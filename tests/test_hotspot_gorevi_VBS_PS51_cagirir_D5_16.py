@@ -24,13 +24,18 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "scripts" / "install_hotspot_task.ps1"
 PWSH = shutil.which("pwsh")
 
-pytestmark = pytest.mark.skipif(PWSH is None or os.name != "nt", reason="pwsh / Windows yok")
+# D5-L (L-1): platform (Windows) atlaması eser yokluğu DEĞİL — ayrı kalır; pwsh ARAÇ yokluğu ZORUNLU kipte DÜŞER
+pytestmark = [
+    pytest.mark.skipif(os.name != "nt", reason="Windows yok"),
+    pytest.mark.skipif(PWSH is None and not capraz.ZORUNLU, reason="pwsh yok"),
+]
 
 _SARMAL = r"""
 param([string]$Betik, [string]$Ps1, [string]$Kayit)

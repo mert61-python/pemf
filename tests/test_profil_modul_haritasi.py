@@ -36,11 +36,17 @@ _INSTALL_RS = _KOK / "launcher" / "core" / "src" / "install.rs"
 
 def _paket_haritasi() -> dict[str, str]:
     """make_model_zip.py::PROFILLER + PARCALAR → {modül: profil} (TEK KAYNAK)."""
+    # D5-L TUR 2 (lc6): İZLENEN derleme aracı — dosya yoksa atla (ZORUNLU kipte DÜŞ); VARKEN içe aktarılamıyorsa ürün hatasıdır,
+    # ATLANMAZ. Eskiden `except Exception: pytest.skip` kırık aracı ZORUNLU kipte de sessizce atlıyordu (kapı kör).
+    capraz.atla_yoksa("build_tools/make_model_zip.py", izlenen=True)
     sys.path.insert(0, str(_KOK / "build_tools"))
     try:
         mmz = __import__("make_model_zip")
-    except Exception as e:  # pragma: no cover
-        pytest.skip(f"make_model_zip içe aktarılamadı ({e})")
+    except Exception as e:
+        pytest.fail(
+            f"İZLENEN build_tools/make_model_zip.py içe aktarılamadı ({type(e).__name__}: {e}) — "
+            "profil paket listesi okunamıyor; atlamak profil ↔ Rust tablosu kapısını kör ederdi"
+        )
 
     harita: dict[str, str] = {}
     gruplar = list(getattr(mmz, "PROFILLER", {}).items())

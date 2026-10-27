@@ -26,10 +26,15 @@ import json
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from test_setup_services_firewall_kaniti import PWSH, _ps_lit, _pwsh_file
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — PowerShell ayrıştırıcısı koşturulamaz")
+# D5-L (L-1): yalnız PowerShell ayrıştırıcısını koşturan testler pwsh ister (D5.48 deseni — paket listesi / Python-Rust-NSIS-CI kolları
+# pwsh'siz de koşar); pwsh yokluğu ZORUNLU kipte DÜŞER.
+_pwsh_gerekir = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — PowerShell ayrıştırıcısı koşturulamaz"
+)
 
 KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "scripts" / "install_mosquitto.ps1"
@@ -78,6 +83,7 @@ def _desteklenen_ps_dosyalari() -> list[Path]:
     return dosyalar
 
 
+@_pwsh_gerekir
 def test_ARAC_dedektor_CAGRIYI_yakalar_GUNLUK_iletisini_ve_YORUMU_yakalamaz(tmp_path):
     """Aracın kendi kanıtı: aynı dosyada beş çağrı biçimi YAKALANIR; günlük iletisi, yorum ve kardeş servis betiği YAKALANMAZ."""
     sentetik = tmp_path / "sentetik.ps1"
@@ -104,6 +110,7 @@ def test_ARAC_dedektor_CAGRIYI_yakalar_GUNLUK_iletisini_ve_YORUMU_yakalamaz(tmp_
     )
 
 
+@_pwsh_gerekir
 def test_KRITIK_desteklenen_PowerShell_betikleri_KULLANIMDAN_KALKMIS_install_mosquitto_ps1_CAGIRMAZ(tmp_path):
     bulgu = ps_cagrilari(tmp_path, _desteklenen_ps_dosyalari())
     assert not bulgu, (

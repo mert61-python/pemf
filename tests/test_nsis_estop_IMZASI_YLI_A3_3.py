@@ -18,6 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[2]
@@ -69,7 +70,8 @@ def _ps() -> str:
     ):
         if p.is_file():
             return str(p)
-    pytest.skip("powershell yok")
+    # D5-L TUR 2: erken dönüş + koşulsuz skip ZORUNLU kipte de atlıyordu — araç yokluğu ZORUNLU kipte DÜŞER
+    capraz.atla("powershell yok")
 
 
 def _kos(kip: str, tmp_path: Path) -> tuple[int, str, list[str]]:

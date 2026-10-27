@@ -27,6 +27,7 @@ import sys
 import uuid
 from pathlib import Path
 
+import capraz
 import kayitci_cmdkey
 import pytest
 
@@ -137,8 +138,8 @@ _KABUKLAR = [pytest.param(_PWSH, id="pwsh7"), pytest.param(_PS51, id="ps51")]
 @pytest.mark.parametrize("kabuk", _KABUKLAR)
 def test_KRITIK_torun_kabuk_yalin_cmdkey_i_KAYITCIYA_cozer(tmp_path, monkeypatch, kabuk):
     """`kur` sonrası teardown sürücülerinin kabukları yalın `cmdkey`i kayıtçıya çözer (Get-Command; araç ÇALIŞTIRILMAZ)."""
-    if kabuk is None:
-        pytest.skip("kabuk bulunamadı")
+    if kabuk is None:  # D5-L TUR 2: parametre `shutil.which` sonucu — araç yokluğu ZORUNLU kipte DÜŞER
+        capraz.atla("kabuk bulunamadı")
     kayitci = kayitci_cmdkey.kur(tmp_path, monkeypatch)
     r = subprocess.run(
         [kabuk, "-NoProfile", "-NonInteractive", "-Command", "(Get-Command cmdkey).Source"],

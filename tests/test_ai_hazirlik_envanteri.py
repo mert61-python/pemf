@@ -249,11 +249,17 @@ def test_envanter_yollari_model_paketi_listeleriyle_TUTARLI():
     if not _model_agaci_kurulu():
         capraz.atla("AI ağırlık ağacı bu ortamda kurulu değil — gömülü/paketli ayrımı ölçülemez")  # D5-F
 
+    # D5-L TUR 2 (lc6): İZLENEN derleme aracı — dosya yoksa atla (ZORUNLU kipte DÜŞ); VARKEN içe aktarılamıyorsa ürün hatasıdır,
+    # ATLANMAZ. Eskiden `except Exception: pytest.skip` kırık aracı ZORUNLU kipte de sessizce atlıyordu (kapı kör).
+    capraz.atla_yoksa("build_tools/make_model_zip.py", izlenen=True)
     sys.path.insert(0, str(_KOK / "build_tools"))
     try:
         mmz = importlib.import_module("make_model_zip")
     except Exception as e:
-        pytest.skip(f"make_model_zip içe aktarılamadı ({e}) — frozen/CI ortamı")
+        pytest.fail(
+            f"İZLENEN build_tools/make_model_zip.py içe aktarılamadı ({type(e).__name__}: {e}) — "
+            "paket listeleri okunamıyor; atlamak envanter ↔ paket tutarlılık kapısını kör ederdi"
+        )
 
     paketli = set()
     for grup in getattr(mmz, "PROFILLER", {}).values():

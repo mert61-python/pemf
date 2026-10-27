@@ -24,13 +24,16 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "scripts" / "build_backend_exe.ps1"
 PWSH = shutil.which("pwsh")
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — build betiği pwsh ile koşar")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — build betiği pwsh ile koşar"
+)
 
 _SURUCU = r"""
 param([string]$Betik, [string]$Kok, [int]$Kod, [string]$Cikti)

@@ -24,10 +24,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import capraz
 import pytest
 from test_setup_services_firewall_kaniti import PWSH, _extract_function, _ps_lit, _pwsh_file
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz"
+)
 
 BETIK = Path(__file__).resolve().parents[1] / "scripts" / "install_backend_service.ps1"
 FONK = "Ensure-PemfBackendFirewallKurali"

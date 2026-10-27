@@ -32,6 +32,7 @@ import string
 import subprocess
 from pathlib import Path
 
+import capraz
 import gitleaks_ikili
 import pytest
 
@@ -40,7 +41,7 @@ _GIT = shutil.which("git")
 #: Git for Windows'un sistem gitattributes'unda textconv'a bağlı türler (ölçüldü) — burada PİNLİ.
 SISTEM_TEXTCONV_TURLERI = ("doc", "docx", "docm", "dot", "dotx", "dotm", "pdf", "rtf", "ods", "odf", "odt")
 
-pytestmark = pytest.mark.skipif(_GIT is None, reason="git yok")
+pytestmark = pytest.mark.skipif((_GIT is None) and not capraz.ZORUNLU, reason="git yok")
 
 
 def _sahte_belirtec() -> str:

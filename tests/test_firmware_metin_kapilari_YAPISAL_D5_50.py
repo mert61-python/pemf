@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from c_soyucu import c_soy
 
@@ -28,9 +29,16 @@ SENSOR_C = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "pemf_sensor.c"
 MAIN_C = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 S3_CPP = KOK / "firmware" / "esps3_pemf_coil" / "SensorManager.cpp"
 
-pytestmark = pytest.mark.skipif(
-    not (SENSOR_C.exists() and MAIN_C.exists() and S3_CPP.exists()), reason="firmware kaynagi yok"
-)
+
+@pytest.fixture(autouse=True)
+def _firmware_kaynagi():
+    """D5-L (L-1): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ (K5-F P2 deseni).
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU. Dosyadaki HER test STM ya da S3
+    kaynağını okur."""
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/pemf_sensor.c", izlenen=True)
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/main.c", izlenen=True)
+    capraz.atla_yoksa("firmware/esps3_pemf_coil/SensorManager.cpp", izlenen=True)
 
 
 def _kod(p: Path) -> str:

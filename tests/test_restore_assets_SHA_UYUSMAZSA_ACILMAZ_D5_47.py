@@ -25,6 +25,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -32,7 +33,7 @@ BETIK = KOK / "scripts" / "restore_assets.ps1"
 MANIFEST_URL = "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/manifest.json"
 PWSH = shutil.which("pwsh")
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh yok")
+pytestmark = pytest.mark.skipif((PWSH is None) and not capraz.ZORUNLU, reason="pwsh yok")
 
 _SARMAL = r"""
 param([string]$Betik, [string]$Harita, [Parameter(ValueFromRemainingArguments = $true)][string[]]$Kalan)
