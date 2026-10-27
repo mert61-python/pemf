@@ -2338,15 +2338,27 @@ fn ps_b64(betik: &str) -> String {
     o
 }
 
+/// D5 J-3 tur 3 · ÜRÜN KARARI [ÖNERİLEN UYGULANDI]: yükseltilmiş sürecin nesnesi ya da çıkış kodu OKUNAMAZSA (`$p` /
+/// `$p.ExitCode` boş) sarmalayıcı SIFIR DIŞI çıkar (fail-closed). Eskiden `exit $p.ExitCode` → `exit $null` = 0 → "İzin ver"
+/// arayüzü "tamam" deyip uyarıyı kapatıyordu (paylaşım kurulumu da "kuruldu" sayıyordu). 1 = PowerShell'in yakalanmamış hata
+/// koduyla AYNI genel hata: güvenlik duvarında MEVCUT "kural eklenemedi (kod 1)", paylaşımda MEVCUT `paylasimBasarisiz` iletisi
+/// (özel kodlar 3 / 4 / 5 / 1223 ile ÇAKIŞMAZ; yeni kullanıcı metni YOK).
+#[cfg_attr(not(windows), allow(dead_code))]
+const KOD_YUKSELTILMIS_CIKIS_KODU_YOK: i32 = 1;
+
 /// D3 T-g: `ps_yukselterek_kos` gibi, ama yükseltilmiş betiğin ÇIKIŞ KODUNU döndürür (`-PassThru`); UAC reddi / yükseltme
 /// başlatılamadı → `paylasim::KOD_UAC_REDDEDILDI` (1223 = ERROR_CANCELLED). D5 J-3: güvenlik duvarı "İzin ver" yolu da bunu kullanır.
+/// D5 J-3 tur 3: çıkış kodu boşsa → `KOD_YUKSELTILMIS_CIKIS_KODU_YOK` (fail-closed; davranışı gölge PowerShell'le ölçen kapı
+/// `tests/test_launcher_izin_ver_sarmalayici_GOLGE_cikis_kodu_D5_J3.py`).
 #[cfg(windows)]
 fn ps_yukselterek_kos_kodlu(betik: &str) -> Result<i32, String> {
     let b64 = ps_b64(betik);
     let arg = format!(
         "try {{ $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop \
-         -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}' }} catch {{ exit {red} }}; exit $p.ExitCode",
+         -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}' }} catch {{ exit {red} }}; \
+         if ($null -eq $p -or $null -eq $p.ExitCode) {{ exit {bos} }}; exit $p.ExitCode",
         red = pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI,
+        bos = KOD_YUKSELTILMIS_CIKIS_KODU_YOK,
     );
     let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &arg])
@@ -3065,6 +3077,47 @@ mod tests {
         assert!(yakala.contains("disabled = false"), "hata sonrası 'İzin ver' düğmesi yeniden açılmıyor: {yakala}");
         assert!(!yakala.contains("clearNotice("), "hata dalında uyarı KAPATILIYOR — engel sürerken kullanıcı 'tamam' sanır: {yakala}");
         assert_eq!(isleyici.matches("clearNotice(").count(), 1, "uyarıyı kapatan ikinci bir yol (finally / catch) var: {isleyici}");
+        // TUR 3 (çürütücü 2 j2): `clearNotice(` ADI aranıyordu — `box.hidden = true` (aynı görünür etki) YEŞİLDİ. Artık catch gövdesi
+        // İZİN LİSTESİYLE: yalnız `<öğe>.textContent = String(e)` (öğe = bu işlevde `document.createElement` ile kurulan metin öğesi,
+        // uyarı kutusunun kendisi DEĞİL) ve `<düğme>.disabled = false` (düğme = bu onclick'in sahibi); başka HİÇBİR deyim yok.
+        let catch_bas = &isleyici[ct..cac];
+        assert!(catch_bas.contains("(e)"), "catch hatayı `e` adıyla bağlamıyor (String(e) başka şeyi gösterir): {catch_bas}");
+        for yasak in ["hidden", "box.", "$(\"notice\")", "textContent = \"\"", "clearNotice", "innerHTML", "remove("] {
+            assert!(!yakala.contains(yasak), "'İzin ver' hata dalı uyarıyı gizliyor / boşaltıyor (`{yasak}`): {yakala}");
+        }
+        let dugme: String = html[..bas]
+            .chars()
+            .rev()
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        assert!(!dugme.is_empty(), "onclick'in sahibi düğme adı okunamadı");
+        let govde = yakala.trim().trim_start_matches('\u{7b}').trim_end_matches('\u{7d}');
+        let (mut metin_ogesi, mut acildi) = (None::<String>, false);
+        for d in govde.split(';').map(|s| s.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|s| !s.is_empty()) {
+            if let Some(h) = d.strip_suffix(".textContent = String(e)") {
+                if metin_ogesi.is_none() && !h.is_empty() && h.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '$') {
+                    metin_ogesi = Some(h.to_string());
+                    continue;
+                }
+            }
+            if d == format!("{dugme}.disabled = false") && !acildi {
+                acildi = true;
+                continue;
+            }
+            panic!("'İzin ver' catch gövdesinde İZİN LİSTESİ DIŞI deyim: `{d}` (yalnız hata metni + düğmeyi açma) — {yakala}");
+        }
+        assert!(acildi, "hata sonrası onclick'in sahibi `{dugme}` yeniden açılmıyor: {yakala}");
+        let h = metin_ogesi.expect("hata metni yazılmıyor");
+        assert_ne!(h, dugme, "hata metni düğmenin ÜSTÜNE yazılıyor (uyarı metni kaybolur): {yakala}");
+        let kutu = html[..bas].rfind("$(\"notice\")").expect("uyarı kutusu bu işlevde kurulmuyor");
+        let tanim = html[..bas].rfind(&format!("const {h} = document.createElement(")).unwrap_or(0);
+        assert!(
+            tanim > kutu,
+            "hata metni uyarı kutusunun İÇİNE kurulan metin öğesine yazılmıyor (`{h}` bu uyarıda createElement ile kurulmadı): {yakala}"
+        );
     }
 
     /// Rust dizge sabitinin İÇERİĞİ → değer: `\`+satır sonu+girinti birleşir, `{{` / `}}` (format!) tek ayraca iner.
@@ -3112,7 +3165,29 @@ mod tests {
             ps.trim_end().trim_end_matches(';').trim_end().ends_with("exit $p.ExitCode"),
             "sarmalayıcının SON deyimi iç sürecin çıkış kodu değil (yorum soyulmuş): {ps}"
         );
-        assert_eq!(ps.matches("exit ").count(), 2, "UAC-reddi catch'i dışında ikinci bir sabit `exit` var (kod aktarılmaz): {ps}");
+        // TUR 3 (çürütücü 2 j3): `-ErrorAction Stop` `try` içindeki `Start-Process` çağrısında — UAC iptali SONLANDIRMAYAN hata
+        // olursa `catch`e düşmez, `$p` boş kalır (gölge ölçümü: `-ErrorAction Stop` yokken çıkış 0 = "tamam").
+        let dene = &ps[ps.find("try {").expect("sarmalayıcıda try yok")..ps.find("} catch {").expect("sarmalayıcıda catch yok")];
+        assert!(
+            dene.contains("Start-Process") && dene.contains("-ErrorAction Stop"),
+            "UAC iptali (sonlandırmayan hata) catch'e DÜŞMEZ — `Start-Process … -ErrorAction Stop` try içinde değil: {dene}"
+        );
+        // TUR 3 ÜRÜN KARARI: çıkış kodu BOŞSA sıfır dışı (fail-closed) — koruma SON deyimden önce, değeri genel hata.
+        let koruma = "if ($null -eq $p -or $null -eq $p.ExitCode) \u{7b} exit \u{7b}bos\u{7d} \u{7d}";
+        let k = ps.find(koruma).unwrap_or_else(|| {
+            panic!("çıkış kodu BOŞSA (`$p` / `$p.ExitCode` $null) sarmalayıcı sıfır dışı çıkmıyor — `exit $null` = 0 → 'tamam': {ps}")
+        });
+        assert!(k < ps.rfind("exit $p.ExitCode").expect("son exit yok"), "boş-kod koruması SON deyimden sonra (ulaşılmaz): {ps}");
+        assert!(kodlu.contains("bos = KOD_YUKSELTILMIS_CIKIS_KODU_YOK"), "boş-kod koruması sabit dışı bir değerle çıkıyor");
+        assert!(
+            ![0, 3, 4, 5, pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI].contains(&KOD_YUKSELTILMIS_CIKIS_KODU_YOK),
+            "boş-kod değeri {KOD_YUKSELTILMIS_CIKIS_KODU_YOK} başarı ya da ÖZEL bir sonuçla (UAC reddi / bozuk kural / paylaşım) karışıyor"
+        );
+        assert_eq!(
+            ps.matches("exit ").count(),
+            3,
+            "UAC-reddi catch'i ve boş-kod koruması dışında ikinci bir sabit `exit` var (kod aktarılmaz): {ps}"
+        );
         assert!(kodlu.contains("status.code()"), "Rust tarafı yükseltme sarmalayıcısının çıkış kodunu okumuyor");
     }
 

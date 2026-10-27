@@ -596,6 +596,51 @@ mod tests {
             "izin_ver_sonucu çıkış kodunu ekleme_hata_anahtari ile eşlemiyor"
         );
         assert_eq!(esle.matches("\"status\":\"ok\"").count(), 1, "izin_ver_sonucu'nda ikinci bir 'tamam' dalı var");
+        // TUR 3 (çürütücü 2 j1): arayüzün ÇAĞIRDIĞI Tauri komutu (`async fn firewall_kurali_ekle`) ölçülmüyordu — `…map_err(…)?`
+        // sonuna `.or_else(|_e| Ok(json!({"status":"ok"})))` eklenince saf işlev ve `_blocking` doğru kaldı, Rust `Err`i komut
+        // katmanında "tamam"a döndü (app 53 / çekirdek 21 / pytest 1015 passed). Artık komut gövdesi (yorumsuz, boşluksuz) TAM OLARAK
+        // `tauri::async_runtime::spawn_blocking(firewall_kurali_ekle_blocking).await.map_err(<görev çöktü iletisi>)?` — `?`ten SONRA
+        // hiçbir dönüşüm (`or_else` / `unwrap_or` / `ok()` / `map(`) ve başka deyim YOK; `spawn_blocking`e işlevin KENDİSİ verilir.
+        let komut = govde_of("async fn firewall_kurali_ekle()");
+        let ac = komut.find('\u{7b}').expect("komut gövdesi yok");
+        let ic = &komut[ac + 1..];
+        let on = "tauri::async_runtime::spawn_blocking(firewall_kurali_ekle_blocking).await.map_err(";
+        assert!(
+            ic.starts_with(on),
+            "'İzin ver' Tauri komutu `_blocking`in sonucunu doğrudan geçirmiyor (araya dönüşüm / başka çağrı girdi): {ic}"
+        );
+        // map_err( … ) ayracının kapanışı (dizge içi ayraç sayılmaz) → ardından YALNIZ `?`
+        let (mut derinlik, mut dizge, mut kapanis) = (1i32, false, None);
+        let mut onceki = ' ';
+        for (i, c) in ic[on.len()..].char_indices() {
+            if dizge {
+                if c == '"' && onceki != '\\' {
+                    dizge = false;
+                }
+            } else if c == '"' {
+                dizge = true;
+            } else if c == '(' {
+                derinlik += 1;
+            } else if c == ')' {
+                derinlik -= 1;
+                if derinlik == 0 {
+                    kapanis = Some(on.len() + i + 1);
+                    break;
+                }
+            }
+            onceki = if onceki == '\\' { ' ' } else { c };
+        }
+        let kapanis = kapanis.expect("map_err ayracı kapanmıyor");
+        let map_err = &ic[on.len()..kapanis];
+        assert!(
+            map_err.contains("rust.hata.guvenlikDuvariGorevCoktu"),
+            "görev çökmesi MEVCUT iletiyle hataya çevrilmiyor: {map_err}"
+        );
+        assert_eq!(
+            &ic[kapanis..],
+            "?",
+            "'İzin ver' Tauri komutu `?`ten SONRA sonucu dönüştürüyor (or_else / unwrap_or / ok() / map( …) — Rust Err'i arayüze 'tamam' gidebilir: {ic}"
+        );
     }
 
     /// D5 I-1 — adlı kural İÇERİKLE, port ÇOCUKTAN: ÜRETİLEN betik GÖLGE NetSecurity ile KOŞULUR (yalnız Windows; CI windows-latest).

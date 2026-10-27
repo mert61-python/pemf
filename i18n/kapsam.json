@@ -10611,7 +10611,7 @@
      ]
     },
     {
-     "metin": "try {{ $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{{b64}}' }} catch {{ exit {{red}} }}; exit $p.ExitCode",
+     "metin": "try {{ $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{{b64}}' }} catch {{ exit {{red}} }}; if ($null -eq $p -or $null -eq $p.ExitCode) {{ exit {{bos}} }}; exit $p.ExitCode",
      "gerekce": "PowerShell komutu / argümanı — metin değil",
      "turler": [
       "rust-sablon"
