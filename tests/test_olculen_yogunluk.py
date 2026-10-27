@@ -48,7 +48,9 @@ def _at(live_state):
         return dict(live_state._live_state["activeTreatment"])
 
 
-def test_KRITIK_seans_YOKKEN_olcum_YAZILMAZ(ls):
+def test_KRITIK_seans_YOKKEN_olcum_YAZILMAZ_eski_iki_argumanli_cagri(ls):
+    # D5.21 (B-10.4): bu test :206'daki AYNI ADLI tanım tarafından ezildiği için HİÇ koşmamıştı (yinelenen ad kapısı:
+    # tests/test_yinelenen_test_adi_YOK_D5_21.py). Ad ayrıldı; iki argümanlı (`ornek_sayisi` verilen) çağrı yolunu ölçer.
     """Boştaki cihazın okuduğu alan "uygulanan doz" değildir.
 
     MUTASYON: `update_measured_intensity`teki `if not at.get("isActive"): return False`
