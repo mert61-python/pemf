@@ -440,6 +440,35 @@ def test_KRITIK_giris_betikleri_ACILISTA_patlamiyor():
     )
 
 
+def test_KRITIK_D5_33_onsozde_YUTULAN_istisna_YOK():
+    """D5.33 (B-10.221): koşucu önsözde import DIŞI istisnayı yutar (ortam / dosya hatası ayrı arıza) — ama yutma önsözün GERİ
+    KALANINI koşturmaz, o betiğin sonraki import'ları ölçülmemiş olur. Tam listede yutulan istisna (tür, betik, satır) SIFIR olmalı.
+    Ölçülen: üçüncü-taraf C uzantısının (cv2) betikler arası `sys.modules`tan atılıp yeniden yüklenmesi `kabin_marker_a4.py:24`'te
+    AttributeError üretiyordu → `:26` (PIL) hiç denenmiyordu."""
+    from onsoz_kosucu import YUTULAN_ONEKI
+
+    dosyalar = _takipli([f"{d}*.py" for d in BETIK_DIZINLERI])
+    assert len(dosyalar) > 30, f"VAKUM: yalnız {len(dosyalar)} betik"
+    satirlar = _kosucu_satirlari(dosyalar, None, False)
+    yutulan = [x for s in satirlar if s.startswith(YUTULAN_ONEKI) for x in json.loads(s[len(YUTULAN_ONEKI) :])]
+    assert any(s.startswith(YUTULAN_ONEKI) for s in satirlar), "koşucu yutulan-istisna satırını basmadı (sayaç ölü)"
+    assert not yutulan, "önsözde YUTULAN istisna (betiğin geri kalan import'ları ölçülmedi):\n  " + "\n  ".join(
+        f"{r}:{n} {t}: {m}" for r, t, n, m in yutulan
+    )
+
+
+def test_KARSIT_KANIT_D5_33_kosucu_yutulani_SAYAR(tmp_path):
+    """Sayaç ölü değil: önsözde import DIŞI hata (dosya yok) sayılır, satırıyla."""
+    from onsoz_kosucu import YUTULAN_ONEKI
+
+    (tmp_path / "yutan.py").write_text(
+        "import json\nopen('kesinlikle_yok_d533.cfg').read()\nimport os\n", encoding="utf-8"
+    )
+    satirlar = _kosucu_satirlari(["yutan.py"], tmp_path, False)
+    yutulan = [x for s in satirlar if s.startswith(YUTULAN_ONEKI) for x in json.loads(s[len(YUTULAN_ONEKI) :])]
+    assert [(r, t, n) for r, t, n, _ in yutulan] == [("yutan.py", "FileNotFoundError", 2)], yutulan
+
+
 @pytest.mark.parametrize(
     "rel,beklenen_import",
     [

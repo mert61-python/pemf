@@ -55,6 +55,10 @@ from pathlib import Path
 IC_IMPORT_ONEKI = "COZULEMEYEN_IC_IMPORT"
 #: Denetlenen (betik, ad) çiftleri satırının öneki — kapının VAKUM ölçüsü.
 DENETLENEN_ONEKI = "DENETLENEN_IC_IMPORTLAR "
+#: D5.33 (B-10.221): önsözde YUTULAN (import dışı) istisnalar satırının öneki — [[betik, tür, satır, ileti], ...].
+#: Yutma, önsözün GERİ KALANINI (sonraki import'lar dahil) koşturmadan bırakır; sayılmazsa ölçüm sessizce daralır.
+YUTULAN_ONEKI = "YUTULAN_ONSOZ_ISTISNALARI "
+YUTULAN: list[list] = []
 
 
 def onsoz_dugumleri(agac: ast.Module) -> list[ast.stmt]:
@@ -409,10 +413,13 @@ def bir_betik(
             cerceveler = traceback.extract_tb(e.__traceback__)
             if cerceveler and _depo_ici_mi(cerceveler[-1].filename, kok):
                 sonuc.append((rel, f"RuntimeError: {e}"))
-        except Exception:
+        except Exception as e:
             # ⚠️ BU KAPININ KONUSU YALNIZ IMPORT. Önsözde ortam/dosya hatası olabilir
             # (ör. eksik ayar dosyası) — o ayrı bir arızadır, burada susturulur.
-            pass
+            # D5.33: ama SAYILIR (tür, betik, satır): yutulan istisna önsözün geri kalanını koşturmaz — o betiğin
+            # sonraki import'ları ÖLÇÜLMEMİŞ olur (kabin_marker_a4 :24 cv2 AttributeError → :26 PIL import'u görünmezdi).
+            satir = next((c.lineno for c in reversed(traceback.extract_tb(e.__traceback__)) if c.filename == str(p)), 0)
+            YUTULAN.append([rel, type(e).__name__, satir, str(e)[:160]])
         if ic_importlar:
             # Önsözden sonra kurulan yol (yalnız sys.path dilimi — kalan gövde KOŞMAZ).
             dilim = yol_kurulumu_dugumleri(agac)
@@ -433,9 +440,16 @@ def bir_betik(
     finally:
         sys.path = eski_yol
         # Betiğin import ettikleri sonraki betiği etkilemesin.
+        # ⚠️ D5.33: YALNIZ depo içi (birinci taraf) modüller atılır. Üçüncü-taraf / stdlib modülleri atılıp yeniden
+        # yüklenince C uzantıları (cv2) ikinci kez başlatılamıyor → sonraki betiğin önsözü `import cv2`de AttributeError'la
+        # kesiliyor ve arkasındaki import'lar HİÇ ölçülmüyordu (ölçüldü: kabin_marker_a4.py:24).
         for ad in list(sys.modules):
-            if ad not in _TEMIZ_MODULLER:
-                sys.modules.pop(ad, None)
+            if ad in _TEMIZ_MODULLER:
+                continue
+            dosya = getattr(sys.modules.get(ad), "__file__", None) or ""
+            if dosya and not _depo_ici_mi(dosya, kok):
+                continue
+            sys.modules.pop(ad, None)
     return sonuc
 
 
@@ -448,6 +462,7 @@ def main() -> int:
     sonuc = [x for rel in dosyalar for x in bir_betik(kok, rel, ic_importlar, denetlenen)]
     if ic_importlar:
         print(DENETLENEN_ONEKI + json.dumps(denetlenen, ensure_ascii=False))
+    print(YUTULAN_ONEKI + json.dumps(YUTULAN, ensure_ascii=False))
     print(json.dumps(sonuc, ensure_ascii=False))
     return 0
 
