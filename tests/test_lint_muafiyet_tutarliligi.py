@@ -43,6 +43,43 @@ def _pyproject_muafiyetleri() -> set[str]:
     return {y.strip("/^$").lstrip("./") for y in yollar}
 
 
+def _exclude_degerleri(blok: str) -> list[str]:
+    """`exclude:` değerleri — tek / çift TIRNAKLI, TIRNAKSIZ (`exclude: ^a/` + satır sonu yorumu) ve BLOK-SKALER (`|`, `>`,
+    `|-`, `>-`: altındaki daha girintili satırlar birleştirilir). D5.32 (B-10.241): eski ayrıştırıcı yalnız tırnaklıyı okuyordu;
+    tırnaksız / blok-skaler yazılan yeni bir muafiyet pyproject'te olmasa da kapı YEŞİLDİ."""
+    satirlar = blok.splitlines()
+    degerler: list[str] = []
+    for i, satir in enumerate(satirlar):
+        m = re.match(r"^(\s*)exclude:\s*(.*?)\s*$", satir)
+        if not m:
+            continue
+        girinti, ham = len(m.group(1)), m.group(2)
+        if re.fullmatch(r"[|>][+-]?", ham):
+            parca = []
+            for alt in satirlar[i + 1 :]:
+                if alt.strip() and len(alt) - len(alt.lstrip()) <= girinti:
+                    break
+                if alt.strip():
+                    parca.append(alt.strip())
+            degerler.append("".join(parca))
+        elif ham[:1] in ("'", '"'):
+            degerler.append(ham[1 : ham.rfind(ham[0])] if ham.rfind(ham[0]) > 0 else ham[1:])
+        elif ham:
+            degerler.append(re.split(r"\s+#", ham, maxsplit=1)[0])
+    return degerler
+
+
+def test_KARSIT_KANIT_D5_32_exclude_bicimleri_OKUNUR():
+    for metin, beklenen in (
+        ("    exclude: '^a/'\n", ["^a/"]),
+        ('    exclude: "^(a|b)/"\n', ["^(a|b)/"]),
+        ("    exclude: ^(a|b)/   # yorum\n", ["^(a|b)/"]),
+        ("    exclude: |\n      ^(a|\n      b)/\n    - id: x\n", ["^(a|b)/"]),
+        ("    exclude: >-\n      ^c/\n", ["^c/"]),
+    ):
+        assert _exclude_degerleri(metin) == beklenen, f"okunamadı: {metin!r} -> {_exclude_degerleri(metin)}"
+
+
 def _precommit_ruff_muafiyetleri() -> set[str]:
     """`.pre-commit-config.yaml`'daki ruff/ruff-format hook'larının `exclude:` regex'leri.
 
@@ -55,7 +92,7 @@ def _precommit_ruff_muafiyetleri() -> set[str]:
     if not blok:
         pytest.skip("pre-commit'te ruff hook'u yok")
     yollar: set[str] = set()
-    for kalip in re.findall(r"^\s*exclude:\s*['\"](.+?)['\"]\s*$", blok.group(0), re.M):
+    for kalip in _exclude_degerleri(blok.group(0)):
         ham = kalip.strip("^$")
         ic = re.fullmatch(r"\((.+)\)/?", ham.rstrip("/"))
         parcalar = ic.group(1).split("|") if ic else [ham.rstrip("/")]

@@ -30,6 +30,19 @@ def _yukle(ad):
     return yaml.safe_load((W / ad).read_text(encoding="utf-8"))
 
 
+def test_KRITIK_D5_32_PyYAML_CI_test_bagimliliklarinda_PINLI():
+    """D5.32 (B-10.206): bu dosyanın TÜM iş akışı kapıları `_yukle` → `importorskip("yaml")` ile PyYAML'a bağlı. Pin
+    `requirements-test.txt`ten düşerse CI'da hepsi SESSİZCE atlanır (adı konmuş tek kırmızı yoktu; yalnız ilgisiz bir testin
+    TypeError'ı). Statik kapı: pin VAR ve TAM sürümle (`==`) — PyYAML'ı içe aktarmadan, dosyadan okunur."""
+    gereksinim = (KOK / "requirements-test.txt").read_text(encoding="utf-8")
+    satirlar = [s.split("#", 1)[0].strip() for s in gereksinim.splitlines()]
+    pin = [s for s in satirlar if re.match(r"(?i)^pyyaml\s*==\s*\d+(\.\d+)*\s*$", s)]
+    assert len(pin) == 1, (
+        f"PyYAML requirements-test.txt'te TAM sürümle (==) pinli değil ({pin}) — CI iş akışı kapıları "
+        "(`_yukle`) PyYAML olmadan SESSİZCE ATLANIR"
+    )
+
+
 def _tetikleyici(d):
     """PyYAML `on:` anahtarını Python `True`'ya çevirir (YAML 1.1 boolean) — ikisini de dene."""
     return d.get("on") or d.get(True)
