@@ -37,6 +37,20 @@ TASINMIS = {
 # ⚠️ SABİT SAYAÇ (depo deseni): listeden bir giriş SİLMEK kapıyı sessizce boşaltırdı.
 TASINMIS_SAYISI = 2
 
+# D5.30 (B-10.260): F4 taşıması (2026-09-18) — `servers/ services/ database/ utils/ controllers/` → `apps/backend/`. Bu adlar
+# Python'da İMPORT adı olarak yaşar (`from utils.x import`) ve başka ağaçlarda meşru yol parçasıdır (`apps/ui/src/services`),
+# bu yüzden YALNIZ Python OLMAYAN çalışan dosyalarda (kabuk / PowerShell / CI yml / bat) ve yol biçiminde aranır:
+# önünde `[\w.$/\\-]` olmayan `<ad>/` (ör. `cp -R servers/x`; `apps/backend/servers/` YAKALANMAZ) ve `cd <ad>` / `-d <ad>`.
+TASINMIS_KABUK = {
+    "servers": "apps/backend/servers",
+    "services": "apps/backend/services",
+    "database": "apps/backend/database",
+    "utils": "apps/backend/utils",
+    "controllers": "apps/backend/controllers",
+}
+TASINMIS_KABUK_SAYISI = 5
+KABUK_UZANTILAR = {".sh", ".bash", ".ps1", ".psm1", ".yml", ".yaml", ".bat", ".cmd"}
+
 CALISAN_UZANTILAR = {".sh", ".ps1", ".psm1", ".py", ".yml", ".yaml", ".spec", ".bat", ".cmd"}
 
 # `pf` üç meşru anlamda geçer ve hiçbiri DİZİN değildir:
@@ -49,12 +63,18 @@ MUAF_DOSYALAR = {
 }
 
 
-def _izlenen_calisan_dosyalar() -> list[str]:
-    ch = subprocess.run(["git", "ls-files"], cwd=KOK, capture_output=True, text=True, timeout=120)
+def _izlenen_dosyalar() -> list[str]:
+    """İzlenen TÜM dosyalar. D5.30 (B-10.262): `git ls-files` (`-z`siz) aksanlı yolu TIRNAKLI + sekizli kaçışlı verir
+    (`"dema-terapi-sim\\303\\274lat…/x.sh"`) → uzantısı `.sh"` olur ve dosya SESSİZCE elenirdi. `-z` + UTF-8 çözümü."""
+    ch = subprocess.run(["git", "ls-files", "-z"], cwd=KOK, capture_output=True, timeout=120)
     if ch.returncode != 0:
         pytest.skip("git deposu değil")
+    return [x.decode("utf-8") for x in ch.stdout.split(b"\x00") if x]
+
+
+def _izlenen_calisan_dosyalar() -> list[str]:
     yollar = []
-    for ad in ch.stdout.splitlines():
+    for ad in _izlenen_dosyalar():
         if not ad or ad in MUAF_DOSYALAR:
             continue
         # Taşınan ağacın KENDİ içindeki dosyalar konu dışı (kendi göreli yollarını kullanırlar).
@@ -78,7 +98,7 @@ def _desen(eski: str) -> re.Pattern[str]:
     )
 
 
-def yorumsuz(satir: str) -> str:
+def yorumsuz(satir: str, kabuk: bool = False) -> str:
     """Satırın KOD kısmını döndürür — `#`ten sonrası atılır.
 
     ⚠️ 7. KEZ AYNI TUZAK (2026-09-18): kapının ilk hâli .py/.ps1/.spec içindeki
@@ -88,6 +108,10 @@ def yorumsuz(satir: str) -> str:
 
     Tırnak-farkındadır: `"#kanal"` gibi dize içi `#` yorum sayılmaz — yoksa kapı
     kendi kapsamını sessizce daraltırdı.
+
+    D5.30 (B-10.261) `kabuk=True` (bash / PowerShell / YAML / bat): `#` YALNIZ sözcük başında (satır başı ya da boşluktan sonra)
+    yorumdur — `${#PWD}`, `$#`, `a#b` yorum DEĞİLDİR. Eski kural `[ ${#PWD} -gt 0 ] && cd pf` satırını `[ $` noktasında kesip
+    ARKASINDAKİ `cd pf`yi görünmez yapıyordu.
     """
     tirnak = None
     for i, ch in enumerate(satir):
@@ -96,9 +120,20 @@ def yorumsuz(satir: str) -> str:
                 tirnak = None
         elif ch in ("'", '"'):
             tirnak = ch
-        elif ch == "#":
+        elif ch == "#" and (not kabuk or i == 0 or satir[i - 1].isspace()):
             return satir[:i]
     return satir
+
+
+def _kabuk_desenleri(eski: str) -> list[re.Pattern[str]]:
+    """F4 adları için kabuk / CI dosyalarındaki YOL kullanımı (bkz. `TASINMIS_KABUK`)."""
+    a = re.escape(eski)
+    return [
+        re.compile(r"(?<![\w.$/\\-])" + a + r"(?=[/\\])"),
+        re.compile(r"(?:\bcd|-[dfe])\s+[\"']?(?:\./)?" + a + r"[\"']?(?![\w./\\-])"),
+        # CI / compose: `working-directory: services`, `context: ./utils` (yalın değer)
+        re.compile(r"\b(?:working-directory|context|cwd|path|dir)\s*:\s*[\"']?(?:\.{1,2}/)*" + a + r"[\"']?\s*$"),
+    ]
 
 
 def docstring_satirlari(metin: str) -> set[int]:
@@ -136,16 +171,20 @@ def _ihlaller() -> dict[str, list[str]]:
     for rel in _izlenen_calisan_dosyalar():
         try:
             metin = (KOK / rel).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError) as e:  # D5.30: okunamayan çalışan dosya ATLANMAZ — ölçülmedi demektir
+            bulgu.setdefault(rel, []).append(f"OKUNAMADI ({type(e).__name__}) — kapı bu dosyayı ölçemedi")
             continue
         atlanan = docstring_satirlari(metin) if rel.endswith((".py", ".spec")) else set()
-        for eski in TASINMIS:
-            d = _desen(eski)
-            for no, satir in enumerate(metin.splitlines(), 1):
-                if no in atlanan:
-                    continue
-                if d.search(yorumsuz(satir)):
-                    bulgu.setdefault(rel, []).append(f"{no}: {satir.strip()[:100]}")
+        kabuk = Path(rel).suffix.lower() in KABUK_UZANTILAR
+        desenler = [_desen(eski) for eski in TASINMIS]
+        if kabuk:
+            desenler += [d for eski in TASINMIS_KABUK for d in _kabuk_desenleri(eski)]
+        for no, satir in enumerate(metin.splitlines(), 1):
+            if no in atlanan:
+                continue
+            kod = yorumsuz(satir, kabuk=kabuk)
+            if any(d.search(kod) for d in desenler):
+                bulgu.setdefault(rel, []).append(f"{no}: {satir.strip()[:100]}")
     return bulgu
 
 
@@ -225,8 +264,47 @@ def test_KARSIT_KANIT_mesru_kullanim_YANLIS_KIRMIZI_vermez():
     )
 
 
+def test_KARSIT_KANIT_D5_30_F4_adlari_kabukta_YAKALANIR_importta_YAKALANMAZ():
+    desenler = [d for eski in TASINMIS_KABUK for d in _kabuk_desenleri(eski)]
+    for bozuk in (
+        "( cd servers && npm ci )",
+        "cp -R utils/x dist",
+        '[[ -d controllers ]] || exit 1',
+        "  working-directory: ./services",
+    ):
+        assert any(d.search(yorumsuz(bozuk, kabuk=True)) for d in desenler), f"F4 kabuk yolu KAÇIRILIYOR: {bozuk}"
+    for temiz in (
+        "from utils.x import y",
+        "python apps/backend/utils/x.py",
+        "cd apps/backend/servers",
+        "$env:PEMF_DB = $database_url",
+        "my_services/x",
+    ):
+        assert not any(d.search(yorumsuz(temiz, kabuk=True)) for d in desenler), f"YANLIŞ KIRMIZI: {temiz}"
+
+
+def test_KARSIT_KANIT_D5_30_bash_dolar_diyez_YORUM_SAYILMAZ():
+    d = _desen("pf")
+    assert d.search(yorumsuz("[ ${#PWD} -gt 0 ] && cd pf", kabuk=True)), (
+        "${#…} yorum sanıldı — arkasındaki kod görünmez"
+    )
+    assert d.search(yorumsuz('[ $# -eq 0 ] && cd pf', kabuk=True)), "$# yorum sanıldı"
+    assert not d.search(yorumsuz("echo x # cd pf", kabuk=True)), "gerçek kabuk yorumu ihlal sayıldı"
+
+
+def test_KARSIT_KANIT_D5_30_aksanli_yollar_COZULUR():
+    """`-z` + UTF-8: aksanlı izlenen yol tırnaksız ve gerçek adıyla listelenir (DEMA simülatörü ağacı)."""
+    izlenen = _izlenen_dosyalar()
+    assert "dema-terapi-simülatörü/README.md" in izlenen, (
+        "aksanlı yol çözülmüyor (tırnaklı / kaçışlı) — o ağaç kapı dışı kalır"
+    )
+    assert not [y for y in izlenen if y.startswith('"')], "tırnaklı (kaçışlı) yol kaldı"
+
+
 def test_KARSIT_KANIT_esleme_tablosu_BOSALTILMAMIS():
     """ "Kırmızıyı sustur" diye tabloyu ya da muafiyeti şişiren yamayı yakalar."""
+    assert len(TASINMIS_KABUK) == TASINMIS_KABUK_SAYISI, f"F4 kabuk tablosu değişmiş: {TASINMIS_KABUK}"
+    assert KABUK_UZANTILAR >= {".sh", ".ps1", ".yml"}, "kabuk uzantı kapsamı daraltılmış"
     assert len(TASINMIS) == TASINMIS_SAYISI, (
         f"eşleme tablosu değişmiş ({len(TASINMIS)} ≠ {TASINMIS_SAYISI}) — bilinçli "
         "eklemede bu sayı da güncellenir, SİLMEDE kapı sessizce boşalır"
