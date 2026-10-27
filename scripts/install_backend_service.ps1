@@ -174,6 +174,29 @@ function Get-PemfServisApiPortu([string[]]$AppEnv) {
     return 8000
 }
 
+# D5 M-2 (E2-2.4 / S-E.4 — setup_services.ps1 ön denetimiyle aynı ölçüt): servisin portunu bu servisin DIŞINDAN dinleyen ilk süreç
+# (SurecNo + Yol) ya da $null. "Kendi" = değiştirilecek servisin süreç ağacı (nssm + çocukları; python ara başlatıcısı için 4 kuşağa dek) —
+# bu betik eski servisi `nssm stop/remove` ile durdurur. setup_services'ten TEK fark: o betik kurulum dizinindeki ({app}) süreçleri kendisi
+# öldürür (Stop-PemfKurulumBackendi), bu betik öldürmez → dizin ölçütü burada yanlış olurdu (elle başlatılmış EXE portu tutmaya devam eder).
+# Kapı: tests/test_install_backend_service_PORT_DOLU_servise_DOKUNMADAN_durur_D5M2.py (setup_services E2-2.4 eşliği dahil)
+function Get-PemfPortDisSahibi([int]$Port, [string]$ServisAdi) {
+    $Surecler = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $Servis = Get-CimInstance Win32_Service -Filter "Name='$ServisAdi'" -ErrorAction SilentlyContinue | Select-Object -First 1
+    $ServisPid = $(if ($Servis) { [int]$Servis.ProcessId } else { 0 })
+    foreach ($PortSahibi in @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)) {
+        $Kendi = $false
+        $Atadaki = [int]$PortSahibi
+        for ($Kusak = 0; $Kusak -le 4 -and $ServisPid -gt 0 -and $Atadaki -gt 0; $Kusak++) {
+            if ($Atadaki -eq $ServisPid) { $Kendi = $true; break }
+            $Atadaki = [int](@($Surecler | Where-Object { $_.ProcessId -eq $Atadaki }) | Select-Object -First 1).ParentProcessId
+        }
+        if ($Kendi) { continue }
+        $SahipYolu = (@($Surecler | Where-Object { $_.ProcessId -eq $PortSahibi }) | Select-Object -First 1).ExecutablePath
+        return [pscustomobject]@{ SurecNo = [int]$PortSahibi; Yol = $SahipYolu }
+    }
+    return $null
+}
+
 # D5 H-1 (DEV-C4 / G-2 sınıfı): 'PEMF Backend API' / 'PEMF UDP Discovery' kuralları eskiden YALNIZ ADIYLA aranıyordu — aynı adlı devre dışı /
 # Block / giden / yanlış protokol / başka port (eski PEMF_API_PORT) / dar profilli / başka programın (taşınmış kurulum) kuralı "var" sayılıyor,
 # servis LAN'dan (mobil / web istemci — ACİL DURDUR dahil) erişilemezken betik sessiz bitiyordu. İÇERİK setup_services.ps1 API döngüsüyle AYNI
@@ -274,6 +297,16 @@ if (-not $AppEnv) {
 }
 Write-Status "Profil ($Mode): $ProfilDosyasi" "Cyan"
 
+# ── D5 M-2 (E2-2.4 / S-E.4): servisin dinleyeceği port (profil PEMF_API_PORT — güvenlik duvarı kuralı da AYNI portu açar) bu servisin DIŞINDAN
+# bir süreç (launcher'ın backend çocuğu / başka kurulum) tarafından tutuluyorsa yeni servis bind edemeyip NSSM döngüsünde çöker, betik yine
+# "Backend servisi kuruldu" derdi. O süreç ÖLDÜRÜLMEZ (ACİL DURDUR bu betiğin işi değil) — kurulum servise / NSSM'e DOKUNMADAN durur.
+$ApiPort = Get-PemfServisApiPortu $AppEnv
+$PortunDisSahibi = Get-PemfPortDisSahibi -Port $ApiPort -ServisAdi $ServiceName
+if ($PortunDisSahibi) {
+    Write-Status "HATA: port $ApiPort dolu — bu servisin DIŞINDA bir süreç dinliyor (PID $($PortunDisSahibi.SurecNo), $($PortunDisSahibi.Yol)). Launcher'ın backend'i ya da başka bir kurulum olabilir; yeni servis bu portu açamaz ve döngüde çöker. Önce onu kapatın (launcher'dan çıkın) ya da profilde PEMF_API_PORT'u değiştirin — kurulum DURDU, servis DEĞİŞTİRİLMEDİ." "Red"
+    pause; exit 1
+}
+
 if (-not (Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
     Write-Status "Log dizini oluşturuldu: $LogDir" "Green"
@@ -372,8 +405,8 @@ if (Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue) {
 }
 
 # --- Firewall (API TCP <servis portu> + keşif UDP 5051) — adla değil İÇERİKLE (D5 H-1; bkz. Ensure-PemfBackendFirewallKurali) ---
-# API portu servise giden ortamdan ($AppEnv → PEMF_API_PORT, backend'in kuralıyla); keşif portu backend'de sabit (headless_core: 5051).
-$ApiPort = Get-PemfServisApiPortu $AppEnv
+# API portu servise giden ortamdan ($AppEnv → PEMF_API_PORT, backend'in kuralıyla — `$ApiPort`, D5 M-2 port-dolu denetiminde hesaplandı);
+# keşif portu backend'de sabit (headless_core: 5051).
 $ApiFirewallOk = $false
 $KesifFirewallOk = $false
 try {
