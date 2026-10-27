@@ -9,6 +9,9 @@ A5: em_fantom/em_petri modülleri em_kedi ile AYNI hafif canlı-sensitivity sarm
 A6: termal/ses uçlarında CAM yöntemi dışa açıldı — allowlist DIŞI değer 422 (sessiz düşüş değil).
 """
 
+from __future__ import annotations
+
+import ast
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -54,14 +57,138 @@ def test_KARSIT_KANIT_dosya_yokken_bos_dict_ZARIF(monkeypatch):
     air._FGS_BANTLARI_CACHE = None  # sonraki testler gerçek dosyayı görsün
 
 
+# ── D5.57 (B-10.172 · B-10.173) AST yardımcıları: yanıt sözlüğü anahtarları / `**` yayılımları / zarif XAI try'ı ──────────
+# Eski yapısal kapılar çıpayı YORUMLAR DAHİL ham metinde arıyordu: yanıt sözlüğündeki alan satırı `# ` ile yoruma alınınca dördü de
+# YEŞİL kalıyordu (ölçüldü, HEAD d38b0db5: router landmark `"fgs_bantlari"` satırı yoruma → 219 passed). AST yorumu görmez.
+def _sozlukler(dugum) -> list:
+    return [d for d in ast.walk(dugum) if isinstance(d, ast.Dict)]
+
+
+def _anahtarlar(sozluk: ast.Dict) -> dict:
+    """Sözlük sabitinin dizge anahtarları → değer düğümü (yalnız KOD; yorumdaki satır sayılmaz)."""
+    return {
+        k.value: v
+        for k, v in zip(sozluk.keys, sozluk.values)
+        if isinstance(k, ast.Constant) and isinstance(k.value, str)
+    }
+
+
+def _yayilanlar(sozluk: ast.Dict) -> set:
+    """`{**ad, ...}` yayılımlarının adları."""
+    return {v.id for k, v in zip(sozluk.keys, sozluk.values) if k is None and isinstance(v, ast.Name)}
+
+
+def _cagri_adi(dugum) -> str | None:
+    if isinstance(dugum, ast.Call):
+        f = dugum.func
+        return f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else None)
+    return None
+
+
+def _fonksiyon_dugumu(src: str, karakter_ofseti: int):
+    """`karakter_ofseti`ni İÇEREN en içteki fonksiyonun AST düğümü."""
+    satir = src.count("\n", 0, karakter_ofseti) + 1
+    en_iyi = None
+    for d in ast.walk(ast.parse(src)):
+        if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef)) and d.lineno <= satir <= d.end_lineno:
+            if en_iyi is None or d.lineno > en_iyi.lineno:
+                en_iyi = d
+    assert en_iyi is not None, f"satır {satir} hiçbir fonksiyonda değil"
+    return en_iyi
+
+
+def _zarif_xai_denemesi(fn, etiket: str) -> None:
+    """B-10.173: `xai_hizli_sensitivity` çağrısını saran EN İÇTEKİ try'ın yakalayıcısı `Exception` (daraltılmamış) ve uyarısı
+    "analiz etkilenmedi" der. Eskiden ±800 karakterlik pencerede `"except Exception"` aranıyordu — komşu bir uç / blok pencereye
+    girince iç except `ValueError`a daraltılsa da YEŞİLDİ (DENETİM-10 ölçümü; HEAD'de konum şans eseri tutuyor)."""
+    denemeler = [
+        t
+        for t in ast.walk(fn)
+        if isinstance(t, ast.Try)
+        and any(isinstance(n, ast.Attribute) and n.attr == "xai_hizli_sensitivity" for b in t.body for n in ast.walk(b))
+    ]
+    assert denemeler, f"{etiket}: XAI meta çağrısı bir try İÇİNDE DEĞİL — açıklama hatası analizi düşürür"
+    ic = min(denemeler, key=lambda t: t.end_lineno - t.lineno)
+    turler = [ast.unparse(h.type) if h.type is not None else "<çıplak>" for h in ic.handlers]
+    assert any(isinstance(h.type, ast.Name) and h.type.id == "Exception" for h in ic.handlers), (
+        f"{etiket}: XAI meta except'i daraltılmış ({turler}) — başka bir istisna analizi düşürür"
+    )
+    uyari = [
+        c
+        for h in ic.handlers
+        for c in ast.walk(h)
+        if _cagri_adi(c) == "warning"
+        and c.args
+        and isinstance(c.args[0], ast.Constant)
+        and "analiz etkilenmedi" in str(c.args[0].value)
+    ]
+    assert uyari, f"{etiket}: XAI meta hatası uyarısız ya da 'analiz etkilenmedi' demiyor"
+    # TUR 2 (çürütücü ea / eb): `Exception` yakalayıcısının VARLIĞI yetmiyordu — (ea) yakalayıcı uyarı + xai_error yazıp YİNE `raise`
+    # ediyor (analiz 500) ve (eb) `Exception`dan ÖNCE `except RuntimeError: raise` geliyor (some ↔ every) → geniş kümede 320 passed.
+    # Artık HER yakalayıcı zarif: içinde `raise` / `return` YOK, "analiz etkilenmedi" uyarısı VAR ve `_xai_meta["xai_error"]` yazar.
+    for h in ic.handlers:
+        tur = ast.unparse(h.type) if h.type is not None else "<çıplak>"
+        kacis = sorted({type(n).__name__ for n in ast.walk(h) if isinstance(n, (ast.Raise, ast.Return))})
+        assert not kacis, (
+            f"{etiket}: XAI meta yakalayıcısı `except {tur}` hatayı ANALİZE taşıyor ({kacis}) — açıklama hatası analizi düşürür"
+        )
+        assert any(
+            _cagri_adi(c) == "warning"
+            and c.args
+            and isinstance(c.args[0], ast.Constant)
+            and "analiz etkilenmedi" in str(c.args[0].value)
+            for c in ast.walk(h)
+        ), f"{etiket}: `except {tur}` yakalayıcısı uyarısız / 'analiz etkilenmedi' demiyor (sessiz yutma)"
+        assert any(
+            isinstance(a, ast.Assign)
+            and any(
+                isinstance(t, ast.Subscript)
+                and isinstance(t.value, ast.Name)
+                and t.value.id == "_xai_meta"
+                and isinstance(t.slice, ast.Constant)
+                and t.slice.value == "xai_error"
+                for t in a.targets
+            )
+            for a in ast.walk(h)
+        ), f"{etiket}: `except {tur}` yakalayıcısı yanıta `xai_error` yazmıyor (D5.05 sözleşmesi)"
+
+
+def _donus_sozlukleri(fn) -> list:
+    """Ucun YANIT sözlükleri: `return {…}` ya da `return JSONResponse({…})` / `JSONResponse(content={…})` ile DÖNEN ve `"status"`
+    anahtarı taşıyan sözlük sabitleri (hata gövdeleri — `{"error": …}` — ve ara sözlükler, ör. `hw_params = {…}`, SAYILMAZ)."""
+    sozlukler = []
+    for d in ast.walk(fn):
+        if not isinstance(d, ast.Return) or d.value is None:
+            continue
+        v = d.value
+        if isinstance(v, ast.Call) and _cagri_adi(v) == "JSONResponse":
+            adaylar = list(v.args[:1]) + [k.value for k in v.keywords if k.arg == "content"]
+        else:
+            adaylar = [v]
+        sozlukler += [s for s in adaylar if isinstance(s, ast.Dict) and "status" in _anahtarlar(s)]
+    return sozlukler
+
+
 def test_YAPISAL_landmark_yaniti_bantlari_tasir():
     """Çıpa GERÇEK çağrıya pinli (yapısal-çıpa kırılganlığı dersi): landmark JSONResponse
-    gövdesi `fgs_bantlari` alanını _fgs_bantlari() ÇAĞRISIYLA doldurur."""
+    gövdesi `fgs_bantlari` alanını _fgs_bantlari() ÇAĞRISIYLA doldurur.
+
+    ⚠️ D5.57 (B-10.172): eskiden `'"fgs_bantlari": _fgs_bantlari(),' in src` + 600 karakterlik pencere — satır `# ` ile yoruma alınınca
+    YEŞİLDİ. Artık AST: KODDAKİ bir yanıt sözlüğünde `"fgs_bantlari"` anahtarının değeri `_fgs_bantlari()` çağrısı ve AYNI sözlükte
+    `"fgs_total"` var.
+    ⚠️ TUR 2 (çürütücü dc): "dosyadaki HERHANGİ bir sözlük" kabul ediliyordu — alan yanıttan silinip `hw_params = {"fgs_total": …,
+    "fgs_bantlari": _fgs_bantlari()}` iç sözlüğüne taşınınca YEŞİLDİ. Artık YALNIZ `/api/ai/vision/landmark` ucunun DÖNDÜRDÜĞÜ
+    (`return JSONResponse(content={…})`) sözlük. Değer akışı: `test_KRITIK_D557_landmark_yaniti_FGS_alanlarini_UST_DUZEYDE_tasir`."""
     src = (KOK / "apps/backend/servers/ai_router.py").read_text(encoding="utf-8")
-    assert '"fgs_bantlari": _fgs_bantlari(),' in src, "landmark yanıtı bant alanını kaybetti (A4 regresyonu)"
-    i = src.index('"fgs_bantlari": _fgs_bantlari(),')
-    pencere = src[max(0, i - 600) : i]
-    assert '"fgs_total": total,' in pencere, "bant alanı landmark yanıt gövdesinden ayrı düşmüş"
+    donus = _donus_sozlukleri(_uc_dugumu(src, "/api/ai/vision/landmark"))
+    assert donus, "aparat: landmark ucunun yanıt sözlüğü bulunamadı (çıpa kaymış)"
+    for s in donus:
+        a = _anahtarlar(s)
+        assert _cagri_adi(a.get("fgs_bantlari")) == "_fgs_bantlari", (
+            "landmark YANITI bant alanını kaybetti (A4 regresyonu) — dönen sözlükte `\"fgs_bantlari\": _fgs_bantlari()` yok: "
+            f"{sorted(a)}"
+        )
+        assert "fgs_total" in a, "bant alanı landmark yanıt gövdesinden ayrı düşmüş"
 
 
 # ── A5: em_fantom/em_petri hafif sensitivity paritesi ────────────────────────
@@ -106,53 +233,19 @@ def test_KRITIK_em_modul_hizli_sensitivity_ANLAMLI(modul_yolu):
     assert all(t["etki"] > 0 for t in belirleyen), f"{modul_yolu}: sensitivity ~0 (ref-stats bağlanmamış olabilir)"
 
 
-def _fonksiyon_govdesi(src: str, karakter_ofseti: int) -> str:
-    """`karakter_ofseti`ni İÇEREN fonksiyonun tam kaynak gövdesi (AST ile).
+def _uc_dugumu(src: str, yol: str):
+    """Route dekoratörünün ilk argümanı `yol` olan fonksiyonun AST düğümü.
 
-    ⚠️ NEDEN: karakter-pencereli çıpalar araya satır girince sahte-kırmızı verir
-    (2026-09-11'de ölçüldü). Fonksiyon sınırı, "aynı yanıt sözlüğü" sorusunun DOĞRU
-    ölçeğidir ve biçimlendirici satır kırmalarından etkilenmez.
+    ⚠️ `src[i : i + 4000]` karakter penceresinin yerine geçer (ADIM 2 ve ADIM 3'te, 2026-09-11, pencere ucun yanıt sözlüğüne yorum
+    eklenince aranan alanı dışarıda bırakıp SAHTE KIRMIZI verdi). ⚠️ D5.57 (B-10.172): eski `_uc_govdesi` / `_fonksiyon_govdesi`
+    gövdeyi METİN döndürüyordu → yoruma alınmış alan satırı da "var" sayılıyordu; artık düğüm döner, alanlar `_anahtarlar` /
+    `_yayilanlar` ile KODDAN okunur. Dekoratör çağrısının argümanı karşılaştırılır (yorum / docstring'deki yol sayılmaz).
     """
-    import ast as _ast
-
-    satir = src.count("\n", 0, karakter_ofseti) + 1
-    agac = _ast.parse(src)
-    en_iyi = None
-    for d in _ast.walk(agac):
-        if not isinstance(d, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
-            continue
-        son = getattr(d, "end_lineno", d.lineno)
-        if d.lineno <= satir <= son and (en_iyi is None or d.lineno > en_iyi.lineno):
-            en_iyi = d
-    if en_iyi is None:
-        return src
-    satirlar = src.split("\n")
-    return "\n".join(satirlar[en_iyi.lineno - 1 : getattr(en_iyi, "end_lineno", en_iyi.lineno)])
-
-
-def _uc_govdesi(src: str, yol: str) -> str:
-    """Route dekoratöründe `yol` geçen fonksiyonun TAM gövdesi (AST ile).
-
-    ⚠️ `src[i : i + 4000]` karakter penceresinin yerine geçer. Pencere, ucun yanıt sözlüğüne
-    birkaç satır yorum eklenince aranan alanı dışarıda bırakıp SAHTE KIRMIZI veriyor — bu
-    depoda 2026-09-11'de iki kez ölçüldü (ADIM 2 ve ADIM 3). Pencereyi büyütmek kırılmayı
-    yalnız erteler; fonksiyon sınırı sorunun DOĞRU ölçeğidir.
-
-    ⚠️ Dekoratör AST'de `lineno`nun DIŞINDADIR: gövde dekoratör satırından başlatılır, yoksa
-    yol hiçbir fonksiyonla eşleşmez ve kapı sessizce her şeyi kabul ederdi.
-    """
-    import ast as _ast
-
-    agac = _ast.parse(src)
-    satirlar = src.split("\n")
-    for d in _ast.walk(agac):
-        if not isinstance(d, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
-            continue
-        if not d.decorator_list:
-            continue
-        bas = min([d.lineno] + [x.lineno for x in d.decorator_list])
-        if yol in "\n".join(satirlar[bas - 1 : d.lineno]):
-            return "\n".join(satirlar[bas - 1 : getattr(d, "end_lineno", d.lineno)])
+    for d in ast.walk(ast.parse(src)):
+        if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for dek in d.decorator_list:
+                if isinstance(dek, ast.Call) and dek.args and getattr(dek.args[0], "value", None) == yol:
+                    return d
     raise AssertionError(f"{yol} rotasini tasiyan fonksiyon BULUNAMADI (uc silinmis olabilir)")
 
 
@@ -172,9 +265,9 @@ def test_YAPISAL_router_fantom_ve_petri_meta_bagli():
         # pencere dışında bırakıyordu (ölçüldü — sahte kırmızı)
         blok = src[max(0, i - 800) : i + 800]
         assert 'cache["predictor"]' in blok, f"{modul}: sensitivity önbellekli predictor'la çağrılmıyor"
-        assert "except Exception" in blok and "analiz etkilenmedi" in blok, (
-            f"{modul}: XAI meta hatası zarif değil — analiz düşebilir"
-        )
+        # D5.57 (B-10.173): ±800 penceresinde "except Exception" aramak konuma bağlıydı → AST (en içteki try'ın yakalayıcısı).
+        fn = _fonksiyon_dugumu(src, i)
+        _zarif_xai_denemesi(fn, modul)
         assert "asyncio.to_thread" in blok, f"{modul}: sensitivity event-loop üstünde koşuyor (bloklar)"
         # WIRING kilidi (düşman-doğrulama 2026-08-27: **_xai_meta silinince eski test yeşil
         # kalıyordu): meta gerçekten YANITA yayılıyor mu?
@@ -185,8 +278,11 @@ def test_YAPISAL_router_fantom_ve_petri_meta_bagli():
         # kırılmayı yalnız erteler (bu depoda "yapısal çıpa kırılganlığı" olarak kayıtlı).
         # Artık çıpa AST'ye pinli: meta'nın ÜRETİLDİĞİ fonksiyonun KENDİ gövdesinde
         # `**_xai_meta` yayılımı aranır — araya kaç satır girdiği ÖNEMSİZ.
-        _fn = _fonksiyon_govdesi(src, i)
-        assert "**_xai_meta," in _fn, f"{modul}: _xai_meta üretiliyor ama YANITA yayılmıyor"
+        # ⚠️ D5.57 (B-10.172): fonksiyon gövdesi METİN olarak aranıyordu → `# **_xai_meta,` (yorum) da sayılıyordu. Artık
+        # KODDAKİ bir sözlük sabitinde `**_xai_meta` yayılımı (AST).
+        assert any("_xai_meta" in _yayilanlar(s) for s in _sozlukler(fn)), (
+            f"{modul}: _xai_meta üretiliyor ama YANITA yayılmıyor"
+        )
         # Baz-nokta kilidi: açıklama tahminin FİİLEN kullandığı noktada (None → cfg.phantom
         # default'ları; 'or 0.0' yanlış noktada açıklama üretiyordu — 8/8 noktada top-3 farklıydı)
         assert 'cache["cfg"].phantom.achieved_B' in blok, f"{modul}: XAI baz-noktası cfg ikamesiz"
@@ -204,14 +300,15 @@ def test_YAPISAL_ai_service_fantom_ve_petri_meta_PARITESI():
         assert cagri in src, f"ai_service {modul}: xaiSensitivity paritesi kayıp (router dönerken :8100 dönmez)"
         i = src.index(cagri)
         blok = src[max(0, i - 800) : i + 800]
-        assert "except Exception" in blok and "analiz etkilenmedi" in blok, (
-            f"ai_service {modul}: XAI meta hatası zarif değil"
-        )
+        # D5.57 (B-10.173): pencere yerine AST — en içteki try'ın yakalayıcısı `Exception` + "analiz etkilenmedi" uyarısı.
+        fn = _fonksiyon_dugumu(src, i)
+        _zarif_xai_denemesi(fn, f"ai_service {modul}")
         # ⚠️ KARAKTER PENCERESİ TERK EDİLDİ (2026-09-12): çıpa `src[i : i + 1600]` idi ve
         # ADIM 3'te yanıt sözlüğüne `"paneller"` + dört satırlık gerekçe yorumu eklenince
         # `**_xai_meta,` pencerenin DIŞINA taştı → SAHTE KIRMIZI. (Aynı kırılma ADIM 2'de
         # router tarafında yaşanmış ve orada AST'ye pinlenmişti; bu ikizi atlanmış.)
-        assert "**_xai_meta," in _fonksiyon_govdesi(src, i), (
+        # ⚠️ D5.57 (B-10.172): gövde METNİ yerine KODDAKİ sözlükte `**_xai_meta` yayılımı (yorum sayılmaz).
+        assert any("_xai_meta" in _yayilanlar(s) for s in _sozlukler(fn)), (
             f"ai_service {modul}: _xai_meta üretiliyor ama YANITA yayılmıyor"
         )
         assert 'c["cfg"].phantom.achieved_B' in blok, f"ai_service {modul}: XAI baz-noktası cfg ikamesiz"
@@ -235,14 +332,120 @@ def test_YAPISAL_ai_service_landmark_ve_cat_organ_PARITESI():
     """GPU mikroservis yanıtları A2/A4 alanlarını taşımalı (düşman-doğrulama: taşımıyordu —
     rozetler + ölçüm-band paneli GPU dağıtımında sessizce ölüydü)."""
     src = (KOK / "ai_service/app.py").read_text(encoding="utf-8")
+
     # ⚠️ Çıpa AST'ye pinli: `src[i : i + 4000]` karakter penceresi, ucun gövdesine yorum ya da
     # yeni alan girdiğinde aranan alanı dışarıda bırakır (ADIM 2 ve ADIM 3'te iki kez ölçüldü).
-    blok = _uc_govdesi(src, "/infer/landmark")
-    for alan in ('"fgs_bantlari"', '"raw_fgs"', '"action_units"'):
-        assert alan in blok, f"ai_service landmark yanıtı {alan} taşımıyor (A4 GPU'da ölü)"
-    blok = _uc_govdesi(src, "/infer/cat_organ")
-    for alan in ('"mirror_warning"', '"anatomic_consistency"'):
-        assert alan in blok, f"ai_service cat_organ yanıtı {alan} taşımıyor (A2 GPU'da ölü)"
+    # ⚠️ D5.57 (B-10.172): uç gövdesi METİN olarak aranıyordu → yoruma alınmış `# "fgs_bantlari": …` satırı da sayılıyordu.
+    # Artık ucun KODUNDAKİ sözlük sabitlerinin anahtarları (AST; yorum görünmez).
+    # ⚠️ TUR 2 (çürütücü de): ucun TÜM sözlüklerinin anahtarları BİRLEŞTİRİLİYORDU — `raw_fgs` ana yanıttan silinip 400 hata
+    # gövdesine taşınınca YEŞİLDİ. Artık ucun DÖNDÜRDÜĞÜ her YANIT sözlüğü (`"status"` taşıyan `return {…}`) alanları TEK TEK taşır.
+    def _yanit_sozlukleri(yol: str) -> list:
+        donus = [_anahtarlar(s) for s in _donus_sozlukleri(_uc_dugumu(src, yol))]
+        assert donus, f"aparat: ai_service {yol} yanıt sözlüğü bulunamadı (çıpa kaymış)"
+        return donus
+
+    for anahtar in _yanit_sozlukleri("/infer/landmark"):
+        for alan in ("fgs_bantlari", "raw_fgs", "action_units"):
+            assert alan in anahtar, f"ai_service landmark yanıtı {alan!r} taşımıyor (A4 GPU'da ölü): {sorted(anahtar)}"
+        assert _cagri_adi(anahtar["fgs_bantlari"]) == "_fgs_bantlari_tek", (
+            "ai_service landmark bantları TEK-KAYNAK modülden değil"
+        )
+    for anahtar in _yanit_sozlukleri("/infer/cat_organ"):
+        for alan in ("mirror_warning", "anatomic_consistency"):
+            assert alan in anahtar, f"ai_service cat_organ yanıtı {alan!r} taşımıyor (A2 GPU'da ölü): {sorted(anahtar)}"
+
+
+class _Dizi:
+    """torch tensörü taklidi — landmark uçlarının okuduğu yüzey: `[i]`, `len()`, `.cpu()`, `.numpy()`."""
+
+    def __init__(self, a):
+        self._a = np.asarray(a, dtype=np.float32)
+
+    def __getitem__(self, i):
+        return _Dizi(self._a[i])
+
+    def __len__(self):
+        return len(self._a)
+
+    def cpu(self):
+        return self
+
+    def numpy(self):
+        return self._a
+
+
+def _sahte_poz_modeli(kp_piksel: np.ndarray, kutu: list):
+    """YOLO-pose sonucu taklidi: tek kedi yüzü, 48 nokta (piksel), nokta güveni YOK (sevk edilen modelle aynı)."""
+    sonuc = SimpleNamespace(
+        keypoints=SimpleNamespace(xy=_Dizi([kp_piksel]), conf=None),
+        boxes=[SimpleNamespace(xyxy=_Dizi([kutu]))],
+    )
+    return SimpleNamespace(predict=lambda *a, **k: [sonuc])
+
+
+def _renkli_jpg() -> bytes:
+    import cv2
+
+    ok, buf = cv2.imencode(".jpg", (np.random.default_rng(57).random((96, 96, 3)) * 255).astype(np.uint8))
+    assert ok, "aparat: JPEG kodlanamadı"
+    return buf.tobytes()
+
+
+@pytest.mark.parametrize("profil", ["gomulu", "servis"])
+def test_KRITIK_D557_landmark_yaniti_FGS_alanlarini_UST_DUZEYDE_tasir(profil, monkeypatch):
+    """TUR 2 (çürütücü dc / de) — DAVRANIŞ: GERÇEK landmark ucu (gömülü `/api/ai/vision/landmark` ve :8100 `/infer/landmark`;
+    süreç içi TestClient, port YOK) + sahte YOLO-pose sonucu (48 nokta, tohumlu). Yanıtın ÜST DÜZEYİNDE: `detected` true,
+    `fgs_total` = Σ eylem birimi = `raw_fgs.fgs_total` (ürünün `compute_fgs`i ile AYNI girdi → aynı sonuç), `action_units` =
+    `raw_fgs.action_units`, `fgs_bantlari` TEK-KAYNAK bantlar (8 ölçüm, p5/p95). MUTASYON: bantlar `hw_params` iç sözlüğüne (dc) /
+    `raw_fgs` hata gövdesine (de) taşınır, değer `{}` olur → KIRMIZI."""
+    from ai_hub.cat_landmark.inference_cat_landmark import compute_fgs, fgs_bantlari
+
+    kutu = [10.0, 20.0, 110.0, 120.0]
+    kp_norm = np.random.default_rng(557).random((48, 2)).astype(np.float32)
+    kp_piksel = kp_norm * np.array([100.0, 100.0], dtype=np.float32) + np.array([10.0, 20.0], dtype=np.float32)
+    beklenen = compute_fgs((kp_piksel - np.array([10.0, 20.0], dtype=np.float32)) / 100.0)
+    assert beklenen["fgs_total"] >= 0, (
+        "48 noktalı tohumlu girdide compute_fgs skor üretmiyor (-1) — landmark ucu hiçbir yüzü tespit edemez"
+    )
+    model = _sahte_poz_modeli(kp_piksel, kutu)
+    jpg = _renkli_jpg()
+    if profil == "gomulu":
+        import servers.ai_router as air
+        import servers.api_server as apis
+        from utils import image_domain
+
+        monkeypatch.setattr(air, "ai_service_enabled", lambda: False)
+        monkeypatch.setattr(air, "_get_or_load_model", lambda ad, yukleyici: model)
+        monkeypatch.setattr(image_domain, "check", lambda *a, **k: None)  # modalite kapısı bu kapının konusu değil
+        import base64
+
+        r = TestClient(apis.app).post("/api/ai/vision/landmark", data={"image_base64": base64.b64encode(jpg).decode()})
+        bant_beklenen = air._fgs_bantlari()
+    else:
+        import ai_service.app as sapp
+
+        monkeypatch.setattr(sapp, "_kapi", lambda *a, **k: None)
+        monkeypatch.setattr(sapp.predictors, "get", lambda ad: model)
+        r = TestClient(sapp.app).post("/infer/landmark", files={"file": ("y.jpg", jpg, "image/jpeg")})
+        bant_beklenen = fgs_bantlari()
+    assert r.status_code == 200, f"{profil}: landmark ucu {r.status_code}: {r.text[:200]}"
+    j = r.json()
+    assert j.get("detected") is True, f"{profil}: aparat — sahte yüz tespit sayılmadı: {sorted(j)}"
+    eksik = [a for a in ("fgs_total", "raw_fgs", "action_units", "fgs_bantlari") if a not in j]
+    assert not eksik, f"{profil}: landmark YANITI üst düzeyde {eksik} taşımıyor (A2 / A4 alanı düştü): {sorted(j)}"
+    assert set(bant_beklenen) == _BEKLENEN_OLCUMLER and j["fgs_bantlari"] == bant_beklenen, (
+        f"{profil}: yanıttaki bantlar TEK-KAYNAK bantlar değil: {sorted(j['fgs_bantlari'] or {})}"
+    )
+    puanlar = [au["score"] for au in (j["action_units"] or {}).values()]
+    assert j["fgs_total"] == beklenen["fgs_total"] == sum(puanlar), (
+        f"{profil}: fgs_total {j['fgs_total']!r} ≠ compute_fgs {beklenen['fgs_total']!r} / Σ AU {sum(puanlar)}"
+    )
+    assert (j["raw_fgs"] or {}).get("fgs_total") == j["fgs_total"], (
+        f"{profil}: raw_fgs yanıtla çelişiyor: {j['raw_fgs']!r}"
+    )
+    assert j["action_units"] == (j["raw_fgs"] or {}).get("action_units"), (
+        f"{profil}: action_units raw_fgs ile çelişiyor"
+    )
 
 
 def test_KRITIK_ai_service_termal_ses_allowlist_422():
