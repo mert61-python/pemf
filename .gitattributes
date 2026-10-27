@@ -1,0 +1,28 @@
+# İG-6.101 (D5): ikili belge türlerinde git TEXTCONV KAPALI (ikili diff).
+# Git for Windows'un SİSTEM gitattributes'u bu türleri `diff=astextplain` textconv'una bağlar. Textconv aracı (docx2txt /
+# pdftotext) yoksa ya da dosyayı açamazsa `git log -p` / `git diff --staged` stderr'e yazar ya da DÜŞER → gitleaks geçmiş ve
+# pre-commit (--staged) taraması "partial scan" ile KISMİ kalır; düşüşten ESKİ commit'ler hiç taranmaz (ölçüldü: geçmişe konmuş
+# sahte sızıntı kaçtı). Depo içi öznitelik sistemin özniteliğini EZER. Satır sonu (text / eol) özniteliği YOK: checkout değişmez.
+# Kapı: tests/test_gitleaks_gecmis_taramasi_TEXTCONV_kismi_kalmaz_IG6101.py
+*.doc -diff
+*.DOC -diff
+*.docx -diff
+*.DOCX -diff
+*.docm -diff
+*.DOCM -diff
+*.dot -diff
+*.DOT -diff
+*.dotx -diff
+*.DOTX -diff
+*.dotm -diff
+*.DOTM -diff
+*.pdf -diff
+*.PDF -diff
+*.rtf -diff
+*.RTF -diff
+*.ods -diff
+*.ODS -diff
+*.odf -diff
+*.ODF -diff
+*.odt -diff
+*.ODT -diff
