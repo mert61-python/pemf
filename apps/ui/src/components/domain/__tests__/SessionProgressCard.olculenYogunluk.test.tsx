@@ -17,8 +17,9 @@
  *  3. ⚠️ Ölçüm yokken **0 mT gösterilmez**: "0 ölçtük" demek, ölçmediğimizi ölçtük demektir —
  *     bu deponun tekrarlayan arızası (PDF'e "0.0 °C ölçüldü" yazdıran desen).
  *
- * ⚠️ MUTASYON: `measuredIntensityMt != null ?` koşulunu `measuredIntensityMt != undefined ?`
- * (null geçer) ya da doğrudan ölçüm dalına sabitle → 2. ve 3. vaka KIRILIR.
+ * ⚠️ MUTASYON (İG-6.156 · D5, ölçüldü): kural artık `utils/yogunlukGosterimi.canliYogunluk`'ta; ölçüm dalını koşulsuz yapmak
+ * (`if (sayi(olculen))` → `if (true)`) → 2. ve 3. vaka KIRILIR. Eski not (`!= null` → `!= undefined`) EŞDEĞER mutanttı (JS'de
+ * `null == undefined`) ve silinmiş koda bakıyordu — kırmızı vermez.
  */
 import React from "react";
 import { render } from "@testing-library/react-native";

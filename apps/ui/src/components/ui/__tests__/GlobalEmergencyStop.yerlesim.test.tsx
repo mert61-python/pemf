@@ -14,8 +14,10 @@
  *  3. ⚠️ HASTA GÜVENLİĞİ: minHeight ölçekten BAĞIMSIZ olarak 44 px'in altına inmez.
  *  4. compact yalnız DARALTIR ve sağa hizalar — GİZLEMEZ, metni kısaltmaz, tabanı küçültmez.
  *
- * ⚠️ MUTASYON: `Math.max(spacing.md, insets.left)` → `spacing.md` yapılırsa 2. vaka;
- * `Math.max(touch.min, rs(52))` → `rs(52)` yapılırsa 3. vaka KIRILIR (dar telefon ölçeğinde).
+ * ⚠️ MUTASYON: `Math.max(spacing.md, insets.left)` → `spacing.md` yapılırsa 2. vaka KIRILIR (ölçüldü).
+ * İG-6.156 (D5, ölçüldü): `Math.max(touch.min, rs(52))` → `rs(52)` bu dosyayı ve `darEkran`ı KIRMAZ — ölçek tabanı 0,85'te
+ * `rs(52)` her cihazda 44'tür (eşdeğer mutant). Taban kapısını kıran ölçülmüş mutant `rs(52)` → `rs(46)` (tabansız):
+ * `GlobalEmergencyStop.darEkran.test.tsx` 2 vaka KIRMIZI. Bu dosyanın 3. vakası yalnız varsayılan cihazı ölçer.
  */
 import React from "react";
 import { StyleSheet } from "react-native";
