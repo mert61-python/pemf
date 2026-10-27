@@ -7,6 +7,8 @@ onu TOPLAMAZ. Kapılar: `test_soak_ws_OLCER.py` (D0Ö.22) · `test_soak_rss_OLCE
 
 127.0.0.1 RASTGELE portta dinler (sahibin 8000'deki backend'ine ASLA bağlanılmaz): betiğin okuma
 uçlarına 200 döner, `/ws`de RFC 6455 el sıkışmasını yapar ve her isteği (yol + başlıklar) kaydeder.
+D5 G-1: `http_davranis` ile okuma uçları 5xx / yanıtsız kapanış / ön-uçuşta 422 da döndürebilir
+(kapı: `test_soak_http_hata_OLCER_D5G1.py` — eskiden aparat hep 200 döndüğü için HTTP-hata kolu kapısızdı).
 """
 
 from __future__ import annotations
@@ -40,10 +42,23 @@ class SahteBackend:
     davranır; sonrakiler reddedilir / açık kalıp HİÇ mesaj yollamaz.
 
     ⚠️ D0Ö.22 ek: yükseltme YALNIZ `/ws` yolunda kabul edilir (Starlette bilinmeyen WS yoluna 403
-    döner); `ws_yukseltme_sayisi` da yalnız `/ws`i sayar — yanlış yol regresyonu kapıdan geçemez."""
+    döner); `ws_yukseltme_sayisi` da yalnız `/ws`i sayar — yanlış yol regresyonu kapıdan geçemez.
 
-    def __init__(self, ws_davranis: str):
+    http_davranis (D5 G-1): "200" → okuma uçları hep 200 · "on_ucus_422" → `/api/history/` HER ZAMAN 422
+    (betiğin ön-uçuşu reddetmeli) · "5xx" / "kes" / "tek_500" → yalnız ön-uçuş BİTTİKTEN sonra (ilk `/ws`
+    yükseltmesi = betiğin WS ön-uçuşu görüldü): her 3. istek 503 döner / her 3. istek YANITSIZ kesilir
+    (istemcide bağlantı koptu → betik kod 0 sayar) / yalnız İLK istek 500 döner. Döndürülen ya da kesilen
+    her istek `http_hata`yı artırır — kapı betiğin saydığı `hata`yı bununla birebir karşılaştırır."""
+
+    _HTTP_DAVRANISLARI = ("200", "on_ucus_422", "5xx", "kes", "tek_500")
+
+    def __init__(self, ws_davranis: str, http_davranis: str = "200"):
+        if http_davranis not in self._HTTP_DAVRANISLARI:
+            raise ValueError(f"http_davranis {http_davranis!r} bilinmiyor: {self._HTTP_DAVRANISLARI}")
         self.ws_davranis = ws_davranis
+        self.http_davranis = http_davranis
+        self.http_sirasi = 0  # ön-uçuştan SONRAKİ HTTP (yükseltmesiz) istek sayısı
+        self.http_hata = 0  # 5xx döndürülen ya da yanıtsız kesilen istek sayısı
         self.istekler: list[tuple[str, dict]] = []
         self.ws_sirasi = 0
         self._kilit = threading.Lock()
@@ -61,6 +76,21 @@ class SahteBackend:
 
     def ws_yukseltme_sayisi(self) -> int:
         return sum(1 for yol, b in self.istekler if yol == "/ws" and b.get("upgrade", "").lower() == "websocket")
+
+    def _http_hatasi(self, yol: str) -> str:
+        """Bu HTTP isteğine dönülecek hata durum satırı ("" = 200; "kes" = yanıtsız kapat). Bkz. `http_davranis`."""
+        d = self.http_davranis
+        if d == "on_ucus_422":
+            return "422 Unprocessable Entity" if yol == "/api/history/" else ""
+        with self._kilit:
+            if self.ws_sirasi == 0:  # ön-uçuş (HTTP + WS) bitmeden hata YOK — soak başlamalı
+                return ""
+            self.http_sirasi += 1
+            # 1/3 oran (1/2 DEĞİL): başarılıları sayan ters-yön hatası, hata sayısıyla tesadüfen eşitlenmesin.
+            if d == "200" or not (self.http_sirasi == 1 if d == "tek_500" else self.http_sirasi % 3 == 0):
+                return ""
+            self.http_hata += 1  # yanıt yollanmadan ÖNCE sayılır: istemci gördüğünde sayaç güncel
+        return {"5xx": "503 Service Unavailable", "kes": "kes", "tek_500": "500 Internal Server Error"}[d]
 
     def _dongu(self) -> None:
         while not self.dur.is_set():
@@ -121,6 +151,12 @@ class SahteBackend:
                 while not self.dur.is_set():
                     time.sleep(0.4)
                     c.sendall(_metin_cercevesi('{"type":"telemetri"}'))
+                return
+            hata = self._http_hatasi(yol)
+            if hata == "kes":
+                return  # finally: TCP yanıtsız kapanır → istemcide RemoteDisconnected (betik için kod 0)
+            if hata:
+                c.sendall(f"HTTP/1.1 {hata}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode("ascii"))
                 return
             govde = b'{"ok": true}'
             c.sendall(
