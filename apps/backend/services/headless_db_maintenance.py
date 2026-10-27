@@ -594,7 +594,6 @@ class HeadlessDBMaintenance:
         `\\\\127.0.0.1\\C$\\…`, `\\\\<bu makine>\\C$\\…`) yerel sürücü yoluna indirger — ağa ÇIKMADAN (yalnız dizgi + yerel makine adı).
         `realpath` önekli girdiyi önekli bırakır, UNC'yi sürücü harfine çevirmez → kök-içi hedef "kök dışı" sayılıyordu (ölçüldü)."""
         import re
-        import socket
 
         y = str(yol)
         if y.startswith("\\\\?\\UNC\\"):
@@ -602,15 +601,33 @@ class HeadlessDBMaintenance:
         elif y.startswith("\\\\?\\"):
             y = y[4:]
         m = re.match(r"^\\\\([^\\]+)\\([A-Za-z])\$(\\.*)?$", y)
-        if m:
-            yerel = {"localhost", "127.0.0.1", "::1", "[::1]", "."}
-            for ad in (os.environ.get("COMPUTERNAME", ""), socket.gethostname()):
-                if ad:
-                    yerel.add(ad.lower())
-            ana = m.group(1).lower()
-            if ana in yerel or ana.startswith("127."):
-                y = f"{m.group(2)}:{m.group(3) or os.sep}"
+        if m and HeadlessDBMaintenance._bu_makine_mi(m.group(1)):
+            y = f"{m.group(2)}:{m.group(3) or os.sep}"
         return y
+
+    @staticmethod
+    def _bu_makine_mi(ana: str) -> bool:
+        """UNC ana bilgisayar adı BU makine mi — yalnız dizgi + yerel makine adı (ağ / DNS sorgusu YOK)."""
+        import socket
+
+        yerel = {"localhost", "127.0.0.1", "::1", "[::1]", "."}
+        for ad in (os.environ.get("COMPUTERNAME", ""), socket.gethostname()):
+            if ad:
+                yerel.add(ad.lower())
+        a = str(ana).lower()
+        return a in yerel or a.startswith("127.")
+
+    @staticmethod
+    def _ayni_makinenin_paylasimi_mi(dest: str) -> bool:
+        """2-F incelemesi §10 #8 (D5): hedef BU makinenin yönetici OLMAYAN bir paylaşımı mı (`\\\\KLINIK-PC\\PEMF_Yedek`,
+        `\\\\localhost\\PEMF_Yedek`)? Yönetici paylaşımı (`X$`) `_yerel_esdeger`le yerel yola iner; adlı paylaşımın hangi klasöre denk
+        geldiği ağ / API sorgusu (NetShareGetInfo) olmadan bilinemez — YAPILMAZ. Yalnız dizgi. Kapı:
+        tests/test_makine_disi_hedef_AYNI_makine_paylasimi_UYARIR_D5E8.py"""
+        import re
+
+        y = HeadlessDBMaintenance._yerel_esdeger(dest)
+        m = re.match(r"^\\\\([^\\?.][^\\]*)\\[^\\]+", y)
+        return bool(m) and HeadlessDBMaintenance._bu_makine_mi(m.group(1))
 
     def _hedef_veri_kokunde_mi(self, dest: str) -> bool:
         """S-E2I.4: `dest` (mutlak + gerçek yol, Windows'ta harf duyarsız) veri kökünün KENDİSİ ya da altı mı? Çözülemezse True
@@ -647,6 +664,16 @@ class HeadlessDBMaintenance:
                 self.app_data_dir,
             )
             return
+        if self._ayni_makinenin_paylasimi_mi(dest):
+            # ⚠️ 2-F incelemesi §10 #8 (D5 · A3 açık #9): BU makinenin adlı paylaşımı "makine dışı" sayılıyor, kopya doğrulanınca günlük
+            # "baska makinede geri yuklenebilir" diyordu — kopya AYNI bilgisayarda kalır ve paylaşım veri kökünü gösteriyorsa kaldırma /
+            # tam temizlik onu da siler (ağ sorgusu olmadan çözülemez). Kopya DURMAZ (paylaşım kök dışında olabilir); uyarı her turda.
+            logger.warning(
+                "Makine disi yedek hedefi (PEMF_BACKUP_DIR=%s) BU bilgisayarin paylasimi — kopya ayni bilgisayarda kalir (disk arizasinda "
+                "yedekle birlikte kaybolabilir) ve paylasimin hangi klasore denk geldigi ag sorgusu yapilmadan bilinemez (PEMF veri koku "
+                "icindeyse kaldirma / tam temizlik onu da siler). Cozum: baska bir bilgisayarin paylasimini ya da USB disk kullanin.",
+                dest,
+            )
         try:
             dpath = Path(dest)
             dpath.mkdir(parents=True, exist_ok=True)
