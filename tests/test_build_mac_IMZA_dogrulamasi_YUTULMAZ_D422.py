@@ -16,13 +16,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "build_tools" / "build_mac.sh"
 BASH = shutil.which("bash")
 
-pytestmark = pytest.mark.skipif(BASH is None, reason="bash yok")
+pytestmark = pytest.mark.skipif((BASH is None) and not capraz.ZORUNLU, reason="bash yok")
 
 
 def _blok_ve_die() -> tuple[str, str]:

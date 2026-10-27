@@ -20,6 +20,7 @@ import math
 import struct
 import wave
 
+import capraz
 import pytest
 from fastapi.testclient import TestClient
 
@@ -32,7 +33,7 @@ SR = 22050
 # (18 test) ile ffmpeg'siz doğrulanıyor; burada kilitlenen şey HTTP davranışıdır.
 _FFMPEG_VAR = importlib.util.find_spec("imageio_ffmpeg") is not None
 _ffmpeg_gerekir = pytest.mark.skipif(
-    not _FFMPEG_VAR,
+    (not _FFMPEG_VAR) and not capraz.ZORUNLU,
     reason="imageio_ffmpeg yok (CI hafif bağımlılık seti) — ses çözülemez, uç çalışamaz",
 )
 

@@ -246,7 +246,7 @@ def _ffmpeg_var() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _ffmpeg_var(), reason="imageio_ffmpeg binary yok")
+@pytest.mark.skipif((not _ffmpeg_var()) and not capraz.ZORUNLU, reason="imageio_ffmpeg binary yok")
 def test_KRITIK_mikroserviste_SESSIZ_kayit_REDDEDILIR(client, mikroservis, tmp_path):
     """Sessiz kayıt → mikroservis modunda da 422; GPU servisine devredilmemeli.
 
@@ -262,7 +262,7 @@ def test_KRITIK_mikroserviste_SESSIZ_kayit_REDDEDILIR(client, mikroservis, tmp_p
     assert not mikroservis, f"kapi reddetmesine ragmen GPU servisine devredildi: {mikroservis}"
 
 
-@pytest.mark.skipif(not _ffmpeg_var(), reason="imageio_ffmpeg binary yok")
+@pytest.mark.skipif((not _ffmpeg_var()) and not capraz.ZORUNLU, reason="imageio_ffmpeg binary yok")
 def test_KRITIK_mikroserviste_GERCEK_kayit_hala_DEVREDILIR_karsit_kanit(client, mikroservis):
     """Karşıt-kanıt: düzeltme "her şeyi reddet"e dönüşmemeli VE baytlar gerçekten geçmeli.
 
@@ -285,7 +285,7 @@ def test_KRITIK_mikroserviste_GERCEK_kayit_hala_DEVREDILIR_karsit_kanit(client, 
     )
 
 
-@pytest.mark.skipif(not _ffmpeg_var(), reason="imageio_ffmpeg binary yok")
+@pytest.mark.skipif((not _ffmpeg_var()) and not capraz.ZORUNLU, reason="imageio_ffmpeg binary yok")
 def test_GOMULU_mod_sessizlik_karsit_kanit(client, api, monkeypatch, tmp_path):
     """Karşıt-kanıt: mikroservis KAPALIYKEN sessizlik kapısı davranışı hiç değişmemeli."""
     monkeypatch.setattr(api, "ai_service_enabled", lambda: False)

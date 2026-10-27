@@ -21,6 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -66,7 +67,10 @@ def test_uretilmis_dosyalar_guncel_ve_dil_listesi_bayrakla_uyumlu():
     assert " 1055 " in blok and ((" 1033 " in blok) == acik), "LangString blok dilleri NSIS dil listesiyle ayrışmış"
 
 
-@pytest.mark.skipif(MAKENSIS is None, reason="makensis yok (Tauri NSIS önbelleği / PATH) — derleme denemesi atlandı")
+@pytest.mark.skipif(
+    (MAKENSIS is None) and not capraz.ZORUNLU,
+    reason="makensis yok (Tauri NSIS önbelleği / PATH) — derleme denemesi atlandı",
+)
 @pytest.mark.parametrize("diller", [["Turkish"], ["Turkish", "English"]])
 def test_hooks_makensis_WX_temiz_derlenir(tmp_path, diller):
     """Tauri şablonunun sırası: hooks !include → MUI_LANGUAGE; makrolar bölümde açılır. Aynı sırayla asgari betik."""
@@ -135,7 +139,7 @@ process.stdout.write(JSON.stringify(sonuc));
 """
 
 
-@pytest.mark.skipif(not shutil.which("node"), reason="node yok")
+@pytest.mark.skipif((not shutil.which("node")) and not capraz.ZORUNLU, reason="node yok")
 def test_arayuz_t_KATALOGU_sozlugun_ustune_bindirir_gocen_anahtar_TEK_kaynakta(tmp_path):
     """P1 · 11a: `t()` YALNIZ katalogdan okur; her `ui.*` (düz metin) anahtarı iki dilde katalogdaki değeri verir ve index.html'de ESKİ
     `I18N` sözlüğü ARTIK YOK (iki kaynak olamaz). Eski sözlükteki anahtarlar (ör. `web`) katalogdan aynen gelir."""

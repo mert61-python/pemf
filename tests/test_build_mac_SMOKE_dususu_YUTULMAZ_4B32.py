@@ -18,6 +18,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -54,7 +55,7 @@ def _kos(tmp_path: Path, kod: int) -> subprocess.CompletedProcess:
     )
 
 
-@pytest.mark.skipif(BASH is None, reason="bash yok")
+@pytest.mark.skipif((BASH is None) and not capraz.ZORUNLU, reason="bash yok")
 @pytest.mark.parametrize("kod", [1, 137])
 def test_KRITIK_smoke_DUSERSE_paketleme_YAPILMAZ(tmp_path, kod):
     r = _kos(tmp_path, kod)
@@ -67,7 +68,7 @@ def test_KRITIK_smoke_DUSERSE_paketleme_YAPILMAZ(tmp_path, kod):
     )
 
 
-@pytest.mark.skipif(BASH is None, reason="bash yok")
+@pytest.mark.skipif((BASH is None) and not capraz.ZORUNLU, reason="bash yok")
 def test_KARSIT_smoke_GECERSE_paketlemeye_gecer(tmp_path):
     r = _kos(tmp_path, 0)
     assert r.returncode == 0 and "SURUCU-SONU-PAKETLEME" in r.stdout, f"{r.stdout}\n{r.stderr}"
