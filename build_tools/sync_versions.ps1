@@ -51,7 +51,17 @@ function Set-Value {
         [switch]$FirstOnly
     )
     $full = Join-Path $ProjectRoot $Path
-    if (-not (Test-Path $full)) { Write-Host "  [ATLA] $Label - dosya yok: $Path" -ForegroundColor DarkYellow; return }
+    # D5.13 (B-9.10): -Check'te hedefi OLMAYAN kanal SORUNDUR. Eskiden [ATLA] + return idi -> kanal dosyasi
+    # silinse / yeniden adlansa da -Check "uyumlu" + exit 0 diyordu (kanal hicbir yerde senkronlanmiyor, kapi yesil).
+    # Yazma kipinde davranis degismez (build betikleri). Kapi: tests/test_sync_versions_CHECK_eksik_hedef_D5_13.py
+    if (-not (Test-Path $full)) {
+        if ($Check) {
+            Write-Host "  [YOK]  $Label - hedef dosya yok: $Path" -ForegroundColor Red
+            $script:sorun++
+            return
+        }
+        Write-Host "  [ATLA] $Label - dosya yok: $Path" -ForegroundColor DarkYellow; return
+    }
 
     $raw = [System.IO.File]::ReadAllText($full)
     $m = [regex]::Match($raw, $Pattern)
