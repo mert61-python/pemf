@@ -14,6 +14,7 @@
 jest.mock("@/services/supabaseAuth", () => ({
   supabaseAuth: {
     auth: { getUser: jest.fn(), getSession: jest.fn() },
+    rpc: jest.fn(),
     from: jest.fn(),
   },
 }));
@@ -32,7 +33,7 @@ import { supabaseAuth } from "@/services/supabaseAuth";
 import { EntitlementProvider, useEntitlement, HAK_YENIDEN_DENEME_MS } from "@/context/EntitlementContext";
 import { planRozetiMetni, abonelikDogrulanamadi } from "@/config/entitlement";
 
-const sb = supabaseAuth as unknown as { auth: { getUser: jest.Mock; getSession: jest.Mock }; from: jest.Mock };
+const sb = supabaseAuth as unknown as { auth: { getUser: jest.Mock; getSession: jest.Mock }; rpc: jest.Mock; from: jest.Mock };
 const basliklar = setEntitlementHeaders as jest.Mock;
 
 function Rozet() {
@@ -50,7 +51,7 @@ const AG_HATASI = { data: { user: null }, error: new AuthRetryableFetchError("Fa
 const KULLANICI = { data: { user: { id: "u1", created_at: new Date().toISOString() } }, error: null };
 const UCRETLI = { tier: "pro", status: "active", addons: [], trial_ends_at: null, current_period_end: null };
 const satir = (yanit: { data: unknown; error: unknown; status: number }) =>
-  sb.from.mockReturnValue({ select: () => ({ eq: () => ({ maybeSingle: async () => yanit }) }) });
+  sb.rpc.mockReturnValue({ maybeSingle: async () => yanit });
 
 beforeEach(() => {
   jest.clearAllMocks();

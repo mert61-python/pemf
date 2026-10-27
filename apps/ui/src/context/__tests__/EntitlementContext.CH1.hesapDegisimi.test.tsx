@@ -11,6 +11,7 @@
 jest.mock("@/services/supabaseAuth", () => ({
   supabaseAuth: {
     auth: { getUser: jest.fn(), getSession: jest.fn() },
+    rpc: jest.fn(),
     from: jest.fn(),
   },
 }));
@@ -28,7 +29,7 @@ import { setAuthBearer, setEntitlementHeaders } from "@/services/apiClient";
 import { supabaseAuth } from "@/services/supabaseAuth";
 import { EntitlementProvider, useEntitlement } from "@/context/EntitlementContext";
 
-const mockSb = supabaseAuth as unknown as { auth: { getUser: jest.Mock; getSession: jest.Mock }; from: jest.Mock };
+const mockSb = supabaseAuth as unknown as { auth: { getUser: jest.Mock; getSession: jest.Mock }; rpc: jest.Mock; from: jest.Mock };
 const mockHeaders = setEntitlementHeaders as jest.Mock;
 const mockBearer = setAuthBearer as jest.Mock;
 
@@ -43,8 +44,8 @@ beforeEach(() => {
   mockSession = { email: "a@klinik.com" };
   mockSb.auth.getUser.mockResolvedValue({ data: { user: { id: "uA", created_at: new Date().toISOString() } } });
   mockSb.auth.getSession.mockResolvedValue({ data: { session: { access_token: "jwt-A" } } });
-  mockSb.from.mockReturnValue({
-    select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { tier: "pro_plus", status: "active", addons: ["research"] }, error: null }) }) }),
+  mockSb.rpc.mockReturnValue({
+    maybeSingle: async () => ({ data: { tier: "pro_plus", status: "active", addons: ["research"] }, error: null }),
   });
 });
 

@@ -16,6 +16,7 @@
 jest.mock("@/services/supabaseAuth", () => ({
   supabaseAuth: {
     auth: { getUser: jest.fn(), getSession: jest.fn() },
+    rpc: jest.fn(),
     from: jest.fn(),
   },
 }));
@@ -31,7 +32,7 @@ import { setEntitlementHeaders } from "@/services/apiClient";
 import { supabaseAuth } from "@/services/supabaseAuth";
 import { EntitlementProvider, useEntitlement } from "@/context/EntitlementContext";
 
-const sb = supabaseAuth as unknown as { auth: { getUser: jest.Mock; getSession: jest.Mock }; from: jest.Mock };
+const sb = supabaseAuth as unknown as { auth: { getUser: jest.Mock; getSession: jest.Mock }; rpc: jest.Mock; from: jest.Mock };
 const basliklar = setEntitlementHeaders as jest.Mock;
 let yenile: () => Promise<void> = async () => undefined;
 
@@ -43,7 +44,7 @@ function Probe() {
 const kur = () => render(<EntitlementProvider><Probe /></EntitlementProvider>);
 const KULLANICI = { data: { user: { id: "u1", created_at: new Date().toISOString() } }, error: null };
 const satir = (yanit: { data: unknown; error: unknown; status: number }) =>
-  sb.from.mockReturnValue({ select: () => ({ eq: () => ({ maybeSingle: async () => yanit }) }) });
+  sb.rpc.mockReturnValue({ maybeSingle: async () => yanit });
 const UCRETLI = { tier: "pro_plus", status: "active", addons: ["research"], trial_ends_at: null, current_period_end: null };
 
 beforeEach(() => {

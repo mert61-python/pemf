@@ -27,10 +27,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 _KOK = Path(__file__).resolve().parent.parent
 
 # Taranan kaynak agaclari (uretim kodu; testler ve dokumanlar haric).
-_AGACLAR = ("apps/web/api", "apps/web/src", "apps/ui/src", "servers", "services")
+# ⚠️ D5.40 (B-3.17): "servers", "services" F4 tasimasindan (09-18) beri depo kokunde YOK ve tarama sessizce `continue`
+# ediyordu → backend (`apps/backend/servers/entitlement.py` dahil) HIC taranmiyordu. Artik kok YOKSA kapi DUSER.
+_AGACLAR = ("apps/web/api", "apps/web/src", "apps/ui/src", "apps/backend")
 _UZANTI = (".ts", ".tsx", ".py")
 
 # ⚠️ SERVICE_ROLE ISTISNALARI — dosya bazinda. Bu dosyalardaki dogrudan tablo cagrilari
@@ -43,6 +47,11 @@ _SERVICE_ROLE_DOSYALARI = {
 }
 
 _REST = re.compile(r"rest/v1/(?!rpc\b)([A-Za-z_][A-Za-z_0-9]*)")
+# D5.40: istemci kutuphaneleriyle DOGRUDAN tablo okumasi — supabase-js `.from("<tablo>")` (Array / Buffer / storage haric) ve
+# supabase-py `.table("<tablo>")...select(` (yazma yolu bu kapinin konusu degil). Zincir satir atlayabilir → tum metinde aranir.
+_JS_FROM = re.compile(r"(?<![\w$])(\w+)?\s*\.\s*from\(\s*[\"'`]([A-Za-z_]\w*)[\"'`]\s*\)")
+_JS_FROM_DISI = {"Array", "Buffer", "Uint8Array", "storage", "Object"}
+_PY_TABLE = re.compile(r"\.table\(\s*[\"']([A-Za-z_]\w*)[\"']\s*\)\s*\.\s*select\(")
 
 # ⚠️ YORUMLAR SOYULUR — yoksa test KENDI BELGESINI hata sanar. Bu tasinma sirasinda tam olarak
 # oyle oldu: "eskiden /rest/v1/token_balances okunuyordu" diye yazilan ACIKLAMA satirlari sapma
@@ -63,13 +72,39 @@ def _soy(p: Path, govde: str) -> str:
 
 
 def _kaynaklar():
+    eksik = [a for a in _AGACLAR if not (_KOK / a).is_dir()]
+    assert not eksik, (
+        f"okuma-RPC kapisi koku YOK: {eksik} — kok tasindiysa listeyi guncelle (sessiz atlama kor kapiydi: D5.40)"
+    )
     for agac in _AGACLAR:
         kok = _KOK / agac
-        if not kok.exists():
-            continue
-        for p in kok.rglob("*"):
-            if p.suffix in _UZANTI and "__tests__" not in p.parts and "node_modules" not in p.parts:
-                yield p
+        bulunan = [
+            p
+            for p in kok.rglob("*")
+            if p.suffix in _UZANTI and "__tests__" not in p.parts and "node_modules" not in p.parts
+        ]
+        assert bulunan, f"okuma-RPC kapisi koku BOS: {agac}"
+        yield from bulunan
+
+
+def _dogrudan_okumalar(p: Path, soyulmus: str) -> list[str]:
+    """rest/v1/<tablo> + supabase-js `.from("<tablo>")` + supabase-py `.table("<tablo>").select(` (satir numarasiyla)."""
+    rel = p.relative_to(_KOK).as_posix() if p.is_absolute() else p.as_posix()
+    sapma = []
+
+    def satir(i: int) -> int:
+        return soyulmus.count("\n", 0, i) + 1
+
+    for m in _REST.finditer(soyulmus):
+        sapma.append(f"{rel}:{satir(m.start())} -> rest/v1/{m.group(1)}")
+    if p.suffix in (".ts", ".tsx"):
+        for m in _JS_FROM.finditer(soyulmus):
+            if (m.group(1) or "") not in _JS_FROM_DISI:
+                sapma.append(f"{rel}:{satir(m.start())} -> .from({m.group(2)!r})")
+    if p.suffix == ".py":
+        for m in _PY_TABLE.finditer(soyulmus):
+            sapma.append(f"{rel}:{satir(m.start())} -> .table({m.group(1)!r}).select")
+    return sapma
 
 
 def test_KRITIK_kullanici_anahtariyla_DOGRUDAN_tablo_okunmaz():
@@ -78,16 +113,47 @@ def test_KRITIK_kullanici_anahtariyla_DOGRUDAN_tablo_okunmaz():
         rel = p.relative_to(_KOK).as_posix()
         if rel in _SERVICE_ROLE_DOSYALARI:
             continue
-        soyulmus = _soy(p, p.read_text(encoding="utf-8", errors="replace"))
-        for satir_no, satir in enumerate(soyulmus.splitlines(), 1):
-            for m in _REST.finditer(satir):
-                sapma.append(f"{rel}:{satir_no} -> rest/v1/{m.group(1)}")
+        sapma += _dogrudan_okumalar(p, _soy(p, p.read_text(encoding="utf-8", errors="replace")))
 
     assert not sapma, (
         "Kullanici anahtariyla DOGRUDAN tablo erisimi bulundu. Bu yol artik kapali (sahip karari "
         "2026-08-21): okuma SECURITY DEFINER RPC uzerinden yapilmali, cunku tablolarda hicbir role "
         "GRANT birakilmiyor.\n  " + "\n  ".join(sapma)
     )
+
+
+def test_KRITIK_D5_40_backend_ve_arayuz_GERCEKTEN_taraniyor():
+    """Vakum degil: backend RPC okuyucusu (`entitlement.py`) ve arayuz hak baglami taranan kumede."""
+    rel = {p.relative_to(_KOK).as_posix() for p in _kaynaklar()}
+    for beklenen in ("apps/backend/servers/entitlement.py", "apps/ui/src/context/EntitlementContext.tsx"):
+        assert beklenen in rel, f"{beklenen} okuma-RPC kapisinda TARANMIYOR"
+
+
+@pytest.mark.parametrize(
+    ("ad", "kaynak", "beklenen"),
+    [
+        ("a.ts", 'await supabase.from("token_balances").select("*");', 1),
+        ("a.ts", 'const r = await sb\n  .from(`subscriptions`)\n  .select("tier");', 1),
+        ("a.ts", "const x = Array.from(\"abc\"); const b = Buffer.from(\"x\"); supabase.storage.from(\"kova\");", 0),
+        ("a.ts", 'await supabase.rpc("abonelik_getir").maybeSingle();', 0),
+        ("a.py", 'self.client.table("subscriptions").select("tier").execute()', 1),
+        ("a.py", 'self.client.table("devices").upsert(x, on_conflict="device_id").execute()', 0),
+        ("a.py", 'url = f"{base}/rest/v1/subscriptions?select=tier"', 1),
+        ("a.py", 'url = f"{base}/rest/v1/rpc/abonelik_getir"', 0),
+    ],
+    ids=[
+        "js_from",
+        "js_from_cok_satir",
+        "js_from_disi",
+        "js_rpc",
+        "py_table_select",
+        "py_table_yazma",
+        "rest_tablo",
+        "rest_rpc",
+    ],
+)
+def test_KARSIT_KANIT_D5_40_dogrudan_okuma_tarayicisi(ad, kaynak, beklenen):
+    assert len(_dogrudan_okumalar(Path(ad), kaynak)) == beklenen
 
 
 def test_KARSIT_KANIT_service_role_istisnasi_GERCEKTEN_service_role_kullaniyor():

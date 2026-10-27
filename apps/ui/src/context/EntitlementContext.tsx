@@ -1,8 +1,10 @@
 // Author: mertaygn, cglrgrkn
 /**
  * EntitlementContext — kullanıcının abonelik hakkını (tier/eklenti/deneme) Supabase'den okur
- * ve uygulamaya sağlar (A1: mobil satmaz, yalnız okur). `subscriptions` tablosu/satırı yoksa
+ * ve uygulamaya sağlar (A1: mobil satmaz, yalnız okur). Abonelik satırı yoksa
  * → 14 günlük deneme varsayılanı (graceful; tablo canlı olmadan da app çalışır).
+ * D5.40 (sahip kararı 2026-08-21 "okumaları RPC'ye taşı"): okuma `abonelik_getir()` SECURITY DEFINER RPC'siyle — tabloda
+ * hiçbir role yetki yok (`supabase_okuma_rpc.sql`); backend `servers/entitlement.py` aynı RPC'yi okur.
  */
 import React, {
   createContext,
@@ -49,6 +51,15 @@ const EntitlementContext = createContext<Ctx | undefined>(undefined);
 const UNKNOWN: unique symbol = Symbol("entitlement-unknown");
 type FetchResult = Entitlement | typeof UNKNOWN;
 
+/** `abonelik_getir()` dönüş satırı — RPC imzası (`apps/backend/database/supabase_okuma_rpc.sql`). */
+type AbonelikSatiri = {
+  tier: string | null;
+  addons: unknown;
+  status: string | null;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+};
+
 async function fetchEntitlement(): Promise<FetchResult> {
   try {
     // ⚠️ D1.63 (B-6.7): supabase-js `getUser()` ağ hatasında FIRLATMAZ — `{data:{user:null}, error: AuthRetryableFetchError}`
@@ -61,13 +72,13 @@ async function fetchEntitlement(): Promise<FetchResult> {
     } = await supabaseAuth.auth.getUser();
     if (kullaniciHatasi && isAuthRetryableFetchError(kullaniciHatasi)) return UNKNOWN;
     if (!user) return defaultEntitlement();
-    const { data, error, status: httpDurum } = await supabaseAuth
-      .from("subscriptions")
-      .select("tier,status,addons,trial_ends_at,current_period_end")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    // Kimlik `auth.uid()`ten (parametre YOK); dönen alanlar RPC imzasında sabit (tier, addons, status, trial_ends_at, current_period_end).
+    const { data, error, status: httpDurum } = await supabaseAuth.rpc("abonelik_getir").maybeSingle<AbonelikSatiri>();
     // postgrest-js istek reddini (ağ) `status: 0` ile döndürür — o da "bilinmiyor"dur, abonelik satırı YOK değil.
     if (error && httpDurum === 0) return UNKNOWN;
+    // ⚠️ D5.40 · B-3.56: YETKİ REDDİ (42501 / HTTP 401 / 403) "abonelik yok" DEĞİLDİR — eskiden varsayılan denemeye
+    // düşülüyordu (ücretli kullanıcı "Başlangıç"). Bilinmiyor sayılır: bilinen son hak korunur, yoksa Y58 "doğrulanamadı".
+    if (error && (error.code === "42501" || httpDurum === 401 || httpDurum === 403)) return UNKNOWN;
     if (error || !data) return defaultEntitlement(user.created_at);
     // Şekil doğrula (backend gibi savunmacı): bilinmeyen tier/status → güvenli varsayılan;
     // addons dizi değilse [] (aksi halde [...e.addons] / includes çökerdi).

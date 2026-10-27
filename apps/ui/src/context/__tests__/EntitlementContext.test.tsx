@@ -17,6 +17,7 @@
 jest.mock("@/services/supabaseAuth", () => ({
   supabaseAuth: {
     auth: { getUser: jest.fn(), getSession: jest.fn() },
+    rpc: jest.fn(),
     from: jest.fn(),
   },
 }));
@@ -36,6 +37,7 @@ import { EntitlementProvider, useEntitlement } from "@/context/EntitlementContex
 
 const mockSb = supabaseAuth as unknown as {
   auth: { getUser: jest.Mock; getSession: jest.Mock };
+  rpc: jest.Mock;
   from: jest.Mock;
 };
 const mockHeaders = setEntitlementHeaders as jest.Mock;
@@ -46,11 +48,9 @@ function Probe() {
 }
 const setup = () => render(<EntitlementProvider><Probe /></EntitlementProvider>);
 
-/** `supabase.from(...).select(...).eq(...).maybeSingle()` zincirini taklit et. */
-const mockRow = (data: unknown, error: unknown = null) => {
-  mockSb.from.mockReturnValue({
-    select: () => ({ eq: () => ({ maybeSingle: async () => ({ data, error }) }) }),
-  });
+/** D5.40: `supabase.rpc("abonelik_getir").maybeSingle()` zincirini taklit et (tablo DOĞRUDAN okunmaz). */
+const mockRow = (data: unknown, error: unknown = null, status = 200) => {
+  mockSb.rpc.mockReturnValue({ maybeSingle: async () => ({ data, error, status }) });
 };
 
 beforeEach(() => {
@@ -105,6 +105,46 @@ it("KRİTİK #47: ÇIKIŞ sonrası çözülen bayat refresh önceki kullanıcın
 
   expect(getByTestId("tier").props.children).toBe("baslangic");        // hak geri gelmedi
   expect(mockHeaders).not.toHaveBeenCalledWith("pro_plus", expect.anything()); // header sızmadı
+});
+
+function DogrulamaProbe() {
+  const { tier, dogrulanamadi } = useEntitlement();
+  return <Text testID="durum">{`${tier}|${dogrulanamadi}`}</Text>;
+}
+
+it("KRİTİK D5.40: hak `rpc('abonelik_getir')` ile okunur — tablo DOĞRUDAN okunmaz (from() HİÇ çağrılmaz)", async () => {
+  const { getByTestId } = setup();
+  await waitFor(() => expect(getByTestId("tier").props.children).toBe("pro_plus"));
+  expect(mockSb.rpc).toHaveBeenCalledWith("abonelik_getir");
+  expect(mockSb.rpc).toHaveBeenCalledTimes(1);
+  expect(mockSb.from).not.toHaveBeenCalled();
+});
+
+it("KRİTİK D5.40: YETKİ REDDİ (42501) 'abonelik yok' sayılmaz — bilinen ücretli hak KORUNUR", async () => {
+  const { getByTestId, rerender } = setup();
+  await waitFor(() => expect(getByTestId("tier").props.children).toBe("pro_plus"));
+  const once = mockSb.rpc.mock.calls.length;
+  mockRow(null, { code: "42501", message: "permission denied for function abonelik_getir", details: "", hint: "" }, 403);
+  mockSession = { email: "vet@klinik.com" };
+  rerender(<EntitlementProvider><Probe /></EntitlementProvider>);
+  await waitFor(() => expect(mockSb.rpc.mock.calls.length).toBe(once + 1));
+  await act(async () => { await Promise.resolve(); });
+  expect(getByTestId("tier").props.children).toBe("pro_plus");
+});
+
+it("KRİTİK D5.40: ilk açılışta yetki reddi → yer tutucu deneme değil 'doğrulanamadı' (Y58)", async () => {
+  mockRow(null, { code: "42501", message: "permission denied", details: "", hint: "" }, 403);
+  const u = render(<EntitlementProvider><DogrulamaProbe /></EntitlementProvider>);
+  await waitFor(() => expect(mockSb.rpc).toHaveBeenCalled());
+  await act(async () => { await Promise.resolve(); });
+  expect(u.getByTestId("durum").props.children).toBe("baslangic|true");
+  expect(mockHeaders).not.toHaveBeenCalled();
+});
+
+it("KARŞIT D5.40: satır YOKSA (hata yok) varsayılan deneme hakkı — red olmayan boş yanıt 'bilinmiyor' sayılmaz", async () => {
+  mockRow(null, null, 200);
+  const u = render(<EntitlementProvider><DogrulamaProbe /></EntitlementProvider>);
+  await waitFor(() => expect(u.getByTestId("durum").props.children).toBe("baslangic|false"));
 });
 
 it("bilinmeyen tier/status güvenli varsayılana düşer (savunmacı şekil doğrulaması)", async () => {
