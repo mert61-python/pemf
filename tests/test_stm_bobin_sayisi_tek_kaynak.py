@@ -131,9 +131,12 @@ def ust_seviye_elemanlar(govde: str) -> list[str]:
 
 
 #: `<tip> <ad>[NUM_COILS] = {` biçimindeki dosya-kapsamlı dizi tanımları.
+#: ⚠️ D5.50 (B-10.160): tip eskiden yalnız `u?intN_t|float|char` idi → YAPI tipli `PEMF_CoilGPIO_t coil_gpio[NUM_COILS]` (bobin pin
+#: haritası) kapı dışındaydı: 7. bobinin girdisi silinse C onu SIFIRLA doldurur (portA = NULL → ISR NULL'a yazar), derleyici uyarmaz,
+#: kapı YEŞİL kalıyordu (ölçüldü). Artık HER tip (typedef'li yapılar dahil).
 DIZI_TANIMI = re.compile(
-    r"\b(?:static\s+)?(?:volatile\s+)?(?:const\s+)?(?:static\s+)?(?:volatile\s+)?"
-    r"(u?int(?:8|16|32)_t|float|char)\s+(\w+)\s*\[\s*NUM_COILS\s*\]\s*=\s*\{"
+    r"\b(?:static\s+)?(?:volatile\s+)?(?:const\s+)?(?:static\s+)?(?:volatile\s+)?(?:struct\s+)?"
+    r"([A-Za-z_]\w*)\s+(\w+)\s*\[\s*NUM_COILS\s*\]\s*=\s*\{"
 )
 
 
