@@ -30,10 +30,12 @@ $PSModuleAutoLoadingPreference = 'None'
 $ErrorActionPreference = 'Continue'
 function Get-NetFirewallRule {{ [CmdletBinding()] param([Parameter(ValueFromRemainingArguments=$true)]$Rest)
     if ($Rest -contains 'Mosquitto MQTT') {{ return }}
-    if ((Get-Content -LiteralPath {_ps_lit(durum)} -Raw) -match 'var') {{ [pscustomobject]@{{ DisplayName = 'PEMF Mosquitto MQTT' }} }} }}
+    if ((Get-Content -LiteralPath {_ps_lit(durum)} -Raw) -match 'var') {{ [pscustomobject]@{{ DisplayName = 'PEMF Mosquitto MQTT'; Enabled = 'True'; Action = 'Allow'; Direction = 'Inbound'; Profile = 'Any' }} }} }}
 # D3.42: fonksiyon kuralın İÇERİĞİNİ (uzak adres), eski 'Mosquitto MQTT' kuralını ve native servisi de sorar → bunlar da SAHTE; modül
 # OTOMATİK YÜKLEME KAPALI: gölgelenmemiş bir NetSecurity cmdlet'i gerçek güvenlik duvarına ULAŞAMAZ ("komut yok" ile düşer).
 function Get-NetFirewallAddressFilter {{ [CmdletBinding()] param([Parameter(ValueFromPipeline=$true)]$InputObject) process {{ [pscustomobject]@{{ RemoteAddress = '192.168.137.0/24' }} }} }}
+# DEV-C4: fonksiyon kuralın port / protokol / durum içeriğini de okur → gerçek kural nesnesi gibi TAM içerik + port süzgeci gölgesi.
+function Get-NetFirewallPortFilter {{ [CmdletBinding()] param([Parameter(ValueFromPipeline=$true)]$InputObject) process {{ [pscustomobject]@{{ Protocol = 'TCP'; LocalPort = '1883' }} }} }}
 function Set-NetFirewallRule {{ [CmdletBinding()] param([Parameter(ValueFromPipeline=$true)]$InputObject, $RemoteAddress) process {{ throw 'D3.42 aparat: Set beklenmiyor' }} }}
 function Remove-NetFirewallRule {{ [CmdletBinding()] param([Parameter(ValueFromPipeline=$true)]$InputObject) process {{ throw 'D3.42 aparat: Remove beklenmiyor' }} }}
 function Get-Service {{ [CmdletBinding()] param($Name) }}

@@ -39,7 +39,9 @@ function _Oku {{ Get-Content -LiteralPath $Durum -Raw | ConvertFrom-Json -AsHash
 function _Yaz($d) {{ Set-Content -LiteralPath $Durum -Value ($d | ConvertTo-Json -Depth 5) -Encoding UTF8 }}
 function _Olay($m) {{ Add-Content -LiteralPath $Olay -Value $m -Encoding UTF8 }}
 function Get-NetFirewallRule {{ [CmdletBinding()] param($DisplayName)
-    $d = _Oku; if ($d.ContainsKey($DisplayName)) {{ [pscustomobject]@{{ DisplayName = $DisplayName }} }} }}
+    $d = _Oku; if ($d.ContainsKey($DisplayName)) {{ [pscustomobject]@{{ DisplayName = $DisplayName; Enabled = 'True'; Action = 'Allow'; Direction = 'Inbound'; Profile = 'Any' }} }} }}
+# DEV-C4: fonksiyon kuralın port / protokol / durum içeriğini de okur → gerçek kural nesnesi gibi TAM içerik + port süzgeci gölgesi.
+function Get-NetFirewallPortFilter {{ [CmdletBinding()] param([Parameter(ValueFromPipeline=$true)]$InputObject) process {{ [pscustomobject]@{{ Protocol = 'TCP'; LocalPort = '1883' }} }} }}
 function Get-NetFirewallAddressFilter {{ [CmdletBinding()] param([Parameter(ValueFromPipeline=$true)]$InputObject)
     process {{ if ({'$true' if adres_okunmaz else '$false'}) {{ return }}; $d = _Oku; [pscustomobject]@{{ RemoteAddress = @($d[$InputObject.DisplayName]) }} }} }}
 function Set-NetFirewallRule {{ [CmdletBinding()] param([Parameter(ValueFromPipeline=$true)]$InputObject, $RemoteAddress)

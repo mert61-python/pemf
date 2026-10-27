@@ -121,15 +121,39 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
     $MosqFirewallOk = $false
     $Hotspot = "192.168.137.0/24"
     $Genis = $false
-    $Mevcut = @(Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue | Where-Object { $_ })
-    if ($Mevcut.Count -eq 0) {
-        try {
-            New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any -ErrorAction Stop | Out-Null
-        } catch {
-            Log "UYARI: Firewall kuralı oluşturulamadı (PEMF Mosquitto MQTT): $_" "Yellow"
-        }
+    # DEV-C4 (D4B §8 #2 — İG-9.5 / 4B-3.5 ile aynı sınıf): uzak adres dışındaki içerik de doğrulanır. Aynı adlı ama devre dışı / Block / giden /
+    # UDP / başka port / dar profilli kural "var" sayılınca sonuç True, `.install_verified` mosqFirewall=True yazıyordu; ESP bobinleri (6-8) 1883'e
+    # ULAŞAMAZDI. ESP KAPALI: uymayan kural silinir, doğrusu kurulur (uyan kural varsa yenisi kurulmaz). ESP ETKİN: dokunulmaz (Y3), uyarı, $false.
+    # Kapı: tests/test_setup_services_MOSQ_FW_kurali_ICERIKLE_DEV_C4.py
+    $IcerikUymuyor = $false
+    $SilinenKural = 0
+    $IcerikUygun = {
+        param($Kural)
+        $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        [bool]($PortFiltresi -and "$($PortFiltresi.Protocol)" -eq 'TCP' -and "$($PortFiltresi.LocalPort)" -eq '1883' -and
+            "$($Kural.Enabled)" -eq 'True' -and "$($Kural.Action)" -eq 'Allow' -and "$($Kural.Direction)" -eq 'Inbound' -and "$($Kural.Profile)" -eq 'Any')
     }
+    $ElleKur = "New-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress $Hotspot -Action Allow -Profile Any"
+    $Mevcut = @(Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue | Where-Object { $_ })
     foreach ($Kural in $Mevcut) {
+        if (-not (& $IcerikUygun $Kural)) {
+            $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+            $Icerik = "$($PortFiltresi.Protocol) $($PortFiltresi.LocalPort), Enabled=$($Kural.Enabled), Action=$($Kural.Action), Direction=$($Kural.Direction), Profile=$($Kural.Profile)"
+            if ($EspEtkin) {
+                Log "UYARI: 'PEMF Mosquitto MQTT' adlı kural VAR ama içeriği TCP 1883 Inbound Allow (etkin, tüm profiller) DEĞİL ($Icerik) — ESP ETKİN: DOKUNULMADI (Y3 / A-04); ESP bobinleri (6-8) broker'a ulaşamayabilir. Elle: Remove-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT'; $ElleKur" "Yellow"
+                $IcerikUymuyor = $true
+            } else {
+                try {
+                    $Kural | Remove-NetFirewallRule -ErrorAction Stop
+                    $SilinenKural++
+                    Log "'PEMF Mosquitto MQTT' adlı kuralın içeriği uymuyordu ($Icerik) -> silindi; doğrusu (TCP 1883 <- $Hotspot) kurulacak." "Yellow"
+                } catch {
+                    Log "UYARI: 'PEMF Mosquitto MQTT' adlı kuralın içeriği uymuyor ($Icerik) ve silinemedi ($_) — ESP bobinleri (6-8) broker'a ulaşamayabilir. Elle: Remove-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT'; $ElleKur" "Yellow"
+                    $IcerikUymuyor = $true
+                }
+            }
+            continue
+        }
         $Adres = @(($Kural | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue).RemoteAddress | Where-Object { $_ })
         if ($Adres.Count -eq 1 -and $Adres[0] -eq $Hotspot) { continue }
         if ($Adres.Count -eq 0) {
@@ -145,6 +169,14 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
                 Log "UYARI: 'PEMF Mosquitto MQTT' kuralı daraltılamadı ($_) — 1883 $($Adres -join ',') kaynağına AÇIK kaldı. Elle: Set-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -RemoteAddress $Hotspot" "Yellow"
                 $Genis = $true
             }
+        }
+    }
+    # Hiç kural yoktu ya da hepsi içerik uymadığı için silindi → doğrusu kurulur (uyan kural kaldıysa çift kural kurulmaz).
+    if ($Mevcut.Count -eq $SilinenKural -and -not $IcerikUymuyor) {
+        try {
+            New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any -ErrorAction Stop | Out-Null
+        } catch {
+            Log "UYARI: Firewall kuralı oluşturulamadı (PEMF Mosquitto MQTT): $_" "Yellow"
         }
     }
     $Eski = @(Get-NetFirewallRule -DisplayName "Mosquitto MQTT" -ErrorAction SilentlyContinue | Where-Object { $_ })
@@ -164,9 +196,10 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
     if (Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue) {
         Log "UYARI: native 'mosquitto' Windows servisi kurulu (install_mosquitto*.ps1) — PEMF broker'ı NSSM ile '$ServiceMosq'; native servis anonim ikinci bir broker olabilir. Gerekmiyorsa: Stop-Service mosquitto; sc.exe delete mosquitto" "Yellow"
     }
-    # HER YOLDA yeniden sorgula: cmdlet sessizce geçse de kural GERÇEKTEN var mı?
-    $MosqFirewallOk = [bool](Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue) -and -not $Genis
-    if (-not $MosqFirewallOk -and -not $Genis) {
+    # HER YOLDA yeniden sorgula: cmdlet sessizce geçse de kural GERÇEKTEN var mı — ve İÇERİĞİ uyuyor mu (DEV-C4: adla değil)?
+    $UyanKural = @(Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue | Where-Object { $_ -and (& $IcerikUygun $_) })
+    $MosqFirewallOk = $UyanKural.Count -gt 0 -and -not $Genis -and -not $IcerikUymuyor
+    if (-not $MosqFirewallOk -and -not $Genis -and -not $IcerikUymuyor) {
         Log "UYARI: 'PEMF Mosquitto MQTT' (TCP 1883 <- 192.168.137.0/24) kuralı YOK -> ESP bobin 6-8 broker'a ULAŞAMAZ. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) GPO firewall'u kilitliyor mu? Kural elle: New-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any" "Yellow"
     }
     return [bool]$MosqFirewallOk
