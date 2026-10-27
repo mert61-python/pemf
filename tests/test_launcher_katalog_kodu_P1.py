@@ -15,6 +15,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 from i18n_yardimci import launcher_ui as ui
 
@@ -22,7 +23,7 @@ KOK = Path(__file__).resolve().parents[1]
 HTML = KOK / "launcher" / "app" / "ui" / "index.html"
 KAT_JS = KOK / "launcher" / "app" / "ui" / "i18n_katalog.js"
 
-pytestmark = pytest.mark.skipif(not shutil.which("node"), reason="node yok")
+pytestmark = pytest.mark.skipif((not shutil.which("node")) and not capraz.ZORUNLU, reason="node yok")
 
 _JS = r"""
 const fs = require("fs");

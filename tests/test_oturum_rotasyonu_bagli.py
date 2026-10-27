@@ -31,6 +31,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -214,10 +215,10 @@ def test_KRITIK_duzeltme_YAYINLANAN_pakete_giriyor():
     """
     dist = _KOK / "frontend" / "dist"
     if not dist.exists():
-        pytest.skip("frontend/dist yok — yayın makinesi değil (CI/taze klon)")
+        capraz.atla("frontend/dist yok — yayın makinesi değil (CI/taze klon)")
     paketler = list((dist / "_expo" / "static" / "js" / "web").glob("entry-*.js"))
     if not paketler:
-        pytest.skip("web paketi bulunamadı (export yapılmamış)")
+        capraz.atla("web paketi bulunamadı (export yapılmamış)")
     icerik = "".join(p.read_text(encoding="utf-8", errors="ignore") for p in paketler)
     assert "TOKEN_REFRESHED" in icerik, (
         "SERVİS EDİLEN web paketi jeton döndürme olayını dinlemiyor — düzeltme kaynakta var ama "

@@ -26,6 +26,7 @@ import json
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -60,7 +61,7 @@ def _yayin_makinesi_mi() -> bool:
 
 def test_KRITIK_sitenin_isaret_ettigi_APK_URETILMIS():
     if not _yayin_makinesi_mi():
-        pytest.skip("release_assets/ altinda hic APK yok — yayin makinesi degil (CI/taze klon)")
+        capraz.atla("release_assets/ altinda hic APK yok — yayin makinesi degil (CI/taze klon)")
     ad = _site_apk_adi()
     yol = _KOK / "release_assets" / ad
     assert yol.exists(), (
@@ -77,7 +78,7 @@ def test_KRITIK_sitenin_isaret_ettigi_APK_URETILMIS():
 def test_KRITIK_surumsuz_APK_da_URETILMIS():
     """Manifest/OTA yolu surumsuz adi kullanir; ikisi de gerekir."""
     if not _yayin_makinesi_mi():
-        pytest.skip("release_assets/ altinda hic APK yok — yayin makinesi degil (CI/taze klon)")
+        capraz.atla("release_assets/ altinda hic APK yok — yayin makinesi degil (CI/taze klon)")
     yol = _KOK / "release_assets" / "PEMF_Vet_Mobil.apk"
     assert yol.exists(), "PEMF_Vet_Mobil.apk yok — OTA (manifest) yolu bu adi kullanir"
 
@@ -90,7 +91,7 @@ def test_KRITIK_iki_APK_AYNI_ikili():
     a = _KOK / "release_assets" / _site_apk_adi()
     b = _KOK / "release_assets" / "PEMF_Vet_Mobil.apk"
     if not (a.exists() and b.exists()):
-        pytest.skip("APK'lardan biri yok (yukaridaki testler zaten kirmizi)")
+        capraz.atla("APK'lardan biri yok (yukaridaki testler zaten kirmizi)")
     sa = hashlib.sha256(a.read_bytes()).hexdigest()
     sb = hashlib.sha256(b.read_bytes()).hexdigest()
     assert sa == sb, (
@@ -112,7 +113,7 @@ def test_KARSIT_KANIT_APK_icindeki_surum_versions_json_ile_AYNI():
     surum = _surumler()["mobile"]["name"]
     yol = _KOK / "release_assets" / _site_apk_adi()
     if not yol.exists():
-        pytest.skip("APK yok (yukaridaki test zaten kirmizi)")
+        capraz.atla("APK yok (yukaridaki test zaten kirmizi)")
     with zipfile.ZipFile(yol) as z:
         manifest = z.read("AndroidManifest.xml")
     assert surum in manifest.decode("utf-16-le", "ignore"), (
@@ -152,7 +153,7 @@ def _exe_yayin_makinesi_mi() -> bool:
 
 def test_KRITIK_sitenin_isaret_ettigi_WINDOWS_kurulumu_URETILMIS():
     if not _exe_yayin_makinesi_mi():
-        pytest.skip("release_assets/ altinda hic setup EXE yok — yayin makinesi degil (CI/taze klon)")
+        capraz.atla("release_assets/ altinda hic setup EXE yok — yayin makinesi degil (CI/taze klon)")
     ad = _site_exe_adi()
     yol = _KOK / "release_assets" / ad
     assert yol.exists(), (
@@ -167,7 +168,7 @@ def test_KRITIK_sitenin_isaret_ettigi_WINDOWS_kurulumu_URETILMIS():
 def test_KRITIK_surumsuz_EXE_de_URETILMIS():
     """Self-update yolu (manifest.launcher.installer_url) surumsuz adi kullanir; ikisi de gerekir."""
     if not _exe_yayin_makinesi_mi():
-        pytest.skip("release_assets/ altinda hic setup EXE yok — yayin makinesi degil")
+        capraz.atla("release_assets/ altinda hic setup EXE yok — yayin makinesi degil")
     yol = _KOK / "release_assets" / "PEMFVetClient-Setup.exe"
     assert yol.exists(), "PEMFVetClient-Setup.exe yok — launcher self-update bu adi kullanir"
 
@@ -181,11 +182,11 @@ def test_KRITIK_iki_EXE_AYNI_ikili():
     import hashlib
 
     if not _exe_yayin_makinesi_mi():
-        pytest.skip("release_assets/ altinda hic setup EXE yok — yayin makinesi degil")
+        capraz.atla("release_assets/ altinda hic setup EXE yok — yayin makinesi degil")
     a = _KOK / "release_assets" / _site_exe_adi()
     b = _KOK / "release_assets" / "PEMFVetClient-Setup.exe"
     if not (a.exists() and b.exists()):
-        pytest.skip("EXE'lerden biri yok (yukaridaki testler zaten kirmizi)")
+        capraz.atla("EXE'lerden biri yok (yukaridaki testler zaten kirmizi)")
     sa = hashlib.sha256(a.read_bytes()).hexdigest()
     sb = hashlib.sha256(b.read_bytes()).hexdigest()
     assert sa == sb, (

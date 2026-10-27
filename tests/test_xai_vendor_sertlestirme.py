@@ -23,6 +23,7 @@ import re
 import warnings
 from pathlib import Path
 
+import capraz
 import numpy as np
 import pytest
 
@@ -285,7 +286,7 @@ def test_YAPISAL_kernel_predict_proba_dususu_LOGLANIR():
 
 def test_ig_internal_batch_size_parametresi():
     """Captum IG bellek zarfı: internal_batch_size passthrough (captum yoksa atla)."""
-    pytest.importorskip("captum")
+    capraz.paket_yoksa_atla("captum")
     import inspect
 
     from ai_hub.xai_tabular.ig_torch import integrated_gradients

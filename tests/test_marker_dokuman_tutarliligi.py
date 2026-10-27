@@ -20,6 +20,7 @@ dokümanların da değişmesi ZORUNLU olur.
 import pathlib
 import re
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -47,7 +48,14 @@ _YAMLLAR = (
 #: birlikte emekli — hocanın v2 / v3'ü README getirmedi; kurulum yönergesi TEK yerde: kabin kılavuzu.
 _DOKUMANLAR = ("KABIN_KURULUM_KILAVUZU.md",)
 
-pytestmark = pytest.mark.skipif(not (_AI_HUB / _YAMLLAR[0]).exists(), reason="ai_hub kaynak ağacı yok")
+
+@pytest.fixture(autouse=True)
+def _ai_hub_kaynagi():
+    """D5-L (L-2): `ai_hub/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ (F-P1 / D4.04 deseni).
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU. Dosyadaki HER test ilk kabin
+    yaml'ını okur; varlık hedefi eski koşulla AYNI."""
+    capraz.atla_yoksa(f"ai_hub/{_YAMLLAR[0]}", izlenen=True)
 
 
 #: Sayfa üreteci — kenar TEK sabitten gelir ve yaml ile aynı olmalı.

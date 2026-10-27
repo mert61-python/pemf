@@ -40,6 +40,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -143,7 +144,7 @@ def test_KARSIT_KANIT_sunum_dizini_VARSA_saglam(dizin: str):
     """
     p = KOK / dizin / "dist"
     if not p.is_dir():
-        pytest.skip(
+        capraz.atla(
             f"{dizin}/dist yok — temiz checkout/CI (uretilen cikti, .gitignore'da). Asil koruma: kod referansi testleri."
         )
     assert (p / "index.html").exists(), (
@@ -199,7 +200,7 @@ def test_KRITIK_website_KENDI_KARARINI_tasiyor():
         # ⚠️ SESSIZ `return` DEGIL: "dosya yoksa gecerim" diyen bir kapi, dizin bir gun
         # sessizce silindiginde KIRMIZI donmez ve kaybi kimse gormez — tam da bu dosyanin
         # anlattigi hatanin ta kendisi. Atlama GORUNUR olmali.
-        pytest.skip(
+        capraz.atla(
             "website/README.md YOK -> dizin kaldirilmis olabilir. Icinde bir KARAR kaydi "
             "vardi; kaldirma bilincliyse denetim belgesindeki satiri da guncelleyin."
         )

@@ -446,12 +446,10 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
     ),
-    'tests/test_D3_32_mosquitto_1883_kurali_HOTSPOT_alt_agina_DAR_argumanlar.py': (None, _BEKLEYEN),
     'tests/test_D3_41_kurtarma_kilidi_SEVK_AGACIYLA_ayni.py': (
         1,
         "ORTAM: gömülü derleme Python'u kimliği (python3XX.zip) — CI / venv'de bilinçli atlar; statik + sentetik kollar her ortamda koşar (eser değil yorumlayıcı kimliği)",
     ),
-    'tests/test_D3_42_mosquitto_1883_kurali_ICERIKLE_dogrulanir_ESP_kollari.py': (None, _BEKLEYEN),
     'tests/test_I18NI_pdf_csv_ai_pro_modu_en.py': (
         1,
         'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
@@ -476,17 +474,14 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         "ARAC: ffmpeg ikilisi (PATH + imageio_ffmpeg) — dosya P6b'de importorskip için dönüştürüldü; aynı dosyaya ikinci parti çakışmasın diye bırakıldı (imageio-ffmpeg requirements'ta — sonraki partide dönüştürülebilir)",
     ),
-    'tests/test_calisma_ani_pip_yasagi.py': (None, _BEKLEYEN),
     'tests/test_capraz_atla_ve_paket_ZORUNLU_kipte_DUSER_D5.py': (
         1,
         "TASARIM: KARŞIT kol — düz `pytest.importorskip`in ZORUNLU=1'de de ATLADIĞINI ölçer (ölçücünün ayırt ettiği kanıt); istisna `_yakala` içinde yakalanır, test atlanmaz",
     ),
-    'tests/test_ci_workflow_gate.py': (None, _BEKLEYEN),
     'tests/test_compose_cozum_kolu_KIRIK_compose_ta_DURUR_4B214.py': (
         1,
         'ARAC: Docker CLI — yayın zincirinin aracı DEĞİL (publish_release / build betikleri istemez); yayın makinesinde zorunlu tutulmaz (K5_F: taşımıyorsa zorunlu yapma)',
     ),
-    'tests/test_cv_ortak_tek_uygulama.py': (None, _BEKLEYEN),
     'tests/test_docker_DOCKERFILE_ve_IGNORE_yollari_GUNCEL_D420.py': (
         2,
         'ARAC: Docker CLI — yayın zincirinin aracı DEĞİL (publish_release / build betikleri istemez); yayın makinesinde zorunlu tutulmaz (K5_F: taşımıyorsa zorunlu yapma)',
@@ -495,7 +490,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
         4,
         'ARAC: Docker CLI — yayın zincirinin aracı DEĞİL (publish_release / build betikleri istemez); yayın makinesinde zorunlu tutulmaz (K5_F: taşımıyorsa zorunlu yapma)',
     ),
-    'tests/test_frontend_tek_kaynak.py': (None, _BEKLEYEN),
     'tests/test_i18n_launcher_altyapi.py': (
         1,
         "TASARIM: asgari NSIS betiğinin Tauri şablonuna özgü sembol sınırı (makensis ÇIKTISINA bağlı); eser yokluğu değil — dönüştürmek ZORUNLU'da sahte kırmızı üretirdi (K5-F P9 --haric)",
@@ -520,14 +514,10 @@ IZIN: dict[str, tuple[int | None, str]] = {
         3,
         "PLATFORM: keyring.backends.Windows — Windows'a özgü kasa arka ucu (Linux CI'da modül içi pywin32-ctypes yok); paket değil platform yeteneği",
     ),
-    'tests/test_launcher_katalog_kodu_P1.py': (None, _BEKLEYEN),
-    'tests/test_launcher_responsive_kapisi.py': (None, _BEKLEYEN),
     'tests/test_manifest_consistency.py': (
         1,
         'TASARIM: manifestte `launcher` bloğu opsiyonel (şema); eser yokluğu değil — tarayıcı koşulu manifest okuyan yolu çözerken sayıyor',
     ),
-    'tests/test_marker_dokuman_tutarliligi.py': (None, _BEKLEYEN),
-    'tests/test_oturum_rotasyonu_bagli.py': (None, _BEKLEYEN),
     'tests/test_pdf_turkce_karakter_ATLAMA_D5_17.py': (
         1,
         'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); D5.17 kolu fitz KURULUYKEN `_fitz()`in atlamadığını ölçer, fitz yoksa ölçecek şey yok',
@@ -544,10 +534,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
     ),
-    'tests/test_setup_services_firewall_kaniti.py': (None, _BEKLEYEN),
-    'tests/test_silinecek_sanilan_dizinler_CANLI.py': (None, _BEKLEYEN),
-    'tests/test_site_indirme_varligi_URETILDI.py': (None, _BEKLEYEN),
-    'tests/test_stm_bobin_sayisi_tek_kaynak.py': (None, _BEKLEYEN),
     'tests/test_sunucu_pdf_yedek_durum_istek_dilinde_P1.py': (
         1,
         'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
@@ -556,7 +542,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         'ORTAM: aparat önkoşulu — dizin bağlantısı (junction) kurulamazsa senaryo kurulamaz; koşul `bag.exists()` aparatın sonucunu sınar, eser yokluğunu değil',
     ),
-    'tests/test_xai_vendor_sertlestirme.py': (None, _BEKLEYEN),
 }
 
 

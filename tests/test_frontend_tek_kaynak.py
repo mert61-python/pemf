@@ -24,6 +24,7 @@ launcher orayı arar; kilitlenen şey KAYNAK dizindir.)
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
@@ -55,8 +56,8 @@ def test_arayuz_kaynagi_var():
     `test_KRITIK_ikinci_arayuz_kaynagi_YOK` koşulsuz kalır: ikinci bir kopya HER ortamda
     yasaktır, çünkü zararı checkout'a bağlı değildir.
     """
-    if not _KAYNAK.exists():
-        pytest.skip("apps/ui/ bu çalışma kopyasında yok (parçalı checkout)")
+    # D5-L (L-2): parçalı checkout'ta atlar; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de (yayın makinesi) DÜŞER
+    capraz.atla_yoksa(_KAYNAK_YOL, izlenen=True)
     assert _kaynak_agaci_mi(_KAYNAK), f"arayüz kaynağı bulunamadı: {_KAYNAK}"
 
 
@@ -114,8 +115,7 @@ def test_KRITIK_build_backend_exe_PfDir_TEK_kaynagi_gosterir_D5_60():
 def test_ci_export_adimi_da_TEK_kaynaktan_alir():
     """CI'daki web export de aynı ağaçtan olmalı; yoksa Linux paketi eski arayüz taşır."""
     ci = _KOK / ".github" / "workflows" / "linux-backend.yml"
-    if not ci.is_file():
-        pytest.skip("linux-backend.yml yok")
+    capraz.atla_yoksa(ci.relative_to(_KOK).as_posix(), izlenen=True)  # D5-L (L-2): ZORUNLU kipte DÜŞER
     metin = ci.read_text(encoding="utf-8")
     m = re.search(r"^\s*cd\s+(\S+)\s*$", metin, re.M)
     assert m, "CI'da export dizinine geçiş satırı bulunamadı"

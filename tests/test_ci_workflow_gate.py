@@ -19,6 +19,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 W = Path(__file__).resolve().parent.parent / ".github" / "workflows"
@@ -26,7 +27,7 @@ KOK = W.parent.parent
 
 
 def _yukle(ad):
-    yaml = pytest.importorskip("yaml", reason="pyyaml yok — iş akışı şeması kontrol edilemiyor")
+    yaml = capraz.paket_yoksa_atla("yaml", sebep="pyyaml yok — iş akışı şeması kontrol edilemiyor")
     return yaml.safe_load((W / ad).read_text(encoding="utf-8"))
 
 

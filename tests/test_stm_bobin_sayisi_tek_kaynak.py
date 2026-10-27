@@ -36,6 +36,7 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -44,10 +45,12 @@ FW = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 # Sebep: surus kipi artik `PEMF_BOBIN_UNIPOLAR_MASKESI` ile BOBIN BASINA seciliyor,
 # ikinci bir derleme gerekmiyor. TEK kaynak = firmware/stm32_pemf.
 
-pytestmark = pytest.mark.skipif(not FW.exists(), reason="firmware/ kaynak agaci yok")
+# D5-L (L-2): `firmware/` İZLENEN ağaç. Eskiden modül düzeyi düz `skipif(not FW.exists())` idi — ZORUNLU kipte de ATLIYORDU ve
+# kaynağa muhtaç OLMAYAN KARŞIT öz-testini de atlatıyordu (D5.48 sınıfı). Atlama artık kaynağı OKUYAN yolda (`_oku`).
 
 
 def _oku(p: Path) -> str:
+    capraz.atla_yoksa(p.relative_to(KOK).as_posix(), izlenen=True)  # yoksa atla, ZORUNLU kipte DÜŞ
     return io.open(p, encoding="utf-8", errors="replace").read()
 
 
@@ -175,8 +178,6 @@ def test_KRITIK_elle_yazilmis_bobin_listeleri_NUM_COILS_ile_ayrisMAMIS():
     derleyici UYARMAZ, log basılmaz, bobin sessizce sürülmez.
     """
     for p in (FW,):
-        if not p.exists():
-            continue
         kotu = ihlaller(_oku(p))
         assert not kotu, (
             f"{p.name}: NUM_COILS ile AYRISMIS initializer(lar) — eksik elemanlar SESSIZCE "
@@ -267,3 +268,27 @@ def test_KARSIT_KANIT_kapi_gercekten_sayiyor():
     # IC ICE susluler ust-seviye eleman sayimini bozmamali
     ic = "#define NUM_COILS 2U\nstatic uint8_t g_w[NUM_COILS] = {{1, 9}, {2, 8}};\n"
     assert ihlaller(ic) == [], f"ic-ice suslu eleman sayimi bozuk: {ihlaller(ic)}"
+
+
+def test_KARSIT_firmware_YOKKEN_okuyan_kapilar_ZORUNLU_kipte_DUSER_sessiz_GECMEZ(monkeypatch):
+    """D5-L (L-2): kaynak yokken okuyan kapılar sessizce GEÇMEZ — erken dönüş (`if not p.exists(): continue`) yok, atlama
+    `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞER. Meta kapı (`test_atlama_ZORUNLU_kipte_DUSER_D5.py`) atlamayı SARMAYAN erken-dönüş
+    korumasını göremez (bilinen sınır) — bu kol görür. Gerçek kaynağa dokunulmaz: yalnız modülün `FW` yolu yoka çevrilir."""
+    monkeypatch.setitem(globals(), "FW", KOK / "firmware" / "_YOK_D5L" / "main.c")
+    monkeypatch.setattr(capraz, "ZORUNLU", True)
+    for kapi in (
+        test_KRITIK_elle_yazilmis_bobin_listeleri_NUM_COILS_ile_ayrisMAMIS,
+        test_KRITIK_g_shadow_da_elle_bobin_listesi_TASIMAZ,
+        test_KRITIK_Coil_StateInit_ISR_BASLAMADAN_ONCE_cagriliyor,
+        test_KRITIK_ntc_kanal_tablosu_derleme_zamani_IDDIASI_TASIR,
+    ):
+        try:
+            kapi()
+        except pytest.fail.Exception:
+            continue
+        # Skipped dahil yakalanır — `pytest.raises(Failed)` beklenmeyen Skipped'i SIZDIRIR (K5-F ölçtü)
+        except (Exception, pytest.skip.Exception) as e:
+            raise AssertionError(f"{kapi.__name__}: beklenen Failed, gelen {type(e).__name__}: {e}") from None
+        raise AssertionError(
+            f"{kapi.__name__}: firmware kaynağı YOKKEN sessizce GEÇTİ (erken dönüş — ZORUNLU kipte düşmeli)"
+        )

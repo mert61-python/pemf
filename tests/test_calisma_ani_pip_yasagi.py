@@ -33,6 +33,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -608,7 +609,7 @@ def test_pip_alt_sureci_gercekten_dogmuyor():
 
     `subprocess.check_output`'u araya girip yakalarız; gerçek bir pip komutu denenirse test düşer.
     """
-    ultra_checks = pytest.importorskip("ultralytics.utils.checks", reason="ultralytics kurulu değil")
+    ultra_checks = capraz.paket_yoksa_atla("ultralytics.utils.checks", sebep="ultralytics kurulu değil")
     from utils.runtime_guards import pip_kurulumunu_yasakla
 
     pip_kurulumunu_yasakla()

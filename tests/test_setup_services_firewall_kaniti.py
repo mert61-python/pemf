@@ -31,13 +31,16 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 PS1 = REPO / "scripts" / "setup_services.ps1"
 PWSH = shutil.which("pwsh")
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz"
+)
 
 
 # ─────────────────────────── yardımcılar ───────────────────────────

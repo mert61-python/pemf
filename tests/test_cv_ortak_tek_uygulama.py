@@ -40,6 +40,7 @@ import os
 from collections import defaultdict
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -81,8 +82,7 @@ def _taranan_py() -> list[str]:
     ölçüm de diskte yapılmalı.
     """
     kok = KOK / "ai_hub"
-    if not kok.is_dir():
-        pytest.skip("ai_hub yok")
+    capraz.atla_yoksa("ai_hub", izlenen=True)  # D5-L (L-2): İZLENEN ağaç — ZORUNLU kipte DÜŞER
     return sorted(p.relative_to(KOK).as_posix() for p in kok.rglob("*.py") if "__pycache__" not in p.parts)
 
 

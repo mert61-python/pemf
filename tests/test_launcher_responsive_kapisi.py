@@ -19,6 +19,7 @@ import json
 import pathlib
 import re
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -26,7 +27,14 @@ _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _CONF = _KOK / "launcher" / "app" / "tauri.conf.json"
 _RS = _KOK / "launcher" / "app" / "src" / "main.rs"
 
-pytestmark = pytest.mark.skipif(not _UI.exists(), reason="launcher/ kaynak ağacı yok — kapı atlanır")
+
+@pytest.fixture(autouse=True)
+def _launcher_kaynagi():
+    """D5-L (L-2): `launcher/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ (F-P1 / D4.04 deseni).
+
+    Eskiden modül düzeyi düz `skipif(not _UI.exists())` idi: zorunlu kipte de sessizce ATLIYORDU. Dosyadaki HER test launcher
+    kaynağını (index.html / tauri.conf.json / main.rs) okur; varlık hedefi eski koşulla AYNI (index.html)."""
+    capraz.atla_yoksa("launcher/app/ui/index.html", izlenen=True)
 
 
 def _soy(metin: str) -> str:
