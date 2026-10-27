@@ -32,6 +32,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 _KOK = Path(__file__).resolve().parents[1]
 _API = (_KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8", errors="replace")
 
@@ -164,21 +166,118 @@ def test_KRITIK_surum_farki_bandi_BLOKLAMAZ():
     assert "<SurumFarkiBanner />" in shell, "bant hicbir ekrana baglanmamis"
 
 
+#: D5.43 (B-10.19): BAĞLANTI YOLU — keşif, sağlık yoklaması, istemci, WS, eşleşme, taban adresi + sürüm bandı. Dosya YOKSA FAIL
+#: (eskiden `continue`: dosya taşınınca kapı sessizce boşalıyordu).
+_BAGLANTI_YOLU = (
+    "apps/ui/src/services/apiClient.ts",
+    "apps/ui/src/services/discovery.ts",
+    "apps/ui/src/services/wsClient.ts",
+    "apps/ui/src/services/pairing.ts",
+    "apps/ui/src/services/config.ts",
+    "apps/ui/src/services/backendKonumu.ts",
+    "apps/ui/src/components/domain/SurumFarkiBanner.tsx",
+)
+_SURUM = re.compile(
+    r"\b(?:version|versiyon|appVersion|apiVersion|APP_VERSION|surum|sürüm|semver\w*|semverMajor)\b", re.I
+)
+_RED = re.compile(r"\breturn\s*(?:null|false|undefined)?\s*;|\breject\s*\(|\bthrow\b|\.close\s*\(|\babort\s*\(")
+#: React bileşeninde (`.tsx`) `return null` "hiçbir şey çizme"dir (sürüm bandı gizlenir) — bağlantı reddi DEĞİL. Orada yalnız
+#: kapatma / ret / atma / kesme ihlaldir.
+_RED_BILESEN = re.compile(r"\breject\s*\(|\bthrow\b|\.close\s*\(|\babort\s*\(|\bdisconnect\s*\(|\blogout\s*\(")
+
+
+def _dengeli(metin: str, bas: int, ac: str, kapa: str) -> int:
+    """`metin[bas] == ac` iken eşleşen kapanışın indeksi (yoksa metin sonu)."""
+    derinlik = 0
+    for i in range(bas, len(metin)):
+        derinlik += {ac: 1, kapa: -1}.get(metin[i], 0)
+        if derinlik == 0:
+            return i
+    return len(metin)
+
+
+def surum_red_dallari(kaynak: str, bilesen: bool = False) -> list[str]:
+    """Yorumsuz TS kaynağında: koşulu sürüm anan `if (…)` dalı ret / kapat / at'a gidiyorsa, ya da sürüm koşullu üçlü ifade
+    `null|false|undefined` veriyorsa ihlal. Sözcük listesi (eski kapı) `d?.version !== APP_VERSION) return null` biçimini görmüyordu."""
+    from c_soyucu import c_soy
+
+    kod = c_soy(kaynak)
+    ihlal = []
+    for m in re.finditer(r"\bif\s*\(", kod):
+        ac = m.end() - 1
+        kapa = _dengeli(kod, ac, "(", ")")
+        kosul = kod[ac + 1 : kapa]
+        if not _SURUM.search(kosul):
+            continue
+        j = kapa + 1
+        while j < len(kod) and kod[j].isspace():
+            j += 1
+        if j < len(kod) and kod[j] == "{":
+            govde = kod[j : _dengeli(kod, j, "{", "}") + 1]
+        else:
+            k = kod.find(";", j)
+            govde = kod[j : (k + 1 if k >= 0 else len(kod))]
+        if (_RED_BILESEN if bilesen else _RED).search(govde):
+            ihlal.append(
+                f"satir {kod.count(chr(10), 0, m.start()) + 1}: if ({kosul.strip()[:70]}) → {govde.strip()[:50]}"
+            )
+    # Üçlü ifade (deyim düzeyinde): sürüm KARŞILAŞTIRMASI taşıyan deyimde `? null :` ya da sonda `: null` dalı (eşitlikte `d : null`
+    # da RETTİR). İsteğe bağlı zincir `?.` üçlü sayılmaz. Bileşende (`.tsx`) üçlü `null` çizim seçimidir — atlanır.
+    if not bilesen:
+        konum = 0
+        for deyim in kod.replace("?.", ". ").split(";"):
+            if _SURUM.search(deyim) and re.search(r"[!=]==?|[<>]=?", deyim) and "?" in deyim:
+                if re.search(r"\?\s*(?:null|false|undefined)\s*:|:\s*(?:null|false|undefined)\s*\)?\s*$", deyim):
+                    ihlal.append(
+                        f"satir {kod.count(chr(10), 0, konum) + deyim.count(chr(10)) + 1}: üçlü {deyim.strip()[:70]}"
+                    )
+            konum += len(deyim) + 1
+    return ihlal
+
+
 def test_KARSIT_KANIT_baglanti_SURUME_gore_REDDEDILMEZ():
     """⚠️ Pazarlik edilemez: hicbir yerde 'surum uyusmazligi → baglanma' kapisi olmamali."""
-    hedefler = [
-        _KOK / "apps" / "ui" / "src" / "services" / "apiClient.ts",
-        _KOK / "apps" / "ui" / "src" / "services" / "discovery.ts",
-        _KOK / "apps" / "ui" / "src" / "components" / "domain" / "SurumFarkiBanner.tsx",
-    ]
     yasak = re.compile(r"(surum|version).{0,40}(uyusmaz|mismatch|incompatible|reddet|block)", re.I)
-    for p in hedefler:
-        if not p.exists():
-            continue
-        for no, satir in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+    eksik = [g for g in _BAGLANTI_YOLU if not (_KOK / g).exists()]
+    assert not eksik, f"bağlantı yolu dosyası YOK (taşındıysa listeyi güncelle — sessiz atlama kör kapıydı): {eksik}"
+    ihlal = []
+    for g in _BAGLANTI_YOLU:
+        p = _KOK / g
+        metin = p.read_text(encoding="utf-8", errors="replace")
+        for no, satir in enumerate(metin.splitlines(), 1):
             kirpik = satir.strip()
             if kirpik.startswith(("//", "*", "/*")):
                 continue  # yorumlar KARARI anlatir, kod degildir
-            assert not yasak.search(satir), (
-                f"{p.name}:{no} surum uyusmazliginda baglantiyi engelliyor olabilir: {kirpik[:90]}"
-            )
+            if yasak.search(satir):
+                ihlal.append(f"{p.name}:{no} {kirpik[:90]}")
+        ihlal += [f"{p.name} {x}" for x in surum_red_dallari(metin, bilesen=g.endswith(".tsx"))]
+    assert not ihlal, "surum uyusmazliginda baglantiyi engelliyor olabilir:\n  " + "\n  ".join(ihlal)
+
+
+@pytest.mark.parametrize(
+    ("kaynak", "beklenen"),
+    [
+        ("if (d?.version !== APP_VERSION) return null;", 1),
+        ("if (semverMajor(d.version) !== semverMajor(APP_VERSION)) { ws.close(); return; }", 1),
+        ("if (d.apiVersion < 2) reject(new Error('eski'));", 1),
+        ("const hedef = d?.version === APP_VERSION ? d : null;", 1),
+        ('const bant = d?.version !== APP_VERSION ? "farkli" : "ayni";', 0),
+        ("const hedef = d?.version !== APP_VERSION ? null : d;", 1),
+        ("if (d?.service !== 'PEMF-Vet') return null;", 0),
+        ("if (surumFarki) setBant(true);", 0),
+        ("// if (d.version !== APP_VERSION) return null;\nconst x = 1;", 0),
+    ],
+    ids=[
+        "esitsizlik_null",
+        "semver_close",
+        "apiVersion_reject",
+        "ucu_esitlikte_null",
+        "ucu_etiket",
+        "ucu_null",
+        "servis_kimligi",
+        "bant",
+        "yorum",
+    ],
+)
+def test_KARSIT_KANIT_D5_43_surum_dal_tarayicisi(kaynak, beklenen):
+    assert len(surum_red_dallari(kaynak)) == beklenen, surum_red_dallari(kaynak)
