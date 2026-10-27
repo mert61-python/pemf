@@ -100,21 +100,48 @@ pub(crate) fn ps_kacis(s: &str) -> String {
 /// D5 I-1: kural ADIYLA değil İÇERİKLE bulunur (`ICERIK_ISLEVLERI`) ve API portu çocuğun GERÇEK portudur (`api_portu`).
 /// BU exe'nin uymayan aynı adlı kuralı silinip doğrusu kurulur (çift kural yok); silinemezse doğrusu yine kurulur.
 /// Başka programın aynı adlı kuralına (servis kurulumu) DOKUNULMAZ. Uzak adres verilmez (A-01 kapsamı DEĞİŞMEDİ).
+///
+/// D5 J-3: sonuç ÇIKIŞ KODUYLA söylenir (`KOD_*`; okuyan `main.rs` `ps_yukselterek_kos_kodlu`). Eskiden `New-NetFirewallRule`
+/// düşünce betik ilk hatada kesiliyor (ikinci kural hiç denenmiyordu), bozuk kuralın silinemeyişi `SilentlyContinue` ile
+/// YUTULUYORDU; çağıran zaten kodu okumadığından arayüz her durumda "tamam" deyip uyarıyı kapatıyordu. Artık iki kural da denenir;
+/// kurulamayan kural → `KOD_KURAL_KURULAMADI`, silinemeyen bozuk kural (doğrusu yine kurulur) → `KOD_BOZUK_KURAL_SILINEMEDI`.
 pub fn ekleme_betigi(backend_exe: &Path, api_port: u16) -> String {
     let p = ps_kacis(&backend_exe.to_string_lossy());
     format!(
-        "$ErrorActionPreference='Stop'; \
+        "$ErrorActionPreference='Stop'; $kurulamadi = 0; $silinemedi = 0; \
          $p='{p}'; {islevler}\
          foreach ($k in @(@('{api}', 'TCP', {tcp}), @('{kesif}', 'UDP', {udp}))) {{ \
            $uyan = 0; \
            foreach ($r in @(Get-NetFirewallRule -DisplayName $k[0] -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ \
              if (PemfKuralUyar $r $k[1] $k[2]) {{ $uyan++ }} \
-             elseif (PemfKuralBizim $r) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }}; \
+             elseif (PemfKuralBizim $r) {{ try {{ $r | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ $silinemedi++ }} }} }}; \
            if ($uyan -eq 0) {{ \
-             New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p \
-               -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any | Out-Null }} }}",
+             try {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p \
+               -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any -ErrorAction Stop | Out-Null }} \
+             catch {{ $kurulamadi++ }} }} }}; \
+         if ($kurulamadi -gt 0) {{ exit {kod_kur} }}; if ($silinemedi -gt 0) {{ exit {kod_sil} }}; exit {kod_tamam}",
         p = p, islevler = ICERIK_ISLEVLERI, api = KURAL_API, kesif = KURAL_KESIF, tcp = api_port, udp = DISCOVERY_PORT,
+        kod_kur = KOD_KURAL_KURULAMADI, kod_sil = KOD_BOZUK_KURAL_SILINEMEDI, kod_tamam = KOD_TAMAM,
     )
+}
+
+/// Ekleme betiğinin çıkış kodları (D5 J-3). PowerShell'in kendi "yakalanmamış hata" kodu (1) beklenmeyen arızadır — kurulamadı
+/// sayılır. UAC reddi / yükseltilmiş süreç başlatılamadı: `crate::paylasim::KOD_UAC_REDDEDILDI` (1223; `main.rs` sarmalayıcısı).
+pub const KOD_TAMAM: i32 = 0;
+/// En az bir kural KURULAMADI (`New-NetFirewallRule` düştü) — LAN'dan (mobil / web, ACİL DURDUR dahil) erişim yok.
+pub const KOD_KURAL_KURULAMADI: i32 = 2;
+/// Doğru kurallar kuruldu ama bu programın BOZUK (ör. Block) eski kuralı SİLİNEMEDİ — engel sürebilir.
+pub const KOD_BOZUK_KURAL_SILINEMEDI: i32 = 3;
+
+/// Yükseltilmiş ekleme betiğinin çıkış kodu → arayüze dönecek hata anahtarı (`None` = kurallar kuruldu). UAC reddi MEVCUT metni
+/// korur ("Yönetici izni verilmedi …"); sıfır dışı başka her kod "tamam" SAYILMAZ (D5 J-3).
+pub fn ekleme_hata_anahtari(kod: i32) -> Option<&'static str> {
+    match kod {
+        KOD_TAMAM => None,
+        crate::paylasim::KOD_UAC_REDDEDILDI => Some("rust.hata.guvenlikDuvariIzinYok"),
+        KOD_BOZUK_KURAL_SILINEMEDI => Some("rust.hata.guvenlikDuvariBozukKuralSilinemedi"),
+        _ => Some("rust.hata.guvenlikDuvariKuralEklenemedi"),
+    }
 }
 
 /// KALDIRMA temizliği: kendi adlandırdığımız kuralları sil.
@@ -427,12 +454,81 @@ mod tests {
         }
     }
 
+    /// D5 J-3 (tur 2 · çürütücü n10): Rust kaynağından `//` VE `/* … */` yorumlarını atar (dizge ve karakter sabitlerinin içi korunur;
+    /// `'"'` gibi bir karakter sabiti dizge sanılmaz). Eskiden kapılar satırı `//`de kesiyordu — `/* … */` içine alınan çağrı "var"
+    /// sayılıyordu (çağrı blok yorumuna alınıp yerine `Ok(Value::Null)` konunca 20 / 50 / 213 passed — YEŞİL).
+    fn rust_yorumsuz(src: &str) -> String {
+        let k: Vec<char> = src.chars().collect();
+        let mut o = String::with_capacity(src.len());
+        let mut i = 0;
+        while i < k.len() {
+            let c = k[i];
+            let s = k.get(i + 1).copied();
+            if c == '/' && s == Some('/') {
+                while i < k.len() && k[i] != '\n' {
+                    i += 1;
+                }
+            } else if c == '/' && s == Some('*') {
+                let mut derinlik = 1;
+                i += 2;
+                while i < k.len() && derinlik > 0 {
+                    if k[i] == '/' && k.get(i + 1) == Some(&'*') {
+                        derinlik += 1;
+                        i += 2;
+                    } else if k[i] == '*' && k.get(i + 1) == Some(&'/') {
+                        derinlik -= 1;
+                        i += 2;
+                    } else {
+                        if k[i] == '\n' {
+                            o.push('\n');
+                        }
+                        i += 1;
+                    }
+                }
+            } else if c == '"' {
+                o.push(c);
+                i += 1;
+                while i < k.len() && k[i] != '"' {
+                    if k[i] == '\\' && i + 1 < k.len() {
+                        o.push(k[i]);
+                        i += 1;
+                    }
+                    o.push(k[i]);
+                    i += 1;
+                }
+                if i < k.len() {
+                    o.push('"');
+                    i += 1;
+                }
+            } else if c == '\'' && (s == Some('\\') || k.get(i + 2) == Some(&'\'')) {
+                // karakter sabiti ('x', '\n', '\u…'); yaşam süresi ('a) olduğu gibi geçer
+                let bas = if s == Some('\\') { i + 3 } else { i + 2 };
+                let son = (bas..k.len()).find(|&j| k[j] == '\'').unwrap_or(k.len() - 1);
+                o.extend(&k[i..=son]);
+                i = son + 1;
+            } else {
+                o.push(c);
+                i += 1;
+            }
+        }
+        o
+    }
+
+    #[test]
+    fn rust_yorumsuz_satir_blok_dizge_ve_karakter() {
+        let g = "a(); // x()\nb(/* y() */); /* c(\n) */ d(\"// z\", '\"', '/', '\\'', 'q); // w()\ne();";
+        let y = rust_yorumsuz(g);
+        assert!(y.contains("a();") && y.contains("b(") && y.contains("d(\"// z\", '\"', '/', '\\'', 'q);") && y.contains("e();"), "{y}");
+        assert!(!y.contains("w()"), "karakter sabitinden sonraki yorum kaldı: {y}");
+        assert!(!y.contains("x()") && !y.contains("y()") && !y.contains("c("), "yorum kaldı: {y}");
+    }
+
     /// D5 I-1 · çağrı yerleri (`launcher/app` — bu crate'in testi o crate'i derlemez): kural portu ÇOCUĞUN portundan, exe ile AYNI
-    /// kurulum kökünden. `//` yorumları atılır (çağrı yalnız yorumda kalırsa KIRMIZI), boşluklar silinir (biçim kapıyı kırmasın).
+    /// kurulum kökünden. Yorumlar (`//` ve — D5 J-3 tur 2 — `/* … */`) atılır (çağrı yalnız yorumda kalırsa KIRMIZI), boşluklar silinir.
     #[test]
     fn KRITIK_I1_main_rs_kural_portu_COCUGUN_portundan() {
         let kaynak = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/main.rs")).expect("main.rs okunamadı");
-        let yalin: String = kaynak.lines().map(|l| l.split("//").next().unwrap_or("")).collect::<Vec<_>>().join("\n");
+        let yalin = rust_yorumsuz(&kaynak).replace("\r\n", "\n");
         for (islev, cagri) in [
             ("fn firewall_durumu_blocking()", "durum_icin(Some(&exe),api_portu(&root))"),
             ("fn firewall_kurali_ekle_blocking()", "ekleme_betigi(&exe,api_portu(&root))"),
@@ -449,6 +545,57 @@ mod tests {
                 "{islev}: exe ve port AYNI kurulum kökünden okunmuyor"
             );
         }
+    }
+
+    /// D5 J-3 · çıkış kodu → arayüz iletisi: başarı YALNIZ 0; UAC reddi (1223) MEVCUT metni korur; kurulamayan kural ve silinemeyen
+    /// bozuk kural AYRI iletiyle söylenir (kod iletide). Anahtarlar TR + EN katalogda (`{{kod}}` yer tutucusuyla). Kodlar burada SABİT.
+    #[test]
+    fn KRITIK_J3_ekleme_cikis_kodu_ARAYUZ_iletisine_cevrilir_UAC_reddi_mevcut_metin() {
+        use crate::dil::{katalog, Dil};
+        assert_eq!(ekleme_hata_anahtari(0), None, "başarı (0) hata sayıldı");
+        assert_eq!(ekleme_hata_anahtari(1223), Some("rust.hata.guvenlikDuvariIzinYok"), "UAC reddinin MEVCUT iletisi değişti");
+        assert_eq!(ekleme_hata_anahtari(3), Some("rust.hata.guvenlikDuvariBozukKuralSilinemedi"), "silinemeyen bozuk kural ayrı söylenmiyor");
+        for kod in [1, 2, 4, 96, 99, -1] {
+            assert_eq!(
+                ekleme_hata_anahtari(kod),
+                Some("rust.hata.guvenlikDuvariKuralEklenemedi"),
+                "sıfır dışı çıkış {kod} 'tamam' ya da yanlış ileti sayıldı → arayüz uyarıyı kapatır, erişim YOK"
+            );
+        }
+        for anahtar in ["rust.hata.guvenlikDuvariKuralEklenemedi", "rust.hata.guvenlikDuvariBozukKuralSilinemedi"] {
+            for d in [Dil::Tr, Dil::En] {
+                let m = katalog(d).get(anahtar).unwrap_or_else(|| panic!("{anahtar} {d:?} katalogda yok"));
+                assert!(m.contains("{{kod}}"), "{anahtar} {d:?}: çıkış kodu iletide yok (destek ekibi ayıramaz): {m}");
+            }
+        }
+    }
+
+    /// D5 J-3 · çağrı yeri (`launcher/app`; bu crate'in testi o crate'i derlemez): "İzin ver" yükseltilmiş betiği KODLU koşar
+    /// (`ps_yukselterek_kos_kodlu`, `-PassThru` + `exit $p.ExitCode`) ve sonucu SAF `izin_ver_sonucu`na verir (davranışı app crate
+    /// testinde: `KRITIK_J3_izin_ver_sonucu_KOD_davranisi_UAC_reddi_mevcut_metin`); kodsuz `ps_yukselterek_kos` (sonuç okunmaz) ve
+    /// kod okunmadan "tamam" dönen dal bu gövdede YOK. Yorumlar — `//` ve (tur 2 · n10) `/* … */` — atılır, boşluklar silinir.
+    #[test]
+    fn KRITIK_J3_main_rs_izin_ver_KODLU_kosar_kodu_Err_e_cevirir() {
+        let kaynak = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/main.rs")).expect("main.rs okunamadı");
+        let yalin = rust_yorumsuz(&kaynak).replace("\r\n", "\n");
+        let govde_of = |islev: &str| -> String {
+            let i = yalin.find(islev).unwrap_or_else(|| panic!("{islev} bulunamadı"));
+            let j = yalin[i..].find("\n\u{7d}\n").map(|j| i + j).expect("işlev gövdesinin sonu bulunamadı");
+            yalin[i..j].split_whitespace().collect()
+        };
+        let govde = govde_of("fn firewall_kurali_ekle_blocking()");
+        assert!(
+            govde.contains("izin_ver_sonucu(ps_yukselterek_kos_kodlu(&ekleme_betigi(&exe,api_portu(&root))))"),
+            "'İzin ver' yükseltilmiş betiği ÇIKIŞ KODU okunmadan / sonucu eşlenmeden koşuyor → kural kurulamasa da arayüz 'tamam' der"
+        );
+        assert!(!govde.contains("ps_yukselterek_kos("), "kodsuz yükseltme (sonuç okunmaz) 'İzin ver' gövdesinde duruyor");
+        assert!(!govde.contains("\"status\":\"ok\""), "kod okunmadan 'tamam' dönen bir dal var (başarı yalnız izin_ver_sonucu'nda)");
+        let esle = govde_of("fn izin_ver_sonucu(");
+        assert!(
+            esle.contains("pemf_launcher_core::firewall::ekleme_hata_anahtari(kod)"),
+            "izin_ver_sonucu çıkış kodunu ekleme_hata_anahtari ile eşlemiyor"
+        );
+        assert_eq!(esle.matches("\"status\":\"ok\"").count(), 1, "izin_ver_sonucu'nda ikinci bir 'tamam' dalı var");
     }
 
     /// D5 I-1 — adlı kural İÇERİKLE, port ÇOCUKTAN: ÜRETİLEN betik GÖLGE NetSecurity ile KOŞULUR (yalnız Windows; CI windows-latest).
@@ -521,33 +668,45 @@ mod tests {
             cikti: String,
             tablo: Vec<String>,
             olay: Vec<String>,
+            /// D5 J-3: betiğin ÇIKIŞ KODU (`exit N`; betik bir dosyadan nokta-kaynak koşar → `$LASTEXITCODE`). `exit` yoksa 0.
+            kod: i32,
             hata: String,
         }
 
+        /// Kural tablosu → aparatın `$kurallar` dizisi (PowerShell sabiti).
+        fn kurallar_ps(kurallar: &[Kural]) -> String {
+            let satirlar: Vec<String> = kurallar
+                .iter()
+                .map(|k| {
+                    format!(
+                        "  @{{ Ad = '{}'; Etkin = '{}'; Yon = '{}'; Eylem = '{}'; Profil = '{}'; Proto = '{}'; Port = '{}'; Program = '{}'; Silinemez = ${} }}",
+                        ps_kacis(k.ad),
+                        k.etkin,
+                        k.yon,
+                        k.eylem,
+                        k.profil,
+                        k.proto,
+                        ps_kacis(&k.port),
+                        ps_kacis(&k.program),
+                        k.silinemez
+                    )
+                })
+                .collect();
+            format!("$kurallar = @(\n{}\n)\n", satirlar.join(",\n"))
+        }
+
         fn golge_kos(senaryolar: &[(&str, Vec<Kural>, String, u8)]) -> BTreeMap<String, Sonuc> {
+            let s: Vec<_> = senaryolar.iter().map(|(ad, k, b, t)| (*ad, k.clone(), b.clone(), *t, "")).collect();
+            golge_kos_ayarli(&s)
+        }
+
+        /// `ayar`: gölge arıza düğmesi — `yeni_hata` → gölge `New-NetFirewallRule` "Access is denied" ile DÜŞER (D5 J-3: kurulamayan
+        /// kural; grup ilkesi / yetki). Boş = arızasız.
+        fn golge_kos_ayarli(senaryolar: &[(&str, Vec<Kural>, String, u8, &str)]) -> BTreeMap<String, Sonuc> {
             let mut ps = String::from(GOLGE_ONSOZ);
-            for (ad, kurallar, betik, tur) in senaryolar {
-                let satirlar: Vec<String> = kurallar
-                    .iter()
-                    .map(|k| {
-                        format!(
-                            "  @{{ Ad = '{}'; Etkin = '{}'; Yon = '{}'; Eylem = '{}'; Profil = '{}'; Proto = '{}'; Port = '{}'; Program = '{}'; Silinemez = ${} }}",
-                            ps_kacis(k.ad),
-                            k.etkin,
-                            k.yon,
-                            k.eylem,
-                            k.profil,
-                            k.proto,
-                            ps_kacis(&k.port),
-                            ps_kacis(&k.program),
-                            k.silinemez
-                        )
-                    })
-                    .collect();
-                ps.push_str(&format!(
-                    "$kurallar = @(\n{}\n)\n$betik = @'\n{betik}\n'@\nKos '{ad}' $kurallar $betik {tur}\n",
-                    satirlar.join(",\n")
-                ));
+            for (ad, kurallar, betik, tur, ayar) in senaryolar {
+                ps.push_str(&kurallar_ps(kurallar));
+                ps.push_str(&format!("$betik = @'\n{betik}\n'@\nKos '{ad}' $kurallar $betik {tur} '{ayar}'\n"));
             }
             ps.push_str(GOLGE_SONSOZ);
             let dizin = tempfile::tempdir().expect("geçici dizin");
@@ -563,19 +722,25 @@ mod tests {
             let out = String::from_utf8_lossy(&o.stdout).into_owned();
             assert!(
                 o.status.success() && out.contains("GOLGE-BITTI"),
-                "gölge aparatı tamamlanmadı (çıkış {:?}; 96 = gerçek NetSecurity erişilebilir, 99 = gölge eksik, 98 = NetSecurity yüklendi):\n{out}\n{}",
+                "gölge aparatı tamamlanmadı (çıkış {:?}; 96 = gerçek NetSecurity erişilebilir, 97 = aparat dizini yok, 99 = gölge eksik, 98 = NetSecurity yüklendi):\n{out}\n{}",
                 o.status.code(),
                 String::from_utf8_lossy(&o.stderr)
             );
             let mut r = BTreeMap::new();
             for l in out.lines() {
                 if let Some(x) = l.strip_prefix("SENARYO\t") {
-                    let p: Vec<&str> = x.splitn(5, '\t').collect();
-                    assert_eq!(p.len(), 5, "bozuk aparat satırı: {l}");
+                    let p: Vec<&str> = x.splitn(6, '\t').collect();
+                    assert_eq!(p.len(), 6, "bozuk aparat satırı: {l}");
                     let parca = |s: &str| s.split(';').filter(|t| !t.is_empty()).map(str::to_string).collect::<Vec<_>>();
                     r.insert(
                         p[0].to_string(),
-                        Sonuc { cikti: p[1].to_string(), tablo: tablo(parca(p[2])), olay: parca(p[3]), hata: p[4].trim().to_string() },
+                        Sonuc {
+                            cikti: p[1].to_string(),
+                            tablo: tablo(parca(p[2])),
+                            olay: parca(p[3]),
+                            kod: p[4].trim().parse().unwrap_or_else(|_| panic!("bozuk çıkış kodu: {l}")),
+                            hata: p[5].trim().to_string(),
+                        },
                     );
                 }
             }
@@ -589,6 +754,117 @@ mod tests {
             for (ad, x) in r {
                 assert!(x.hata.is_empty(), "{ad}: üretilen betik HATA verdi (gölgelenmemiş komut / sözdizimi?): {}", x.hata);
             }
+        }
+
+        /// D5 J-3 · ÜRETİM BİÇİMİ: yükseltilmiş betik AYRI bir `powershell` SÜRECİ olarak koşar (`-EncodedCommand`) ve çağıran
+        /// (`main.rs` `ps_yukselterek_kos_kodlu`) O SÜRECİN çıkış kodunu okur. Burada da betik kendi sürecinde, ÜST DÜZEYDE koşar
+        /// (önsöz = gölge NetSecurity + kural tablosu) ve sürecin çıkış kodu döner — `exit N` ile yakalanmamış hata (PowerShell kodu 1)
+        /// ayrımı üretimdeki gibidir (ölçüldü 2026-10-27: `-File` ve `-EncodedCommand` `exit 5`te ikisi de 5; `finally` `exit`te de
+        /// koşar → olay günlüğü çıkıştan sonra basılır). Dönüş: (çıkış kodu, olaylar, son kural tablosu).
+        fn golge_surec_kos(kurallar: &[Kural], betik: &str, ayar: &str) -> (i32, Vec<String>, Vec<String>) {
+            let ps = format!(
+                "{onsoz}{tablo_ps}Yukle $kurallar '{ayar}'\n'GOLGE-HAZIR'\ntry {{\n{betik}\n}} finally {{\n{sonsoz}\n}}\n",
+                onsoz = GOLGE_ONSOZ,
+                tablo_ps = kurallar_ps(kurallar),
+                sonsoz = GOLGE_SUREC_SONSOZ,
+            );
+            let dizin = tempfile::tempdir().expect("geçici dizin");
+            let yol = dizin.path().join("golge_surec.ps1");
+            std::fs::write(&yol, ps.as_bytes()).expect("aparat yazılamadı");
+            let o = crate::platform::gizli_komut("powershell")
+                .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+                .arg(&yol)
+                .env("PSModulePath", "")
+                .output()
+                .expect("powershell başlatılamadı");
+            let out = String::from_utf8_lossy(&o.stdout).into_owned();
+            assert!(
+                out.contains("GOLGE-HAZIR"),
+                "gölge önsözü tamamlanmadı (çıkış {:?}; 96 = gerçek NetSecurity erişilebilir, 97 = aparat dizini yok, 99 = gölge eksik):\n{out}\n{}",
+                o.status.code(),
+                String::from_utf8_lossy(&o.stderr)
+            );
+            assert!(!out.contains("NETSECURITY-YUKLENDI"), "betik GERÇEK NetSecurity modülünü yükledi:\n{out}");
+            let alan = |on: &str| -> Vec<String> {
+                out.lines()
+                    .find_map(|l| l.strip_prefix(on))
+                    .unwrap_or_else(|| panic!("aparat {on} satırı yok:\n{out}"))
+                    .split(';')
+                    .filter(|t| !t.trim().is_empty())
+                    .map(|t| t.trim().to_string())
+                    .collect()
+            };
+            (o.status.code().expect("çıkış kodu yok"), alan("OLAY\t"), tablo(alan("TABLO\t")))
+        }
+
+        /// D5 J-3 ÖNCE-KIRMIZI (yardımcı I'nın kapsam dışı bulgusu, 2026-10-27): "İzin ver" düğmesinin yükseltilmiş betiği kural
+        /// KURAMASA da arayüz "tamam" deyip uyarıyı kapatıyordu. Betik tarafı: kurulamayan kural ilk hatada betiği kesiyordu (ikinci
+        /// kural HİÇ denenmiyordu); bozuk (ör. Block) kuralın silinemeyişi `SilentlyContinue` ile yutuluyordu → çıkış 0. Artık iki kural
+        /// da denenir ve sonuç ÇIKIŞ KODUYLA söylenir: 2 = kural kurulamadı, 3 = bozuk kural silinemedi (doğrusu yine kurulur).
+        /// Kodlar burada SABİT (ürün sabitinden okunmaz — tanım satırı mutasyonu da kırmızı olsun).
+        #[test]
+        fn KRITIK_J3_ekleme_KURULAMAYAN_ve_SILINEMEYEN_kuralda_SIFIR_DISI_cikis_kodu() {
+            let block_silinemez = Kural { eylem: "Block", silinemez: true, ..api(COCUK) };
+            let r = golge_kos_ayarli(&[
+                ("j_kurulamaz", vec![], ekle_betik(COCUK), 1, "yeni_hata"),
+                ("j_kurulamaz_yalniz_kesif", vec![api(COCUK)], ekle_betik(COCUK), 1, "yeni_hata"),
+                ("j_block_silinemez", vec![block_silinemez.clone(), kesif()], ekle_betik(COCUK), 1, ""),
+                ("j_ikisi_birden", vec![block_silinemez.clone(), kesif()], ekle_betik(COCUK), 1, "yeni_hata"),
+                // KARŞIT — başarıda 0 (uyarı haklı olarak kapanır)
+                ("j_yok", vec![], ekle_betik(COCUK), 1, ""),
+                ("j_dogru", vec![api(COCUK), kesif()], ekle_betik(COCUK), 1, ""),
+                ("j_dogru_ariza_dugmesi", vec![api(COCUK), kesif()], ekle_betik(COCUK), 1, "yeni_hata"),
+                ("j_block_silinir", vec![Kural { eylem: "Block", ..api(COCUK) }, kesif()], ekle_betik(COCUK), 1, ""),
+                ("j_iki_tur", vec![], ekle_betik(COCUK), 2, ""),
+            ]);
+            temiz(&r);
+            let x = &r["j_kurulamaz"];
+            assert_eq!(
+                x.kod, 2,
+                "kural KURULAMADI ama betik başarı ({}) ile bitti → arayüz 'tamam' deyip uyarıyı kapatır, LAN'dan (mobil / web, ACİL DURDUR dahil) erişim YOK",
+                x.kod
+            );
+            assert_eq!(
+                x.olay,
+                vec![format!("NEWRED|{KURAL_API}"), format!("NEWRED|{KURAL_KESIF}")],
+                "ilk kural kurulamayınca ikincisi DENENMEDİ (betik ilk hatada kesildi)"
+            );
+            assert!(x.tablo.is_empty(), "kurulamayan kural tabloya girdi: {:?}", x.tablo);
+            let y = &r["j_kurulamaz_yalniz_kesif"];
+            assert_eq!((y.kod, y.olay.clone()), (2, vec![format!("NEWRED|{KURAL_KESIF}")]), "yalnız keşif kuralı kurulamadı — kod 2 değil");
+            let b = &r["j_block_silinemez"];
+            assert_eq!(
+                b.kod, 3,
+                "bu programın BOZUK (Block) kuralı SİLİNEMEDİ — engel sürer — ama betik {} ile bitti (hata yutuldu)",
+                b.kod
+            );
+            assert_eq!(
+                b.tablo,
+                tablo(vec![satir(&block_silinemez), satir(&api(COCUK)), satir(&kesif())]),
+                "silinemeyen bozuk kural yüzünden doğrusu KURULMADI"
+            );
+            assert_eq!(r["j_ikisi_birden"].kod, 2, "kurulamayan kural (erişim YOK) silinemeyenden ÖNCE söylenmeli");
+            for ad in ["j_yok", "j_dogru", "j_dogru_ariza_dugmesi", "j_block_silinir", "j_iki_tur"] {
+                assert_eq!(r[ad].kod, 0, "{ad}: kurallar kurulduğu / zaten doğru olduğu hâlde betik {} ile bitti (yanlış alarm)", r[ad].kod);
+            }
+            assert!(r["j_dogru_ariza_dugmesi"].olay.is_empty(), "doğru kural varken yeniden kurulmaya çalışıldı");
+        }
+
+        /// D5 J-3 · ÜRETİM BİÇİMİ: aynı kollar betik KENDİ `powershell` sürecinde koşarken — çağıranın okuduğu şey sürecin çıkış kodudur.
+        #[test]
+        fn KRITIK_J3_ekleme_betigi_KENDI_SURECINDE_basarisizlikta_SIFIR_DISI_cikar() {
+            let (kod, olay, t) = golge_surec_kos(&[], &ekle_betik(COCUK), "yeni_hata");
+            assert_eq!(kod, 2, "kural kurulamadı ama yükseltilmiş SÜREÇ {kod} ile çıktı — çağıran 'tamam' sayar");
+            assert_eq!(olay, vec![format!("NEWRED|{KURAL_API}"), format!("NEWRED|{KURAL_KESIF}")], "ikinci kural denenmedi");
+            assert!(t.is_empty());
+            let block_silinemez = Kural { eylem: "Block", silinemez: true, ..api(COCUK) };
+            let (kod, _, t) = golge_surec_kos(&[block_silinemez.clone(), kesif()], &ekle_betik(COCUK), "");
+            assert_eq!(kod, 3, "bozuk Block kuralı silinemedi ama süreç {kod} ile çıktı");
+            assert_eq!(t, tablo(vec![satir(&block_silinemez), satir(&api(COCUK)), satir(&kesif())]));
+            let (kod, olay, t) = golge_surec_kos(&[], &ekle_betik(COCUK), "");
+            assert_eq!(kod, 0, "KARŞIT: kurallar kuruldu ama süreç {kod} ile çıktı (yanlış alarm)");
+            assert_eq!(olay, vec![yeni(&api(COCUK)), yeni(&kesif())]);
+            assert_eq!(t, tablo(vec![satir(&api(COCUK)), satir(&kesif())]));
         }
 
         #[test]
@@ -648,6 +924,8 @@ mod tests {
                 tablo(vec![satir(&silinemez), satir(&api(COCUK)), satir(&kesif())]),
                 "silinemeyen bozuk kural yüzünden doğrusu KURULMADI (betik düştü?)"
             );
+            // D5 J-3: doğrusu kurulsa da silinemeyen bozuk kural SÖYLENİR (çıkış 3); başka programın kuralına dokunmamak hata değil (0).
+            assert_eq!((x.kod, r["e_silinemez"].kod), (0, 3), "çıkış kodları (servis kuralı, silinemeyen bozuk kural)");
         }
 
         #[test]
@@ -745,6 +1023,9 @@ $ErrorActionPreference = 'Stop'
 Import-Module "$PSHOME\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1"
 $PSModuleAutoLoadingPreference = 'None'
 if (Get-Command Set-NetFirewallRule -ErrorAction SilentlyContinue) { 'GERCEK-NETSECURITY-ERISILEBILIR'; exit 96 }
+# D5 J-3: betik dosyası aparatın KENDİ geçici dizinine yazılır (boşsa göreli yol cargo'nun çalışma dizinine — klona — düşerdi).
+$script:AparatDizini = $PSScriptRoot
+if (-not $script:AparatDizini) { 'APARAT-DIZINI-YOK'; exit 97 }
 $script:Tablo = New-Object System.Collections.ArrayList
 $script:Filtre = @{}
 $script:Olay = New-Object System.Collections.ArrayList
@@ -790,6 +1071,8 @@ function New-NetFirewallRule {
           [string]$Protocol = 'Any', [string[]]$LocalPort = @('Any'), [Alias('Profile')][string]$Profil = 'Any',
           [string]$Enabled = 'True', [string[]]$RemoteAddress = @())
     # PEMF-GOLGE
+    # D5 J-3 arıza düğmesi: kural KURULAMAZ (grup ilkesi / yetki) — olay "NEWRED" (denendi), tabloya girmez.
+    if ($script:YeniHata) { [void]$script:Olay.Add("NEWRED|$DisplayName"); Write-Error "Access is denied (golge: New $DisplayName)"; return }
     $script:Sayac++
     $ad = "golge-$($script:Sayac)"
     [void]$script:Olay.Add("NEW|$DisplayName|$Direction|$Program|$Action|$Protocol|$($LocalPort -join ',')|$Profil|$($RemoteAddress -join ',')")
@@ -820,8 +1103,9 @@ foreach ($n in @('Get-NetFirewallRule', 'New-NetFirewallRule', 'Remove-NetFirewa
     $c = Get-Command $n -ErrorAction SilentlyContinue
     if (-not $c -or "$($c.CommandType)" -ne 'Function' -or $c.ModuleName -or "$($c.ScriptBlock)" -notmatch 'PEMF-GOLGE') { "GOLGE-YOK`t$n"; exit 99 }
 }
-function Kos([string]$Ad, $Kurallar, [string]$Betik, [int]$Tur) {
+function Yukle($Kurallar, [string]$Ayar) {
     $script:Tablo.Clear(); $script:Filtre.Clear(); $script:Olay.Clear(); $script:Silinemez = @(); $script:Sayac = 0
+    $script:YeniHata = ($Ayar -eq 'yeni_hata')
     foreach ($k in @($Kurallar)) {
         $script:Sayac++
         $n = "kural-$($script:Sayac)"
@@ -829,20 +1113,40 @@ function Kos([string]$Ad, $Kurallar, [string]$Betik, [int]$Tur) {
         $script:Filtre[$n] = @{ Protocol = $k.Proto; LocalPort = $k.Port; Program = $k.Program }
         if ($k.Silinemez) { $script:Silinemez += $n }
     }
+}
+function TabloSatirlari {
+    @($script:Tablo | ForEach-Object { $f = $script:Filtre[$_.Name]; "$($_.DisplayName)/$($_.Enabled)/$($_.Direction)/$($_.Action)/$($_.Profile)/$($f.Protocol)/$($f.LocalPort)/$($f.Program)" })
+}
+# D5 J-3: betik bir DOSYADAN, iç bir betik bloğunda NOKTA-KAYNAK olarak koşar (`& { . $args[0] } $yol`) — betikteki `exit N` yalnız
+# o dosyayı bitirir ve `$LASTEXITCODE`e yazılır (eskiden `[scriptblock]::Create` ile koşuyordu: `exit` tüm aparatı bitirirdi).
+# `& $yol` OLMAZ: dosya kendi betik kapsamını açar ve gölge işlevlerin `$script:` durumu (tablo / olay) o BOŞ kapsama düşer
+# (ölçüldü 2026-10-27, PS 5.1: olay boş, "null-valued expression"); dış `& { }` betiğin değişkenlerini ve
+# `$ErrorActionPreference`ını `Kos`a sızdırmaz.
+function Kos([string]$Ad, $Kurallar, [string]$Betik, [int]$Tur, [string]$Ayar = '') {
+    Yukle $Kurallar $Ayar
+    $yol = [System.IO.Path]::Combine($script:AparatDizini, 'golge_betik.ps1')
+    [System.IO.File]::WriteAllText($yol, $Betik, [System.Text.UTF8Encoding]::new($true))
     $ErrorActionPreference = 'Continue'
-    $cikti = @(); $hata = @()
+    $cikti = @(); $hata = @(); $kod = 0
     for ($i = 0; $i -lt $Tur; $i++) {
         $script:Olay.Clear()
+        $global:LASTEXITCODE = 0
         try {
-            $cikti = @(& ([scriptblock]::Create($Betik)) 2>&1 | ForEach-Object {
+            $cikti = @(& { . $args[0] } $yol 2>&1 | ForEach-Object {
                 if ($_ -is [System.Management.Automation.ErrorRecord]) { $hata += "$_" } else { "$_" }
             })
         } catch { $hata += "$_" }
+        $kod = $global:LASTEXITCODE
     }
-    $tablo = @($script:Tablo | ForEach-Object { $f = $script:Filtre[$_.Name]; "$($_.DisplayName)/$($_.Enabled)/$($_.Direction)/$($_.Action)/$($_.Profile)/$($f.Protocol)/$($f.LocalPort)/$($f.Program)" })
-    "SENARYO`t$Ad`t$($cikti -join ',')`t$($tablo -join ';')`t$($script:Olay -join ';')`t$($hata -join ' ~ ')"
+    $tablo = TabloSatirlari
+    "SENARYO`t$Ad`t$($cikti -join ',')`t$($tablo -join ';')`t$($script:Olay -join ';')`t$kod`t$($hata -join ' ~ ')"
 }
 "##;
+
+        /// D5 J-3 süreç kipi: betiğin `exit`inden SONRA da koşar (`finally`) — olay günlüğü, son tablo, NetSecurity sızıntı işareti.
+        const GOLGE_SUREC_SONSOZ: &str = r##""OLAY`t$($script:Olay -join ';')"
+"TABLO`t$((TabloSatirlari) -join ';')"
+if (Get-Module NetSecurity) { 'NETSECURITY-YUKLENDI' }"##;
 
         const GOLGE_SONSOZ: &str = r##"if (Get-Module NetSecurity) { 'NETSECURITY-YUKLENDI'; exit 98 }
 'GOLGE-BITTI'

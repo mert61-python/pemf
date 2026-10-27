@@ -2300,6 +2300,9 @@ fn firewall_durumu_blocking() -> serde_json::Value {
 
 /// PowerShell betiğini UAC ile YÜKSELTEREK çalıştır (firewall kuralları admin ister).
 ///
+/// ⚠️ D5 J-3: betiğin ÇIKIŞ KODU OKUNMAZ (yalnız UAC reddi görülür) — yalnız sonucu bilerek yutulan kaldırma temizliği
+/// (`silme_betigi`) kullanır. Sonucu önemli olan yükseltme `ps_yukselterek_kos_kodlu` ile koşar.
+///
 /// ⚠️ Base64 taşıma KASITLI: betik kullanıcı-etkili yollar içerebilir; tırnak/kaçış katmanları
 /// arasında bozulmasın (bkz. firewall.rs enjeksiyon notu). Konsol penceresi açılmaz.
 #[cfg(windows)]
@@ -2336,7 +2339,7 @@ fn ps_b64(betik: &str) -> String {
 }
 
 /// D3 T-g: `ps_yukselterek_kos` gibi, ama yükseltilmiş betiğin ÇIKIŞ KODUNU döndürür (`-PassThru`); UAC reddi / yükseltme
-/// başlatılamadı → `paylasim::KOD_UAC_REDDEDILDI` (1223 = ERROR_CANCELLED). Güvenlik duvarı yolu DEĞİŞMEDİ.
+/// başlatılamadı → `paylasim::KOD_UAC_REDDEDILDI` (1223 = ERROR_CANCELLED). D5 J-3: güvenlik duvarı "İzin ver" yolu da bunu kullanır.
 #[cfg(windows)]
 fn ps_yukselterek_kos_kodlu(betik: &str) -> Result<i32, String> {
     let b64 = ps_b64(betik);
@@ -2411,11 +2414,23 @@ fn firewall_kurali_ekle_blocking() -> Result<serde_json::Value, String> {
         if !exe.exists() {
             return Err(pemf_launcher_core::dil::t("rust.hata.backendKurulDegil"));
         }
-        // Ortak yardımcı (base64 + UAC) — silme yolu da aynısını kullanır, kopya yok.
+        // Ortak yardımcı (base64 + UAC) — paylaşım kurulumu da aynısını kullanır, kopya yok.
         // D5 I-1: kural İÇERİKLE + çocuğun GERÇEK portu (8000'e sabit değil).
-        ps_yukselterek_kos(&ekleme_betigi(&exe, api_portu(&root)))
-            .map_err(|_| pemf_launcher_core::dil::t("rust.hata.guvenlikDuvariIzinYok"))?;
-        Ok(serde_json::json!({ "status": "ok" }))
+        // D5 J-3: yükseltilmiş betiğin ÇIKIŞ KODU okunur. Eskiden `ps_yukselterek_kos` (`Start-Process -Wait`, `-PassThru` yok)
+        // yalnız UAC reddini görüyordu: içerideki `New-NetFirewallRule` düşse de arayüz "tamam" deyip uyarıyı kapatıyordu.
+        izin_ver_sonucu(ps_yukselterek_kos_kodlu(&ekleme_betigi(&exe, api_portu(&root))))
+    }
+}
+
+/// D5 J-3 (tur 2): "İzin ver" yükseltilmiş betiğinin SONUCU → arayüz yanıtı (SAF eşleme; davranışı app crate testinde ölçülür).
+/// `Err` (PowerShell / yükseltme başlatılamadı) ve UAC reddi (1223) → MEVCUT ileti (`guvenlikDuvariIzinYok`); 0 → "tamam";
+/// sıfır dışı başka her kod → kodu taşıyan hata (`firewall::ekleme_hata_anahtari`) — arayüz uyarıyı KAPATMAZ.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn izin_ver_sonucu(kod: Result<i32, String>) -> Result<serde_json::Value, String> {
+    let kod = kod.map_err(|_| pemf_launcher_core::dil::t("rust.hata.guvenlikDuvariIzinYok"))?;
+    match pemf_launcher_core::firewall::ekleme_hata_anahtari(kod) {
+        None => Ok(serde_json::json!({ "status": "ok" })),
+        Some(anahtar) => Err(pemf_launcher_core::dil::t_ile(anahtar, &[("kod", &kod.to_string())])),
     }
 }
 
@@ -2919,6 +2934,186 @@ mod tests {
         assert!(p < env.find("firewallKontrol(false)").expect("güvenlik duvarı denetimi yok"), "paylaşım kartı güvenlik duvarından SONRA");
         let fw = &html[html.find("async function firewallKontrol(").expect("firewallKontrol yok")..];
         assert!(fw[..fw.find("invoke(\"firewall_durumu\")").unwrap()].contains("paylasimNotu"), "güvenlik duvarı paylaşım kartını ezer");
+    }
+
+    /// D5 J-3 (tur 2 · çürütücü n10 / n2): "İzin ver" sonucunun DAVRANIŞI — saf `izin_ver_sonucu` (`firewall_kurali_ekle_blocking`
+    /// yalnız onu çağırır; çekirdeğin `KRITIK_J3_main_rs_…` kapısı yorumlar soyulmuş gövdede bunu doğrular). Kodlar burada SABİT;
+    /// beklenen ileti TR ya da EN katalog metni (etkin dil başka testte değişebilir), kod iletide.
+    #[test]
+    fn KRITIK_J3_izin_ver_sonucu_KOD_davranisi_UAC_reddi_mevcut_metin() {
+        use pemf_launcher_core::dil::{katalog, Dil};
+        let metinler = |anahtar: &str, kod: Option<i32>| -> Vec<String> {
+            [Dil::Tr, Dil::En]
+                .into_iter()
+                .map(|d| {
+                    let m = katalog(d).get(anahtar).unwrap_or_else(|| panic!("{anahtar} katalogda yok")).clone();
+                    match kod {
+                        Some(k) => m.replace("\u{7b}\u{7b}kod\u{7d}\u{7d}", &k.to_string()),
+                        None => m,
+                    }
+                })
+                .collect()
+        };
+        assert_eq!(izin_ver_sonucu(Ok(0)), Ok(serde_json::json!({ "status": "ok" })), "başarı (0) 'tamam' dönmüyor");
+        for (kod, anahtar) in [
+            (2, "rust.hata.guvenlikDuvariKuralEklenemedi"),
+            (4242, "rust.hata.guvenlikDuvariKuralEklenemedi"),
+            (1, "rust.hata.guvenlikDuvariKuralEklenemedi"),
+            (-1, "rust.hata.guvenlikDuvariKuralEklenemedi"),
+            (3, "rust.hata.guvenlikDuvariBozukKuralSilinemedi"),
+        ] {
+            let e = izin_ver_sonucu(Ok(kod))
+                .expect_err(&format!("sıfır dışı çıkış {kod} 'tamam' sayıldı → arayüz uyarıyı kapatır, LAN erişimi YOK"));
+            assert!(metinler(anahtar, Some(kod)).contains(&e), "kod {kod}: ileti {anahtar} değil ya da kodu taşımıyor: {e}");
+        }
+        let uac = metinler("rust.hata.guvenlikDuvariIzinYok", None);
+        let e = izin_ver_sonucu(Ok(1223)).expect_err("UAC reddi (1223) 'tamam' sayıldı");
+        assert!(uac.contains(&e), "UAC reddinin MEVCUT iletisi değişti: {e}");
+        let e = izin_ver_sonucu(Err("powershell başlatılamadı".to_string())).expect_err("yükseltme başlatılamadı ama 'tamam'");
+        assert!(uac.contains(&e), "yükseltme başlatılamayınca MEVCUT ileti dönmüyor: {e}");
+    }
+
+    /// `ac` konumundaki açılış ayracının kapanışından SONRAKİ konum (tırnak içindeki ayraçlar sayılmaz).
+    fn j3_blok_sonu(s: &str, ac: usize) -> usize {
+        let mut derinlik = 0i32;
+        let mut tirnak: Option<char> = None;
+        let mut onceki = ' ';
+        for (i, c) in s[ac..].char_indices() {
+            match tirnak {
+                Some(q) => {
+                    if c == q && onceki != '\\' {
+                        tirnak = None;
+                    }
+                }
+                None => match c {
+                    '"' | '\'' | '`' => tirnak = Some(c),
+                    '\u{7b}' => derinlik += 1,
+                    '\u{7d}' => {
+                        derinlik -= 1;
+                        if derinlik == 0 {
+                            return ac + i + c.len_utf8();
+                        }
+                    }
+                    _ => {}
+                },
+            }
+            onceki = if onceki == '\\' { ' ' } else { c };
+        }
+        panic!("ayraç kapanmıyor");
+    }
+
+    /// JS parçasından `//` ve `/* … */` yorumlarını atar (dizge içi korunur).
+    fn j3_js_yorumsuz(s: &str) -> String {
+        let k: Vec<char> = s.chars().collect();
+        let mut o = String::new();
+        let mut i = 0;
+        let mut tirnak: Option<char> = None;
+        while i < k.len() {
+            let c = k[i];
+            if let Some(q) = tirnak {
+                o.push(c);
+                if c == '\\' && i + 1 < k.len() {
+                    o.push(k[i + 1]);
+                    i += 1;
+                } else if c == q {
+                    tirnak = None;
+                }
+                i += 1;
+            } else if c == '/' && k.get(i + 1) == Some(&'/') {
+                while i < k.len() && k[i] != '\n' {
+                    i += 1;
+                }
+            } else if c == '/' && k.get(i + 1) == Some(&'*') {
+                i += 2;
+                while i < k.len() && !(k[i] == '*' && k.get(i + 1) == Some(&'/')) {
+                    i += 1;
+                }
+                i += 2;
+            } else {
+                if c == '"' || c == '\'' || c == '`' {
+                    tirnak = Some(c);
+                }
+                o.push(c);
+                i += 1;
+            }
+        }
+        o
+    }
+
+    /// D5 J-3 (tur 2 · çürütücü n3): Rust `Err`ini kullanıcıya gösteren SON halka — "İzin ver" `onclick` işleyicisinde `catch` hatayı
+    /// (`String(e)`) yazar, düğmeyi yeniden açar ve uyarıyı KAPATMAZ; `clearNotice()` YALNIZ başarıda (`invoke`dan SONRA) ve işleyicide
+    /// TEK. JS yorumları soyulur (yorumda kalan satır sayılmaz). D3 T-g'nin `include_str!("../ui/index.html")` deseni.
+    #[test]
+    fn KRITIK_J3_arayuz_izin_ver_HATAYI_gosterir_uyariyi_KAPATMAZ() {
+        let html = include_str!("../ui/index.html").replace("\r\n", "\n");
+        let cagri = html.find("invoke(\"firewall_kurali_ekle\")").expect("arayüz 'İzin ver' komutunu hiç çağırmıyor");
+        let bas = html[..cagri].rfind(".onclick").expect("'İzin ver' düğmesinin onclick işleyicisi yok");
+        let ac = bas + html[bas..].find('\u{7b}').expect("işleyici gövdesi yok");
+        let isleyici = j3_js_yorumsuz(&html[ac..j3_blok_sonu(&html, ac)]);
+        let ct = isleyici.find("catch").expect("'İzin ver' işleyicisinde catch YOK — komut hatası kullanıcıya gösterilmez");
+        let tr = isleyici[..ct].find("try").expect("'İzin ver' işleyicisinde try yok");
+        let dene = &isleyici[tr..ct];
+        let i_inv = dene.find("await invoke(\"firewall_kurali_ekle\")").expect("komut try içinde beklenmiyor (yalnız yorumda?)");
+        let i_kapa = dene.find("clearNotice()").expect("başarıda uyarı kapanmıyor");
+        assert!(i_inv < i_kapa, "uyarı komutun SONUCUNDAN önce kapanıyor (hata da 'tamam' görünür)");
+        let cac = ct + isleyici[ct..].find('\u{7b}').expect("catch gövdesi yok");
+        let yakala = &isleyici[cac..j3_blok_sonu(&isleyici, cac)];
+        assert!(
+            yakala.contains(".textContent = String(e)"),
+            "'İzin ver' hatası (Rust Err: kural kurulamadı / UAC reddi) kullanıcıya GÖSTERİLMİYOR: {yakala}"
+        );
+        assert!(yakala.contains("disabled = false"), "hata sonrası 'İzin ver' düğmesi yeniden açılmıyor: {yakala}");
+        assert!(!yakala.contains("clearNotice("), "hata dalında uyarı KAPATILIYOR — engel sürerken kullanıcı 'tamam' sanır: {yakala}");
+        assert_eq!(isleyici.matches("clearNotice(").count(), 1, "uyarıyı kapatan ikinci bir yol (finally / catch) var: {isleyici}");
+    }
+
+    /// Rust dizge sabitinin İÇERİĞİ → değer: `\`+satır sonu+girinti birleşir, `{{` / `}}` (format!) tek ayraca iner.
+    fn j3_rust_dizge_coz(s: &str) -> String {
+        let mut o = String::new();
+        let mut it = s.chars().peekable();
+        while let Some(c) = it.next() {
+            if c == '\\' && it.peek() == Some(&'\n') {
+                while matches!(it.peek(), Some(n) if n.is_whitespace()) {
+                    it.next();
+                }
+            } else {
+                o.push(c);
+            }
+        }
+        o.replace("\u{7b}\u{7b}", "\u{7b}").replace("\u{7d}\u{7d}", "\u{7d}")
+    }
+
+    /// PowerShell komutundan `<# … #>` ve `# …` yorumlarını atar (bu komutta dizge içinde `#` yok).
+    fn j3_ps_yorumsuz(s: &str) -> String {
+        let mut o = s.to_string();
+        while let Some(a) = o.find("<#") {
+            let b = o[a..].find("#>").map(|b| a + b + 2).unwrap_or(o.len());
+            o.replace_range(a..b, " ");
+        }
+        o.lines().map(|l| l.split('#').next().unwrap_or("")).collect::<Vec<_>>().join("\n")
+    }
+
+    /// D5 J-3 (tur 2 · çürütücü n1): kodlu yükseltme sarmalayıcısı iç sürecin ÇIKIŞ KODUNU aktarır — PowerShell yorumları soyulmuş
+    /// komutta `-PassThru`, SON deyim `exit $p.ExitCode` ve başka `exit` yalnız UAC-reddi `catch`ında; Rust tarafı sürecin kodunu okur.
+    /// (D3 T-g kapısı `exit $p.ExitCode`i HAM metinde arıyordu: `exit 0 <# exit $p.ExitCode #>` YEŞİLDİ — kod hiç aktarılmaz, arayüz
+    /// her durumda "tamam".) Komut KOŞULMAZ — gerçek UAC / `Start-Process -Verb RunAs` YOK.
+    #[test]
+    fn KRITIK_J3_kodlu_sarmalayici_CIKIS_KODUNU_aktarir_PS_yorumsuz() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let kodlu = &soy[soy.find("fn ps_yukselterek_kos_kodlu(").expect("kodlu yükseltme yok")..];
+        let kodlu = &kodlu[..kodlu.find("\n\u{7d}\n").expect("gövde sonu")];
+        let f = kodlu.find("format!(").expect("sarmalayıcı komutu format! ile kurulmuyor");
+        let a = f + kodlu[f..].find('"').expect("komut dizgesi yok") + 1;
+        let b = a + kodlu[a..].find('"').expect("komut dizgesi sonu yok");
+        let ps = j3_ps_yorumsuz(&j3_rust_dizge_coz(&kodlu[a..b]));
+        let ps = ps.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(ps.contains("-Verb RunAs -Wait -PassThru"), "yükseltilmiş süreç beklenmiyor / nesnesi alınmıyor: {ps}");
+        assert!(
+            ps.trim_end().trim_end_matches(';').trim_end().ends_with("exit $p.ExitCode"),
+            "sarmalayıcının SON deyimi iç sürecin çıkış kodu değil (yorum soyulmuş): {ps}"
+        );
+        assert_eq!(ps.matches("exit ").count(), 2, "UAC-reddi catch'i dışında ikinci bir sabit `exit` var (kod aktarılmaz): {ps}");
+        assert!(kodlu.contains("status.code()"), "Rust tarafı yükseltme sarmalayıcısının çıkış kodunu okumuyor");
     }
 
     /// 2026-10-18: ana pencere kapanınca bobin durdurma BİLEREK beklenir (süreç çıkıyor) — ama açık uygulama penceresi o 2–4 sn

@@ -356,6 +356,14 @@
    "onek": "rust.hata.",
    "degerler": ["yoneticiIzniVerilmedi", "paylasimIzinVerilemedi", "paylasimBagBulundu", "paylasimVeriYok", "paylasimBasarisiz"],
    "gerekce": "D3 T-g: yükseltilmiş paylaşım betiğinin çıkış kodu → ileti (`launcher/core/src/paylasim.rs::hata_anahtari` kapalı tablosu; değerler orada, kod `{{kod}}` yer tutucusu)"
+  },
+  {
+   "yuzey": "launcher",
+   "dosya": "launcher/app/src/main.rs",
+   "ifade": "dil::t_ile(anahtar, &[(\"kod\", &kod.to_string())])",
+   "onek": "rust.hata.",
+   "degerler": ["guvenlikDuvariIzinYok", "guvenlikDuvariKuralEklenemedi", "guvenlikDuvariBozukKuralSilinemedi"],
+   "gerekce": "D5 J-3: güvenlik duvarı \"İzin ver\" yükseltilmiş betiğinin çıkış kodu → ileti (`launcher/core/src/firewall.rs::ekleme_hata_anahtari` kapalı tablosu; değerler orada, kod `{{kod}}` yer tutucusu)"
   }
  ]
 }

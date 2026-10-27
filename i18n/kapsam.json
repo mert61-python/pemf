@@ -10820,7 +10820,7 @@
      ]
     },
     {
-     "metin": "$ErrorActionPreference='Stop'; $p='{{p}}'; {{islevler}}foreach ($k in @(@('{{api}}', 'TCP', {{tcp}}), @('{{kesif}}', 'UDP', {{udp}}))) {{ $uyan = 0; foreach ($r in @(Get-NetFirewallRule -DisplayName $k[0] -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ if (PemfKuralUyar $r $k[1] $k[2]) {{ $uyan++ }} elseif (PemfKuralBizim $r) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }}; if ($uyan -eq 0) {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any | Out-Null }} }}",
+     "metin": "$ErrorActionPreference='Stop'; $kurulamadi = 0; $silinemedi = 0; $p='{{p}}'; {{islevler}}foreach ($k in @(@('{{api}}', 'TCP', {{tcp}}), @('{{kesif}}', 'UDP', {{udp}}))) {{ $uyan = 0; foreach ($r in @(Get-NetFirewallRule -DisplayName $k[0] -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ if (PemfKuralUyar $r $k[1] $k[2]) {{ $uyan++ }} elseif (PemfKuralBizim $r) {{ try {{ $r | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ $silinemedi++ }} }} }}; if ($uyan -eq 0) {{ try {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any -ErrorAction Stop | Out-Null }} catch {{ $kurulamadi++ }} }} }}; if ($kurulamadi -gt 0) {{ exit {{kod_kur}} }}; if ($silinemedi -gt 0) {{ exit {{kod_sil}} }}; exit {{kod_tamam}}",
      "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
      "turler": [
       "rust-sablon"
