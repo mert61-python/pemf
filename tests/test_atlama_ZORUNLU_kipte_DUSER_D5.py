@@ -31,6 +31,15 @@ ImportError gibi HAM. Atlama eşdeğerleri de atlamadır: `pytest.skip.Exception
 `skipif(condition=…)` ve ikinci konumsal koşul. Saran koşul varken de erken dönüş koşulları eklenir; saran koşul `if` dışında
 `A and skip()` / `A or skip()` kısa devresi, koşullu ifade, `while` ve `for … else` (break koşulları) da sayılır. Atlama istisnası
 yükselten `raise` (ve atlamayı yakalayan bloktaki çıplak `raise`) `if <zorunlu>:` dalını düşüren SAYMAZ.
+TUR 3b (çürütücü 3 bulguları m1a · m1b · m2b · m3a · m3b, 2026-10-27): çağrılan ad bir düzey takma addan çözülür (`from pytest
+import skip as _gec`, `_atla = pytest.skip`, `from unittest import SkipTest as _ST`); pytest işaretinin DİZE koşulu
+(`skipif("PWSH is None")` — pytest onu modül globals'ıyla değerlendirir) ifadeye çevrilip aynı kurallarla taranır (unittest
+biçimi değerlendirmez — dize hep doğru); geniş `except`te `try` gövdesindeki öznitelik çağrısının tabanı içe aktarılmış modül
+DEĞİLSE (`_Y.al()`, `_Y().al()`, `self.f()`) yerel tanım `attr` adıyla açılır. AYRI KRİTİK kapı: ZORUNLU durumuna YAZIM
+(`capraz.ZORUNLU = …`, `setattr(…, "ZORUNLU")`, `os.environ["PEMF_GOLDEN_REQUIRED"] = …` — anahtar sabite bağlı ad da —, `pop` /
+`setdefault` / `update` / `clear` / `putenv`, `setenv` / `delenv` / `setitem(os.environ, …)`, `patch.dict(os.environ…)`) yalnız
+`test_*` işlevinde `monkeypatch.` ile serbest: modül düzeyi (içe aktarmada koşar), fikstür ya da yardımcı işlevdeki yazım META'nın
+bağlı saydığı `capraz.ZORUNLU` / satır içi ortam denetimini ZORUNLU kipte boşa çıkarır.
 Ham atlama yalnız GEREKÇELİ izin listesindeki dosyada ve listedeki SAYIDA olabilir (cırcır: sayı düşerse liste de düşürülmeli —
 bayat liste de KIRMIZI). Doğru yol: `capraz.atla_yoksa(yol, izlenen=…)`, `capraz.atla(sebep)`, `capraz.paket_yoksa_atla(ad)`.
 
@@ -38,7 +47,8 @@ Bilinen sınır (bilinçli): adlar en çok 3 düzey açılır ve başka modülde
 atlamayı SARMAYAN `continue` (döngüde sessiz geçiş, atlama yok) bu kapının değil dosyanın KARŞIT kolunun işidir
 (`test_stm_bobin_sayisi_tek_kaynak.py`). Fikstür `params=` / `request.param` dolaylaması çözülmez. Yardımcı modülün DIŞINDAN
 gelen (3. taraf / ürün) `zorunlu` adı desenle kabul edilir; `except OSError` / `PermissionError` (izin / platform yeteneği) eser
-yokluğu SAYILMAZ (tek canlı örnek symlink izni — platform).
+yokluğu SAYILMAZ (tek canlı örnek symlink izni — platform). Takma ad yalnız bir düzey çözülür; `getattr(pytest, "skip")`,
+`vars(capraz)[…]` / `globals()` / `sys.modules` ile dolaylı atlama ya da durum yazımı taranmaz.
 """
 
 from __future__ import annotations
@@ -117,6 +127,29 @@ def _eser_sorgusu_var(dugumler) -> bool:
     return False
 
 
+def _cozumlu_ad(fn: ast.AST, m) -> str:
+    """TUR 3b (m3b): çağrılan ad bir düzey takma addan çözülür — `from pytest import skip as _gec` → `pytest.skip`,
+    `_gec = pytest.skip` → `pytest.skip`. Çözülemezse sözdizimsel ad."""
+    ad = _cagri_adi(fn)
+    if isinstance(fn, ast.Name) and m is not None:
+        for b in m.baglama.get(fn.id, []):
+            if b[0] == "ithal" and b[2] is not None:
+                return f"{b[1]}.{b[2]}"
+            if b[0] == "deger" and isinstance(b[1], (ast.Attribute, ast.Name)):
+                return _cagri_adi(b[1])
+    return ad
+
+
+def _dize_kosulu(k: ast.AST) -> ast.AST:
+    """TUR 3b (m3a): `skipif("PWSH is None")` → `PWSH is None` ifadesi (çözümlenemeyen dize olduğu gibi)."""
+    if isinstance(k, ast.Constant) and isinstance(k.value, str):
+        try:
+            return ast.parse(k.value.strip(), mode="eval").body
+        except SyntaxError:
+            return k
+    return k
+
+
 def _atlama_adi_mi(ad: str) -> bool:
     """TUR 3 (c8 / c9): çağrı / `raise` adı bir atlama eşdeğeri mi (`_ATLAMA_SONEKI`, nokta sınırında)."""
     return any(ad == s or ad.endswith("." + s) for s in _ATLAMA_SONEKI)
@@ -127,7 +160,7 @@ def _atlama_istisnasi_mi(hedef: ast.AST | None, m: _Modul | None) -> bool:
     if hedef is None:
         return False
     h = hedef.func if isinstance(hedef, ast.Call) else hedef
-    if _atlama_adi_mi(_cagri_adi(h)):
+    if _atlama_adi_mi(_cagri_adi(h)) or _atlama_adi_mi(_cozumlu_ad(h, m)):
         return True
     if isinstance(h, ast.Name) and m is not None:
         for b in m.baglama.get(h.id, []):
@@ -275,10 +308,11 @@ def _cagri_tanimlari(m: _Modul, fn: ast.AST) -> list[tuple[_Modul, ast.AST]]:
                 ym = _yardimci_modul(b[1])
                 if ym is not None:
                     sonuc += [(ym, x[1]) for x in ym.baglama.get(b[2], []) if x[0] == "islev"]
-    elif isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name):
-        if fn.value.id in ("self", "cls"):
-            sonuc += [(m, x[1]) for x in m.baglama.get(fn.attr, []) if x[0] == "islev"]
-        elif fn.value.id in m.ithal:
+    elif isinstance(fn, ast.Attribute) and not (isinstance(fn.value, ast.Name) and fn.value.id in m.ithal):
+        # TUR 3b (m2b): taban içe aktarılmış modül DEĞİLSE (self / cls / sınıf adı / örnek / çağrı) yerel tanım
+        sonuc += [(m, x[1]) for x in m.baglama.get(fn.attr, []) if x[0] == "islev"]
+    elif isinstance(fn, ast.Attribute):
+        if fn.value.id in m.ithal:
             modad, oz = m.ithal[fn.value.id]
             ym = _yardimci_modul(modad if oz is None else f"{modad}.{oz}")
             if ym is not None:
@@ -607,7 +641,7 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
     sonuc = []
     for n in ast.walk(m.agac):
         if isinstance(n, ast.Call):
-            ad, argl, anahtar = _cagri_adi(n.func), n.args, n.keywords
+            ad, argl, anahtar = _cozumlu_ad(n.func, m), n.args, n.keywords
             if any(ad == s or ad.endswith("." + s) for s in _ISTISNA_SONEKI) and not isinstance(
                 m.ebeveyn.get(n), ast.Raise
             ):
@@ -631,6 +665,8 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
             # yalnız ilki (ikincisi neden). Koşulsuz işaret (`skipif(reason=…)`, `mark.xfail(reason=…)`) koşulsuz atlama gibi.
             unittest_bicimi = son in ("skipIf", "skipUnless")
             kosullar = list(argl[:1] if unittest_bicimi else argl) + [k.value for k in anahtar if k.arg == "condition"]
+            if not unittest_bicimi:  # TUR 3b (m3a): pytest dize koşulunu modül globals'ıyla DEĞERLENDİRİR
+                kosullar = [_dize_kosulu(k) for k in kosullar]
             if unittest_bicimi and neden_d is None and len(argl) > 1:
                 neden_d = argl[1]
         if kosullar:
@@ -1322,4 +1358,266 @@ def test_KARSIT_KANIT_TUR3_dogru_tanimli_BAGLI_ve_eser_DISI_bicimleri_saymaz():
     bulunan = tara(_BAGLI_TUR3, "sentetik_bagli_tur3.py")
     assert bulunan == [], (
         f"ZORUNLU kipte DÜŞEN (tanımıyla bağlı) / eser dışı atlama ham sayıldı (sahte kırmızı): {bulunan}"
+    )
+
+
+# ═══ TUR 3b — çürütücü 3'ün yaşayanları: takma ad (m3b) · DİZE koşulu (m3a) · sınıf adıyla dolaylı içe aktarma (m2b) ════════════
+_HAM_TUR3B = """
+import shutil
+import sys
+from pathlib import Path
+import pytest
+from pytest import skip as _gec
+from unittest import SkipTest as _ST
+_atla = pytest.skip
+KOK = Path(__file__).resolve().parents[1]
+PWSH = shutil.which("pwsh")
+@pytest.mark.skipif("PWSH is None", reason="m3a dize kosulu")  # HAM
+def test_m3a_dize():
+    pass
+@pytest.mark.xfail("not (KOK / 'x').exists()", reason="dize xfail kosulu")  # HAM
+def test_dize_xfail():
+    pass
+pytestmark = pytest.mark.skipif(condition="not (KOK / 'z').is_dir()", reason="anahtar sozcuklu dize")  # HAM
+@pytest.mark.skipif(sys.platform != "win32", "not (KOK / 'w').exists()", reason="ikinci konumsal dize")  # HAM
+def test_ikinci_dize():
+    pass
+def test_m3b_takma_ad():
+    if PWSH is None:
+        _gec("pwsh yok")  # HAM
+def test_takma_deger():
+    if not (KOK / "y").exists():
+        _atla("y yok")  # HAM
+def test_takma_istisna():
+    if not (KOK / "y").exists():
+        raise _ST("y yok")  # HAM
+def test_takma_istisna_cagrisiz():
+    if shutil.which("node") is None:
+        raise _ST  # HAM
+class _Y:
+    @staticmethod
+    def al():
+        import yaml
+        return yaml
+def test_m2b_sinif_adi():
+    try:
+        _Y.al()
+    except Exception:
+        pytest.skip("yaml yok")  # HAM
+def test_ornek_cagrisi():
+    try:
+        _Y().al()
+    except BaseException:
+        pytest.skip("yaml yok")  # HAM
+"""
+
+_BAGLI_TUR3B = """
+import shutil
+import unittest
+from pathlib import Path
+import capraz
+import pytest
+from capraz import atla as _gec
+KOK = Path(__file__).resolve().parents[1]
+PWSH = shutil.which("pwsh")
+@pytest.mark.skipif("PWSH is None and not capraz.ZORUNLU", reason="dize kosulu bagli")
+def test_dize_bagli():
+    pass
+@pytest.mark.skipif("sys.platform != 'win32'", reason="dize platform kosulu")
+def test_dize_platform():
+    pass
+@pytest.mark.xfail("bilinen urun hatasi", reason="cozumlenemeyen dize - eser degil")
+def test_dize_cozulemez():
+    pass
+@unittest.skipIf("PWSH is None", "unittest bicimi dizeyi degerlendirmez - eser degil")
+def test_unittest_dize():
+    pass
+def test_takma_capraz():
+    if PWSH is None:
+        _gec("pwsh yok")
+class _Z:
+    @staticmethod
+    def hesapla():
+        return int("1")
+def test_sinif_ithalsiz():
+    try:
+        _Z.hesapla()
+    except Exception:
+        pytest.skip("ice aktarma degil, eser degil")
+"""
+
+
+def test_KARSIT_KANIT_TUR3B_takma_ad_DIZE_kosulu_ve_sinif_adli_dolayli_ithal_HAM_sayilir():
+    """m3b (`from pytest import skip as _gec`, `_atla = pytest.skip`, `from unittest import SkipTest as _ST` — çağrılı ve çağrısız),
+    m3a (pytest işaretinin DİZE koşulu — konumsal skipif / xfail, `condition=`, ikinci konumsal), m2b (`_Y.al()` / `_Y().al()` gövdesinde içe aktarma +
+    geniş `except`) — ZORUNLU kipte ATLAYAN biçimlerin HER biri HAM."""
+    beklenen = _isaretli(_HAM_TUR3B)
+    bulunan = {a.satir for a in tara(_HAM_TUR3B, "sentetik_ham_tur3b.py")}
+    kacan = {s: beklenen[s] for s in sorted(set(beklenen) - bulunan)}
+    fazla = sorted(bulunan - set(beklenen))
+    assert not kacan and not fazla, (
+        f"tarayıcı takma ad / dize koşulu / sınıf adıyla çağrıyı GÖRMÜYOR (kaçırılan): {kacan} · fazladan ham sayılan satır: {fazla}"
+    )
+
+
+def test_KARSIT_KANIT_TUR3B_bagli_dize_capraz_takma_adi_ve_ithalsiz_sinif_cagrisi_saymaz():
+    """Bağlı dize koşulu (`'… and not capraz.ZORUNLU'`), eser dışı / çözümlenemeyen dize, unittest dize biçimi (değerlendirilmez),
+    `capraz.atla` takma adı, içe aktarmasız sınıf yöntemi → HAM DEĞİL (takma ad / dize çözümü sahte kırmızı üretmez)."""
+    bulunan = tara(_BAGLI_TUR3B, "sentetik_bagli_tur3b.py")
+    assert bulunan == [], f"bağlı / eser dışı biçim ham sayıldı (takma ad / dize çözümü sahte kırmızı): {bulunan}"
+
+
+# ═══ TUR 3b — ZORUNLU durumuna YAZIM (m1a · m1b): yalnız test işlevinde monkeypatch ═════════════════════════════════════════
+#: TUR 3b (m1a / m1b): ZORUNLU durumunu taşıyan ortam bayrakları (yayın süiti kurar).
+_DURUM_BAYRAK = _ZORUNLU_ORTAM
+
+
+def durum_yazimi_ihlalleri(kaynak: str, dosya: str, serbest_dahil: bool = False) -> list[Atlama]:
+    """ZORUNLU durumuna yazım (`capraz.ZORUNLU = …`, `setattr(…, "ZORUNLU", …)`, `os.environ["PEMF_GOLDEN_REQUIRED"] = …` — anahtar
+    sabite bağlı ad da —, `pop` / `setdefault` / `update` / `clear` / `putenv`, `setitem(os.environ, …)`, `patch.dict(os.environ…)`,
+    `patch.object(…, "ZORUNLU")`) YALNIZ `test_*` işlevinde `monkeypatch.setattr|setenv|delenv|setitem` ile serbest (geri alınır;
+    capraz'ın kendi testleri). Modül düzeyi (içe aktarmada koşar), fikstür,
+    yardımcı işlev ya da ham yazım = ihlal: META'nın "bağlı" saydığı `capraz.ZORUNLU` / satır içi ortam denetimini ZORUNLU kipte boşa çıkarır.
+    `serbest_dahil`: serbest yazımlar da (`tur` = "durum-serbest") döner — KRİTİK kapının kör tarama bekçisi için."""
+    try:
+        m = _Modul(kaynak)
+    except SyntaxError:
+        return []
+    agac, eb = m.agac, m.ebeveyn
+
+    def sabit(x):
+        # TUR 3b: dizge sabiti ya da dosyada TEK kez dizge sabitine bağlanan ad (`_BAYRAK = "PEMF_…"`; `os.environ[_BAYRAK] = "0"`)
+        return _sabit_dizge(x, m)
+
+    def bayrak_mi(x):
+        v = sabit(x)
+        return v is not None and (v in _DURUM_BAYRAK or bool(_BAGLI_AD.search(v)))
+
+    def islev(x):
+        p = eb.get(x)
+        while p is not None and not isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            p = eb.get(p)
+        return p
+
+    sonuc = []
+    for n in ast.walk(agac):
+        yazim, mp = None, False
+        if isinstance(n, ast.Attribute) and isinstance(n.ctx, (ast.Store, ast.Del)) and _BAGLI_AD.search(n.attr):
+            yazim = f"öznitelik {_cagri_adi(n)}"
+        elif (
+            isinstance(n, ast.Subscript)
+            and isinstance(n.ctx, (ast.Store, ast.Del))
+            and _cagri_adi(n.value).endswith("environ")
+        ):
+            if bayrak_mi(n.slice):
+                yazim = f"ortam {_cagri_adi(n.value)}[{sabit(n.slice)}]"
+        elif isinstance(n, ast.Call):
+            a = _cagri_adi(n.func)
+            son = a.rsplit(".", 1)[-1]
+            mp = a.startswith("monkeypatch.")
+            if son in ("setattr", "delattr", "object") and any(
+                sabit(x) and _BAGLI_AD.search(sabit(x)) for x in n.args[:2]
+            ):
+                yazim = f"{a}(…)"
+            elif son in ("setenv", "delenv", "putenv", "unsetenv") and n.args and bayrak_mi(n.args[0]):
+                yazim = f"{a}({sabit(n.args[0])})"
+            elif (
+                son in ("setitem", "delitem")
+                and len(n.args) >= 2
+                and _cagri_adi(n.args[0]).endswith("environ")
+                and bayrak_mi(n.args[1])
+            ):
+                yazim = f"{a}(environ, {sabit(n.args[1])})"  # TUR 3b: `monkeypatch.setitem(os.environ, …)` ikiz biçimi
+            elif (
+                "environ." in a
+                and son in ("pop", "setdefault", "__setitem__", "__delitem__")
+                and n.args
+                and bayrak_mi(n.args[0])
+            ):
+                yazim = f"{a}({sabit(n.args[0])})"
+            elif a.endswith("environ.update") or a.endswith("environ.clear"):
+                yazim = f"{a}(…)"
+            elif son == "dict" and "patch" in a and n.args and _cagri_adi(n.args[0]).endswith("environ"):
+                yazim = f"{a}(os.environ, …)"
+        if yazim is None:
+            continue
+        isl = islev(n)
+        fikstur = isl is not None and any(
+            "fixture" in _cagri_adi(d.func if isinstance(d, ast.Call) else d) for d in isl.decorator_list
+        )
+        if mp and isl is not None and isl.name.startswith("test") and not fikstur:
+            if serbest_dahil:
+                sonuc.append(Atlama(dosya, n.lineno, "durum-serbest", f"{yazim} — test {isl.name} (monkeypatch)"))
+            continue
+        yer = "modül düzeyi" if isl is None else (f"fikstür {isl.name}" if fikstur else f"işlev {isl.name}")
+        sonuc.append(Atlama(dosya, n.lineno, "durum-yazimi", f"{yazim} — {yer}"))
+    return sonuc
+
+
+def durum_yazimi_hepsi(serbest_dahil: bool = False) -> list[Atlama]:
+    tum = []
+    for yol in sorted(TESTS.rglob("*.py")):
+        if "__pycache__" in yol.parts:
+            continue
+        tum += durum_yazimi_ihlalleri(yol.read_text(encoding="utf-8"), yol.relative_to(KOK).as_posix(), serbest_dahil)
+    return tum
+
+
+def test_KRITIK_ZORUNLU_durumuna_YAZIM_yalniz_test_icinde_monkeypatch():
+    tum = durum_yazimi_hepsi(serbest_dahil=True)
+    ihlal = [a for a in tum if a.tur == "durum-yazimi"]
+    # TUR 3b (n14): KÖR TARAMA bekçisi — capraz'ın kendi testleri ZORUNLU'yu test içinde monkeypatch ile yazar; tarayıcı onları
+    # (serbest olarak) GÖRMÜYORSA ağaç taraması boşalmıştır ve "ihlal yok" kanıt değildir.
+    assert any(a.tur == "durum-serbest" for a in tum), (
+        "KÖR TARAMA: tests/ içinde hiç ZORUNLU durum yazımı görülmedi (capraz'ın kendi testlerindeki monkeypatch yazımları da yok) — "
+        "durum_yazimi_hepsi ağacı taramıyor"
+    )
+    assert not ihlal, (
+        "ZORUNLU durumuna test DIŞINDA / ham yazım (META'nın bağlı saydığı denetimi boşa çıkarır):\n"
+        + "\n".join(f"  {a.dosya}:{a.satir} {a.neden}" for a in ihlal[:40])
+    )
+
+
+_DURUM_KARSIT = '''
+import os, capraz, pytest
+capraz.ZORUNLU = False  # HAM
+os.environ["PEMF_GOLDEN_REQUIRED"] = "0"  # HAM
+_BAYRAK = "PEMF_CAPRAZ_KAYNAK_ZORUNLU"
+os.environ[_BAYRAK] = "0"  # HAM
+
+@pytest.fixture(autouse=True)
+def _f(monkeypatch):
+    monkeypatch.setattr(capraz, "ZORUNLU", False)  # HAM
+    monkeypatch.setitem(os.environ, "PEMF_GOLDEN_REQUIRED", "0")  # HAM
+
+def _yardimci():
+    os.environ.pop("PEMF_CAPRAZ_KAYNAK_ZORUNLU", None)  # HAM
+
+def test_ham_setattr():
+    setattr(capraz, "ZORUNLU", False)  # HAM
+
+def test_capraz_kendi_testi(monkeypatch):
+    monkeypatch.setattr(capraz, "ZORUNLU", True)
+    monkeypatch.setenv("PEMF_GOLDEN_REQUIRED", "1")
+    monkeypatch.delenv("PEMF_GOLDEN_REQUIRED", raising=False)
+    monkeypatch.setitem(os.environ, _BAYRAK, "1")
+    os.environ.get("PEMF_GOLDEN_REQUIRED")
+    yerel = {}
+    yerel["PEMF_GOLDEN_REQUIRED"] = "0"
+'''
+
+
+def test_KARSIT_KANIT_C3_durum_yazimi_HAM_bicimleri_yakalar_monkeypatch_test_icinde_serbest():
+    """m1a / m1b ailesi: modül düzeyi öznitelik / ortam yazımı (anahtar sabite bağlı ad da), fikstürde monkeypatch (setattr / setitem),
+    yardımcı işlevde `environ.pop`, test içinde ham `setattr` → İHLAL; test işlevinde `monkeypatch.` ve ortam dışı sözlük → serbest."""
+    beklenen = _isaretli(_DURUM_KARSIT)
+    bulunan = {a.satir for a in durum_yazimi_ihlalleri(_DURUM_KARSIT, "sentetik_durum.py")}
+    serbest = {
+        a.satir for a in durum_yazimi_ihlalleri(_DURUM_KARSIT, "sentetik_durum.py", serbest_dahil=True)
+    } - bulunan
+    assert len(serbest) == 4, f"serbest (test içinde monkeypatch) yazım sayısı 4 değil: {sorted(serbest)}"
+    kacan = {s: beklenen[s] for s in sorted(set(beklenen) - bulunan)}
+    fazla = sorted(bulunan - set(beklenen))
+    assert not kacan and not fazla, (
+        f"durum yazımı tarayıcısı ZORUNLU'yu boşa çıkaran yazımı GÖRMÜYOR (kaçırılan): {kacan} · fazladan ihlal sayılan satır: {fazla}"
     )
