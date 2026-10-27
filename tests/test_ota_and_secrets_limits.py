@@ -98,6 +98,60 @@ def test_manifest_boyut_tavani_UYGULANIR(monkeypatch):
     assert {"_MAX_INSTALLER_BYTES", "_MAX_MANIFEST_BYTES"} <= isimler
 
 
+class _SahteManifestYaniti:
+    """`urlopen` yanıtı: `read(n)` istenen bayt sayısını KAYDEDER ve gövdenin o kadarını döner (n None/-1 → tamamı)."""
+
+    def __init__(self, govde: bytes, istekler: list):
+        self._govde, self._istekler = govde, istekler
+
+    def read(self, n=-1):
+        self._istekler.append(n)
+        return self._govde if n is None or n < 0 else self._govde[:n]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _kontrol_et(monkeypatch, govde: bytes):
+    from servers import update_manager as um
+
+    istekler: list = []
+    monkeypatch.setattr(
+        um, "_status", dict(um._status)
+    )  # modül önbelleği sonraki testlere SIZMASIN (monkeypatch geri alır)
+    monkeypatch.setattr(um, "get_current_version", lambda: "1.0.0")
+    monkeypatch.setattr(um.urllib.request, "urlopen", lambda *a, **k: _SahteManifestYaniti(govde, istekler))
+    return um, um.check_for_update(timeout=1), istekler
+
+
+@pytest.mark.parametrize("fazla", [1, 10])
+def test_KRITIK_manifest_TAVANI_ASAN_govde_DAVRANISLA_reddedilir_D5_29(monkeypatch, fazla):
+    """D5.29 (B-10.251): kaynak-metin kapısı (yukarıda) `r.read(-1)` ya da `raise` → `pass` mutantında YEŞİL kalıyordu (9 dosya).
+    GERÇEK `check_for_update`'e tavan + `fazla` baytlık GEÇERLİ bir manifest (yeni sürüm ilan ediyor) döndüren sahte `urlopen` verilir:
+    okuma tavan+1 ile SINIRLI olmalı (sınırsız okuma RAM'i tüketir) ve manifest REDDEDİLMELİ (güncelleme ÖNERİLMEZ). Ağ YOK."""
+    from servers import update_manager as um
+
+    kafa, kuyruk = b'{"version": "99.0.0", "dolgu": "', b'"}'
+    govde = kafa + b"x" * (um._MAX_MANIFEST_BYTES + fazla - len(kafa) - len(kuyruk)) + kuyruk
+    assert len(govde) == um._MAX_MANIFEST_BYTES + fazla
+    um, res, istekler = _kontrol_et(monkeypatch, govde)
+    assert istekler and all(isinstance(n, int) and 0 < n <= um._MAX_MANIFEST_BYTES + 1 for n in istekler), (
+        f"manifest gövdesi SINIRSIZ okunuyor (istenen: {istekler}) — bozuk/ele geçirilmiş sunucu cihazın RAM'ini tüketir (D5.29)"
+    )
+    assert res["available"] is False and res["error"], (
+        f"tavanı aşan manifest KABUL edildi (available={res['available']}, error={res['error']!r}) — boyut tavanı etkisiz (D5.29)"
+    )
+
+
+def test_KARSIT_tavan_altindaki_manifest_KABUL_edilir_D5_29(monkeypatch):
+    """Karşıt: aynı sahte yol tavan altındaki geçerli manifesti okur ve yeni sürümü ilan eder (ölçüm kör değil)."""
+    um, res, istekler = _kontrol_et(monkeypatch, b'{"version": "99.0.0", "installerUrl": "", "sha256": ""}')
+    assert res["available"] is True and res["latestVersion"] == "99.0.0" and not res["error"], res
+
+
 # ────────────────────────── Sır dosyası ACL kilidi ──────────────────────────
 
 

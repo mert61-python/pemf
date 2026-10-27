@@ -191,6 +191,27 @@ def _bootnetwork(ui: str) -> str:
     return m.group(1)
 
 
+def _cevrimdisi_dal(ui: str) -> str:
+    """bootNetwork'ün ÇEVRİMDIŞI dalı = `fetch_profiles` çağrısını saran `try`ın `catch` bloğunun İÇİ (yorum-soyulmuş, süslü parantez
+    dengesiyle).
+
+    ⚠️ D5.29 (B-10.252): sınır eskiden `g[: g.find("setOffline(false)")]` idi — çağrı bulunamazsa `find` -1 döner, dilim gövdenin
+    neredeyse TAMAMI olur ve BAŞARILI daldaki `startUpdateWatch()` çevrimdışı dalda sayılırdı (`setOffline(!1)` + dal içi çağrının
+    silinmesi mutantı YEŞİLDİ)."""
+    import test_client_arayuz_sade_dil as _js  # dizge-farkında JS yorum soyucu (backtick dahil)
+
+    g = _js._soy(_bootnetwork(ui))
+    t = re.search(r'info\s*=\s*await\s+invoke\(\s*"fetch_profiles"\s*\)\s*;\s*\}\s*catch\s*\(\s*\w+\s*\)\s*\{', g)
+    assert t, "bootNetwork'te `fetch_profiles` try/catch (çevrimdışı dal) bulunamadı — kapı bayat"
+    derinlik, j = 0, t.end() - 1
+    while j < len(g):
+        derinlik += {"{": 1, "}": -1}.get(g[j], 0)
+        if derinlik == 0:
+            return g[t.end() : j]
+        j += 1
+    raise AssertionError("çevrimdışı dal bloğu kapanmadı")
+
+
 def test_KRITIK_CEVRIMDISI_acilista_da_periyodik_tur_BASLAR(ui):
     """🔴 2026-08-16 düzeltmesinin AÇIK KALAN YARISI.
 
@@ -206,11 +227,9 @@ def test_KRITIK_CEVRIMDISI_acilista_da_periyodik_tur_BASLAR(ui):
     ⚠️ Turu çevrimdışı dalda başlatmak güvenlidir: `recheckUpdates` ağ hatasını zaten sessizce
     yutuyor (`catch (_) { return; }`) ve `busy || !baseInstalled` kapısı duruyor.
     """
-    g = _bootnetwork(ui)
-    kesme = g.find("startKapisiAc();")
-    assert kesme > 0, "çevrimdışı dal bulunamadı (startKapisiAc yok)"
-    cevrimdisi_dal = g[: g.find("setOffline(false)")]
-    assert "startUpdateWatch()" in cevrimdisi_dal, (
+    cevrimdisi_dal = _cevrimdisi_dal(ui)
+    assert "startKapisiAc();" in cevrimdisi_dal, "çevrimdışı dal bulunamadı (startKapisiAc yok)"
+    assert re.search(r"(^|;|\})\s*startUpdateWatch\(\)\s*;", cevrimdisi_dal), (
         "çevrimdışı açılışta periyodik güncelleme turu HİÇ başlatılmıyor → ağ geri gelse bile "
         "hep-açık makine manifesti bir daha çekmez (geri çağırma dahil ulaşmaz)"
     )
@@ -222,9 +241,8 @@ def test_cevrimdisi_dal_yine_de_ERKEN_DONER(ui):
     Çevrimdışıyken manifest yoktur; dal `return` etmeye devam etmeli, yoksa aşağıdaki
     `manifestRaw = info.raw` tanımsız `info` üzerinde patlar.
     """
-    g = _bootnetwork(ui)
-    cevrimdisi_dal = g[: g.find("setOffline(false)")]
-    assert "return;" in cevrimdisi_dal, "çevrimdışı dal erken dönüşü kaybetmiş"
+    cevrimdisi_dal = _cevrimdisi_dal(ui)
+    assert re.search(r"\breturn\s*;\s*$", cevrimdisi_dal.strip()), "çevrimdışı dal erken dönüşü kaybetmiş"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
