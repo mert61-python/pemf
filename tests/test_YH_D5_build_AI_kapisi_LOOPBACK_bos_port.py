@@ -21,6 +21,7 @@ import socket
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -45,7 +46,7 @@ $portlar = foreach ($i in 1..8) { Get-BosLoopbackPortu }
 
 def test_KRITIK_bos_loopback_portu_YASAK_port_vermez_ve_baglanabilir(tmp_path):
     if not _PWSH:
-        pytest.skip("pwsh (PowerShell 7) yok")
+        capraz.atla("pwsh (PowerShell 7) yok")
     (tmp_path / "cagir.ps1").write_bytes(b"\xef\xbb\xbf" + _CAGIR.encode("utf-8"))
     cikti = tmp_path / "portlar.json"
     r = subprocess.run(

@@ -19,6 +19,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = next(p for p in Path(__file__).resolve().parents if (p / "versions.json").exists())
@@ -56,7 +57,7 @@ $sonuc['acilan'] = $script:acilan
 
 def _cagir(tmp_path: Path, portlar: list[int]) -> dict:
     if not _PWSH:
-        pytest.skip("pwsh (PowerShell 7) yok")
+        capraz.atla("pwsh (PowerShell 7) yok")
     (tmp_path / "cagir.ps1").write_bytes(b"\xef\xbb\xbf" + _CAGIR.encode("utf-8"))
     cikti = tmp_path / "sonuc.json"
     r = subprocess.run(

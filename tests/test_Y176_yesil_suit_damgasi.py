@@ -34,7 +34,7 @@ YAYINDAKI = KOK / "pemf-app-packages" / "manifest.json"
 PWSH = shutil.which("pwsh")
 GIT = shutil.which("git")
 
-pytestmark = pytest.mark.skipif(GIT is None, reason="git gerekir (damga HEAD'e bağlıdır)")
+pytestmark = pytest.mark.skipif((GIT is None) and not capraz.ZORUNLU, reason="git gerekir (damga HEAD'e bağlıdır)")
 
 
 def _ortam() -> dict:
@@ -316,7 +316,7 @@ _DUSEN = "def test_duser():\n    assert False, 'Y176-KIRMIZI'\n"
 
 def _suit(d: Path, kancali: bool = False) -> subprocess.CompletedProcess:
     if PWSH is None or os.name != "nt":
-        pytest.skip("pwsh 7 + Windows gerekir (Y30 yayın makinesi)")
+        capraz.atla("pwsh 7 + Windows gerekir (Y30 yayın makinesi)")
     komut = [
         PWSH,
         "-NoProfile",

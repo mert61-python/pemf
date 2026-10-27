@@ -25,6 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -148,7 +149,7 @@ def test_goster_komutu_metni_UTF8_basar_ve_bilinmeyende_sifirdan_farkli_doner():
 
 def _pwsh() -> str:
     if not _PWSH:
-        pytest.skip("pwsh (PowerShell 7) yok")
+        capraz.atla("pwsh (PowerShell 7) yok")
     return _PWSH
 
 

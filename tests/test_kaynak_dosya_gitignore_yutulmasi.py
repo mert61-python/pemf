@@ -21,6 +21,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -96,7 +97,7 @@ def test_KRITIK_kaynak_dosyalar_gitignore_ile_YUTULMUYOR():
 
     yutulan = _check_ignore([str(p.relative_to(_KOK).as_posix()) for p in adaylar])
     if yutulan is None:
-        pytest.skip("git check-ignore calistirilamadi")
+        capraz.atla("git check-ignore calistirilamadi")
     yutulan = [y for y in yutulan if y not in _BILEREK_YOKSAYILAN]
 
     assert not yutulan, (

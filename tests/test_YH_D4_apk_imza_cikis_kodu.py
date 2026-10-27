@@ -18,6 +18,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -39,7 +40,7 @@ $s = Test-ApkImzasi -Apksigner $Sahte -Apk 'C:\yok\PEMF_Vet_Mobil.apk'
 
 def _imza(tmp_path: Path, satirlar: list[str], cikis: int) -> dict:
     if not _PWSH:
-        pytest.skip("pwsh (PowerShell 7) yok")
+        capraz.atla("pwsh (PowerShell 7) yok")
     if os.name != "nt":
         pytest.skip("sahte apksigner .cmd — yalnız Windows (build_apk.ps1 de yalnız Windows'ta koşar)")
     sahte = tmp_path / "apksigner.cmd"

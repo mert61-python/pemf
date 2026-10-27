@@ -18,6 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -52,7 +53,7 @@ Set-Content -LiteralPath $Cikti -Value ($sonuc | ConvertTo-Json -Depth 5) -Encod
 
 def _arac(tmp_path: Path, girdiler: list[str], belgeli: bool = False) -> dict:
     if not _PWSH:
-        pytest.skip("pwsh (PowerShell 7) yok")
+        capraz.atla("pwsh (PowerShell 7) yok")
     a = tmp_path / "arac.ps1"
     a.write_bytes(b"\xef\xbb\xbf" + _ARAC.encode("utf-8"))
     g, c = tmp_path / "girdi.json", tmp_path / "cikti.json"
@@ -142,7 +143,7 @@ Set-Content -LiteralPath $Cikti -Value ($sonuc | ConvertTo-Json -Depth 4) -Encod
 
 def test_KRITIK_koruma_iki_notu_da_SUITTEN_ve_KIMLIKTEN_ONCE_durdurur(tmp_path):
     if not _PWSH:
-        pytest.skip("pwsh (PowerShell 7) yok")
+        capraz.atla("pwsh (PowerShell 7) yok")
     n = json.loads(NOTLAR.read_text(encoding="utf-8"))["mobile"]
     gercek = n[next(iter(n))]
     ciftler = [

@@ -21,6 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -28,7 +29,7 @@ BETIK = KOK / "scripts" / "yayin_oncesi_suit.ps1"
 PWSH = shutil.which("pwsh")
 
 pytestmark = pytest.mark.skipif(
-    PWSH is None or os.name != "nt" or not shutil.which("powershell.exe"),
+    (PWSH is None or os.name != "nt" or not shutil.which("powershell.exe")) and not capraz.ZORUNLU,
     reason="pwsh 7 + Windows PowerShell 5.1 gerekir",
 )
 

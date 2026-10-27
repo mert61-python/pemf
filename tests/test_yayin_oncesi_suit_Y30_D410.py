@@ -205,7 +205,7 @@ exit $rc
 def test_KRITIK_yayin_oncesi_suit_pwsh7_modul_yolunu_alt_PowerShell51e_SIZDIRMAZ_ve_GERI_yukler(tmp_path):
     pwsh = _pwsh_gerekli()
     if os.name != "nt" or not shutil.which("powershell.exe"):
-        pytest.skip("Windows PowerShell 5.1 yalnız Windows'ta")
+        capraz.atla("Windows PowerShell 5.1 yalnız Windows'ta")
     hedef = tmp_path / "acl"
     hedef.mkdir()
     (hedef / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")

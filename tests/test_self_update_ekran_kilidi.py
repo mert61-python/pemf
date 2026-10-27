@@ -37,6 +37,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
@@ -123,7 +124,7 @@ def _senaryo(senaryo: str, tmp_path: Path) -> dict:
 _GUNCELLEME = '{ installer_url: "https://x/setup.exe", sha256: "a".repeat(64), size: 1, version: "9.9.9" }'
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_KURULU_cihazda_basarisizlikta_ekran_GERI_ALINIR(tmp_path):
     """Kurulu cihaz: self-update patlarsa ekran `s-ready`ye dönmeli (Başlat'a ulaşılabilsin)."""
     s = _senaryo(
@@ -146,7 +147,7 @@ def test_KRITIK_KURULU_cihazda_basarisizlikta_ekran_GERI_ALINIR(tmp_path):
     )
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_KURULU_OLMAYAN_cihazda_da_ekran_GERI_ALINIR(tmp_path):
     """Taze cihaz: kaçış yolu HİÇ yoktu (`tryRuntimeUpdate` `!baseInstalled` ile hemen dönüyor,
     `pending_profiles` de boş) → yeni kullanıcı hiç kuramıyordu."""
@@ -168,7 +169,7 @@ def test_KRITIK_KURULU_OLMAYAN_cihazda_da_ekran_GERI_ALINIR(tmp_path):
     )
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_basarisizlik_SESSIZ_kalmaz(tmp_path):
     """Başarı ile başarısızlık ayırt edilebilir olmalı — kullanıcı ne olduğunu OKUMALI."""
     s = _senaryo(
@@ -186,7 +187,7 @@ def test_KRITIK_basarisizlik_SESSIZ_kalmaz(tmp_path):
     )
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_eksik_manifest_alanlari_ekrani_HIC_DEVRALMAZ_karsit_kanit(tmp_path):
     """Karşı-kanıt: `installer_url`/`sha256` yoksa fonksiyon ekrana HİÇ dokunmamalı (eski-tip bildirim)."""
     s = _senaryo(
@@ -204,7 +205,7 @@ def test_eksik_manifest_alanlari_ekrani_HIC_DEVRALMAZ_karsit_kanit(tmp_path):
     assert not s["sonra"]["notlar"], "eksik alanlarda gereksiz uyari gosterildi"
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_auto_false_ekrani_HIC_DEVRALMAZ_karsit_kanit(tmp_path):
     """Karşı-kanıt: `--launcher-rollout 0` (auto=false) yolunda da ekran devralınmamalı."""
     s = _senaryo(
@@ -221,7 +222,7 @@ def test_auto_false_ekrani_HIC_DEVRALMAZ_karsit_kanit(tmp_path):
     assert s["sonra"]["ekran"] == "s-ready"
 
 
-@pytest.mark.skipif(_NODE is None, reason="node yok")
+@pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_ekran_geri_alinirken_BASLAT_kapisi_ACILMAZ(tmp_path):
     """🔴 Ekranı geri almak, ağ adımı bitmeden düğmeyi AÇMAMALI.
 
