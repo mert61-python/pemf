@@ -122,6 +122,29 @@ _AYARLANAN_BASLIK = {"tr": "Ayarlanan (mT)", "en": "Set (mT)"}
 # Metni ölçülen akış öğeleri (Paragraph / Table) + metinsizler. Başka bir tür (Preformatted, XPreformatted, KeepTogether …) metni
 # ölçülmeden rapora girerdi → tanınmayan tür KIRMIZI (fail-closed; yeni tür eklenirse bu küme bilinçli genişletilir).
 _BILINEN_AKIS = {"Paragraph", "Table", "Spacer", "Image", "PageBreak"}
+# ⚠️ D5.59 TUR 3b (çürütücü 3 m1b / m2 / m3 — üçü de TUR 3 kapısında YAŞADI):
+#   m1b story DIŞI çizim: `doc.build(story, onFirstPage=…, onLaterPages=…)` her sayfanın altına canvas `drawString` ile
+#       "Ayarlanan (mT): 7.3" — kapı yalnız story'yi okuyordu → DERLENMİŞ PDF'in metni (PyMuPDF) story ile PARİTE: değer deseni ve
+#       "Ayarlanan (mT)" / "Set (mT)" etiketi PDF'te story'de geçtiği kadar geçer (kapalı dünya; story dışı fazlalık → KIRMIZI).
+#   m2  yalnız seansların ayarlanan değeri FARKLIYSA görünen satır ("Ort.Alan(mT)  5.1 - 7.3") — aparatın iki seansı da 7.3'tü
+#       (dal hiç koşmuyordu) → iki rapor kapısı HOMOJEN (7.3 + 7.3) ve HETEROJEN (7.3 + 5.1) aparatla koşar; desen İKİ değeri arar.
+#   m3  bobin koşu tablosuna başlık DIŞI etiket hücresi (alt toplam satırı: "Ort.Alan(mT)" + izinli sütunda ortalama) — kol
+#       etiketi yalnız BAŞLIK satırında arıyordu → TÜM satırlarda (başlık + veri) izinli sütun DIŞINDA mT / alan etiketi YOK ve
+#       veri satırı sayısı = yazılan bobin koşusu sayısı (seans başına 1).
+_IKINCI_MT = 5.1  # heterojen aparatın ikinci seansı (belirgin; tarih / saat / sayaç hücrelerinde rastlantıyla oluşmaz)
+_APARATLAR = {"homojen": (_AYARLANAN_MT, _AYARLANAN_MT), "heterojen": (_AYARLANAN_MT, _IKINCI_MT)}
+_SEANS_BASINA_KOSU = 1  # aparat her seansa TEK bobin koşusu yazar
+
+
+def _deger_deseni(degerler) -> re.Pattern:
+    """Ayarlanan değer(ler)in metin deseni — `_DEGER_DESENI` ile AYNI biçim (önü rakamsız, sonu açık: 7.30 da yakalanır)."""
+    parcalar = sorted({"[.,]".join(f"{float(v):.1f}".split(".")) for v in degerler})
+    return re.compile(r"(?<!\d)(?:" + "|".join(parcalar) + ")")
+
+
+def _bosluk(metin: str) -> str:
+    """Satır sonu / çoklu boşluk → tek boşluk (PDF metninde hücre içi satır kırılması etiketi bölmesin)."""
+    return " ".join(metin.split())
 
 
 def _hucre_metni(h) -> str:
@@ -136,8 +159,16 @@ def _hucre_metni(h) -> str:
     return str(h)
 
 
-def _rapor_ogeleri(tmp_path, monkeypatch, dil: str, rapor: str) -> tuple[list[list[list[str]]], list[str]]:
-    """Gerçek DB (İKİ seans) → gerçek `generate_session_report` / `generate_patient_report` → (tablo hücreleri, paragraf metinleri)."""
+def _rapor_yolu(tmp_path, dil: str, rapor: str) -> Path:
+    return tmp_path / (f"seans_{dil}.pdf" if rapor == "seans" else f"hasta_{dil}.pdf")
+
+
+def _rapor_ogeleri(
+    tmp_path, monkeypatch, dil: str, rapor: str, degerler: tuple = (_AYARLANAN_MT,) * _SEANS_SAYISI
+) -> tuple[list[list[list[str]]], list[str]]:
+    """Gerçek DB (İKİ seans; ayarlanan değerler `degerler`) → gerçek `generate_session_report` / `generate_patient_report` →
+    (tablo hücreleri, paragraf metinleri). Derlenen PDF `_rapor_yolu(...)`nda kalır (TUR 3b parite kolu onu okur)."""
+    assert len(degerler) == _SEANS_SAYISI, f"aparat: {len(degerler)} ayarlanan değer ≠ {_SEANS_SAYISI} seans"
     from utils import ceviri
     from utils.pdf_report_generator import PDFReportGenerator
 
@@ -145,7 +176,7 @@ def _rapor_ogeleri(tmp_path, monkeypatch, dil: str, rapor: str) -> tuple[list[li
     uretici = PDFReportGenerator(app_data_dir=tmp_path)  # DB izolasyonu: gerçek kliniğe dokunma
     db = uretici.db
     sidler = []
-    for i in range(_SEANS_SAYISI):
+    for i, mt in enumerate(degerler):
         sid = db.start_session(treatment_mode="Manuel", patient_name="Pamuk")
         assert sid, "aparat: seans yazılamadı"
         assert db.start_coil_run(
@@ -154,13 +185,13 @@ def _rapor_ogeleri(tmp_path, monkeypatch, dil: str, rapor: str) -> tuple[list[li
             frequency_hz=50,
             duty_percent=25,
             phase=0,
-            intensity_mt=_AYARLANAN_MT,
+            intensity_mt=mt,
             hw_type="stm",
             started_epoch=1757000000.0 + i,
         ), "aparat: bobin koşusu yazılamadı"
         db.end_session(
             sid,
-            parameters={"frequency_hz": 50, "intensity_mt": _AYARLANAN_MT, "intensity": _AYARLANAN_MT},
+            parameters={"frequency_hz": 50, "intensity_mt": mt, "intensity": mt},
             patient_notes="not",
             session_status="completed",
         )
@@ -176,9 +207,9 @@ def _rapor_ogeleri(tmp_path, monkeypatch, dil: str, rapor: str) -> tuple[list[li
     jeton = ceviri.istek_dili_var.set(dil)
     try:
         if rapor == "seans":
-            uretici.generate_session_report(session_ids=sidler, output_path=str(tmp_path / f"seans_{dil}.pdf"))
+            uretici.generate_session_report(session_ids=sidler, output_path=str(_rapor_yolu(tmp_path, dil, rapor)))
         else:
-            uretici.generate_patient_report(patient_name="Pamuk", output_path=str(tmp_path / f"hasta_{dil}.pdf"))
+            uretici.generate_patient_report(patient_name="Pamuk", output_path=str(_rapor_yolu(tmp_path, dil, rapor)))
     finally:
         ceviri.istek_dili_var.reset(jeton)
     assert len(yakalanan) == 1, "aparat: rapor derlenmedi"
@@ -193,31 +224,36 @@ def _rapor_ogeleri(tmp_path, monkeypatch, dil: str, rapor: str) -> tuple[list[li
     return tablolar, paragraflar
 
 
-def _mT_ihlalleri(tablolar) -> list[str]:
-    return [h for t in tablolar for satir in t for h in satir if _MT_ETIKETI.search(h) or _DEGER_DESENI.search(h)]
+def _mT_ihlalleri(tablolar, desen: re.Pattern = _DEGER_DESENI) -> list[str]:
+    return [h for t in tablolar for satir in t for h in satir if _MT_ETIKETI.search(h) or desen.search(h)]
 
 
-def _paragraf_ihlalleri(paragraflar) -> list[str]:
-    return [p for p in paragraflar if _PARAGRAF_MT_ETIKETI.search(p) or _DEGER_DESENI.search(p)]
+def _paragraf_ihlalleri(paragraflar, desen: re.Pattern = _DEGER_DESENI) -> list[str]:
+    return [p for p in paragraflar if _PARAGRAF_MT_ETIKETI.search(p) or desen.search(p)]
 
 
+@pytest.mark.parametrize("aparat", sorted(_APARATLAR))
 @pytest.mark.parametrize("dil", ["tr", "en"])
-def test_KRITIK_seans_raporunda_YOGUNLUK_SATIRI_ve_mT_YOK(temp_app_data, tmp_path, monkeypatch, dil):
+def test_KRITIK_seans_raporunda_YOGUNLUK_SATIRI_ve_mT_YOK(temp_app_data, tmp_path, monkeypatch, dil, aparat):
     """Uygulanmamış bir dozu uygulanmış gibi beyan etmek, üçüncü kişiye yanlış tıbbi bilgidir.
 
-    SEANS raporu (`generate_session_report`, İKİ seans) hasta sahibine gider: rapor bilgisi / istatistik / seans BİLGİ tablosu
-    (2026-08-09'da "Yoğunluk: X mT" SATIRI buradan kaldırıldı) ve TÜM paragraflar ayarlanan mT'yi ne etiketle ne değerle taşır;
-    ayarlanan değer yalnız bobin koşu tablosunun "Ayarlanan (mT)" / "Set (mT)" sütununda durur, o tablonun başlığında başka mT /
-    alan etiketi yoktur. MUTASYON: `_session_info_rows`a `[ceviri.t("gecmis.csv.ortAlan"), <ayarlanan>]` (n2b) / "Yoğunluk (mT)"
-    literali (n2) / masum etiketli değer / bilgi tablosundan sonra "Ayarlanan (mT): 7.3" paragrafı (y1) / bobin tablosuna ikiz
-    `ortAlan` sütunu (y4) → KIRMIZI.
+    SEANS raporu (`generate_session_report`, İKİ seans; aparat HOMOJEN 7.3 + 7.3 ve HETEROJEN 7.3 + 5.1) hasta sahibine gider:
+    rapor bilgisi / istatistik / seans BİLGİ tablosu (2026-08-09'da "Yoğunluk: X mT" SATIRI buradan kaldırıldı) ve TÜM paragraflar
+    ayarlanan mT'yi ne etiketle ne değerle taşır; ayarlanan değer yalnız bobin koşu tablosunun "Ayarlanan (mT)" / "Set (mT)"
+    sütununda durur, o tablonun HİÇBİR satırında (başlık + veri) başka mT / alan etiketi yoktur ve veri satırı sayısı yazılan koşu
+    sayısıdır. MUTASYON: `_session_info_rows`a `[ceviri.t("gecmis.csv.ortAlan"), <ayarlanan>]` (n2b) / "Yoğunluk (mT)" literali
+    (n2) / masum etiketli değer / bilgi tablosundan sonra "Ayarlanan (mT): 7.3" paragrafı (y1) / bobin tablosuna ikiz `ortAlan`
+    sütunu (y4) / bobin tablosuna "Ort.Alan(mT)" alt toplam satırı (m3) → KIRMIZI.
     """
-    tablolar, paragraflar = _rapor_ogeleri(tmp_path, monkeypatch, dil, "seans")
+    degerler = _APARATLAR[aparat]
+    desen = _deger_deseni(degerler)
+    tablolar, paragraflar = _rapor_ogeleri(tmp_path, monkeypatch, dil, "seans", degerler)
     bobin = [i for i, t in enumerate(tablolar) if "Hz" in t[0]]
     assert len(bobin) == _SEANS_SAYISI, (
         f"her seansın bobin koşu tablosu rapora girmedi ({len(bobin)} ≠ {_SEANS_SAYISI}): {[t[0] for t in tablolar]}"
     )
     beklenen = _AYARLANAN_BASLIK[dil]
+    gorulen: set = set()
     for i in bobin:
         baslik = tablolar[i][0]
         assert beklenen in baslik, f"bobin koşu tablosu başlığı '{beklenen}' değil ({dil}): {baslik}"
@@ -226,44 +262,95 @@ def test_KRITIK_seans_raporunda_YOGUNLUK_SATIRI_ve_mT_YOK(temp_app_data, tmp_pat
             f"bobin koşu tablosunda '{beklenen}' DIŞINDA ölçülmüş-gibi mT / alan sütunu var ({dil}): {fazla}"
         )
         sutun = baslik.index(beklenen)
-        assert tablolar[i][1:] and all(_DEGER_DESENI.search(satir[sutun]) for satir in tablolar[i][1:]), (
+        # TUR 3b (m3): yalnız başlık değil TÜM satırlar — alt toplam / özet satırının ilk hücresindeki "Ort.Alan(mT)" görünmüyordu.
+        etiketli = [
+            (s, j, h)
+            for s, satir in enumerate(tablolar[i])
+            for j, h in enumerate(satir)
+            if j != sutun and _MT_ETIKETI.search(h)
+        ]
+        assert not etiketli, (
+            f"bobin koşu tablosunda '{beklenen}' sütunu DIŞINDA mT / alan etiketli hücre var (veri / alt toplam satırı dahil; "
+            f"(satır, sütun, hücre)) ({dil}, {aparat}): {etiketli}"
+        )
+        veri = tablolar[i][1:]
+        assert len(veri) == _SEANS_BASINA_KOSU, (
+            f"bobin koşu tablosunda yazılan koşu ({_SEANS_BASINA_KOSU}) DIŞINDA satır var (alt toplam / ortalama satırı?) "
+            f"({dil}, {aparat}): {veri}"
+        )
+        assert all(desen.search(satir[sutun]) for satir in veri), (
             f"ayarlanan değer bobin koşu tablosunda '{beklenen}' sütununda yok (kayıt rapora ulaşmıyor; yokluk ölçümü de "
             f"anlamsızlaşır): {tablolar[i]}"
         )
-        ikiz = [
-            (baslik[j], h)
-            for satir in tablolar[i][1:]
-            for j, h in enumerate(satir)
-            if j != sutun and _DEGER_DESENI.search(h)
-        ]
+        gorulen.update(m.replace(",", ".") for satir in veri for m in desen.findall(satir[sutun]))
+        ikiz = [(baslik[j], h) for satir in veri for j, h in enumerate(satir) if j != sutun and desen.search(h)]
         assert not ikiz, f"ayarlanan değer bobin koşu tablosunda BAŞKA sütunda da var ({dil}): {ikiz}"
+    yazilan = {f"{v:.1f}" for v in degerler}
+    assert gorulen == yazilan, (
+        f"aparat: yazılan ayarlanan değerler {sorted(yazilan)} bobin koşu tablolarına ulaşmadı ({aparat}): {sorted(gorulen)}"
+    )
     digerleri = [t for i, t in enumerate(tablolar) if i not in bobin]
     assert sum(1 for t in digerleri for satir in t for h in satir if h == "Pamuk") == _SEANS_SAYISI, (
         "aparat: her seansın BİLGİ tablosu (hasta adı satırı) okunmadı"
     )
-    ihlal = _mT_ihlalleri(digerleri)
+    ihlal = _mT_ihlalleri(digerleri, desen)
     assert not ihlal, (
-        f"hasta sahibine giden seans raporunda bobin tablosu DIŞINDA ayarlanan mT / ölçülmüş-gibi etiket var ({dil}): {ihlal}"
+        f"hasta sahibine giden seans raporunda bobin tablosu DIŞINDA ayarlanan mT / ölçülmüş-gibi etiket var ({dil}, {aparat}): {ihlal}"
     )
-    p_ihlal = _paragraf_ihlalleri(paragraflar)
-    assert not p_ihlal, f"hasta sahibine giden seans raporunun PARAGRAFINDA ayarlanan mT var ({dil}): {p_ihlal}"
+    p_ihlal = _paragraf_ihlalleri(paragraflar, desen)
+    assert not p_ihlal, (
+        f"hasta sahibine giden seans raporunun PARAGRAFINDA ayarlanan mT var ({dil}, {aparat}): {p_ihlal}"
+    )
 
 
+@pytest.mark.parametrize("aparat", sorted(_APARATLAR))
 @pytest.mark.parametrize("dil", ["tr", "en"])
-def test_KRITIK_hasta_raporunda_YOGUNLUK_SUTUNU_ve_mT_YOK(temp_app_data, tmp_path, monkeypatch, dil):
-    """HASTA raporu (`generate_patient_report`, İKİ seanslı hasta): hasta bilgisi / istatistik / tedavi GEÇMİŞİ tablosu ("Yoğunluk
-    (mT)" SÜTUNU kaldırıldı) ve TÜM paragraflar ayarlanan mT'yi ne etiketle ne değerle taşır. MUTASYON: geçmiş tablosuna
-    `ceviri.t("gecmis.csv.ortAlan")` sütunu + değer (n3b) / "Yoğunluk (mT)" literali (n3) / yalnız çok seansta eklenen ortalama
-    alan satırı (y2) → KIRMIZI."""
-    tablolar, paragraflar = _rapor_ogeleri(tmp_path, monkeypatch, dil, "hasta")
+def test_KRITIK_hasta_raporunda_YOGUNLUK_SUTUNU_ve_mT_YOK(temp_app_data, tmp_path, monkeypatch, dil, aparat):
+    """HASTA raporu (`generate_patient_report`, İKİ seanslı hasta; aparat HOMOJEN 7.3 + 7.3 ve HETEROJEN 7.3 + 5.1): hasta bilgisi /
+    istatistik / tedavi GEÇMİŞİ tablosu ("Yoğunluk (mT)" SÜTUNU kaldırıldı) ve TÜM paragraflar ayarlanan mT'yi ne etiketle ne
+    değerle (iki değerden HİÇBİRİ) taşır. MUTASYON: geçmiş tablosuna `ceviri.t("gecmis.csv.ortAlan")` sütunu + değer (n3b) /
+    "Yoğunluk (mT)" literali (n3) / yalnız çok seansta eklenen ortalama alan satırı (y2) / yalnız değerler FARKLIYSA eklenen
+    "Ort.Alan(mT)  5.1 - 7.3" aralık satırı (m2) → KIRMIZI."""
+    degerler = _APARATLAR[aparat]
+    desen = _deger_deseni(degerler)
+    tablolar, paragraflar = _rapor_ogeleri(tmp_path, monkeypatch, dil, "hasta", degerler)
     seans_satirlari = [satir for t in tablolar for satir in t[1:] if any(re.fullmatch(r"50(\.0+)?", h) for h in satir)]
     assert len(seans_satirlari) == _SEANS_SAYISI, (
         f"aparat: tedavi geçmişi tablosu her seansın satırını (50 Hz) taşımıyor ({len(seans_satirlari)} ≠ {_SEANS_SAYISI}): {tablolar}"
     )
-    ihlal = _mT_ihlalleri(tablolar)
-    assert not ihlal, f"hasta raporunda ayarlanan mT / ölçülmüş-gibi etiket var ({dil}): {ihlal}"
-    p_ihlal = _paragraf_ihlalleri(paragraflar)
-    assert not p_ihlal, f"hasta raporunun PARAGRAFINDA ayarlanan mT var ({dil}): {p_ihlal}"
+    ihlal = _mT_ihlalleri(tablolar, desen)
+    assert not ihlal, f"hasta raporunda ayarlanan mT / ölçülmüş-gibi etiket var ({dil}, {aparat}): {ihlal}"
+    p_ihlal = _paragraf_ihlalleri(paragraflar, desen)
+    assert not p_ihlal, f"hasta raporunun PARAGRAFINDA ayarlanan mT var ({dil}, {aparat}): {p_ihlal}"
+
+
+@pytest.mark.parametrize("rapor", ["seans", "hasta"])
+@pytest.mark.parametrize("dil", ["tr", "en"])
+def test_KRITIK_DERLENMIS_PDF_metni_story_ile_PARITE_story_DISI_mT_cizimi_YOK(
+    temp_app_data, tmp_path, monkeypatch, dil, rapor
+):
+    """TUR 3b (çürütücü 3 m1b): yukarıdaki kapılar derlenmeden ÖNCEKİ story'yi okur; `doc.build(story, onFirstPage=…,
+    onLaterPages=…)` ile canvas'a çizilen sayfa alt bilgisi ("Ayarlanan (mT): 7.3") story'de YOKTUR ama hasta sahibinin aldığı
+    PDF'te VARDIR. Kapı: gerçek üretim yolunun DERLEDİĞİ PDF'in metni (PyMuPDF) ile story PARİTESİ — ayarlanan değer deseni ve
+    "Ayarlanan (mT)" / "Set (mT)" etiketi PDF'te story'de (yalnız bobin tablosunun izinli hücreleri) geçtiği kadar geçer (kapalı
+    dünya: story dışı her çizim fazlalıktır). MUTASYON: sayfa alt bilgisine ayarlanan mT → KIRMIZI."""
+    fitz = capraz.paket_yoksa_atla("fitz", sebep="PyMuPDF (fitz) yok — derlenmiş PDF metni ölçülemez")
+    tablolar, paragraflar = _rapor_ogeleri(tmp_path, monkeypatch, dil, rapor)
+    with fitz.open(str(_rapor_yolu(tmp_path, dil, rapor))) as d:
+        metin = _bosluk(" ".join(sayfa.get_text() for sayfa in d))
+    assert "PAMUK" in metin.upper(), f"aparat: derlenmiş PDF metni okunamadı ({dil}, {rapor}): {metin[:200]!r}"
+    story = [_bosluk(h) for t in tablolar for satir in t for h in satir] + [_bosluk(p) for p in paragraflar]
+    etiket = _AYARLANAN_BASLIK[dil]
+    story_sayi = (sum(len(_DEGER_DESENI.findall(x)) for x in story), sum(x.count(etiket) for x in story))
+    pdf_sayi = (len(_DEGER_DESENI.findall(metin)), metin.count(etiket))
+    if rapor == "seans":
+        assert story_sayi[0] >= _SEANS_SAYISI and story_sayi[1] >= _SEANS_SAYISI, (
+            f"aparat: seans story'sinde bobin tablosunun ayarlanan değeri / başlığı yok ({dil}): {story_sayi}"
+        )
+    assert pdf_sayi == story_sayi, (
+        f"derlenmiş PDF'te story DIŞINDA çizilmiş ayarlanan mT var ({dil}, {rapor}): PDF (değer, etiket) = {pdf_sayi} ≠ story "
+        f"{story_sayi} — hasta sahibinin aldığı PDF, kapıların okuduğu story'den FAZLASINI taşıyor (sayfa alt / üst bilgisi?)"
+    )
 
 
 def test_klinik_ici_tablo_AYARLANAN_der_siddet_DEMEZ():

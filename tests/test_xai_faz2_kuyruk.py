@@ -320,6 +320,78 @@ def test_KRITIK_D557_explain_CALISIRKEN_modul_kilidi_TUTULUR_ve_cagrilar_ORTUSME
     )
 
 
+@pytest.mark.parametrize("modul_adi,islev,anahtar", _CAM_ISLEVLERI, ids=["retikulosit", "CT"])
+def test_KRITIK_D557_aciklayici_KURULUMU_kilit_ICINDE_ve_TEK_kez(monkeypatch, modul_adi, islev, anahtar):
+    """TUR 3b (çürütücü 3 c1) — DAVRANIŞ: yukarıdaki kol önbelleği DOLU veriyordu (kurucu hiç çağrılmaz); açıklayıcının KURULUMU
+    (`YOLO(...)` + `YoloDetCAM(...)` + önbelleğe yazma) `with _XAI_KILIT:` DIŞINA alınınca (yalnız `.explain` içeride) geniş kümede
+    (331 passed) YEŞİLDİ — eşzamanlı ilk iki istekte model İKİ kez yüklenir (bellek / GPU; önbellek yarışı). Kapı: önbellek BOŞ
+    (modülün `_XAI_PT_CACHE`i test süresince TAZE sözlük — gerçek önbelleğe sahte açıklayıcı SIZMAZ), `ultralytics` +
+    `ai_hub.xai_utils.yolo_cam` sahte modül (torch / ağırlık YOK), iki iş parçacığı aynı anda: model yükleme (`YOLO`) ve açıklayıcı
+    kurucusu (`YoloDetCAM`) TAM BİR kez ve ikisi de MODÜLÜN kilidi TUTULURKEN çağrılır; önbellekte o tek açıklayıcı kalır.
+    MUTASYON: kurulum kilit dışında / kilitten önce model yükleme → KIRMIZI."""
+    import importlib
+    import sys
+    import threading
+    import time
+    import types
+
+    mod = importlib.import_module(modul_adi)
+
+    def _kilit_durumu():
+        sorgu = getattr(mod._XAI_KILIT, "locked", None)
+        return bool(sorgu()) if callable(sorgu) else f"kilit değil: {type(mod._XAI_KILIT).__name__}"
+
+    yukleme: list = []
+    kurulum: list = []
+
+    class _SahteCam:
+        def __init__(self, model, **kw):
+            kurulum.append(_kilit_durumu())
+            time.sleep(0.2)  # ikinci iş parçacığı bu arada boş önbelleği görmeye çalışır
+
+        def explain(self, yol):
+            return f"harita:{yol}"
+
+    def _sahte_yolo(yol):
+        yukleme.append(_kilit_durumu())
+        return types.SimpleNamespace(yol=yol)
+
+    sahte_cam = types.ModuleType("ai_hub.xai_utils.yolo_cam")
+    sahte_cam.YoloDetCAM = _SahteCam
+    sahte_ul = types.ModuleType("ultralytics")
+    sahte_ul.YOLO = _sahte_yolo
+    monkeypatch.setitem(sys.modules, "ai_hub.xai_utils.yolo_cam", sahte_cam)
+    monkeypatch.setitem(sys.modules, "ultralytics", sahte_ul)
+    onbellek: dict = {}
+    monkeypatch.setattr(mod, "_XAI_PT_CACHE", onbellek)  # BOŞ önbellek; test bitince gerçek sözlük geri gelir
+    sonuc: list = []
+    hata: list = []
+
+    def _kos():
+        try:
+            sonuc.append(getattr(mod, islev)("c1.png", pt_path="yok_C1.pt"))
+        except Exception as e:  # noqa: BLE001 — aparat iddiası aşağıda (iş parçacığı istisnası kaybolmasın)
+            hata.append(repr(e))
+
+    isler = [threading.Thread(target=_kos, daemon=True) for _ in range(2)]
+    for t in isler:
+        t.start()
+    for t in isler:
+        t.join(10)
+    assert not hata and sonuc == ["harita:c1.png"] * 2, f"aparat: {islev} iki çağrıda sonuç dönmedi: {sonuc} {hata}"
+    assert kurulum == [True], (
+        f"{modul_adi}.{islev}: açıklayıcı KURULUMU kilit DIŞINDA / birden çok kez ({kurulum}) — eşzamanlı istekte model iki kez "
+        "yüklenir"
+    )
+    assert yukleme == [True], (
+        f"{modul_adi}.{islev}: YOLO model yüklemesi kilit DIŞINDA / birden çok kez ({yukleme}) — eşzamanlı istekte model iki kez "
+        "yüklenir"
+    )
+    assert list(onbellek) == [anahtar] and isinstance(onbellek[anahtar], _SahteCam), (
+        f"{modul_adi}.{islev}: kurulan açıklayıcı önbelleğe '{anahtar}' anahtarıyla yazılmadı: {onbellek}"
+    )
+
+
 # ── 2) RNA IG — gerçek PT ile ────────────────────────────────────────────────
 @rna_pt_gerekir
 def test_KRITIK_rna_ig_top_genler_URETIR_ve_DETERMINISTIK():

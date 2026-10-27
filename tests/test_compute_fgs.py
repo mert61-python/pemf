@@ -154,3 +154,34 @@ def test_KRITIK_D557_FGS_YONU_goz_kapaninca_AU2_bas_inince_AU5_kulak_yatinca_AU1
         _monoton_ve_artan(bas, f"tohum {tohum} AU5 (baş yukarıdan aşağıya)")
         kulak = [_au(_kulak(kp, r), "AU1_Ear_Position") for r in (0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.0)]
         _monoton_ve_artan(kulak, f"tohum {tohum} AU1 (kulak dikten yatığa)")
+
+
+# ── TUR 3b (çürütücü 3 a2): TEK göz — ağrılı kedi çoğu zaman yalnız BİR gözünü sıkar ────────────────────────────────────────
+# Yön kolu iki gözü BİRLİKTE kapatıyordu: `avg_eye_ratio = max(sağ, sol)` (açık göz kapalıyı örter → tek gözünü sıkan kedide AU2 0
+# kalır, ölçü açık gözü gösterir) geniş kümede (331 passed) YEŞİLDİ. Kapı: YALNIZ bir göz (sağ / sol AYRI) adım adım kapanırken
+# `measurements.eye_aperture_ratio` KESİN azalır ve AU2 AZALMAZ. Eşik (THRESH) testte YOK.
+def _tek_goz(kp, yari_yukseklik: float, taraf: str):
+    """İki göz `_goz(kp, 0.30)` ile açık; YALNIZ `taraf` gözün yarı yüksekliği `yari_yukseklik` (öteki göz açık kalır)."""
+    kp = _goz(kp, 0.30)
+    a = yari_yukseklik
+    if taraf == "sag":
+        kp[4], kp[6], kp[5] = [0.27, 0.40 - a], [0.33, 0.40 - a], [0.30, 0.40 + a]
+    else:
+        kp[10], kp[11] = [0.70, 0.40 - a], [0.70, 0.40 + a]
+    return kp
+
+
+def test_KRITIK_D557_TEK_goz_kapaninca_goz_acikligi_AZALIR_AU2_AZALMAZ():
+    """MUTASYON: göz oranı ortalaması yerine MAKS (tek göz görünmez) / yalnız bir gözün oranı → KIRMIZI. Eşik değeri testte YOK."""
+    for taraf in ("sag", "sol"):
+        for tohum in _YON_TOHUMLARI:
+            kp = np.random.default_rng(tohum).random((48, 2))
+            sonuc = [compute_fgs(_tek_goz(kp, a, taraf)) for a in (0.30, 0.20, 0.10, 0.0)]
+            oran = [r["measurements"]["eye_aperture_ratio"] for r in sonuc]
+            artmayan = [(i, oran[i], oran[i + 1]) for i in range(len(oran) - 1) if not oran[i] > oran[i + 1]]
+            assert not artmayan, (
+                f"tohum {tohum}: YALNIZ {taraf} göz kapanırken göz açıklığı ölçüsü AZALMIYOR {oran} — tek gözlü sıkma görünmez "
+                f"(maks / tek göz?) {artmayan}"
+            )
+            au2 = [r["action_units"]["AU2_Orbital_Tightening"]["score"] for r in sonuc]
+            assert au2 == sorted(au2), f"tohum {tohum}: YALNIZ {taraf} göz kapanırken AU2 DÜŞTÜ (yön ters) {au2}"

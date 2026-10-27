@@ -21,7 +21,12 @@ KAPI (gerçek UAC / yükseltme / `Start-Process` / RunAs YOK):
   4. Gölge kipleri → beklenen süreç çıkış kodu (testte SABİT): UAC iptali = SONLANDIRMAYAN `Write-Error` → 1223 (ERROR_CANCELLED,
      MEVCUT "Yönetici izni verilmedi" iletisi) · sahte `ExitCode` 2 → 2 · 0 → 0 (karşıt) · `ExitCode` `$null` ve süreç nesnesi YOK →
      SIFIR DIŞI ve 0 / 3 / 4 / 5 / 1223 DIŞI (TUR 3 ÜRÜN KARARI: fail-closed; MEVCUT "kural eklenemedi (kod 1)" iletisi).
-MUTASYON: `-ErrorAction Stop` silinir (j3) / boş-kod koruması silinir ya da 0 döner / catch `exit 0` / son deyim sabit → KIRMIZI.
+  5. TUR 3b (çürütücü 3 w2): gölge `ArgumentList`i AYNEN `-NoProfile | -NonInteractive | -EncodedCommand | <b64>` alır ve <b64>
+     sarmalayıcıya verilen iç betiğin UTF-16LE base64'üdür — `-EncodedCommand` yerine `-Command` (yükseltilmiş PowerShell base64'ü
+     KOMUT adı sanar → betik HİÇ koşmaz, "İzin ver" her seferinde "kod 1", kural / grup hiç kurulmaz) app / çekirdek / gölge
+     kümesinde YEŞİLDİ (gölge ArgumentList'i kaydetmiyordu).
+MUTASYON: `-ErrorAction Stop` silinir (j3) / boş-kod koruması silinir ya da 0 döner / catch `exit 0` / son deyim sabit /
+`-EncodedCommand` → `-Command` (w2) → KIRMIZI.
 [TEZGÂH] gerçek `Start-Process -Verb RunAs` UAC iptalinin hata türü (sonlandıran / sonlandırmayan) gerçek UAC ile bir kez doğrulanmalı;
 gölge EN KÖTÜ durumu (sonlandırmayan) modeller — sonlandıran olsa da 1223 beklenir.
 """
@@ -47,6 +52,10 @@ _UAC_REDDI = 1223
 #: Özel anlamlı kodlar (başarı · bozuk kural silinemedi / paylaşım izin · bağ · veri yok · UAC) — "kod okunamadı" bunlarla KARIŞMAZ.
 _OZEL_KODLAR = {0, 3, 4, 5, _UAC_REDDI}
 _GOLGE = "Golge-BaslatSurec"
+#: `{b64}` yerine konan zararsız sahte iç betik — gölge ArgumentList'i KOŞMAZ; yalnız AYNEN taşındığı ölçülür (TUR 3b w2).
+_SAHTE_IC_BETIK = "exit 0"
+#: Yükseltilmiş sürece giden argüman listesi (sıra + bayraklar testte SABİT): betik `-EncodedCommand` ile, kodlaması UTF-16LE base64.
+_BEKLENEN_ARGUMANLAR = ["-NoProfile", "-NonInteractive", "-EncodedCommand"]
 _CREATE_NO_WINDOW = 0x08000000
 
 
@@ -107,7 +116,7 @@ def _sarmalayici() -> str:
         ad: str(int(ifade) if re.fullmatch(r"-?\d+", ifade) else _sabit(ifade.split("::")[-1]))
         for ad, ifade in argumanlar.items()
     }
-    degerler["b64"] = base64.b64encode("exit 0".encode("utf-16-le")).decode()  # gölge ArgumentList'i KOŞMAZ
+    degerler["b64"] = base64.b64encode(_SAHTE_IC_BETIK.encode("utf-16-le")).decode()  # gölge ArgumentList'i KOŞMAZ
 
     def _yer(m: re.Match) -> str:
         t = m.group(0)
@@ -167,6 +176,7 @@ function Golge-BaslatSurec {
     # PEMF-GOLGE-J3
     [CmdletBinding()]
     param([string]$FilePath, [string]$Verb, [switch]$Wait, [switch]$PassThru, [string]$WindowStyle, [object[]]$ArgumentList)
+    [Console]::Out.WriteLine("GOLGE-ARG`t$($ArgumentList -join '|')")
     [Console]::Out.WriteLine("GOLGE-CAGRI`t$FilePath`t$Verb`t$($Wait.IsPresent)`t$($PassThru.IsPresent)`t$($PSBoundParameters['ErrorAction'])")
     __KIP__
 }
@@ -216,6 +226,13 @@ def _golge_kos(golge: str, kip: str) -> tuple[int, str]:
     p = cagri[0].split("\t")
     assert p[1:5] == ["powershell", "RunAs", "True", "True"], (
         f"sarmalayıcı yükseltilmiş süreci `powershell -Verb RunAs -Wait -PassThru` ile istemiyor: {p[1:]}"
+    )
+    # TUR 3b (w2): iç betik yükseltilmiş sürece `-EncodedCommand <UTF-16LE base64>` ile AYNEN gider (`-Command <b64>` → betik koşmaz).
+    arg = [s.split("\t", 1)[1] for s in cikti.splitlines() if s.startswith("GOLGE-ARG\t")]
+    beklenen = "|".join([*_BEKLENEN_ARGUMANLAR, _kodla(_SAHTE_IC_BETIK)])
+    assert arg == [beklenen], (
+        f"yükseltilmiş sürece iç betik `-EncodedCommand <b64>` ile AYNEN gitmiyor (`-Command` / eksik bayrak → betik HİÇ koşmaz, "
+        f"'İzin ver' her seferinde 'kod 1'): {arg} ≠ [{beklenen!r}]"
     )
     return r.returncode, cikti
 
