@@ -13,6 +13,8 @@ adımından ÖNCE; profil `PEMF_API_PORT` satırı `Test-PemfApiPortDegeri` (Pyt
 `HATA: <neden + eylem> Dosya: <profil> — kurulum DURDU, hiçbir servis değiştirilmedi.` + `pause` + `exit 1` (setup_services.ps1 Y44 ile
 AYNI karar ve AYNI metin — eşlik bu dosyada ölçülür). Satır yoksa / geçerliyse kurulum sürer. Çalışma anındaki uyarılı 8000'e düşüş
 (ACİL DURDUR ucu) AYNEN kalır.
+TUR 3 (çürütücü 2): sürücü betiğin `-Mode` parametresini TANIMLAR ve Y44 iki kipte (device / server) ölçülür — kip koşullu koruma (q2 / q2b)
+görünür; değer listesinde çok `_`li geçerli yazım (`8_0_10` = 8010, Python `int()`) SÜRER, çift `_` (`8__010`) DURUR (q4).
 ⛔ Betik GERÇEKTEN koşmaz: yalnız `Test-PemfApiPortDegeri` + `Read-PemfProfilEnv` tanımları ve Y44 üst düzey ifadesi parser ile çekilir,
 koşturulmadan ÖNCE izin listesine karşı denetlenir (dışında komut / yöntem → koşmaz, KIRMIZI); `Write-Status` / `Log` / `Write-Host` /
 `pause` kayıtçı gölgedir (Get-Command ile İŞLEV kanıtlı, modül otomatik yükleme KAPALI). Profil dosyası test geçici dizinindedir.
@@ -34,10 +36,11 @@ BETIK = KOK / "scripts" / "install_backend_service.ps1"
 SETUP = KOK / "scripts" / "setup_services.ps1"
 _PWSH = shutil.which("pwsh")
 
-pytestmark = [
-    pytest.mark.skipif(sys.platform != "win32", reason="pwsh aparatı Windows betik anlamını ölçer"),
-    pytest.mark.skipif((_PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
-]
+# D5 M-3 TUR 3: ham `skipif` yerine ZORUNLU'ya bağlı atlama (yayın makinesinde Windows + pwsh yoksa DÜŞER).
+if sys.platform != "win32":
+    capraz.atla("pwsh aparatı Windows betik anlamını ölçer")
+if _PWSH is None:
+    capraz.atla("pwsh (PowerShell 7) bulunamadı")
 
 # Backend `int()` anlamında geçerli / geçersiz yazımlar (değer profil satırına `PEMF_API_PORT=<değer>` olarak yazılır; satır kırpılır).
 DEGERLER = [
@@ -45,6 +48,8 @@ DEGERLER = [
     "+8010",
     "08000",
     "8_010",
+    "8_0_10",
+    "8__010",
     "٨٠١٠",
     "1",
     "65535",
@@ -130,8 +135,9 @@ def _cek(tmp_path: Path, betik: Path) -> str:
     return cikti.read_text(encoding="utf-8")
 
 
-def kos(tmp_path: Path, kip: str, satir: str | None) -> tuple[int, list[str], Path]:
-    """`kip` = install | setup; profil dosyasında `satir` (None = PEMF_API_PORT satırı YOK) → (çıkış kodu, olaylar, profil yolu)."""
+def kos(tmp_path: Path, kip: str, satir: str | None, mode: str = "device") -> tuple[int, list[str], Path]:
+    """`kip` = install | setup; profil dosyasında `satir` (None = PEMF_API_PORT satırı YOK) → (çıkış kodu, olaylar, profil yolu).
+    `mode` = betiğin `-Mode` parametresi (device | server) — sürücü onu betikteki gibi TANIMLAR (TUR 3, çürütücü 2 q2b)."""
     d = tmp_path / kip
     d.mkdir(parents=True)
     profil = d / "deploy" / "device.env"
@@ -146,6 +152,7 @@ def kos(tmp_path: Path, kip: str, satir: str | None) -> tuple[int, list[str], Pa
         betik, on, eap = BETIK, f"$ProfilDosyasi = {_ps_lit(profil)}\n", "'Stop'"  # betiğin kendi tercihi
     else:
         betik, on, eap = SETUP, f"$OnEnvFile = {_ps_lit(profil)}\n", "'Continue'"
+    on = f"$Mode = {_ps_lit(mode)}\n" + on
     govde = _SURUCU.replace("@@OLAY@@", _ps_lit(olay)).replace("@@EAP@@", eap).replace("@@KOD@@", on + _cek(d, betik))
     r = _pwsh_file(d, "surucu.ps1", govde)
     olaylar = [s for s in olay.read_text(encoding="utf-8-sig").splitlines() if s.strip()]
@@ -190,6 +197,22 @@ def test_KRITIK_bozuk_PEMF_API_PORT_kurulumu_DURDURUR_gecerli_SURER_backend_int_
     assert "PAUSE" in olaylar, f"operatör HATA'yı göremeden pencere kapanır (pause yok):\n{olaylar}"
 
 
+@pytest.mark.parametrize("mode", ["device", "server"])
+def test_KRITIK_Y44_KIPTEN_BAGIMSIZ_bozuk_portta_iki_kipte_de_DURDURUR(tmp_path, mode):
+    """Çürütücü 2 q2 / q2b (kip koşullu koruma): Y44 `$Mode` ile koşullanırsa (yalnız device ya da server dışı) server.env'deki bozuk port
+    ile servis kurulur. Sürücü `-Mode`'u betikteki gibi tanımlar; iki kipte de bozuk değer DURDURUR, geçerli değer SÜRER (iki kurulum yolu)."""
+    for kip in ("install", "setup"):
+        rc, olaylar, _p = kos(tmp_path / f"{mode}_bozuk", kip, "PEMF_API_PORT=80O0", mode=mode)
+        assert rc == 1 and _hata(olaylar), (
+            f"[{kip} / -Mode {mode}] bozuk PEMF_API_PORT kurulumu DURDURMADI — Y44 kipe bağlı atlanıyor, servis bozuk değerle kurulur:\n"
+            f"{olaylar}"
+        )
+        rc2, olaylar2, _p2 = kos(tmp_path / f"{mode}_gecerli", kip, "PEMF_API_PORT=8010", mode=mode)
+        assert rc2 == 0 and not _hata(olaylar2), (
+            f"[{kip} / -Mode {mode}] geçerli port (8010) ile kurulum durdu:\n{olaylar2}"
+        )
+
+
 def test_KARSIT_PEMF_API_PORT_satiri_YOKSA_kurulum_surer(tmp_path):
     rc, olaylar, _profil = kos(tmp_path, "install", None)
     assert rc == 0 and not _hata(olaylar), f"profilde PEMF_API_PORT yokken (backend 8000) kurulum durdu:\n{olaylar}"
@@ -203,6 +226,7 @@ def test_KARSIT_PEMF_API_PORT_satiri_YOKSA_kurulum_surer(tmp_path):
         "PEMF_API_PORT=",
         "PEMF_API_PORT = sekiz bin",
         "PEMF_API_PORT=+8001",
+        "PEMF_API_PORT=8_0_10",
         None,
     ],
 )
@@ -216,7 +240,7 @@ def test_KRITIK_ESLIK_setup_services_Y44_ile_AYNI_karar_ve_AYNI_HATA_metni(tmp_p
         f"[{satir!r}] install_backend_service ile setup_services Y44 kararında / metninde AYRIŞTI:\ninstall={sonuc['install']}\n"
         f"setup  ={sonuc['setup']}"
     )
-    assert sonuc["install"][0] == (0 if satir is None or satir.endswith("+8001") else 1), sonuc
+    assert sonuc["install"][0] == (0 if satir is None or satir.endswith(("+8001", "8_0_10")) else 1), sonuc
 
 
 # ── Betik bağlantısı (AST): Y44 D2.73'ten SONRA, port-dolu denetiminden / $ApiPort'tan / servise dokunan HER adımdan ÖNCE ──
