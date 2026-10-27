@@ -344,6 +344,13 @@ pub fn backend_is_definitely_gone(port: u16) -> bool {
 /// Üstelik `backend.port` üzerine yazılıp ilk sürecin E-stop adresi kayboluyordu.
 /// Artık: çalışan varsa İKİNCİSİNİ BAŞLATMA, mevcut olanı SAHİPLEN.
 pub fn detect_running_backend(install_root: &Path) -> Option<u16> {
+    detect_running_backend_with(install_root, install::DEFAULT_PORT)
+}
+
+/// `detect_running_backend`in varsayılan portu ENJEKTE edilebilir hâli (DEV-C1 · ORTAK §10, LN L6 deseni: `guncelleme_kapisi_backendi`,
+/// `orphan_durdurma_hedefleri`). Testler GERÇEK 8000'e `GET /api/health` ATMAZ — geliştiricinin / kliniğin çalışan backend'ine
+/// istek gitmesin ve sonucu ortamın o anki durumuna bağlı olmasın.
+pub fn detect_running_backend_with(install_root: &Path, varsayilan_port: u16) -> Option<u16> {
     // 1) Kayıtlı port — kim başlattıysa yazmıştır.
     if let Some(port) = read_backend_port(install_root) {
         if probe_pemf_backend(port) {
@@ -351,8 +358,8 @@ pub fn detect_running_backend(install_root: &Path) -> Option<u16> {
         }
     }
     // 2) Port dosyası silinmiş/bayat olabilir → varsayılan portu da yokla.
-    if probe_pemf_backend(install::DEFAULT_PORT) {
-        return Some(install::DEFAULT_PORT);
+    if probe_pemf_backend(varsayilan_port) {
+        return Some(varsayilan_port);
     }
     None
 }
@@ -569,10 +576,15 @@ pub fn push_desktop_session(port: u16, session: &crate::auth::Session) -> Result
 /// kanıtlanmıştır → yeniden yoklanmaz (yük altındaki backend'de yanlış-negatif üretip
 /// "çift giriş"e düşmeyelim).
 pub fn session_target_port(tracked: Option<u16>, install_root: &Path) -> Option<u16> {
+    session_target_port_with(tracked, install_root, install::DEFAULT_PORT)
+}
+
+/// `session_target_port`un varsayılan portu ENJEKTE edilebilir hâli (DEV-C1): testler gerçek 8000'e istek atmaz.
+pub fn session_target_port_with(tracked: Option<u16>, install_root: &Path, varsayilan_port: u16) -> Option<u16> {
     if tracked.is_some() {
         return tracked;
     }
-    detect_running_backend(install_root)
+    detect_running_backend_with(install_root, varsayilan_port)
 }
 
 /// Backend'deki oturumu temizle ("Çıkış yap"). Best-effort ve sessiz.
@@ -1544,14 +1556,46 @@ mod tests {
 
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("backend.port"), yabanci.to_string()).unwrap();
+        // DEV-C1 (ORTAK §10): varsayılan port ENJEKTE — gerçek 8000'e istek YOK. Enjekte port da yanıt veren (sayan) bir yabancı:
+        // varsayılan-port kolunun GERÇEKTEN o porta gittiği (8000'e değil) ölçülür.
+        let (varsayilan, sayac) = sayan_yabanci_servis();
         assert_ne!(
-            session_target_port(None, d.path()),
+            session_target_port_with(None, d.path(), varsayilan),
             Some(yabanci),
             "PEMF OLMAYAN yerel servise jeton devredilirdi"
         );
+        assert!(
+            sayac.load(std::sync::atomic::Ordering::SeqCst) >= 1,
+            "varsayılan-port yoklaması enjekte porta GİTMEDİ (gerçek 8000'e mi gitti?)"
+        );
         // Kendi sürecimiz: ağ yoklaması YAPILMADAN kabul (aynı yabancı port bile olsa — burada
         // kimliği health-nonce ile zaten kanıtlanmıştır).
-        assert_eq!(session_target_port(Some(yabanci), d.path()), Some(yabanci));
+        assert_eq!(session_target_port_with(Some(yabanci), d.path(), varsayilan), Some(yabanci));
+    }
+
+    /// DEV-C1: yanıt veren (PEMF OLMAYAN) ve gelen bağlantıları SAYAN yerel servis — enjekte edilen "varsayılan port" olarak kullanılır.
+    fn sayan_yabanci_servis() -> (u16, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::Read;
+        let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = l.local_addr().unwrap().port();
+        let sayac = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let s2 = sayac.clone();
+        std::thread::spawn(move || {
+            for stream in l.incoming() {
+                let Ok(mut s) = stream else { continue };
+                s2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let mut buf = [0u8; 1024];
+                let _ = s.read(&mut buf);
+                let govde = br#"{"status":"online","service":"VarsayilanPortYabanci"}"#;
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    govde.len()
+                );
+                let _ = s.write_all(govde);
+            }
+        });
+        (port, sayac)
     }
 
     /// Oturum devri sözleşmedeki gövdeyi POST etmeli; backend ucu YOKSA (404/405) SESSİZCE
@@ -2246,17 +2290,25 @@ mod tests {
         let other = serve(br#"{"status":"online","service":"BaskaServis"}"#);
 
         let tmp = tempfile::tempdir().unwrap();
+        // DEV-C1 (ORTAK §10): varsayılan port ENJEKTE (sayan yabancı) — gerçek 8000'e `GET /api/health` YOK.
+        let (varsayilan, sayac) = sayan_yabanci_servis();
         // backend.port GERÇEK backend'i gösteriyor → tespit edilmeli (ikinci süreç açılmaz).
         std::fs::write(tmp.path().join("backend.port"), pemf.to_string()).unwrap();
-        assert_eq!(detect_running_backend(tmp.path()), Some(pemf));
+        assert_eq!(detect_running_backend_with(tmp.path(), varsayilan), Some(pemf));
 
         // backend.port İLGİSİZ bir servisi gösteriyor → SAHİPLENİLMEMELİ.
         std::fs::write(tmp.path().join("backend.port"), other.to_string()).unwrap();
         assert_ne!(
-            detect_running_backend(tmp.path()),
+            detect_running_backend_with(tmp.path(), varsayilan),
             Some(other),
             "PEMF olmayan bir servis backend sanildi"
         );
+        assert!(
+            sayac.load(std::sync::atomic::Ordering::SeqCst) >= 1,
+            "varsayılan-port yoklaması enjekte porta GİTMEDİ (gerçek 8000'e mi gitti?)"
+        );
+        // Varsayılan portta da PEMF OLMAYAN servis var → o da sahiplenilmez.
+        assert_eq!(detect_running_backend_with(tmp.path(), varsayilan), None);
     }
 
     /// DENETİM 2026-08-04 (P2 #13): portu bizden önce kapan bir süreç HTTP 200 dönse bile
