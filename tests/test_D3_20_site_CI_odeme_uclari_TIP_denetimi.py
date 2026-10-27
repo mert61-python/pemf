@@ -12,10 +12,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
-yaml = pytest.importorskip("yaml", reason="pyyaml yok")
+yaml = capraz.paket_yoksa_atla("yaml", sebep="pyyaml yok")
 
 
 def _adimlar():

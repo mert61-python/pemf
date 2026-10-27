@@ -48,7 +48,7 @@ def _yaz_bom(yol: Path, metin: str) -> None:
 
 
 def test_KRITIK_CI_pytest_satirlari_ATLAMA_NEDENINI_listeler():
-    yaml = pytest.importorskip("yaml", reason="pyyaml yok")
+    yaml = capraz.paket_yoksa_atla("yaml", sebep="pyyaml yok")
     adimlar = yaml.safe_load((KOK / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))["jobs"][
         "backend"
     ]

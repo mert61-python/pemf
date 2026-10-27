@@ -18,6 +18,7 @@ import time
 import types
 import uuid
 
+import capraz
 import pytest
 
 _PORT = "COM239"
@@ -25,7 +26,7 @@ _PORT = "COM239"
 
 @pytest.fixture
 def ortam(monkeypatch):
-    pytest.importorskip("serial")
+    capraz.paket_yoksa_atla("serial")
     if sys.platform != "win32":
         pytest.skip("serialwin32 yalnız Windows")
     import serial

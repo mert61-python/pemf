@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -42,7 +43,7 @@ def _duz(d, on=""):
 
 
 def _yukle(p: Path) -> dict:
-    yaml = pytest.importorskip("yaml")
+    yaml = capraz.paket_yoksa_atla("yaml")
     return _duz(yaml.safe_load(p.read_text(encoding="utf-8")))
 
 

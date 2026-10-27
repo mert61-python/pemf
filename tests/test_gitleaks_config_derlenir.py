@@ -27,6 +27,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import capraz
 import gitleaks_ikili
 import pytest
 
@@ -240,7 +241,7 @@ def test_KARSIT_KANIT_bayrak_muafiyeti_GERCEK_SIRRI_gecirmez(tmp_path, deger, ne
 def test_KRITIK_CI_gitleaks_ikilisini_KURAR_ve_testleri_ZORUNLU_kosar():
     """CI pytest işi gitleaks'i kurmuyordu → özel kural testleri hep ATLANIYORDU (docstring "CI'da pre-commit indirir"
     diyordu, CI ölçümü tersini gösterdi). Artık: kurulum adımı pytest'ten ÖNCE, pytest adımlarında zorunlu kip."""
-    yaml = pytest.importorskip("yaml", reason="pyyaml yok")
+    yaml = capraz.paket_yoksa_atla("yaml", sebep="pyyaml yok")
     adimlar = yaml.safe_load((_KOK / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))["jobs"][
         "backend"
     ]["steps"]

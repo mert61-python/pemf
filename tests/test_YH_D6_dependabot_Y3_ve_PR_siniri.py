@@ -15,9 +15,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import capraz
 import pytest
 
-yaml = pytest.importorskip("yaml", reason="pyyaml yok")
+yaml = capraz.paket_yoksa_atla("yaml", sebep="pyyaml yok")
 
 KOK = Path(__file__).resolve().parents[1]
 GUNCELLEMELER = yaml.safe_load((KOK / ".github" / "dependabot.yml").read_text(encoding="utf-8"))["updates"]

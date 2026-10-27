@@ -21,6 +21,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import capraz
 import cv2
 import numpy as np
 import pytest
@@ -106,7 +107,7 @@ def test_KARSIT_fantom_hatti_duz_isarette_UYARMAZ():
 
 
 def _yaml_kopya(tmp_path, degistir):
-    yaml = pytest.importorskip("yaml")
+    yaml = capraz.paket_yoksa_atla("yaml")
     d = yaml.safe_load(FANTOM_YAML.read_text(encoding="utf-8"))
     degistir(d)
     p = tmp_path / "cabin_td4.yaml"
@@ -167,7 +168,7 @@ def test_KRITIK_intrinsics_npz_FARKLI_cozunurlukte_fantom_K_OLCEKLER(tmp_path):
         rms=0.2,
     )
     shutil.copy(FANTOM_YAML, tmp_path / "cabin.yaml")
-    yaml = pytest.importorskip("yaml")
+    yaml = capraz.paket_yoksa_atla("yaml")
     d = yaml.safe_load((tmp_path / "cabin.yaml").read_text(encoding="utf-8"))
     d["camera"]["intrinsics_npz"] = "kalib_td4.npz"  # YAML'a GÖRELİ yol (calibrate_camera.py çıktısı yanına konur)
     (tmp_path / "cabin.yaml").write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")

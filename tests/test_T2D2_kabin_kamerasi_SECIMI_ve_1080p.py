@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import capraz
 import numpy as np
 import pytest
 
@@ -327,7 +328,7 @@ def test_KRITIK_kalibrasyon_dosyasi_COMMITLI_ve_tezgah_olcumuyle_AYNI():
 
 
 def test_KRITIK_uc_YAML_ayni_dizgeyle_kalibrasyona_COZULUR():
-    yaml = pytest.importorskip("yaml")
+    yaml = capraz.paket_yoksa_atla("yaml")
     from ai_hub.cv_ortak.cabin_config import load_cabin_config
     from ai_hub.inference_cat_organ.lib.cabin_config import has_perspective_data
     from ai_hub.inference_cat_organ.lib.cabin_config import load_cabin_config as kedi_yukle
@@ -357,7 +358,7 @@ def test_KRITIK_kedi_hatti_K_yi_kare_boyutuna_OLCEKLER_kenar_orani_farkliysa_RED
 
 
 def _taban_cfg(tmp_path):
-    yaml = pytest.importorskip("yaml")
+    yaml = capraz.paket_yoksa_atla("yaml")
     from ai_hub.cv_ortak.cabin_config import load_cabin_config
 
     d = yaml.safe_load(PETRI_YAML.read_text(encoding="utf-8"))

@@ -16,9 +16,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
-yaml = pytest.importorskip("yaml", reason="pyyaml yok")
+yaml = capraz.paket_yoksa_atla("yaml", sebep="pyyaml yok")
 
 KOK = next(p for p in Path(__file__).resolve().parents if (p / "versions.json").exists())
 GUNCELLEMELER = yaml.safe_load((KOK / ".github" / "dependabot.yml").read_text(encoding="utf-8"))["updates"]

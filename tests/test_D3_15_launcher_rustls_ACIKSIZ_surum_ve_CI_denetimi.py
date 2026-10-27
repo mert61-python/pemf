@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -29,7 +30,7 @@ def test_KRITIK_D3_15_rustls_RUSTSEC_2026_0285_duzeltmesinin_ustunde():
 
 
 def test_KRITIK_D3_15_cargo_audit_HER_PUSHta_ve_audit_toml_ile():
-    yaml = pytest.importorskip("yaml", reason="pyyaml yok")
+    yaml = capraz.paket_yoksa_atla("yaml", sebep="pyyaml yok")
     d = yaml.safe_load((KOK / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))
     adim = [a for a in d["jobs"]["launcher"]["steps"] if "cargo audit" in str(a.get("run") or "")]
     assert len(adim) == 1, "tests.yml launcher işinde cargo audit yok (yalnız etiketli yayında koşuyordu)"

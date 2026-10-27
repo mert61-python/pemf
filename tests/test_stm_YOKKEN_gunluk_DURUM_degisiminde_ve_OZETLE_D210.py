@@ -21,6 +21,7 @@ import time
 import types
 import uuid
 
+import capraz
 import pytest
 
 _YOK_PORT = "COM239"
@@ -29,7 +30,7 @@ _TAVAN_60SN = 3  # plan: 60 sn'de (20 deneme) toplam kayıt tavanı
 
 @pytest.fixture
 def ortam(monkeypatch):
-    pytest.importorskip("serial")
+    capraz.paket_yoksa_atla("serial")
     from serial.tools import list_ports
 
     if any(str(p.device).upper() == _YOK_PORT for p in list_ports.comports()):

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 
+import capraz
 import pytest
 from servers import auto_discovery as ad
 
@@ -184,7 +185,7 @@ def test_KARSIT_KANIT_loopback_YAYINLANMAZ(monkeypatch):
 
 def test_build_info_adi_HEM_name_HEM_server_icin_kullanir():
     """`allow_name_change` yetersizliğinin sebebi: hostname de çakışıyor."""
-    pytest.importorskip("zeroconf")
+    capraz.paket_yoksa_atla("zeroconf")
     info = ad._build_info("192.168.1.37", 8000, "PEMF-Vet-abc123")
     assert info.name.startswith("PEMF-Vet-abc123.")
     assert str(info.server).startswith("PEMF-Vet-abc123."), "server (A kaydı) benzersizleştirilmemiş"
