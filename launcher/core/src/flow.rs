@@ -1742,6 +1742,23 @@ pub(crate) fn hotspot_gorevi_gerekli(profiller: &[String]) -> bool {
 /// uygulama açılışını ENGELLEMEZ — eksik hotspot ESP'leri etkiler, uygulamanın kendisini değil.
 #[cfg(windows)]
 pub(crate) fn hotspot_gorevini_esitle(install_root: &Path) {
+    let gunluk = std::env::var_os("LOCALAPPDATA")
+        .filter(|v| !v.is_empty())
+        .map(|d| PathBuf::from(d).join("PEMF_System").join("hotspot.log"));
+    hotspot_gorevini_esitle_ile(install_root, gunluk.as_deref(), |c| c.spawn().map(|_| ()));
+}
+
+/// `hotspot_gorevini_esitle`in test edilebilir hâli — başlatıcı ve günlük yolu ENJEKTE (D5.16 · B-10.75).
+///
+/// ⚠️ D5.16: başlatma sonucu eskiden `let _ = c.spawn();` ile ATILIYORDU — `powershell` başlatılamazsa (ilke, AppLocker,
+/// bozuk System32) görev hiç kurulmuyor, ESP bobinleri (6-8) hotspot'a bağlanamıyor ve hiçbir yerde iz kalmıyordu. Artık
+/// başlatma hatası betiğin KENDİ günlüğüne (`%LOCALAPPDATA%\PEMF_System\hotspot.log`) yazılır; açılışı yine ENGELLEMEZ.
+#[cfg(windows)]
+pub(crate) fn hotspot_gorevini_esitle_ile(
+    install_root: &Path,
+    gunluk: Option<&Path>,
+    baslat: impl FnOnce(&mut std::process::Command) -> std::io::Result<()>,
+) {
     let betik = install::runtime_dir(install_root)
         .join("PEMF_Backend")
         .join("install_hotspot_task.ps1");
@@ -1758,7 +1775,23 @@ pub(crate) fn hotspot_gorevini_esitle(install_root: &Path) {
     if !gerekli {
         c.arg("-Kaldir"); // profil kaldırıldıysa görev de temizlenir
     }
-    let _ = c.spawn();
+    if let Err(e) = baslat(&mut c) {
+        if let Some(yol) = gunluk {
+            hotspot_gunlugune_ekle(yol, &format!("[launcher] hotspot_gorevi_baslatilamadi: {e}"));
+        }
+    }
+}
+
+/// Best-effort tek satır ekleme (dizin yoksa açılır). Yazılamazsa sessiz: açılış bu yüzden durmaz.
+#[cfg(windows)]
+fn hotspot_gunlugune_ekle(yol: &Path, satir: &str) {
+    use std::io::Write as _;
+    if let Some(d) = yol.parent() {
+        let _ = fs::create_dir_all(d);
+    }
+    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(yol) {
+        let _ = writeln!(f, "{satir}");
+    }
 }
 
 #[cfg(not(windows))]
@@ -3356,5 +3389,44 @@ pub fn ").map(|k| i + k).unwrap_or(src.len());
             !govde.contains("birlesik_model_sha"),
             "adopt birlesik kimlik benimsiyor — sessiz eksik-model penceresi"
         );
+    }
+
+    /// D5.16 (B-10.75): görev betiği Windows PowerShell 5.1 (`powershell`, `pwsh` DEĞİL) ile çağrılır ve başlatma HATASI
+    /// günlüğe yazılır (eskiden `let _ = c.spawn();` ile atılıyordu). Gerçek süreç BAŞLATILMAZ — başlatıcı enjekte.
+    #[cfg(windows)]
+    #[test]
+    fn hotspot_gorevi_PS51_ile_cagrilir_ve_baslatma_HATASI_gunluge_yazilir() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("kok");
+        let betik = install::runtime_dir(&kok).join("PEMF_Backend").join("install_hotspot_task.ps1");
+        fs::create_dir_all(betik.parent().unwrap()).unwrap();
+        fs::write(&betik, "# sahte betik (calistirilmaz)").unwrap();
+        let gunluk = d.path().join("LocalAppData").join("PEMF_System").join("hotspot.log");
+        let mut goruldu: Option<(std::ffi::OsString, Vec<std::ffi::OsString>)> = None;
+        hotspot_gorevini_esitle_ile(&kok, Some(&gunluk), |c| {
+            goruldu = Some((c.get_program().to_owned(), c.get_args().map(|a| a.to_owned()).collect()));
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "sahte-baslatici: powershell yok"))
+        });
+        let (program, args) = goruldu.expect("görev betiği hiç başlatılmak istenmedi");
+        assert_eq!(program, std::ffi::OsString::from("powershell"), "görev pwsh/başka yorumlayıcıyla çağrılıyor — WinRT hotspot API'si yalnız 5.1'de");
+        let i = args.iter().position(|a| a == "-File").expect("-File yok");
+        assert_eq!(args.get(i + 1).map(std::path::PathBuf::from), Some(betik.clone()), "-File görev betiğini göstermiyor");
+        assert!(args.iter().any(|a| a == "-Kaldir"), "profil kurulu değilken görev KALDIRILMALI (-Kaldir)");
+        let metin = fs::read_to_string(&gunluk).expect("başlatma hatası günlüğe YAZILMADI (D5.16)");
+        assert!(metin.contains("sahte-baslatici: powershell yok"), "günlük satırı hatayı taşımıyor: {metin:?}");
+    }
+
+    /// Karşıt: betik paketlenmemişse (eski paket) başlatıcı ÇAĞRILMAZ ve günlük AÇILMAZ.
+    #[cfg(windows)]
+    #[test]
+    fn hotspot_betigi_yoksa_baslatici_CAGRILMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let gunluk = d.path().join("hotspot.log");
+        let mut cagrildi = false;
+        hotspot_gorevini_esitle_ile(&d.path().join("kok"), Some(&gunluk), |_| {
+            cagrildi = true;
+            Ok(())
+        });
+        assert!(!cagrildi && !gunluk.exists());
     }
 }

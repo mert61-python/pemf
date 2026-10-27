@@ -10816,6 +10816,13 @@
      "turler": [
       "rust"
      ]
+    },
+    {
+     "metin": "[launcher] hotspot_gorevi_baslatilamadi: {{e}}",
+     "gerekce": "D5.16: hotspot.log tanı satırı (olay kimliği + işletim sistemi hatası) — ekranda görünmez, makine verisi",
+     "turler": [
+      "rust-sablon"
+     ]
     }
    ],
    "birlesikIstisna": [],
