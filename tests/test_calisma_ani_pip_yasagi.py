@@ -23,7 +23,10 @@ mühendisini var olmayan bir eksik bağımlılığa yönlendiren kırmızı log 
 
 from __future__ import annotations
 
+import ast
 import importlib
+import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -33,6 +36,13 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
+# Üç giriş noktası: her biri yasağı ultralytics'i çeken ilk importtan ÖNCE kendisi kurar (ai_hub'ı doğrudan import eden yollar için üçüncü kilit).
+# Çıpa: AI zincirini çeken GERÇEK import düğümü (modül adı) — ai_hub'ın kendisi çıpa taşımaz (dosyanın geri kalanı alt modül importu değil).
+_GIRISLER = {
+    "backend": (_KOK / "apps" / "backend" / "backend_service.py", "headless_core"),
+    "ai_service": (_KOK / "ai_service" / "app.py", "onnxruntime"),
+    "ai_hub": (_KOK / "ai_hub" / "__init__.py", None),
+}
 _SPEC = _KOK / "build_tools" / "PEMF_Backend_onedir.spec"
 
 # Frozen'da metadata'sı ŞART olan paketler: kodu bundle'a giriyor ama çalışma anında
@@ -53,17 +63,79 @@ def test_KRITIK_yasak_ultralytics_AUTOINSTALLi_kapatir():
     )
 
 
-def test_yasak_gercekten_ultralytics_davranisini_degistirir():
-    """SÖZDE değil GERÇEK etki: ultralytics kendi AUTOINSTALL sabitini False okumalı.
+# D5.23 (18K devri): eski hâli ultralytics'i EBEVEYNDE import edip AUTOINSTALL'ı okuyordu — sonuç dosyadaki ÖNCEKİ testin env'i kurmasına
+# bağlıydı (ölçüldü: tek başına koşunca HEAD'de KIRMIZI, dosyayla YEŞİL; başka bir dosya ultralytics'i önce çekerse ters yönde de kör).
+# Bayrak import ANINDA okunduğu için ölçüm ancak TAZE süreçte anlamlıdır: çocuk GERÇEK giriş noktasını içe aktarır, sonra ultralytics'in
+# kendi sabitini okur. Karşıt kanıt (giriş noktasısız çocuk) aynı ölçümün True görebildiğini kanıtlar (ölçüm aracı kör değil).
+_COCUK_AUTOINSTALL = r'''
+import json, os, sys
+KOK, GIRIS, CIKTI = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path[:0] = [os.path.join(KOK, "apps", "backend"), KOK, os.path.join(KOK, "ai_service")]
+if GIRIS == "backend":
+    import backend_service  # noqa: F401  GERÇEK giriş noktası (modül düzeyindeki kilit burada koşar)
+elif GIRIS == "ai_service":
+    import app  # noqa: F401
+elif GIRIS == "ai_hub":
+    import ai_hub  # noqa: F401
+import ultralytics.utils as U
+json.dump({"autoinstall": U.AUTOINSTALL, "env": os.environ.get("YOLO_AUTOINSTALL")}, open(CIKTI, "w"))
+'''
 
-    Env'i okuyan bizim kodumuz değil, ultralytics'in `apps/backend/utils/__init__.py`'si — bayrak IMPORT
-    ANINDA okunduğu için yasak, ultralytics'ten önce kurulmuş olmalı. Bu testin değeri:
-    'env yazdım' demek yetmez, tüketen kütüphanenin davranışını ölçer.
+
+def _autoinstall_olc(giris: str, tmp_path: Path) -> dict:
+    # Varlık İÇE AKTARMADAN sorulur: ebeveynde `import ultralytics` AUTOINSTALL'ı erken dondurur (sıraya bağlı kapı = bu bulgu).
+    if importlib.util.find_spec("ultralytics") is None:
+        from capraz import ZORUNLU
+
+        if ZORUNLU:
+            pytest.fail(
+                "PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 ama ultralytics kurulu değil — pip yasağının GERÇEK etkisi ölçülemedi"
+            )
+        pytest.skip("ultralytics kurulu değil")
+    betik, cikti = tmp_path / f"autoinstall_{giris}.py", tmp_path / f"autoinstall_{giris}.json"
+    betik.write_text(_COCUK_AUTOINSTALL, encoding="utf-8")
+    ortam = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTEST_CURRENT_TEST", "YOLO_AUTOINSTALL", "ULTRALYTICS_SKIP_REQUIREMENTS_CHECKS")
+    }
+    ortam["YOLO_OFFLINE"] = "true"  # karşıt kanıt çocuğunda da ultralytics içe aktarılırken DNS denemesin (18K K3)
+    ortam["YOLO_CONFIG_DIR"] = str(tmp_path / "ultralytics_ayar")
+    r = subprocess.run(
+        [sys.executable, "-X", "utf8", str(betik), str(_KOK), giris, str(cikti)],
+        env=ortam,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=600,
+        cwd=str(tmp_path),
+    )
+    assert r.returncode == 0 and cikti.exists(), (
+        f"çocuk süreç düştü (rc={r.returncode}):\n{r.stdout[-1500:]}\n{r.stderr[-3000:]}"
+    )
+    return json.loads(cikti.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("giris", sorted(_GIRISLER))
+def test_yasak_gercekten_ultralytics_davranisini_degistirir(giris, tmp_path):
+    """SÖZDE değil GERÇEK etki: GERÇEK giriş noktası içe aktarıldıktan sonra ultralytics kendi AUTOINSTALL sabitini False okumalı.
+
+    Env'i okuyan bizim kodumuz değil, ultralytics'in kendi `utils/__init__.py`'si — bayrak IMPORT ANINDA okunduğu için yasak,
+    ultralytics'ten önce kurulmuş olmalı. 'env yazdım' demek yetmez, tüketen kütüphanenin davranışı TAZE süreçte ölçülür.
     """
-    ultra = pytest.importorskip("ultralytics.utils", reason="ultralytics kurulu değil")
-    assert getattr(ultra, "AUTOINSTALL", True) is False, (
-        "ultralytics.utils.AUTOINSTALL hâlâ True — yasak ultralytics IMPORTUNDAN SONRA kurulmuş "
-        "olabilir (bayrak import anında okunur, sonradan set etmek ETKİSİZDİR)"
+    s = _autoinstall_olc(giris, tmp_path)
+    assert s["autoinstall"] is False, (
+        f"{giris}: giriş noktası içe aktarıldıktan sonra ultralytics.utils.AUTOINSTALL hâlâ True ({s}) — yasak kurulmamış ya da "
+        "ultralytics IMPORTUNDAN SONRA kurulmuş (bayrak import anında okunur, sonradan set etmek ETKİSİZDİR)"
+    )
+
+
+def test_yasak_olcumu_karsit_kanit_giris_noktasiz_AUTOINSTALL_ACIK(tmp_path):
+    """Ölçüm aracının kendisi kör değil: giriş noktası içe aktarılmayan taze süreçte ultralytics varsayılanı (True) görülür."""
+    s = _autoinstall_olc("yok", tmp_path)
+    assert s["autoinstall"] is True, (
+        f"karşıt kanıt: yasaksız taze süreçte AUTOINSTALL True olmalıydı ({s}) — ölçüm aracı KÖR"
     )
 
 
@@ -75,26 +147,71 @@ def test_ai_hub_import_edilince_yasak_kendiliginden_kurulur():
     assert os.environ.get("YOLO_AUTOINSTALL", "").lower() == "false", "ai_hub import edildiğinde pip yasağı kurulmadı"
 
 
-def test_giris_noktalari_yasagi_ULTRALYTICSTEN_ONCE_cagiriyor():
-    """Sıra kilidi: `pip_kurulumunu_yasakla` çağrısı, ultralytics'i çeken importlardan önce olmalı.
+def _ust_duzey_deyimler(govde):
+    """Modül açılışında koşan deyimler: modül gövdesi + üst düzey `try` gövdesi (def / class İÇİ sayılmaz — çağrı açılışta koşmalı)."""
+    for d in govde:
+        yield d
+        if isinstance(d, ast.Try):
+            yield from _ust_duzey_deyimler(d.body)
+
+
+def _yasak_cagrisi_ve_cipa(dosya: Path, cipa_modul):
+    """(takma adlar, yasak ÇAĞRISININ satırı, çıpa import düğümünün satırı) — AST'den, metin araması DEĞİL."""
+    deyimler = list(_ust_duzey_deyimler(ast.parse(dosya.read_text(encoding="utf-8")).body))
+    takma = {
+        a.asname or a.name
+        for d in deyimler
+        if isinstance(d, ast.ImportFrom) and d.module == "utils.runtime_guards"
+        for a in d.names
+        if a.name == "pip_kurulumunu_yasakla"
+    }
+    cagri = next(
+        (
+            d.lineno
+            for d in deyimler
+            if isinstance(d, ast.Expr)
+            and isinstance(d.value, ast.Call)
+            and isinstance(d.value.func, ast.Name)
+            and d.value.func.id in takma
+        ),
+        None,
+    )
+    cipa = None
+    if cipa_modul:
+        cipa = next(
+            (
+                d.lineno
+                for d in deyimler
+                if (isinstance(d, ast.ImportFrom) and d.module == cipa_modul)
+                or (isinstance(d, ast.Import) and any(a.name == cipa_modul for a in d.names))
+            ),
+            None,
+        )
+    return takma, cagri, cipa
+
+
+@pytest.mark.parametrize("giris", sorted(_GIRISLER))
+def test_giris_noktalari_yasagi_ULTRALYTICSTEN_ONCE_cagiriyor(giris):
+    """Sıra kilidi: `pip_kurulumunu_yasakla` ÇAĞRISI, ultralytics'i çeken importlardan önce olmalı.
 
     Kaynak sırası kontrol edilir çünkü yanlış sıra SESSİZDİR — kapı 'kurulu' görünür, bayrak
     zaten okunmuş olduğu için hiçbir işe yaramaz.
     """
-    # ⚠️ Çıpa GERÇEK import satırına pinlenir, düz kelimeye DEĞİL: 'onnxruntime' aynı dosyanın
-    # docstring'inde de geçiyor ve düz `find()` orayı bulup yanlış alarm veriyordu (ölçüldü).
-    for dosya, ultra_deseni in (
-        (_KOK / "apps" / "backend" / "backend_service.py", r"^from headless_core import"),
-        (_KOK / "ai_service" / "app.py", r"^import onnxruntime\b"),
-    ):
-        metin = dosya.read_text(encoding="utf-8")
-        y = metin.find("pip_kurulumunu_yasakla")
-        assert y != -1, f"{dosya.name}: pip yasağı çağrısı YOK"
-        m = re.search(ultra_deseni, metin, re.MULTILINE)
-        assert m, f"{dosya.name}: çıpa import satırı bulunamadı ({ultra_deseni}) — çıpa kaymış olabilir"
-        assert y < m.start(), (
-            f"{dosya.name}: pip yasağı, AI zincirini çeken '{m.group(0)}' importundan SONRA "
-            f"({y} > {m.start()}) — ultralytics bayrağı import anında okur, bu sıra etkisizdir"
+    # ⚠️ D5.23 (B-10.114): eski hâl `metin.find("pip_kurulumunu_yasakla")` ile IMPORT satırını buluyordu — `_pip_yasakla()` çağrısı
+    # `pass` yapılınca ya da yorum içine alınınca kapı YEŞİL kalıyordu (ölçüldü). Artık AST: modül açılışında koşan bir Call düğümü,
+    # adı `utils.runtime_guards.pip_kurulumunu_yasakla`'nın takma adı olmalı (başka bir işlevi aynı adla içe aktarmak da yakalanır).
+    dosya, cipa_modul = _GIRISLER[giris]
+    takma, cagri, cipa = _yasak_cagrisi_ve_cipa(dosya, cipa_modul)
+    assert takma, f"{dosya.name}: `from utils.runtime_guards import pip_kurulumunu_yasakla` (modül açılışında) YOK"
+    assert cagri is not None, (
+        f"{dosya.name}: pip yasağı içe aktarılıyor ama modül açılışında ÇAĞRILMIYOR (takma adlar {sorted(takma)}) — "
+        "import tek başına hiçbir şey kurmaz"
+    )
+    if cipa_modul:
+        assert cipa is not None, f"{dosya.name}: çıpa import düğümü bulunamadı ({cipa_modul}) — çıpa kaymış olabilir"
+        assert cagri < cipa, (
+            f"{dosya.name}: pip yasağı çağrısı (satır {cagri}) AI zincirini çeken '{cipa_modul}' importundan (satır {cipa}) "
+            "SONRA — ultralytics bayrağı import anında okur, bu sıra etkisizdir"
         )
 
 
@@ -287,45 +404,202 @@ def test_paketler_bu_ortamda_gercekten_KURULU(paket):
     )
 
 
+# İG-5.51 / D5.23 (B-10.113): F4 taşımasından (283c419, 09-18) beri backend ağacı `apps/backend/` altında; eski kök listesi
+# ("servers", "utils", "database", "controllers", "services") depo kökünde YOKTU ve tarama sessizce `continue` ediyordu → apps/backend
+# HİÇ taranmıyordu (ölçüldü: sync_worker.py'ye `subprocess.check_call([sys.executable, "-m", "pip", ...])` eklenince kapı YEŞİL).
+# Artık kök YOKSA kapı DÜŞER ve her kökte en az bir dosya taranmış olmalı.
+_PIP_TARAMA_KOKLERI = (
+    "apps/backend/servers",
+    "apps/backend/utils",
+    "apps/backend/database",
+    "apps/backend/controllers",
+    "apps/backend/services",
+    "ai_hub",
+    "ai_service",
+    "ai",
+)
+_PIP_TARAMA_UST_DUZEY = "apps/backend"  # backend_service.py, headless_core.py, event_bus.py (özyinelemesiz)
+# Asgari taranan dosya: HEAD 5bc99be1'de apps/backend 102 (.py), toplam 197 — sabit kendi kopyası (ürün listesinden okunmaz).
+_PIP_TARAMA_ASGARI_BACKEND = 90
+_PIP_TARAMA_ASGARI_TOPLAM = 170
+
+_SUREC_ISLEVLERI = {
+    "subprocess.run",
+    "subprocess.call",
+    "subprocess.check_call",
+    "subprocess.check_output",
+    "subprocess.Popen",
+    "subprocess.getoutput",
+    "subprocess.getstatusoutput",
+    "os.system",
+    "os.popen",
+    "os.execv",
+    "os.execve",
+    "os.execvp",
+    "os.execl",
+    "os.execlp",
+    "os.spawnv",
+    "os.spawnl",
+    "os.spawnlp",
+    "os.spawnvp",
+    "os.startfile",
+    "asyncio.create_subprocess_exec",
+    "asyncio.create_subprocess_shell",
+    "runpy.run_module",
+}
+# "pip install X" / "-m pip" biçimli KOMUT dizgesi (f-string parçası dahil). İnsan iletisi ("Kur: pip install grad-cam") da buna uyar —
+# o yüzden tek başına şüphe DEĞİL; yalnız süreç çağrısının içinde ya da `sys.executable` ile aynı deyimde şüphedir.
+_PIP_KOMUTU = re.compile(r"(?:^|[\s\"'/\\])pip3?(?:\.exe)?\s+(?:install|uninstall|download)\b|-m\s+pip\b")
+_PIP_ARGV = {"pip", "pip3", "pip.exe"}
+
+
+def _nokta_adi(dugum, takma: dict) -> str:
+    if isinstance(dugum, ast.Name):
+        return takma.get(dugum.id, dugum.id)
+    if isinstance(dugum, ast.Attribute):
+        sol = _nokta_adi(dugum.value, takma)
+        return f"{sol}.{dugum.attr}" if sol else ""
+    return ""
+
+
+def _dizgeler(dugum):
+    for alt in ast.walk(dugum):
+        if isinstance(alt, ast.Constant) and isinstance(alt.value, str):
+            yield alt.value
+
+
+def _pip_izleri(kaynak: str) -> list:
+    """AST ile çalışma-anı pip izleri (satır, tür). Yorum ve docstring AST'de çağrı DEĞİLDİR → masum iletiler sahte kırmızı vermez;
+    çok satırlı (black biçimli) çağrı ve değişkene atanmış komut da görülür (eski satır sezgisi ±1 satır penceresine bakıyordu)."""
+    agac = ast.parse(kaynak)
+    takma: dict = {}
+    for d in ast.walk(agac):
+        if isinstance(d, ast.Import):
+            for a in d.names:
+                takma[a.asname or a.name.split(".")[0]] = a.name if a.asname else a.name.split(".")[0]
+        elif isinstance(d, ast.ImportFrom) and d.module:
+            for a in d.names:
+                takma[a.asname or a.name] = f"{d.module}.{a.name}"
+    izler = []
+    for d in ast.walk(agac):
+        if isinstance(d, ast.Call):
+            ad = _nokta_adi(d.func, takma)
+            if ad in _SUREC_ISLEVLERI:
+                argv = {s for s in _dizgeler(d) if s in _PIP_ARGV}
+                if argv or any(_PIP_KOMUTU.search(s) for s in _dizgeler(d)):
+                    izler.append((d.lineno, f"süreç çağrısında pip ({ad})"))
+            if ad.rsplit(".", 1)[-1] == "check_requirements":
+                izler.append((d.lineno, "ultralytics check_requirements (bağımlılık KURUCUSU)"))
+        elif isinstance(d, (ast.List, ast.Tuple)):
+            if any(isinstance(e, ast.Constant) and e.value in _PIP_ARGV for e in d.elts):
+                izler.append((d.lineno, "argv listesinde 'pip'"))
+        elif isinstance(d, (ast.Import, ast.ImportFrom)):
+            mod = d.module if isinstance(d, ast.ImportFrom) else None
+            adlar = [mod] if mod else [a.name for a in d.names]
+            if any(a and (a == "pip" or a.startswith("pip.")) for a in adlar):
+                izler.append((d.lineno, "pip modülü içe aktarılıyor"))
+        if isinstance(d, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Expr, ast.Return)):
+            # Değişkene atanmış komut: `komut = f'"{sys.executable}" -m pip install …'` → başka satırda `check_output(komut)`.
+            # Yalnız BASİT deyim: bileşik deyimde (try / if gövdesi) iki ayrı satırdaki masum parçalar birleşip sahte kırmızı vermesin.
+            if any(
+                _nokta_adi(a, takma) == "sys.executable" for a in ast.walk(d) if isinstance(a, ast.Attribute)
+            ) and any(_PIP_KOMUTU.search(s) or s in _PIP_ARGV for s in _dizgeler(d)):
+                izler.append((d.lineno, "sys.executable ile pip komutu"))
+    return sorted(set(izler))
+
+
+def _pip_tarama_dosyalari():
+    eksik, dosyalar, kok_sayisi = [], [], {}
+    for dizin in _PIP_TARAMA_KOKLERI:
+        kok = _KOK / dizin
+        if not kok.is_dir():
+            eksik.append(dizin)
+            continue
+        bulunan = [
+            y
+            for y in kok.rglob("*.py")
+            if not any(x in str(y) for x in ("PEMF_BUILD", "node_modules", "site-packages", "__pycache__"))
+        ]
+        kok_sayisi[dizin] = len(bulunan)
+        dosyalar += bulunan
+    ust = sorted((_KOK / _PIP_TARAMA_UST_DUZEY).glob("*.py"))
+    kok_sayisi[_PIP_TARAMA_UST_DUZEY + "/*.py"] = len(ust)
+    return eksik, dosyalar + ust, kok_sayisi
+
+
 def test_urun_kaynaginda_calisma_ani_pip_cagrisi_YOK():
     """Sınıfsal kapı: ürün kodu hiçbir yerde çalışma anında pip çağırmamalı."""
     # Yalnız ÜRÜN kaynağı taranır. Kök `rglob` node_modules'taki aşırı uzun iOS yollarında
     # FileNotFoundError ile düşüyordu (ölçüldü) — kapı, kendi tarama hatasıyla kırmızı olmamalı.
-    suphe = []
-    taranan = 0
-    for dizin in ("servers", "ai_hub", "ai_service", "utils", "database", "controllers", "services", "ai"):
-        kok = _KOK / dizin
-        if not kok.is_dir():
+    # ⚠️ Aranan şey pip'i ÇALIŞTIRMAK; "pip install X" yazan bir ImportError mesajı meşrudur (geliştiriciyi yönlendirir, hiçbir şey
+    # kurmaz). İlk sürüm bu ayrımı yapmıyor ve 10 masum hata mesajını bulguymuş gibi gösteriyordu — kapı, doğru kodu suçlarsa kapatılır.
+    eksik, dosyalar, kok_sayisi = _pip_tarama_dosyalari()
+    assert not eksik, (
+        f"pip taraması kökü YOK: {eksik} — kök taşındıysa listeyi güncelle (sessiz atlama kör kapıydı: İG-5.51)"
+    )
+    bos = [k for k, n in kok_sayisi.items() if n == 0]
+    assert not bos, f"pip taraması kökü BOŞ: {bos} ({kok_sayisi})"
+    backend = sum(1 for y in dosyalar if (_KOK / "apps" / "backend") in y.parents)
+    assert backend >= _PIP_TARAMA_ASGARI_BACKEND, (
+        f"apps/backend'den yalnız {backend} dosya tarandı ({kok_sayisi}) — kapı backend'i ölçmüyor"
+    )
+    assert len(dosyalar) >= _PIP_TARAMA_ASGARI_TOPLAM, f"tarama beklenenden dar ({len(dosyalar)} dosya: {kok_sayisi})"
+    suphe, cozulemeyen = [], []
+    for yol in dosyalar:
+        try:
+            izler = _pip_izleri(yol.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError) as e:  # okunamayan dosya ATLANMAZ — kapı onu ölçemediğini söyler
+            cozulemeyen.append(f"{yol.relative_to(_KOK)}: {type(e).__name__}")
             continue
-        for yol in kok.rglob("*.py"):
-            p = str(yol)
-            if any(x in p for x in ("PEMF_BUILD", "node_modules", "site-packages", "__pycache__")):
-                continue
-            taranan += 1
-            try:
-                metin = yol.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
-            # ⚠️ Aranan şey pip'i ÇALIŞTIRMAK; "pip install X" yazan bir ImportError mesajı
-            # meşrudur (geliştiriciyi yönlendirir, hiçbir şey kurmaz). İlk sürüm bu ayrımı
-            # yapmıyor ve 10 masum hata mesajını bulguymuş gibi gösteriyordu — kapı, doğru
-            # kodu suçlarsa kapatılır ve asıl işini de yapamaz.
-            satirlar = metin.splitlines()
-            for i, satir_metni in enumerate(satirlar):
-                s = satir_metni.strip()
-                if s.startswith("#") or "pip" not in s:
-                    continue
-                # Çalıştırma bağlamı: aynı satırda ya da bir önceki satırda süreç başlatma.
-                pencere = " ".join(satirlar[max(0, i - 1) : i + 2])
-                if re.search(r"\b(subprocess|Popen|check_call|check_output|os\.system|sys\.executable)\b", pencere):
-                    suphe.append(f"{yol.relative_to(_KOK)}:{i + 1}")
-            # ultralytics'in kendi bağımlılık kurucusunu ürün kodundan çağırmak da yasak.
-            for m in re.finditer(r"^\s*[^#\n]*\bcheck_requirements\s*\(", metin, re.MULTILINE):
-                suphe.append(f"{yol.relative_to(_KOK)}:{metin[: m.start()].count(chr(10)) + 1}")
-    assert taranan > 50, f"tarama boş kaldı ({taranan} dosya) — kapı hiçbir şey ölçmüyor"
+        suphe += [f"{yol.relative_to(_KOK)}:{satir} ({tur})" for satir, tur in izler]
+    assert not cozulemeyen, f"pip taraması bu dosyaları AYRIŞTIRAMADI (ölçülmedi): {cozulemeyen}"
     assert not suphe, (
         "Ürün kaynağında çalışma-anı pip izi bulundu (paketlenmiş cihaz kendi bağımlılıklarını "
         f"değiştirmemeli): {suphe[:10]}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("kaynak", "beklenen"),
+    [
+        ('import subprocess, sys\nsubprocess.check_call([sys.executable, "-m", "pip", "install", "x"])\n', True),
+        (
+            'import subprocess\nimport sys\n\nsubprocess.run(\n    [\n        sys.executable,\n        "-m",\n        "pip",\n        "install",\n        "x",\n    ]\n)\n',
+            True,
+        ),
+        (
+            'import subprocess, sys\nkomut = f\'"{sys.executable}" -m pip install x\'\n\n\n\nsubprocess.check_output(komut, shell=True)\n',
+            True,
+        ),
+        ("from subprocess import check_output as co\nco('pip install x', shell=True)\n", True),
+        ("import os\nos.system('pip3 install x')\n", True),
+        ("from ultralytics.utils.checks import check_requirements\ncheck_requirements(['onnxruntime'])\n", True),
+        ('raise ImportError("ReportLab gerekli. \'pip install reportlab\' komutunu çalıştırın.")\n', False),
+        (
+            '"""Kurulum:\n    pip install zeroconf\n"""\nimport logging\nlogging.getLogger().error("Kurulum: pip install zeroconf")\n',
+            False,
+        ),
+        (
+            '# subprocess.run([sys.executable, "-m", "pip", "install", "x"])\nX = {"pip": "pip install neurokit2"}\n',
+            False,
+        ),
+    ],
+    ids=[
+        "argv",
+        "cok_satirli_black",
+        "degiskene_atanmis",
+        "takma_ad",
+        "os_system",
+        "check_requirements",
+        "importerror_iletisi",
+        "docstring_ve_log",
+        "yorum_ve_sozluk",
+    ],
+)
+def test_pip_izi_tarayicisi_KARSIT_KANIT(kaynak, beklenen):
+    """Tarayıcının kendisi: gerçek pip çağrısı biçimlerini görür, masum iletileri suçlamaz (iki yönlü)."""
+    assert bool(_pip_izleri(kaynak)) is beklenen, (
+        f"tarayıcı {'görmedi' if beklenen else 'sahte kırmızı verdi'}: {_pip_izleri(kaynak)}"
     )
 
 
