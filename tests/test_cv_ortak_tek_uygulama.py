@@ -269,20 +269,18 @@ def test_KRITIK_yayinci_HAM_kimligi_KULLANMIYOR():
 
 
 def test_KARSIT_KANIT_kopya_tarayicisi_GERCEKTEN_yakaliyor(tmp_path):
-    """Kapı boş geçmiyor: aynı içerikli iki dosya YAKALANMALI."""
+    """Kapı boş geçmiyor: aynı içerikli iki dosya YAKALANMALI.
+
+    ⚠️ D5.34 (B-10.229): eskiden karşıt kanıt hash'i KENDİSİ hesaplıyordu — kapının kullandığı `_kopya_gruplari` `return {}`
+    yapılınca bile yeşildi. Artık GERÇEK yardımcı çağrılır (mutlak yol: `KOK / <mutlak>` mutlak yolu korur)."""
     a, b, c = tmp_path / "a.py", tmp_path / "b.py", tmp_path / "c.py"
     a.write_bytes(b"x = 1\n")
     b.write_bytes(b"x = 1\n")
     c.write_bytes(b"x = 2\n")
 
-    import hashlib as _h
-
-    grup: dict[str, list[str]] = defaultdict(list)
-    for p in (a, b, c):
-        grup[_h.sha256(p.read_bytes()).hexdigest()].append(p.name)
-    kopya = {k: v for k, v in grup.items() if len(v) > 1}
-    assert len(kopya) == 1, "tarayıcı kopyayı KAÇIRIYOR"
-    assert sorted(next(iter(kopya.values()))) == ["a.py", "b.py"]
+    kopya = _kopya_gruplari([str(a), str(b), str(c)])
+    assert len(kopya) == 1, f"tarayıcı kopyayı KAÇIRIYOR: {kopya}"
+    assert sorted(Path(x).name for x in next(iter(kopya.values()))) == ["a.py", "b.py"]
     assert "c.py" not in str(kopya), "FARKLI dosya kopya sayıldı"
 
 
@@ -293,12 +291,16 @@ def test_KARSIT_KANIT_birlesme_ONCESI_hal_KIRMIZI_olurdu():
     MD5 birebir aynıydı. Kapı o hâli kırmızı yapmalıydı; aşağıdaki kurgu onu temsil eder.
     """
     ortak = (KOK / "ai_hub" / "cv_ortak" / "coord_transform.py").read_bytes()
-    grup: dict[str, list[str]] = defaultdict(list)
-    for ad in ("phantom_cv/coord_transform.py", "petri_cv/coord_transform.py"):
-        grup[hashlib.sha256(ortak).hexdigest()].append(ad)
-    assert len({h: v for h, v in grup.items() if len(v) > 1}) == 1, (
-        "birleşme öncesi hâl yakalanmıyor — kapı o günkü arızayı görmezdi"
-    )
+    # D5.34: o günkü iki kopya GERÇEKTEN diske yazılıp kapının yardımcısına verilir (kurgu hash değil).
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        yollar = []
+        for ad in ("phantom_cv", "petri_cv"):
+            (Path(d) / ad).mkdir()
+            (Path(d) / ad / "coord_transform.py").write_bytes(ortak)
+            yollar.append(str(Path(d) / ad / "coord_transform.py"))
+        assert len(_kopya_gruplari(yollar)) == 1, "birleşme öncesi hâl yakalanmıyor — kapı o günkü arızayı görmezdi"
 
 
 def test_KARSIT_KANIT_sabit_esikler_SISIRILMEMIS():

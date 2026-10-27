@@ -203,12 +203,74 @@ def test_KRITIK_xai_utils_TORCHSUZ_ortamda_import_edilir():
 
 
 # ── (e) paket hijyeni ────────────────────────────────────────────────────────
+def _sys_path_mutasyonlari(kaynak: str) -> list[str]:
+    """D5.34 (B-10.264): `sys.path` DEĞİŞTİREN her biçim (AST): `.insert/.append/.extend/.remove/.pop/.clear` çağrısı, `sys.path = …`,
+    `sys.path += …`, `sys.path[…] = …` (dilim atama dahil). Yalnız `"sys.path.insert"` metni aranırken `append` ve `[0:0] =` görünmezdi."""
+    import ast
+
+    agac = ast.parse(kaynak)
+    # takma adlar: `import sys as s` → s.path · `from sys import path as p` → p
+    sys_adlari, yol_adlari = {"sys"}, set()
+    for d in ast.walk(agac):
+        if isinstance(d, ast.Import):
+            sys_adlari |= {a.asname or a.name for a in d.names if a.name == "sys"}
+        elif isinstance(d, ast.ImportFrom) and d.module == "sys":
+            yol_adlari |= {a.asname or a.name for a in d.names if a.name == "path"}
+
+    def _sys_path_mi(d) -> bool:
+        if isinstance(d, ast.Name):
+            return d.id in yol_adlari
+        return (
+            isinstance(d, ast.Attribute)
+            and d.attr == "path"
+            and isinstance(d.value, ast.Name)
+            and d.value.id in sys_adlari
+        )
+
+    bulgu = []
+    for d in ast.walk(agac):
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and _sys_path_mi(d.func.value):
+            if d.func.attr in {"insert", "append", "extend", "remove", "pop", "clear"}:
+                bulgu.append(f"satir {d.lineno}: sys.path.{d.func.attr}(...)")
+        hedefler = d.targets if isinstance(d, ast.Assign) else [d.target] if isinstance(d, ast.AugAssign) else []
+        for h in hedefler:
+            if _sys_path_mi(h) or (isinstance(h, ast.Subscript) and _sys_path_mi(h.value)):
+                bulgu.append(f"satir {d.lineno}: sys.path atamasi")
+    return bulgu
+
+
 def test_YAPISAL_vendored_paketlerde_sys_path_insert_YOK():
-    """ai_hub kopyaları paket-göreli çalışır; sys.path.insert kalıntısı (docstring dahil) kalmamalı."""
+    """ai_hub kopyaları paket-göreli çalışır; sys.path.insert kalıntısı (docstring dahil) kalmamalı — ve D5.34: HİÇBİR sys.path
+    mutasyonu (AST) kalmamalı; tarama boş dönerse (paket taşındı) KIRMIZI."""
+    taranan = 0
     for pkg in ("xai_tabular", "xai_utils"):
-        for py in (KOK / "ai_hub" / pkg).glob("*.py"):
+        dosyalar = sorted((KOK / "ai_hub" / pkg).glob("*.py"))
+        assert dosyalar, f"ai_hub/{pkg} altında .py YOK — hijyen taraması BOŞ (paket taşınmış olabilir)"
+        for py in dosyalar:
+            taranan += 1
             src = py.read_text(encoding="utf-8", errors="replace")
             assert "sys.path.insert" not in src, f"{py.name} hâlâ sys.path.insert içeriyor"
+            assert not _sys_path_mutasyonlari(src), f"{py.name} sys.path DEĞİŞTİRİYOR: {_sys_path_mutasyonlari(src)}"
+    assert taranan >= 4, f"VAKUM: yalnız {taranan} vendored dosya tarandı"
+
+
+@pytest.mark.parametrize(
+    ("kaynak", "beklenen"),
+    [
+        ("import sys\nsys.path.append('x')\n", 1),
+        ("import sys\nsys.path[0:0] = ['x']\n", 1),
+        ("import sys\nsys.path += ['x']\n", 1),
+        ("import sys\nsys.path = ['x'] + sys.path\n", 1),
+        ("import sys\nsys.path.extend(['x'])\n", 1),
+        ("import sys as s\ns.path.append('x')\n", 1),
+        ("from sys import path as p\np.insert(0, 'x')\n", 1),
+        ("import sys\nyollar = list(sys.path)\nprint(sys.path[0])\n", 0),
+        ('"""sys.path.append(x) anlatimi"""\n', 0),
+    ],
+    ids=["append", "dilim", "artirma", "atama", "extend", "takma_ad", "from_path", "okuma", "docstring"],
+)
+def test_KARSIT_KANIT_D5_34_sys_path_tarayicisi(kaynak, beklenen):
+    assert len(_sys_path_mutasyonlari(kaynak)) == beklenen
 
 
 def test_YAPISAL_kernel_predict_proba_dususu_LOGLANIR():
