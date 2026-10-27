@@ -84,6 +84,26 @@ def test_KRITIK_bobin_paydasi_SABIT_8_DEGIL():
             )
 
 
+def test_KRITIK_D5_27_ana_ekran_bobin_ROZETI_paydasi_coilTotal():
+    """D5.27 (B-10.227): yasak liste yalnız "/8" biçimlerini arıyordu — rozete `/7` (ya da `toplam: 7`) yazmak 4/4 YEŞİLDİ.
+    Artık YORUMSUZ JSX'te: "Bağlı bobin" kartının değeri ve bölüm rozeti paydayı `coilTotal`dan alır, `coilTotal` görünür listenin
+    uzunluğudur ve o liste tek kaynaktan (`gorunurBobinler`) gelir; payda yerinde sayı sabiti YOK."""
+    import re
+
+    src = _kaynak("screens/DashboardScreen.tsx")
+    kart = re.search(r'<MetricCard[^>]*t\("ana\.bagliBobin"\)[^>]*?value=\{(`[^`]*`|[^}]*)\}', src)
+    assert kart, "Ana Ekran 'Bagli bobin' karti bulunamadi (capa kaydi?)"
+    assert "${coilTotal}" in kart.group(1) and not re.search(r"/\s*\d", kart.group(1)), (
+        f"'Bagli bobin' karti paydayi coilTotal'dan almiyor: {kart.group(1)!r}"
+    )
+    rozet = re.search(r't\("ana\.bagliSayisi",\s*\{([^}]*)\}\)', src)
+    assert rozet and re.search(r"\btoplam:\s*coilTotal\b", rozet.group(1)), (
+        f"bolum rozeti paydasi coilTotal degil: {rozet.group(1) if rozet else None!r}"
+    )
+    assert re.search(r"\bconst coilTotal = coils\.length;", src), "coilTotal gorunur listenin uzunlugu DEGIL"
+    assert re.search(r"\bconst coils = gorunurBobinler\(", src), "Ana Ekran bobin listesi tek kaynaktan gelmiyor"
+
+
 def test_KRITIK_STM_bobin_sayisi_tek_yerde_TANIMLI():
     """Payda dinamik olsa bile fiziksel sayı ikinci bir yerde sabitlenirse ayrışır.
 

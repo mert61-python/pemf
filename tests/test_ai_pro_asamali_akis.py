@@ -208,11 +208,30 @@ def test_KRITIK_kamera_HAZIRLIKTA_da_monte_edilir(panel):
 
 def test_KRITIK_asama_kullaniciya_GOSTERILIR(panel):
     """Sahip isteği: "önce kedi tespiti ardından organ tespiti" — operatör hangi aşamada
-    olduğunu ve ne yapması gerektiğini GÖRMELİ; sessiz bir bekleme kabul edilemez."""
-    assert "asamaMetni" in panel, "hazirlik asama metni yok"
-    for ipucu in ("Hayvan aranıyor", "aranıyor…", "konumlandı"):
-        assert ipucu in panel, f"asama metni eksik: {ipucu}"
-    assert "catDetected" in panel, "panel kedi/organ ayrimini okumuyor"
+    olduğunu ve ne yapması gerektiğini GÖRMELİ; sessiz bir bekleme kabul edilemez.
+
+    ⚠️ D5.27 (B-10.225): I18N göçünden sonra "Hayvan aranıyor" / "aranıyor…" / "konumlandı" panelde YALNIZ YORUMLARDA kalmıştı
+    (metin katalogda) — ham kaynak araması yorumla yeşildi, aşama çağrısı silinse de kör. Artık: yorumsuz (`c_soy`) kodda aşama
+    ANAHTARI çağrılıyor + TR değeri ipucunu taşıyor + EN değeri dolu."""
+    import i18n_yardimci as iy
+    from c_soyucu import c_soy
+
+    kod = c_soy(panel)
+    assert "asamaMetni" in kod, "hazirlik asama metni yok"
+    tr, en = iy.katalog("arayuz", "tr"), iy.katalog("arayuz", "en")
+    for anahtar, ipucu in (
+        ("ai.pro.asama.hayvanAraniyor", "Hayvan aranıyor"),
+        ("ai.pro.asama.hayvanGorunuyor", "aranıyor…"),
+        ("ai.pro.asama.konumlandi", "konumlandı"),
+    ):
+        assert re.search(r"\bt\(\s*\"" + re.escape(anahtar) + r"\"", kod), (
+            f"asama anahtari YORUMSUZ kodda cagrilmiyor: {anahtar}"
+        )
+        assert ipucu in str(tr.get(anahtar, "")), (
+            f"{anahtar} TR degeri asama ipucunu ({ipucu!r}) tasimiyor: {tr.get(anahtar)!r}"
+        )
+        assert str(en.get(anahtar, "")).strip(), f"{anahtar} EN degeri BOS"
+    assert "catDetected" in kod, "panel kedi/organ ayrimini okumuyor"
 
 
 def test_KRITIK_hazirliktan_CIKIS_yolu_var(panel):
