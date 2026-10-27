@@ -95,36 +95,78 @@ def test_KRITIK_DOKUMANLAR_yanlis_SOZLUK_onermez():
         assert not yanlis, f"{gorece} yanlış ArUco sözlüğü öneriyor: {sorted(yanlis)} (doğrusu {sozluk})"
 
 
+#: D5.39 (B-10.248): BASIM TALİMATI kalıpları — bugünkü kılavuz biçimleri. Eski tek kalıp (`N cm × N cm yazdır` / `N cm kenar`) v1
+#: README'lerle birlikte emekli oldu; kılavuzun `**10×10 cm**`, `kenar = 10.0 cm`, `tam 10×10 cm` satırlarının HİÇBİRİNİ görmüyordu
+#: (eşleşme 0 → kenar 5'e indirilse de YEŞİL). Sayılar `(×|x)` iki kenarı ya da tek kenarı verir.
+_KARE_KALIBI = re.compile(r"(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(?:cm)?\s*(?:×|x)\s*(\d+(?:[.,]\d+)?)\s*cm")
+_KENAR_KALIPLARI = (
+    re.compile(r"kenar[ıi]?\s*(?:=|:)\s*\**\s*(\d+(?:[.,]\d+)?)\s*cm", re.I),
+    re.compile(r"(?<![\d.,])(\d+(?:[.,]\d+)?)\s*cm\s*kenar", re.I),
+)
+#: `N×N cm` YALNIZ işareti anan ya da basım fiili taşıyan satırda talimattır — "Kesik çizgiden kes (14×14 cm)" sessiz bölgeli
+#: KESİM ölçüsüdür, kabin ölçüleri (`55,5 × 35 × 40,5 cm`) işaret değildir.
+_ISARET_BAGLAMI = re.compile(r"marker|[İIi]şaret|İŞARET|aruco|yazdır|\bbas\b", re.I)
+#: Kesim ölçüsü (işaret + sessiz bölge, ör. "Kesik çizgiden kes (14×14 cm)") işaret kenarı DEĞİLDİR.
+_KESIM = re.compile(r"\bkes\b|kesik", re.I)
+#: Kılavuzda ölçülen tarihçe bölümleri (eski düzeneğin 15 cm işaretiyle ölçümleri) — basım talimatı DEĞİL.
+_TARIHCE = "TARİHÇE"
+
+
+def _kenar_talimatlari(metin: str) -> "list[tuple[str, list[float]]]":
+    """[(satır, [cm sayıları])] — `## ` bölümünün ilk satırlarında "TARİHÇE" yazan bölümler atlanır."""
+    sonuc, tarihce = [], False
+    satirlar = metin.splitlines()
+    for i, satir in enumerate(satirlar):
+        if satir.startswith("## "):
+            tarihce = any(_TARIHCE in s for s in satirlar[i : i + 4])
+        if tarihce:
+            continue
+        kare = _ISARET_BAGLAMI.search(satir) and not _KESIM.search(satir)
+        kaliplar = _KENAR_KALIPLARI + ((_KARE_KALIBI,) if kare else ())
+        for kalip in kaliplar:
+            for m in kalip.finditer(satir):
+                sonuc.append((satir.strip(), [float(g.replace(",", ".")) for g in m.groups() if g]))
+    return sonuc
+
+
 def test_KRITIK_DOKUMANLAR_yanlis_KENAR_uzunlugu_onermez():
     """Doğru sözlük + yanlış kenar = SESSİZ ölçek hatası (3B koordinat kat kat yanlış).
 
-    MUTASYON: bir README'de "5 cm × 5 cm yazdır" satırını geri koyun → KIRMIZI."""
+    MUTASYON: kılavuzda `kenar = 10.0 cm` / `**10×10 cm**` / `tam 10×10 cm` satırlarından birini 5'e indirin → KIRMIZI.
+    ⚠️ D5.39: talimat hiç bulunamazsa (vakum) da KIRMIZI — kalıp bayatlarsa kapı sessizce geçmesin."""
     _, kenar = _yaml_isaret(_YAMLLAR[0])
-    # "N cm × N cm yazdır" / "N cm kenar" gibi BASIM TALİMATI kalıpları.
-    kalip = re.compile(r"([\d.,]+)\s*cm\s*(?:×|x)\s*([\d.,]+)\s*cm\s*(?:yazdır|bas)|([\d.,]+)\s*cm\s*kenar")
+    bulunan = 0
     for gorece in _DOKUMANLAR:
         yol = _AI_HUB / gorece
-        if not yol.exists():
-            continue
-        for satir in yol.read_text(encoding="utf-8").splitlines():
-            m = kalip.search(satir)
-            if not m:
-                continue
-            sayilar = [float(g.replace(",", ".")) for g in m.groups() if g]
+        assert yol.exists(), f"kurulum dokümanı YOK: {gorece}"
+        for satir, sayilar in _kenar_talimatlari(yol.read_text(encoding="utf-8")):
+            bulunan += 1
             assert all(abs(s - kenar) < 0.01 for s in sayilar), (
                 f"{gorece} işareti {sayilar} cm basmayı söylüyor, kabin {kenar} cm okuyor "
-                f"→ ölçek {max(sayilar) / kenar:.1f}× yanlış olurdu: {satir.strip()[:90]}"
+                f"→ ölçek {max(sayilar) / kenar:.1f}× yanlış olurdu: {satir[:90]}"
             )
+    assert bulunan >= 2, (
+        f"VAKUM: dokümanlarda yalnız {bulunan} kenar talimatı bulundu — kalıp bugünkü biçimi görmüyor olabilir"
+    )
 
 
 def test_KAPI_gercekten_olcuyor():
-    """MUTASYON ÖZ-TESTİ: tarayıcı yanlış kenar talimatını sentetik metinde görüyor mu?"""
+    """MUTASYON ÖZ-TESTİ: tarayıcı yanlış kenar talimatını sentetik metinde görüyor mu (bugünkü ve eski biçimler)?"""
     _, kenar = _yaml_isaret(_YAMLLAR[0])
-    kalip = re.compile(r"([\d.,]+)\s*cm\s*(?:×|x)\s*([\d.,]+)\s*cm\s*(?:yazdır|bas)|([\d.,]+)\s*cm\s*kenar")
-    m = kalip.search("5 cm × 5 cm yazdır, kabinin sol duvarına yapıştır.")
-    assert m, "tarayıcı basım talimatını görmüyor"
-    sayilar = [float(g.replace(",", ".")) for g in m.groups() if g]
-    assert not all(abs(s - kenar) < 0.01 for s in sayilar), "kapı yanlış kenarı doğru sayıyor"
+    for metin in (
+        "5 cm × 5 cm yazdır, kabinin sol duvarına yapıştır.",
+        "| **Marker** | DICT_5X5_50 · ID 0 · **5×5 cm** (cetvel) |",
+        "`DICT_5X5_50`, ID `0`, **kenar = 5.0 cm** (saha ölçüsü)",
+        "> ⚠️ Marker'ı **tam 5×5 cm** bas",
+    ):
+        talimat = _kenar_talimatlari(metin)
+        assert talimat, f"tarayıcı basım talimatını görmüyor: {metin}"
+        assert not all(abs(s - kenar) < 0.01 for _, sayilar in talimat for s in sayilar), (
+            f"yanlış kenar doğru sayıldı: {metin}"
+        )
+    # TARİHÇE bölümündeki eski ölçüm talimat sayılmaz; tarihçeden çıkınca yine taranır.
+    tarihce = "## 0.5) ESKİ\n> ℹ️ Bu bölüm eski düzeneğin ölçümleridir (TARİHÇE).\nişaret kenarı = 15 cm\n## 1) GÜNCEL\nkenar = 15 cm\n"
+    assert [s for _, s in _kenar_talimatlari(tarihce)] == [[15.0]], _kenar_talimatlari(tarihce)
 
 
 def test_KRITIK_SAYFA_URETECI_yaml_ile_AYNI_kenari_uretir():
