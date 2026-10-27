@@ -14,6 +14,7 @@ Kilitlenenler:
 
 import csv
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -259,4 +260,7 @@ def test_KRITIK_pdf_xai_raporu_uretir_ve_bozuk_gorsel_DUSURMEZ(tmp_path):
     assert icerik[:5] == b"%PDF-"
     # 'Görselli' iddiasının kanıtı (mutasyon-körlüğü ölçüldü: gömme tamamen kapatılınca
     # eski test yeşil kalıyordu): PDF gerçekten bir görüntü XObject'i içermeli.
-    assert b"/Image" in icerik, "PDF görüntü içermiyor — görsel gömme sessizce kapanmış"
+    # ⚠️ D5.59 (B-10.169): eskiden `b"/Image" in icerik` — her PDF'te DOĞRU: ReportLab her sayfanın `/ProcSet [... /ImageB /ImageC
+    # /ImageI]` satırını yazar; gömme `pass` yapılsa da YEŞİLDİ (ölçüldü). Gerçek görüntü XObject'i aranır (ayrıntılı kapı:
+    # tests/test_pdf_rapor_URETIM_YOLU_kapilari_D5_59.py — görselsiz karşıt + öğe başına boyut).
+    assert re.search(rb"/Subtype\s*/Image\b", icerik), "PDF görüntü içermiyor — görsel gömme sessizce kapanmış"

@@ -17,8 +17,11 @@ uygulanmamış bir doz, uygulanmış gibi üçüncü kişiye beyan ediliyordu. K
 doğrula). Yaptıkları, yazılımın uygulamadığı bir şeyi İDDİA ETMEMESİNİ kilitlemektir.
 """
 
+import re
 import sys
 from pathlib import Path
+
+import pytest
 
 KOK = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanlı toplama)
@@ -87,24 +90,120 @@ def test_KRITIK_ESP_komutu_mT_TASIMIYOR():
 # ── hasta sahibine giden PDF ─────────────────────────────────────────────────
 
 
-def test_KRITIK_hasta_raporunda_YOGUNLUK_SATIRI_YOK():
-    """Uygulanmamış bir dozu uygulanmış gibi beyan etmek, üçüncü kişiye yanlış tıbbi bilgidir."""
-    pdf = (KOK / "apps" / "backend" / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
-    assert '["Yoğunluk", f"{parameters.get(\'intensity\'' not in pdf, (
-        "hasta raporunda 'Yogunluk: X mT' satiri geri geldi"
+# ⚠️ D5.59 TUR 2 (B-10.146; çürütücü n2b / n3b): aşağıdaki iki kapı eskiden kaynak METNİNDE iki literal arıyordu
+# (`["Yoğunluk", f"{parameters.get('intensity'…` ve `"Yoğunluk (mT)", "Hedef"`). I18N göçünden beri başlıklar katalog anahtarıyla
+# yazılıyor: aynı satır / sütun `ceviri.t("gecmis.csv.ortAlan")` (TR "Ort.Alan(mT)", EN "Avg.Field(mT)") ya da başka bir anahtarla
+# geri gelse literal hiç oluşmaz → ikisi de YEŞİL kalıyordu (ölçüldü: rapor yolunu okuyan 25 dosyalık kümede 207 passed).
+# Artık GERÇEK üretim yolu koşar: gerçek DB'ye (geçici kök) ayarlanan mT'si BELİRGİN bir seans yazılır, rapor gerçek yöntemle
+# üretilir, derlenen story'nin TABLOLARI okunur. Bobin koşu tablosu ("Ayarlanan (mT)" başlıklı klinik-içi kayıt — meşru) DIŞINDAKİ
+# HER tabloda (1) hiçbir hücre ölçülmüş-gibi / mT etiketi taşımaz, (2) ayarlanan değer hiçbir hücrede yok (etiket masum olsa bile).
+# TR + EN. Beklenen başlık testte SABİT (katalogdan okunmaz). Başlığın kendisi: test_pdf_rapor_URETIM_YOLU_kapilari_D5_59.py (a).
+_AYARLANAN_MT = 7.3  # belirgin değer: tarih / saat / süre / sayaç hücrelerinde rastlantıyla oluşmaz
+_DEGER_DESENI = re.compile(r"(?<!\d)7[.,]3")
+_MT_ETIKETI = re.compile(
+    r"(?i)şiddet|siddet|yoğunluk|yogunluk|intensity|strength|ölçülen|olculen|measured|\balan|field|\(\s*mt\s*\)|\bmt\b|tesla|gauss"
+)
+_AYARLANAN_BASLIK = {"tr": "Ayarlanan (mT)", "en": "Set (mT)"}
+
+
+def _rapor_tablolari(tmp_path, monkeypatch, dil: str, rapor: str) -> list[list[list[str]]]:
+    """Gerçek DB → gerçek `generate_session_report` / `generate_patient_report` → derlenen story'deki tabloların hücreleri."""
+    from utils import ceviri
+    from utils.pdf_report_generator import PDFReportGenerator
+
+    monkeypatch.delenv("PEMF_MASK_HISTORY_PII", raising=False)  # ad AYNEN saklansın (maskeleme opt-in)
+    uretici = PDFReportGenerator(app_data_dir=tmp_path)  # DB izolasyonu: gerçek kliniğe dokunma
+    db = uretici.db
+    sid = db.start_session(treatment_mode="Manuel", patient_name="Pamuk")
+    assert sid, "aparat: seans yazılamadı"
+    assert db.start_coil_run(
+        sid,
+        3,
+        frequency_hz=50,
+        duty_percent=25,
+        phase=0,
+        intensity_mt=_AYARLANAN_MT,
+        hw_type="stm",
+        started_epoch=1757000000.0,
+    ), "aparat: bobin koşusu yazılamadı"
+    db.end_session(
+        sid,
+        parameters={"frequency_hz": 50, "intensity_mt": _AYARLANAN_MT, "intensity": _AYARLANAN_MT},
+        patient_notes="not",
+        session_status="completed",
+    )
+    yakalanan: list = []
+    gercek = uretici._build_pdf
+
+    def _yakala(story, output_path, label):
+        yakalanan.append(list(story))  # doc.build story'yi TÜKETİR → önce kopya
+        return gercek(story, output_path, label)
+
+    uretici._build_pdf = _yakala
+    jeton = ceviri.istek_dili_var.set(dil)
+    try:
+        if rapor == "seans":
+            uretici.generate_session_report(session_ids=[sid], output_path=str(tmp_path / f"seans_{dil}.pdf"))
+        else:
+            uretici.generate_patient_report(patient_name="Pamuk", output_path=str(tmp_path / f"hasta_{dil}.pdf"))
+    finally:
+        ceviri.istek_dili_var.reset(jeton)
+    assert len(yakalanan) == 1, "aparat: rapor derlenmedi"
+    return [[[str(h) for h in satir] for satir in x._cellvalues] for x in yakalanan[0] if type(x).__name__ == "Table"]
+
+
+def _mT_ihlalleri(tablolar) -> list[str]:
+    return [h for t in tablolar for satir in t for h in satir if _MT_ETIKETI.search(h) or _DEGER_DESENI.search(h)]
+
+
+@pytest.mark.parametrize("dil", ["tr", "en"])
+def test_KRITIK_hasta_raporunda_YOGUNLUK_SATIRI_YOK(temp_app_data, tmp_path, monkeypatch, dil):
+    """Uygulanmamış bir dozu uygulanmış gibi beyan etmek, üçüncü kişiye yanlış tıbbi bilgidir.
+
+    Seans raporu hasta sahibine gider: rapor bilgisi / istatistik / seans BİLGİ tablosu (2026-08-09'da "Yoğunluk: X mT" satırı
+    buradan kaldırıldı) ayarlanan mT'yi ne etiketle ne değerle taşır. MUTASYON: `_session_info_rows`a
+    `[ceviri.t("gecmis.csv.ortAlan"), <ayarlanan>]` (n2b) / "Yoğunluk (mT)" literali (n2) / masum etiketli değer → KIRMIZI.
+    """
+    tablolar = _rapor_tablolari(tmp_path, monkeypatch, dil, "seans")
+    bobin = [i for i, t in enumerate(tablolar) if "Hz" in t[0]]
+    assert len(bobin) == 1, f"bobin koşu tablosu rapora girmedi (ya da çift): {[t[0] for t in tablolar]}"
+    assert _AYARLANAN_BASLIK[dil] in tablolar[bobin[0]][0], (
+        f"bobin koşu tablosu başlığı '{_AYARLANAN_BASLIK[dil]}' değil ({dil}): {tablolar[bobin[0]][0]}"
+    )
+    assert any(_DEGER_DESENI.search(h) for h in tablolar[bobin[0]][1]), (
+        f"ayarlanan değer bobin koşu tablosunda yok (kayıt rapora ulaşmıyor; yokluk ölçümü de anlamsızlaşır): {tablolar[bobin[0]]}"
+    )
+    digerleri = [t for i, t in enumerate(tablolar) if i != bobin[0]]
+    assert any(h == "Pamuk" for t in digerleri for satir in t for h in satir), (
+        "aparat: seans BİLGİ tablosu (hasta adı satırı) okunmadı"
+    )
+    ihlal = _mT_ihlalleri(digerleri)
+    assert not ihlal, (
+        f"hasta sahibine giden seans raporunda bobin tablosu DIŞINDA ayarlanan mT / ölçülmüş-gibi etiket var ({dil}): {ihlal}"
     )
 
 
-def test_KRITIK_ozet_tablosunda_YOGUNLUK_SUTUNU_YOK():
-    pdf = (KOK / "apps" / "backend" / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
-    assert '"Yoğunluk (mT)", "Hedef"' not in pdf, "ozet tablosunda mT sutunu geri geldi"
+@pytest.mark.parametrize("dil", ["tr", "en"])
+def test_KRITIK_ozet_tablosunda_YOGUNLUK_SUTUNU_YOK(temp_app_data, tmp_path, monkeypatch, dil):
+    """Hasta raporu (hasta bilgisi / istatistik / tedavi GEÇMİŞİ tablosu — "Yoğunluk (mT)" sütunu kaldırıldı) ayarlanan mT'yi
+    ne etiketle ne değerle taşır. MUTASYON: geçmiş tablosuna `ceviri.t("gecmis.csv.ortAlan")` sütunu + değer (n3b) /
+    "Yoğunluk (mT)" literali (n3) → KIRMIZI."""
+    tablolar = _rapor_tablolari(tmp_path, monkeypatch, dil, "hasta")
+    assert any(re.fullmatch(r"50(\.0+)?", h) for t in tablolar for satir in t[1:] for h in satir), (
+        f"aparat: tedavi geçmişi tablosu seans satırını (50 Hz) taşımıyor: {tablolar}"
+    )
+    ihlal = _mT_ihlalleri(tablolar)
+    assert not ihlal, f"hasta raporunda ayarlanan mT / ölçülmüş-gibi etiket var ({dil}): {ihlal}"
 
 
 def test_klinik_ici_tablo_AYARLANAN_der_siddet_DEMEZ():
     """Kaydı tutmak meşru; "şiddet" demek ölçülmüş gibi okutur."""
     pdf = (KOK / "apps" / "backend" / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
-    assert '"Ayarlanan (mT)"' in pdf, "bobin kosusu tablosu etiketi duzeltilmemis"
-    # Yalnız yorum satırında geçebilir; veri başlığı olarak GEÇMEMELİ.
+    # ⚠️ D5.59 (B-10.146): eskiden burada `'"Ayarlanan (mT)"' in pdf` vardı — I18N göçünden beri o dize YALNIZ bir YORUMDA (başlık
+    # `ceviri.t("pdf.seans.ayarlananMt")`); başlık "Yoğunluk (mT)" literaline ya da başka anahtara çevrilse de YEŞİLDİ (ölçüldü).
+    # Başlığın KENDİSİ rapor üretim yolunda (gerçek DB → generate_session_report → bobin tablosu başlık hücresi, TR + EN) ölçülür:
+    # tests/test_pdf_rapor_URETIM_YOLU_kapilari_D5_59.py::test_KRITIK_D559a_bobin_kosu_tablosu_basligi_AYARLANAN_mT_rapor_yolunda.
+    # Burada kalan: "Şiddet (mT)" bir veri DİZESİ olarak geri gelmesin (yorum satırları elenir).
     #
     # ⚠️ Eskiden `pdf.split("table_data = [[")` ile ayrıştırılıyordu — `ruff format` listeyi
     # çok satıra açınca (`table_data = [\n    [...]`) desen tutmadı ve test kırıldı. Biçime
