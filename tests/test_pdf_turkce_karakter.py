@@ -38,7 +38,22 @@ KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
-fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF metni cikarilamaz")
+
+def _fitz():
+    """PyMuPDF YALNIZ PDF metni / font çıkarımı için gerekir. D5.17 (B-10.84): eskiden modül düzeyinde
+    `importorskip` idi → fitz'siz CI'da stil sayfası, dört yüz, yedek yüz ve kaynak çıpası kapıları da HİÇ
+    koşmuyordu (`_stilleri_unicode_yap()` çağrısını silen mutant orada yeşildi). Zorunlu kipte yokluk atlama değil
+    başarısızlıktır."""
+    try:
+        import fitz
+    except ImportError:
+        from capraz import ZORUNLU
+
+        if ZORUNLU:
+            pytest.fail("PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 ama PyMuPDF (fitz) yok -> PDF metni olculemedi")
+        pytest.skip("PyMuPDF yok -> PDF metni cikarilamaz")
+    return fitz
+
 
 #: Raporda GERÇEKTEN geçen, Türkçe-özel harf taşıyan başlıklar.
 #: ⚠️ Çıpa sahibin ekran görüntüsündeki başlığa pinli: arıza tam orada görüldü.
@@ -86,7 +101,7 @@ def rapor(tmp_path):
 
 
 def _pdf_metni(yol: Path) -> str:
-    with fitz.open(str(yol)) as d:
+    with _fitz().open(str(yol)) as d:
         return "\n".join(sayfa.get_text() for sayfa in d)
 
 
@@ -115,7 +130,7 @@ def test_KRITIK_gomulu_TTF_var_Type1_degil(rapor):
     fontuyla ikame edip DOĞRU gösterebilir; aynı PDF başka bir makinede bozuk görünür.
     Gömülü yüz, taşınabilirliğin kanıtıdır.
     """
-    with fitz.open(str(rapor[1])) as d:
+    with _fitz().open(str(rapor[1])) as d:
         fontlar = [f for sayfa in d for f in sayfa.get_fonts(full=True)]
     assert fontlar, "PDF hic font tasimiyor"
     gomulu = [f for f in fontlar if f[1]]  # f[1] = uzanti ("ttf"/"cff"); gomulu degilse bos
