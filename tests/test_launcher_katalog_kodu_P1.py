@@ -23,7 +23,9 @@ KOK = Path(__file__).resolve().parents[1]
 HTML = KOK / "launcher" / "app" / "ui" / "index.html"
 KAT_JS = KOK / "launcher" / "app" / "ui" / "i18n_katalog.js"
 
-pytestmark = pytest.mark.skipif((not shutil.which("node")) and not capraz.ZORUNLU, reason="node yok")
+# D5-L (L-3.4): node YALNIZ `sonuc` fikstürünün node betiğini kullanan testlerde gerekir (D5.48 deseni — sözlük / katalog / yapısal kollar node'suz da koşar);
+# node yokluğu ZORUNLU kipte DÜŞER.
+_node_gerekir = pytest.mark.skipif((not shutil.which("node")) and not capraz.ZORUNLU, reason="node yok")
 
 _JS = r"""
 const fs = require("fs");
@@ -79,6 +81,7 @@ def _sirali(d: dict) -> list:
     return [d[k] for k in sorted(d)]
 
 
+@_node_gerekir
 @pytest.mark.parametrize("dil", ["tr", "en"])
 def test_KRITIK_kilavuz_katalogdan_kurulur_dizi_yapisi_ve_degerler(sonuc, dil):
     k = ui(dil)["kilavuz"]
@@ -97,6 +100,7 @@ def test_KRITIK_kilavuz_katalogdan_kurulur_dizi_yapisi_ve_degerler(sonuc, dil):
     assert len(g["trouble"]) == 4
 
 
+@_node_gerekir
 @pytest.mark.parametrize("dil", ["tr", "en"])
 def test_KRITIK_profil_adlari_katalogdan_bilinmeyen_anahtar_kendini_gosterir(sonuc, dil):
     meta = ui(dil)["profilMeta"]
@@ -105,6 +109,7 @@ def test_KRITIK_profil_adlari_katalogdan_bilinmeyen_anahtar_kendini_gosterir(son
     assert sonuc[dil]["profil"][3] == ["yok", ""], "bilinmeyen profil anahtarı kendini göstermeli, aciklama boş"
 
 
+@_node_gerekir
 def test_KRITIK_tf_yer_tutucuyu_doldurur_eksik_parametre_bos_bilinmeyen_anahtar_kendini_gosterir(sonuc):
     tr = sonuc["tr"]["tf"]
     # D5.28 (B-10.228): ekranda "Client" yok — süreç adı "başlatıcı" (TR DEĞİŞTİ ui.luReady).

@@ -33,7 +33,9 @@ _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
+# D5-L (L-3.4): node YALNIZ arayüz kodunu `_kos` ile koşturan testlerde gerekir (D5.48 deseni — sözlük / katalog / yapısal kollar node'suz da koşar);
+# node yokluğu ZORUNLU kipte DÜŞER.
+_node_gerekir = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 
 GiB = 1073741824
 BASE = 81133442 + 1487710488  # canlı manifest 1.9.42 (app + deps katmanı)
@@ -220,6 +222,7 @@ def _kart(s: dict, key: str, sonra=False) -> dict:
 # ─────────────────────────── kart rozetleri + düğme toplamı ───────────────────────────
 
 
+@_node_gerekir
 def test_KRITIK_kurulu_ve_secili_profil_KURULU_der_ve_TOPLAMA_GIRMEZ(tmp_path):
     s = _kos(tmp_path, kurulu=["home"], secili=["home", "vet"])
     assert _kart(s, "home")["size"] == "kurulu", f"kurulu+seçili kart boyut yerine 'kurulu' demeli: {_kart(s, 'home')}"
@@ -231,6 +234,7 @@ def test_KRITIK_kurulu_ve_secili_profil_KURULU_der_ve_TOPLAMA_GIRMEZ(tmp_path):
     assert s["btnDisabled"] is False
 
 
+@_node_gerekir
 def test_KRITIK_secimi_kaldirilan_kurulu_profil_KALDIRILACAK_rozeti_ve_acilacak_yer(tmp_path):
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=["home"])
     v = _kart(s, "vet")
@@ -244,6 +248,7 @@ def test_KRITIK_secimi_kaldirilan_kurulu_profil_KALDIRILACAK_rozeti_ve_acilacak_
     assert s["btnDisabled"] is False
 
 
+@_node_gerekir
 def test_ekle_toplami_ana_uygulama_kurulu_degilse_onu_da_sayar_kurulu_profili_saymaz(tmp_path):
     s = _kos(tmp_path, kurulu=["home"], secili=["home", "vet"], base_installed=False)
     assert s["btn"] == f"Kur ve Başlat · {_gb(VET + BASE)} GB", s["btn"]
@@ -251,12 +256,14 @@ def test_ekle_toplami_ana_uygulama_kurulu_degilse_onu_da_sayar_kurulu_profili_sa
     assert s2["btn"] == f"Kur ve Başlat · {_gb(VET)} GB", s2["btn"]
 
 
+@_node_gerekir
 def test_KRITIK_degisiklik_yoksa_dugme_KAPALI_ve_Degisiklik_yok(tmp_path):
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=["home", "vet"])
     assert s["btnDisabled"] is True, "hiçbir fark yokken düğme açık kalmış (boş kurulum başlatır)"
     assert s["btn"] == "Değişiklik yok", s["btn"]
 
 
+@_node_gerekir
 def test_KRITIK_hepsi_kaldirilirsa_dugme_KAPALI_ve_en_az_bir_profil(tmp_path):
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=[])
     assert s["btnDisabled"] is True, "tüm profiller kaldırılmışken düğme açık — son profil silinirdi"
@@ -264,6 +271,7 @@ def test_KRITIK_hepsi_kaldirilirsa_dugme_KAPALI_ve_en_az_bir_profil(tmp_path):
     assert _kart(s, "home")["rmtag"] == "kaldırılacak" and _kart(s, "vet")["rmtag"] == "kaldırılacak"
 
 
+@_node_gerekir
 def test_ilk_kurulum_davranisi_korunur(tmp_path):
     """Kurulu profil yokken (ilk kurulum) eski etiketler: boş seçim → 'Kur ve Başlat' kapalı."""
     s = _kos(tmp_path, kurulu=[], secili=[], base_installed=False)
@@ -272,6 +280,7 @@ def test_ilk_kurulum_davranisi_korunur(tmp_path):
     assert s2["btn"] == f"Kur ve Başlat · {_gb(HOME + BASE)} GB" and s2["btnDisabled"] is False
 
 
+@_node_gerekir
 def test_ingilizce_rozetler_ve_etiketler(tmp_path):
     s = _kos(tmp_path, lang="en", kurulu=["home", "vet"], secili=["home", "research"])
     assert _kart(s, "vet")["rmtag"] == "will be removed"
@@ -288,6 +297,7 @@ def _komutlar(s: dict) -> list:
     return [c for c in s["calls"] if c[0] in ("remove_profiles", "install_and_launch")]
 
 
+@_node_gerekir
 def test_KRITIK_ekle_ve_kaldir_birlikte_ONCE_remove_profiles_SONRA_install(tmp_path):
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=["home", "research"], uygula=True)
     k = _komutlar(s)
@@ -300,6 +310,7 @@ def test_KRITIK_ekle_ve_kaldir_birlikte_ONCE_remove_profiles_SONRA_install(tmp_p
     assert s["hata"] is None
 
 
+@_node_gerekir
 def test_KRITIK_yalniz_kaldirma_remove_profiles_cagrilir_install_CAGRILMAZ_hazir_ekrani(tmp_path):
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=["home"], uygula=True)
     k = _komutlar(s)
@@ -309,6 +320,7 @@ def test_KRITIK_yalniz_kaldirma_remove_profiles_cagrilir_install_CAGRILMAZ_hazir
     assert s["hata"] is None
 
 
+@_node_gerekir
 def test_KRITIK_yalniz_ekleme_remove_profiles_CAGRILMAZ_install_yalniz_yeni_profili_tasir(tmp_path):
     s = _kos(tmp_path, kurulu=["home"], secili=["home", "vet"], uygula=True)
     k = _komutlar(s)
@@ -317,6 +329,7 @@ def test_KRITIK_yalniz_ekleme_remove_profiles_CAGRILMAZ_install_yalniz_yeni_prof
     )
 
 
+@_node_gerekir
 def test_degisiklik_yokken_tiklama_hicbir_backend_cagrisi_yapmaz(tmp_path):
     s = _kos(tmp_path, kurulu=["home"], secili=["home"], uygula=True)
     assert _komutlar(s) == [] and s["screens"] == []
@@ -324,6 +337,7 @@ def test_degisiklik_yokken_tiklama_hicbir_backend_cagrisi_yapmaz(tmp_path):
     assert _komutlar(s0) == [] and s0["screens"] == [], "son profil kaldırılmaya çalışıldı"
 
 
+@_node_gerekir
 def test_kaldirma_hatasi_install_BASLAMAZ_secim_ekrani_ve_sebep_gosterilir(tmp_path):
     neden = "vet için önbellekte vet.zip yok — 'Kurulumu onar' sonrası tekrar deneyin"
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=["home", "research"], uygula=True, kaldirma_hatasi=neden)
@@ -334,6 +348,7 @@ def test_kaldirma_hatasi_install_BASLAMAZ_secim_ekrani_ve_sebep_gosterilir(tmp_p
     assert s["installedSonra"] == ["home", "vet"], "hatada `installed` değişmemeli"
 
 
+@_node_gerekir
 def test_ekleme_varken_giris_yoksa_HICBIR_sey_yapilmaz_giris_ekrani(tmp_path):
     """Yarım iş yok: giriş yoksa kaldırma da yapılmaz (kullanıcı giriş sonrası tek seferde uygular)."""
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=["home", "research"], uygula=True, authed=False)
@@ -341,6 +356,7 @@ def test_ekleme_varken_giris_yoksa_HICBIR_sey_yapilmaz_giris_ekrani(tmp_path):
     assert s["screens"] == ["s-login"], s["screens"]
 
 
+@_node_gerekir
 def test_yalniz_kaldirma_giris_GEREKTIRMEZ(tmp_path):
     s = _kos(tmp_path, kurulu=["home", "vet"], secili=["home"], uygula=True, authed=False)
     assert _komutlar(s) == [["remove_profiles", ["vet"]]]
@@ -349,6 +365,7 @@ def test_yalniz_kaldirma_giris_GEREKTIRMEZ(tmp_path):
 # ─────────────────────────── yedek notu: dil değişince yeniden çizim ───────────────────────────
 
 
+@_node_gerekir
 def test_KRITIK_yedek_notu_EN_dile_gecince_INGILIZCE_yeniden_cizilir_backend_e_sorulmaz(tmp_path):
     s = _kos(tmp_path, yedek={"yol": None, "erisilebilir": False}, dil_degistir="en")
     assert s["notOnce"] and "AYNI diskte" in s["notOnce"], f"TR not beklenen metni taşımıyor: {s['notOnce']!r}"
@@ -360,17 +377,20 @@ def test_KRITIK_yedek_notu_EN_dile_gecince_INGILIZCE_yeniden_cizilir_backend_e_s
     assert s["yedekSorgusu"] == 1, f"dil değişimi backend'e yeniden sormamalı: {s['yedekSorgusu']} sorgu"
 
 
+@_node_gerekir
 def test_yedek_notu_erisilemeyen_hedef_yolu_iki_dilde_tasir(tmp_path):
     s = _kos(tmp_path, yedek={"yol": "E:\\PEMF_Yedek", "erisilebilir": False}, dil_degistir="en")
     assert "E:\\PEMF_Yedek" in s["notOnce"] and "erişilemiyor" in s["notOnce"]
     assert "E:\\PEMF_Yedek" in s["notSonra"] and "unreachable" in s["notSonra"]
 
 
+@_node_gerekir
 def test_yedek_notu_temizlenmisse_dil_degisimi_onu_GERI_GETIRMEZ(tmp_path):
     s = _kos(tmp_path, yedek={"yol": None, "erisilebilir": False}, dil_degistir="en", notu_temizle=True)
     assert s["notOnce"] and s["notSonra"] is None, f"temizlenmiş not dil değişince geri geldi: {s['notSonra']!r}"
 
 
+@_node_gerekir
 def test_yedek_hedefi_saglamsa_not_yok(tmp_path):
     s = _kos(tmp_path, yedek={"yol": "E:\\PEMF_Yedek", "erisilebilir": True}, dil_degistir="en")
     assert s["notOnce"] is None and s["notSonra"] is None
@@ -403,6 +423,7 @@ def test_kur_dugmesi_fark_akisina_bagli_ve_yedek_notu_kodda_gomulu_degil():
     )
 
 
+@_node_gerekir
 def test_KRITIK_ana_uygulama_YOKKEN_kayitli_profiller_yeniden_kurulur_kilitlenmez(tmp_path):
     """Çalışma-zamanı ağacı silinmiş (yarım kalan güncelleme ağacı siler) ama kayıt dosyası dolu:
     aynı seçim "Değişiklik yok" deyip kullanıcıyı KİLİTLEMEMELİ. Kayıtlı profiller yeniden İNMEZ

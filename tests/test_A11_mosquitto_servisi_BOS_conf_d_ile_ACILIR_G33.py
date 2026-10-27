@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import mosquitto_aparat as ma
 import pytest
 
@@ -73,7 +74,7 @@ def _ac(tmp_path: Path, yer_tutucu: tuple[str, str] | None):
 @pytest.fixture(autouse=True)
 def _ikili():
     if ma.ikili() is None:
-        pytest.skip("mosquitto ikilisi yok (Linux CI) — Windows CI aynı kapıyı paketteki 2.0.18 ile koşar")
+        capraz.atla("mosquitto ikilisi yok (Linux CI) — Windows CI aynı kapıyı paketteki 2.0.18 ile koşar")
 
 
 def test_KRITIK_G33_servis_yapilandirmasi_betigin_YER_TUTUCUSUyla_ACILIR(tmp_path):

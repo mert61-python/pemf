@@ -29,7 +29,9 @@ _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _NODE = shutil.which("node")
 
-pytestmark = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
+# D5-L (L-3.4): node YALNIZ arayüz kodunu `_kos` ile koşturan testlerde gerekir (D5.48 deseni — sözlük / katalog / yapısal kollar node'suz da koşar);
+# node yokluğu ZORUNLU kipte DÜŞER.
+_node_gerekir = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
 
 GiB = 1073741824
 BASE_APP, BASE_DEPS = 81133442, 1487710488  # canlı manifest 1.9.42 (app + deps katmanı)
@@ -184,6 +186,7 @@ console.log(JSON.stringify({{ once, sonra, selected: [...selected], btn: $("t-in
 # ─────────────────────────── davranışsal kapılar ───────────────────────────
 
 
+@_node_gerekir
 def test_KRITIK_cekirdek_karti_ILK_sirada_secili_ve_kilitli(tmp_path):
     s = _kos(tmp_path)
     kartlar = s["once"]
@@ -199,6 +202,7 @@ def test_KRITIK_cekirdek_karti_ILK_sirada_secili_ve_kilitli(tmp_path):
     assert [k["label"] for k in kartlar[1:]] == ["Ev Sahibi", "Veteriner Hekim", "Araştırma Modu"]
 
 
+@_node_gerekir
 def test_KRITIK_cekirdek_tiklanamaz_secimi_degistirmez_selected_a_girmez(tmp_path):
     s = _kos(tmp_path, secili=["vet"], tikla="core")
     assert s["sonra"][0]["cls"] == s["once"][0]["cls"] and s["sonra"][0]["pressed"] == "true", (
@@ -212,6 +216,7 @@ def test_KRITIK_cekirdek_tiklanamaz_secimi_degistirmez_selected_a_girmez(tmp_pat
     assert sorted(s2["selected"]) == ["home", "vet"], "profil kartı tıklaması artık çalışmıyor"
 
 
+@_node_gerekir
 def test_KRITIK_boyutlar_cekirdek_katmanlardan_profiller_YALNIZ_kendi(tmp_path):
     s = _kos(tmp_path)
     k = s["once"]
@@ -221,6 +226,7 @@ def test_KRITIK_boyutlar_cekirdek_katmanlardan_profiller_YALNIZ_kendi(tmp_path):
     assert k[3]["size"] == f"{_gb(RESEARCH + RESEARCH2)} GB", "research kartı ana+parça toplamını yazmalı"
 
 
+@_node_gerekir
 def test_KRITIK_dugme_toplami_cekirdek_arti_secilenler(tmp_path):
     s = _kos(tmp_path, secili=["home"])
     assert s["btn"] == f"KUR_TR · {_gb(BASE_APP + BASE_DEPS + HOME)} GB", f"toplam çekirdek+home olmalı: {s['btn']}"
@@ -230,12 +236,14 @@ def test_KRITIK_dugme_toplami_cekirdek_arti_secilenler(tmp_path):
     assert s0["btnDisabled"] is True and s0["btn"] == "KUR_TR", "profil seçilmeden düğme açılmamalı"
 
 
+@_node_gerekir
 def test_cekirdek_KURULUYSA_boyut_yerine_kurulu_der_ve_toplama_girmez(tmp_path):
     s = _kos(tmp_path, base_installed=True, secili=["vet"])
     assert s["once"][0]["size"] == "KURULU_TR", f"kuruluyken 'kurulu' yazmalı: {s['once'][0]['size']}"
     assert s["btn"] == f"KUR_TR · {_gb(VET)} GB", f"kuruluyken toplama çekirdek eklenmemeli: {s['btn']}"
 
 
+@_node_gerekir
 def test_KRITIK_kurulu_profil_kurulu_der_ve_toplama_GIRMEZ(tmp_path):
     """ "Profilleri değiştir" (2026-09-06): kurulu+seçili profil yeniden inmez → kartta 'kurulu',
     düğme toplamı yalnız YENİ seçileni sayar (ayrıntılı akış: test_launcher_profil_degistir)."""
@@ -244,12 +252,14 @@ def test_KRITIK_kurulu_profil_kurulu_der_ve_toplama_GIRMEZ(tmp_path):
     assert s["btn"] == f"KUR_TR · {_gb(VET)} GB", f"kurulu home toplama girmemeli, yalnız vet: {s['btn']}"
 
 
+@_node_gerekir
 def test_dil_degisince_cekirdek_karti_yeniden_etiketlenir(tmp_path):
     s = _kos(tmp_path, lang="en")
     c = s["once"][0]
     assert c["label"] == "CORE_EN" and c["tag"] == "TAG_EN" and c["title"] == "LOCK_EN"
 
 
+@_node_gerekir
 def test_manifest_boyutsuz_gelmeden_cekirdek_boyutu_bos(tmp_path):
     """Manifest gelmeden çizim: boyut '' (profillerle aynı davranış), kart yine seçili+kilitli."""
     s = _kos(tmp_path, base_bytes=0)

@@ -426,21 +426,9 @@ ETIKETLER = ("ARAC:", "PAKET:", "PLATFORM:", "TASARIM:", "DIS-KAYNAK:", "ORTAM:"
 #: değiştiriyor; sayı entegrasyondan sonra pinlenir (≥ 1 olmalı — 0'a düşerse satır BAYAT).
 _BEKLEYEN = "BEKLEYEN YAMA: orkestratörün bekleyen yaması bu dosyayı değiştiriyor (K5-F DOKUNMA listesi) — entegrasyondan sonra capraz'a dönüştürülüp sayı pinlenir"
 IZIN: dict[str, tuple[int | None, str]] = {
-    'tests/test_18K_K1_nsis_estop_VARSAYILAN_port.py': (
-        1,
-        "ARAC: makensis — kapı NSIS kancasını derleyip loopback'teki sahte E-stop sunucusuyla KOŞTURUR; K5-F ölçümü loopback'e istek gönderemez (ORTAK §1) — dönüşüm + üçlü ölçüm ORKESTRATÖRDE",
-    ),
     'tests/test_18K_K3_dis_ag_kullanim_verisi_yok.py': (
         1,
         "PAKET: albumentations requirements*.txt'te doğrudan bildirili DEĞİL (yalnız geçişli — yorum satırı); ultralytics ile aynı find_spec döngüsünde → ZORUNLU yapılmadı",
-    ),
-    'tests/test_A11_mosquitto_servisi_BOS_conf_d_ile_ACILIR_G33.py': (
-        1,
-        'ARAC: mosquitto ikilisi (`mosquitto_aparat.ikili()`) — K5 kafesi mosquitto alt sürecini reddeder (ORTAK §2), ZORUNLU kolu bu ortamda ölçülemez; Windows CI paketteki 2.0.18 ile koşar — dönüşüm + ölçüm ORKESTRATÖRDE',
-    ),
-    'tests/test_D1104_broker_KIMLIKLI_sahte_ack_TEYIT_SAYILMAZ.py': (
-        1,
-        'ARAC: mosquitto ikilisi (`mosquitto_aparat.ikili()`) — K5 kafesi mosquitto alt sürecini reddeder (ORTAK §2), ZORUNLU kolu bu ortamda ölçülemez; Windows CI paketteki 2.0.18 ile koşar — dönüşüm + ölçüm ORKESTRATÖRDE',
     ),
     'tests/test_D3_04_ai_gecmisi_liste_ve_PDF_AYNI_erisim_sinifi_A02.py': (
         1,
@@ -458,10 +446,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         "ORTAM: gömülü derleme Python'u kimliği — geçişli bağımlılık sürümleri yalnız yayın yorumlayıcısında anlamlı (CI / venv başka sürüm taşır)",
     ),
-    'tests/test_ag_gecidi_mosquitto_BOS_conf_d_ile_ACILIR_G8_11.py': (
-        1,
-        'ARAC: mosquitto ikilisi (`mosquitto_aparat.ikili()`) — K5 kafesi mosquitto alt sürecini reddeder (ORTAK §2), ZORUNLU kolu bu ortamda ölçülemez; Windows CI paketteki 2.0.18 ile koşar — dönüşüm + ölçüm ORKESTRATÖRDE',
-    ),
     'tests/test_ai_analiz_pdf.py': (
         1,
         'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
@@ -469,10 +453,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
     'tests/test_ai_analiz_pdf_OKUNUR_TURKCE.py': (
         1,
         'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
-    ),
-    'tests/test_ai_servis_8100_kapisi.py': (
-        1,
-        "ARAC: ffmpeg ikilisi (PATH + imageio_ffmpeg) — dosya P6b'de importorskip için dönüştürüldü; aynı dosyaya ikinci parti çakışmasın diye bırakıldı (imageio-ffmpeg requirements'ta — sonraki partide dönüştürülebilir)",
     ),
     'tests/test_capraz_atla_ve_paket_ZORUNLU_kipte_DUSER_D5.py': (
         1,
@@ -501,14 +481,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
     'tests/test_inno_kod_derlenir.py': (
         1,
         "ARAC: ISCC (Inno Setup) — 'eser var' kolu gerçek Inno derlemesi ister (ORTAK §1 yasak); dönüşüm + ölçüm ORKESTRATÖRDE",
-    ),
-    'tests/test_kabin_CV_mqtt_kimligi_pemf_cv_Y73.py': (
-        1,
-        'ARAC: mosquitto ikilisi (`mosquitto_aparat.ikili()`) — K5 kafesi mosquitto alt sürecini reddeder (ORTAK §2), ZORUNLU kolu bu ortamda ölçülemez; Windows CI paketteki 2.0.18 ile koşar — dönüşüm + ölçüm ORKESTRATÖRDE',
-    ),
-    'tests/test_kaldirma_yetim_surec_temizligi.py': (
-        6,
-        'ARAC: makensis / PowerShell — kapı yetim süreç temizliğini gerçek alt süreçlerle koşturur; K5-F klonunda koşturulmadı — dönüşüm (arac_donustur.py) + ölçüm ORKESTRATÖRDE',
     ),
     'tests/test_kasa_yalitimi.py': (
         3,

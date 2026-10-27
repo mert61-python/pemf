@@ -231,15 +231,96 @@ def test_KRITIK_site_APK_surumu_versions_json_ile_AYNI():
     )
 
 
+def _yayin_kimlikleri(m: dict) -> list[tuple[str, str]]:
+    """Sahadaki `buildId`nin kaynağı (platform, sha256) — launcher `install.rs` `PEMF_BASE_SHA`: katmanlı kurulumda `app` katmanının
+    sha'sı (`record_layer_sha("app", …)`), katmansızda tek parça paketin (`runtimes[platform]` / `base`) sha'sı. client ≥1.9.13 `layers`ı
+    okur, `runtimes` / `base`ı YOK SAYAR (manifest `_layers_note`) → `layers` varsa kimlik YALNIZ oradan (`deps` kimlik DEĞİL)."""
+    katman = m.get("layers") or {}
+    if katman:
+        return [(p, ((k or {}).get("app") or {}).get("sha256", "")) for p, k in sorted(katman.items())]
+    tek = m.get("runtimes") or {}
+    if tek:
+        return [(p, (r or {}).get("sha256", "")) for p, r in sorted(tek.items())]
+    base = m.get("base")
+    return [("base", (base or {}).get("sha256", ""))] if base else []
+
+
+def _buildid_bulgulari(m: dict, changelog: str) -> list[str]:
+    """Yayındaki paketin kimliği CHANGELOG'da YAYINDAKİ sürümün bölümünde (`## app <manifest.version> — …`; kanal başlığı ` — `dan
+    önce) geçmeli. Boş liste = temiz. Dosyanın başka bir yerinde (başka sürümün bölümünde) geçmesi YETMEZ."""
+    kimlikler = _yayin_kimlikleri(m)
+    if not kimlikler:
+        return [
+            "manifestte yayın kimliği YOK (layers / runtimes / base) — sahadan gelen buildId hiçbir kayıtla eşleştirilemez"
+        ]
+    surum = str(m.get("version") or "")
+    bolum = (
+        re.search(rf"^##[^\n—]*\bapp\s+{re.escape(surum)}\b[^\n]*\n(.*?)(?=^## |\Z)", changelog, re.M | re.S)
+        if surum
+        else None
+    )
+    if bolum is None:
+        return [f"CHANGELOG'da yayındaki sürümün bölümü yok (aranan: '## app {surum} — …')"]
+    bulgu = []
+    for platform, sha in kimlikler:
+        if not re.fullmatch(r"[0-9a-f]{64}", sha or ""):
+            bulgu.append(f"{platform}: geçersiz / boş sha256 {sha!r}")
+        elif sha[:12] not in bolum.group(1):
+            bulgu.append(f"{platform}: {sha[:12]} 'app {surum}' bölümünde yok")
+    return bulgu
+
+
 def test_CHANGELOG_yayindaki_paket_shasini_ICERIR():
-    """`buildId` sahadan `90cf004f9fa1` gelince karşılığı burada bulunabilmeli."""
-    man = KOK / "pemf-app-packages" / "manifest.json"
+    """`buildId` sahadan (ör. `cb33f48382a2`) gelince karşılığı YAYINDAKİ sürümün CHANGELOG bölümünde bulunabilmeli.
+
+    D5-L (L-3.3): kapı eskiden manifestin `base.sha256`ını arıyordu — katmanlı şemada (`layers`) `base` YOK → HER ortamda, ZORUNLU
+    kipte de ATLIYORDU (ölü kapı; CHANGELOG'dan kimlik silinince de "skipped" — mutantla ölçüldü). Kimlik artık launcher'ın geçirdiği
+    sha'dan (`_yayin_kimlikleri`) ve yalnız o sürümün bölümünde aranır."""
     capraz.atla_yoksa("pemf-app-packages/manifest.json", izlenen=True)  # D5-F: İZLENEN dosya — ZORUNLU kipte DÜŞER
-    m = json.loads(man.read_text(encoding="utf-8"))
-    sha = (m.get("base") or {}).get("sha256", "")
-    if not sha:
-        pytest.skip("manifest'te base sha yok")
-    metin = (KOK / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert sha[:12] in metin, (
-        f"yayindaki paketin kimligi ({sha[:12]}) CHANGELOG'da yok — sahadan gelen buildId hicbir kayitla eslesmez"
+    m = json.loads((KOK / "pemf-app-packages" / "manifest.json").read_text(encoding="utf-8"))
+    bulgu = _buildid_bulgulari(m, (KOK / "CHANGELOG.md").read_text(encoding="utf-8"))
+    assert not bulgu, (
+        "yayindaki paketin kimligi CHANGELOG'da yayindaki surumun bolumunde yok — sahadan gelen buildId hicbir kayitla "
+        f"eslesmez: {bulgu}"
+    )
+
+
+def test_KARSIT_buildId_kapisi_KATMAN_kimligini_ve_SURUM_bolumunu_ayirt_eder():
+    """Kapının aracı kör değil: sentetik manifest + CHANGELOG ile her kol hem temiz hem kirli girdide ölçülür."""
+    app, dep, eski = "a1" * 32, "b2" * 32, "c3" * 32
+    ch = (
+        "# Değişiklikler\n\n"
+        "## launcher 1.9.52 — YAYIN ADAYI (YAYINLANMADI; app 1.9.51 ile birlikte)\n\nkimlik yok\n\n"
+        "## app 1.9.51 — YAYINLANMADI\n\nkimlik yok\n\n"
+        f"## app 1.9.50 — 2026-09-11\n\nPaket kimliği (`buildId`): `{app[:12]}`. Bağımlılık katmanı `{dep[:12]}`.\n\n"
+        f"## app 1.9.49 — 2026-09-10\n\nPaket kimliği (`buildId`): `{eski[:12]}`.\n"
+    )
+    katmanli = {
+        "version": "1.9.50",
+        "layers": {"win-x64": {"app": {"sha256": app}, "deps": {"sha256": dep}}},
+        "runtimes": {},
+    }
+    assert _buildid_bulgulari(katmanli, ch) == [], "temiz katmanlı girdi kirli sayıldı"
+    # deps katmanının sha'sı kimlik DEĞİL: app kimliği bölümden düşünce (yalnız deps kaldı) kapı DÜŞER
+    assert _buildid_bulgulari(katmanli, ch.replace(f"`{app[:12]}`", "`-`")), "app kimliği yokken deps sha'sıyla GEÇTİ"
+    # kimlik yalnız BAŞKA sürümün bölümünde (eski ham `in metin` bunu GEÇİRİRDİ)
+    baska = {"version": "1.9.50", "layers": {"win-x64": {"app": {"sha256": eski}}}}
+    assert _buildid_bulgulari(baska, ch), "kimlik yalnız 1.9.49 bölümündeyken 1.9.50 için GEÇTİ"
+    # yayınlanmamış sürüm (başlık açıklamasındaki 'app 1.9.51' bölüm sayılmaz; kendi bölümünde kimlik yok)
+    assert _buildid_bulgulari(dict(katmanli, version="1.9.51"), ch), "kimliksiz 1.9.51 bölümü GEÇTİ"
+    assert _buildid_bulgulari(dict(katmanli, version="1.9.99"), ch), "bölümü olmayan sürüm GEÇTİ"
+    # layers varken base / runtimes YOK SAYILIR (client ≥1.9.13)
+    assert _buildid_bulgulari(
+        {"version": "1.9.50", "layers": {"win-x64": {"app": {"sha256": eski}}}, "base": {"sha256": app}}, ch
+    )
+    # tek parça şema (eski launcher) — base / runtimes kimliği
+    assert _buildid_bulgulari({"version": "1.9.50", "base": {"sha256": app}}, ch) == []
+    assert _buildid_bulgulari({"version": "1.9.50", "runtimes": {"win-x64": {"sha256": app}}}, ch) == []
+    # kimliksiz / bozuk manifest → bulgu (ATLAMA DEĞİL)
+    assert _buildid_bulgulari({"version": "1.9.50"}, ch), "kimliksiz manifest GEÇTİ"
+    assert _buildid_bulgulari({"version": "1.9.50", "layers": {"win-x64": {"deps": {"sha256": dep}}}}, ch), (
+        "app'siz katman GEÇTİ"
+    )
+    assert _buildid_bulgulari({"version": "1.9.50", "layers": {"win-x64": {"app": {"sha256": app[:12]}}}}, ch), (
+        "kısa sha GEÇTİ"
     )

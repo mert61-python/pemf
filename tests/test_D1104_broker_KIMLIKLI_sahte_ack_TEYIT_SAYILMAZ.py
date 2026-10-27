@@ -28,6 +28,7 @@ import threading
 import time
 import types
 
+import capraz
 import mosquitto_aparat as ma
 import pytest
 
@@ -47,7 +48,7 @@ def _kimlik_modulu():
 @contextlib.contextmanager
 def _ortam(monkeypatch, tmp_path, *, hazirla: bool = True):
     if ma.ikili() is None:
-        pytest.skip(_ESP_YOK)
+        capraz.atla(_ESP_YOK)
     import ai_pro_aparati as ap
     from kayitci_donanim import gercek_hc
     from servers import api_server as api0

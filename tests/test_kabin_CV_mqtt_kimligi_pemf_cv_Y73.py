@@ -21,6 +21,7 @@ import sys
 import time
 from pathlib import Path
 
+import capraz
 import mosquitto_aparat as ma
 import pytest
 
@@ -142,7 +143,7 @@ def test_KRITIK_kabin_MQTT_varsayilan_KAPALI_YAMLda_SIR_YOK_yan_dosya_GITIGNORE(
 @pytest.fixture
 def broker(mk, tmp_path):
     if ma.ikili() is None:
-        pytest.skip("mosquitto ikilisi yok (Linux CI) — Windows CI aynı kapıyı paketteki 2.0.18 ile koşar")
+        capraz.atla("mosquitto ikilisi yok (Linux CI) — Windows CI aynı kapıyı paketteki 2.0.18 ile koşar")
     veri = tmp_path / "makine" / "mosquitto"
     mk.hazirla()  # varsayılan broker dizini = <makine>/mosquitto = kurulumun $MosqDataRoot'u
     port = ma.bos_port()

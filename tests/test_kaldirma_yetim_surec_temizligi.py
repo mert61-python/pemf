@@ -35,6 +35,7 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
@@ -496,7 +497,7 @@ def test_kanca_dosyasi_bicimi_korunur():
     )
 
 
-@pytest.mark.skipif(_makensis() is None, reason="makensis yok (Windows + Tauri/NSIS gerekir)")
+@pytest.mark.skipif((_makensis() is None) and not capraz.ZORUNLU, reason="makensis yok (Windows + Tauri/NSIS gerekir)")
 def test_kanca_gercekten_nsis_ile_derlenir(tmp_path):
     """Yapısal denetim yetmez: kanca GERÇEKTEN derlenmeli.
 
@@ -745,7 +746,7 @@ def _komutu_kos(komut: str) -> tuple[int, str]:
     return r.returncode, cikti
 
 
-@pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="pwsh/powershell yok")
 def test_estop_tek_satiri_confirmed_false_ise_cikis_2(preuninstall_satirlari):
     """DAVRANIŞ: backend 200 döndü ama `confirmed=false` → çıkış 2 + çıktıda confirmed=False.
 
@@ -768,7 +769,7 @@ def test_estop_tek_satiri_confirmed_false_ise_cikis_2(preuninstall_satirlari):
     )
 
 
-@pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="pwsh/powershell yok")
 def test_estop_tek_satiri_baglanti_yoksa_cikis_1_ve_FAIL(preuninstall_satirlari):
     """DAVRANIŞ: bayat port / backend ölü (bağlantı reddi) → çıkış 1 + çıktı FAIL ile başlar.
 
@@ -780,7 +781,7 @@ def test_estop_tek_satiri_baglanti_yoksa_cikis_1_ve_FAIL(preuninstall_satirlari)
     assert len(cikti) > len("FAIL="), "FAIL var ama istisna mesajı yok — günlük neyi teşhis edecek?"
 
 
-@pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="pwsh/powershell yok")
 def test_estop_tek_satiri_confirmed_true_ise_cikis_0_OK(preuninstall_satirlari):
     """DAVRANIŞ: 200 + confirmed=true → çıkış 0 + 'OK' (MessageBox gösterilmez, günlük OK yazar)."""
     stub = _EstopStub(confirmed=True)
@@ -800,7 +801,7 @@ def test_estop_tek_satiri_confirmed_true_ise_cikis_0_OK(preuninstall_satirlari):
     )
 
 
-@pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="pwsh/powershell yok")
 def test_estop_tek_satiri_ESKI_backendde_kapanis_ucu_YOKSA_ACIL_DURDUR_ucuna_duser(preuninstall_satirlari):
     """🔴 TIBBİ GÜVENLİK (2026-10-18): kapanış ucu yoksa (eski backend: 405) AYNI porta operatörün ACİL DURDUR ucu — bobin
     durdurma kaldırmada hiçbir yolda AZALMAZ. Çıktı hangi ucun kullanıldığını söyler (`uc=2`)."""
@@ -815,7 +816,7 @@ def test_estop_tek_satiri_ESKI_backendde_kapanis_ucu_YOKSA_ACIL_DURDUR_ucuna_dus
     assert rc == 0 and cikti.startswith("OK uc=2") and "confirmed=True" in cikti, f"rc={rc} çıktı={cikti!r}"
 
 
-@pytest.mark.skipif(_powershell() is None, reason="pwsh/powershell yok")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="pwsh/powershell yok")
 def test_estop_tek_satiri_kapanis_ucu_YAVAS_HTTP_hatasinda_ACIL_DURDUR_ucuna_duser(preuninstall_satirlari):
     """🔴 TIBBİ GÜVENLİK (18K K2 — launcher L4 `durdur_iste` ikizi): kapanış ucu ≥ 2 sn sonra HTTP HATASI döndüyse (500) backend
     YANIT VERDİ — uç "yok" sayılır, operatörün ACİL DURDUR ucu denenir (launcher `ureq::Error::Status` → `UcYok`). Eskiden (2026-10-18)

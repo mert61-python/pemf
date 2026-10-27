@@ -188,7 +188,7 @@ FFMPEG = _ffmpeg_yolu()
 def ffmpeg(app_modulu, monkeypatch):
     """`ai_service.app`in `shutil.which("ffmpeg")` çağrısını gerçek bir ikiliye bağla."""
     if not FFMPEG:
-        pytest.skip("hicbir ffmpeg ikilisi bulunamadi (PATH + imageio_ffmpeg)")
+        capraz.atla("hicbir ffmpeg ikilisi bulunamadi (PATH + imageio_ffmpeg)")
     monkeypatch.setattr(app_modulu.shutil, "which", lambda ad: FFMPEG if ad == "ffmpeg" else None)
     return FFMPEG
 

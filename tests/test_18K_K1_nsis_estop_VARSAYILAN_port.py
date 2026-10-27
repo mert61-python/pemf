@@ -29,6 +29,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -245,7 +246,7 @@ def _kos(
 ) -> tuple[list[str], str]:
     mk = _makensis()
     if not mk:
-        pytest.skip("makensis yok (PEMF_MAKENSIS / LOCALAPPDATA\\tauri\\NSIS)")
+        capraz.atla("makensis yok (PEMF_MAKENSIS / LOCALAPPDATA\\tauri\\NSIS)")
     kur, veri, yerel, dolasan = tmp / "kur", tmp / "veri", tmp / "yerel", tmp / "dolasan"
     for d in (kur, veri, yerel / "PEMF Vet Client", dolasan):
         d.mkdir(parents=True, exist_ok=True)

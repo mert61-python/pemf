@@ -59,7 +59,6 @@ def test_KRITIK_UI_JAVASCRIPTI_AYRISTIRILABILIYOR(tmp_path):
     )
 
 
-@pytest.mark.skipif((not _NODE) and not capraz.ZORUNLU, reason="node yok")
 def test_KRITIK_dil_metinlerinde_KAPANMAMIS_dize_yok(tmp_path):
     """Dize sabitleri satır sonunda kapanmadan bırakılmamalı (asıl arızanın biçimi).
 
