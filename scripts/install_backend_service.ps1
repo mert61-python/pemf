@@ -135,7 +135,8 @@ function Get-PemfServisOrtami([string]$ProfilDosyasi, [string]$LogDir, [bool]$Us
 }
 
 # Y44 (setup_services.ps1 ile BİREBİR — eşlik kapıda ölçülür): `PEMF_API_PORT` backend'in `ortam_portu` kuralıyla (Python `int()` — baş/son
-# boşluk, isteğe bağlı +/-, rakamlar arasında tek `_`, Unicode ondalık rakamlar — ve 1..65535). Bu betik `.Hata` metnini KULLANMAZ.
+# boşluk, isteğe bağlı +/-, rakamlar arasında tek `_`, Unicode ondalık rakamlar — ve 1..65535). `.Hata` metni D5 M-3 ön doğrulamasında
+# (aşağıda, D2.73 korumasından hemen sonra) kurulumu durdurur.
 function Test-PemfApiPortDegeri([AllowNull()][string]$Ham) {
     $sonuc = [pscustomobject]@{ Port = $null; Hata = "" }
     $m = [regex]::Match([string]$Ham, '^\s*([+-]?)(\d+(?:_\d+)*)\s*$')
@@ -296,6 +297,19 @@ if (-not $AppEnv) {
     pause; exit 1
 }
 Write-Status "Profil ($Mode): $ProfilDosyasi" "Cyan"
+
+# ── D5 M-3 (Y44 — sahip kararı; setup_services.ps1 "0. ÖN DOĞRULAMA" ile AYNI kural ve AYNI metin): profildeki bozuk `PEMF_API_PORT`
+# kurulumu servise / NSSM'e / günlük dizinine DOKUNMADAN durdurur (eskiden servis bozuk değerle kuruluyor, backend çalışma anında uyarıyla
+# 8000'e düşüyor, güvenlik duvarı 8000'i açıyor — profil niyeti sessizce aşılıyordu; M-2 port-dolu denetimi de asıl nedeni söylemeden
+# "8000 dolu" diyebilirdi). Çalışma anındaki uyarılı 8000'e düşüş (ACİL DURDUR ucu) AYNEN kalır; Get-PemfServisApiPortu'nun UYARI dalı
+# savunma olarak kalır. Kapı: tests/test_install_backend_service_BOZUK_API_PORT_DURDURUR_Y44_D5M3.py (setup_services Y44 eşliği dahil)
+if ($ProfilDosyasi) {
+    $OnProfil = Read-PemfProfilEnv $ProfilDosyasi
+    if ($OnProfil.Contains("PEMF_API_PORT")) {
+        $OnPort = Test-PemfApiPortDegeri $OnProfil["PEMF_API_PORT"]
+        if ($OnPort.Hata) { Write-Status "HATA: $($OnPort.Hata) Dosya: $ProfilDosyasi — kurulum DURDU, hiçbir servis değiştirilmedi." "Red"; pause; exit 1 }
+    }
+}
 
 # ── D5 M-2 (E2-2.4 / S-E.4): servisin dinleyeceği port (profil PEMF_API_PORT — güvenlik duvarı kuralı da AYNI portu açar) bu servisin DIŞINDAN
 # bir süreç (launcher'ın backend çocuğu / başka kurulum) tarafından tutuluyorsa yeni servis bind edemeyip NSSM döngüsünde çöker, betik yine

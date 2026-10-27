@@ -201,6 +201,8 @@ Write-Output "OK"
 # (`$ApiFirewallOk` / `$KesifFirewallOk`) üst düzey atamaları (sırasıyla) + o fonksiyonların tanımları. HEAD'de bu, adla arayan
 # `try { if (-not (Get-NetFirewallRule …)) … }` bloğudur (sonda aynı çekiciyi kullanır). D5 M-1 TUR 2: çekilen her parça İZİN LİSTESİNE karşı
 # denetlenir (IZIN-DISI → çıkış 5); sonuç değişkenlerinin başlangıç ataması da adıma girer (dış `catch` yolunda sonuç ölçülür).
+# D5 M-3 TUR 2: `Test-PemfApiPortDegeri` yalnız TANIM olarak alınır — onu doğrudan çağıran üst düzey ifade Y44 ön doğrulamasıdır (profil
+# okur + `pause; exit 1`), güvenlik duvarı adımı DEĞİL (kendi kapısı: test_install_backend_service_BOZUK_API_PORT_DURDURUR_Y44_D5M3.py).
 _ADIM = r"""
 using namespace System.Management.Automation.Language
 @@IZIN_PS@@
@@ -208,11 +210,12 @@ $t = $null; $h = $null
 $ast = [Parser]::ParseFile(@@BETIK@@, [ref]$t, [ref]$h)
 if ($h.Count) { Write-Output "PARSE-ERROR"; exit 3 }
 $adlar = @('Test-PemfApiPortDegeri', 'Get-PemfServisApiPortu', 'Ensure-PemfBackendFirewallKurali')
+$adimAdlar = @('Get-PemfServisApiPortu', 'Ensure-PemfBackendFirewallKurali')
 $parca = [System.Collections.Generic.List[string]]::new()
 $fonklar = @($ast.EndBlock.Statements | Where-Object { $_ -is [FunctionDefinitionAst] -and $adlar -contains $_.Name })
 foreach ($f in $fonklar) { $parca.Add($f.Extent.Text) }
 $adim = @($ast.EndBlock.Statements | Where-Object { $_ -isnot [FunctionDefinitionAst] -and ($_.Find({ param($n)
-    $n -is [CommandAst] -and ("$($n.GetCommandName())" -like '*-NetFirewall*' -or $adlar -contains "$($n.GetCommandName())") }, $true) -or
+    $n -is [CommandAst] -and ("$($n.GetCommandName())" -like '*-NetFirewall*' -or $adimAdlar -contains "$($n.GetCommandName())") }, $true) -or
     ($_ -is [AssignmentStatementAst] -and @('$ApiFirewallOk', '$KesifFirewallOk') -contains $_.Left.Extent.Text)) })
 if (-not $adim.Count) { Write-Output "ADIM-YOK"; exit 4 }
 foreach ($s in @($fonklar) + @($adim)) { $ihlal = _IzinDisi $s @@IZINLI@@ @@UYE@@; if ($ihlal) { Write-Output ("IZIN-DISI " + $ihlal); exit 5 } }
@@ -531,8 +534,37 @@ def test_KARSIT_ADIM_profilde_port_YOKSA_8000(tmp_path):
     assert not _uyari(satir), f"geçerli kurulumda UYARI basıldı:\n{satir}"
 
 
-def test_KRITIK_ADIM_profilde_port_BOZUKSA_backend_gibi_8000_ve_eylemli_UYARI(tmp_path):
-    """Backend `ortam_portu` bozuk değerde uyarıyla 8000'e düşer — kural da 8000'i açar ve kurulum günlüğü bunu SÖYLER."""
+_Y44_SIRA = r"""
+using namespace System.Management.Automation.Language
+$t = $null; $h = $null
+$ast = [Parser]::ParseFile(@@BETIK@@, [ref]$t, [ref]$h)
+$ust = @($ast.EndBlock.Statements)
+function _Ilk([scriptblock]$k) { for ($i = 0; $i -lt $ust.Count; $i++) { if ($ust[$i] -isnot [FunctionDefinitionAst] -and $ust[$i].Find($k, $true)) { return $i } }; -1 }
+$y44 = -1
+for ($i = 0; $i -lt $ust.Count; $i++) {
+    $s = $ust[$i]
+    if ($y44 -lt 0 -and $s -isnot [FunctionDefinitionAst] -and $s.Find({ param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Test-PemfApiPortDegeri' }, $true) -and
+        $s.Find({ param($n) $n -is [ExitStatementAst] }, $true)) { $y44 = $i }
+}
+[pscustomobject]@{
+    y44 = $y44
+    port = (_Ilk { param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Get-PemfServisApiPortu' })
+    fw = (_Ilk { param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Ensure-PemfBackendFirewallKurali' })
+} | ConvertTo-Json -Compress
+"""
+
+
+def test_KRITIK_ADIM_SAVUNMA_profilde_port_BOZUKSA_islev_8000_ve_UYARI_servis_yolunda_Y44_ONCE_durur(tmp_path):
+    """Backend `ortam_portu` bozuk değerde uyarıyla 8000'e düşer — güvenlik duvarı adımı (savunma) kuralı 8000'e açar ve SÖYLER.
+    D5 M-3 TUR 2 (Y44, sahip kararı): servis yolunda bu dala artık ULAŞILMAZ — bozuk `PEMF_API_PORT` kurulumu D2.73'ten hemen sonra, port
+    hesabından ve güvenlik duvarı adımından ÖNCE durdurur (davranış + setup eşliği: D5M3 kapısı). Kapı ZAYIFLAMADI: adım davranışı aynen
+    ölçülür + bu kol Y44'ün o adımdan ÖNCE olduğunu pinler."""
+    r = _pwsh_file(tmp_path, "y44_sira.ps1", _Y44_SIRA.replace("@@BETIK@@", _ps_lit(BETIK)))
+    assert r.returncode == 0, f"{r.stdout}\n{r.stderr}"
+    a = json.loads(r.stdout.strip().splitlines()[-1])
+    assert 0 <= a["y44"] < a["port"] <= a["fw"], (
+        f"bozuk PEMF_API_PORT Y44 ön doğrulamasıyla port hesabından / güvenlik duvarı adımından ÖNCE durmuyor — servis bozuk değerle kurulur: {a}"
+    )
     satir, son = adim_kos(tmp_path, ["PEMF_API_PORT=80O0"], [])
     beklenen = dict(DOGRU_API, port="8000")
     assert sorted(_icerik(k) for k in son) == sorted([_icerik(beklenen), _icerik(DOGRU_KESIF)]), (
