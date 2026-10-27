@@ -29,6 +29,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -83,7 +84,7 @@ def _eserler() -> dict:
 def olculen():
     e = _eserler()
     if not e:
-        pytest.skip("ai_hub/ yok (model eserleri kurulu degil)")
+        capraz.atla("ai_hub/ altında *.pkl model eseri yok (model eserleri kurulu değil)")  # D5-F: eski düz pytest.skip
     return {ad: serilestirme_surumu(p) for ad, p in e.items()}
 
 

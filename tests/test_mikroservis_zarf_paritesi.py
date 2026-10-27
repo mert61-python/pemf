@@ -28,6 +28,7 @@ import ast
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -168,7 +169,7 @@ def test_KRITIK_yan_dosya_cozucusu_OLMAYAN_dosyayi_models_agacinda_arar(tmp_path
 
     hedef = "ai_hub/cat_disease/scaler_X.pkl"
     if not find_installed_model(hedef):
-        pytest.skip(f"'{hedef}' bu ortamın model ağacında yok — /models senaryosu kurulamaz")
+        capraz.atla(f"'{hedef}' bu ortamın model ağacında yok — /models senaryosu kurulamaz")  # D5-F
 
     yok = tmp_path / "scaler_X.pkl"
     cozulen = yan_dosya_coz(yok, hedef)

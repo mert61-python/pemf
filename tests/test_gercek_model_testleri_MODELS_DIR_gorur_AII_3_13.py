@@ -52,10 +52,10 @@ def test_KRITIK_yolo_gercek_PT_testleri_MODEL_KOKUNU_gorur(agirlik_var):
 
 
 def test_KRITIK_ckd_gercek_model_testleri_MODEL_KOKUNU_gorur(agirlik_var):
-    from golden.eser import ckd_eserleri, eser_var_mi
+    from golden.eser import atla, ckd_eserleri, eser_var_mi
 
     if not eser_var_mi(*ckd_eserleri()):
-        pytest.skip("CKD eserleri yok")
+        atla("CKD eserleri yok")  # D5-F: eski düz pytest.skip — golden zorunlu kipte DÜŞER
     m = importlib.import_module("test_ckd_xai")
     assert m._MODEL_VAR is True, (
         "test_ckd_xai: CKD eserleri PEMF_AI_MODELS_DIR'da VAR ama 8 gerçek-model testi ATLANIYOR"
@@ -68,6 +68,9 @@ def test_KRITIK_ckd_gercek_model_testleri_MODEL_KOKUNU_gorur(agirlik_var):
         ("test_gradient_xai_ses_termal", "gercek_pt_gerekir"),
         ("test_xai_faz2_kuyruk", "yolo_pt_gerekir"),
         ("test_ckd_xai", "gercek_model_gerekir"),
+        # D5-F (K5-F P5): eskiden düz `skipif` olan iki gerçek-PT işareti de aynı sözleşmeye bağlandı
+        ("test_xai_faz2_kuyruk", "rna_pt_gerekir"),
+        ("test_renal_xai", "gercek_pt_gerekir"),
     ],
 )
 def test_KRITIK_golden_kipte_eser_YOKKEN_ATLAMAZ(monkeypatch, modul, isaret):
@@ -81,7 +84,12 @@ def test_KRITIK_golden_kipte_eser_YOKKEN_ATLAMAZ(monkeypatch, modul, isaret):
     monkeypatch.setattr(ge, "eser_var_mi", lambda *a, **k: False)
     spec = importlib.util.spec_from_file_location(f"{modul}_aii313_golden", KOK / "tests" / f"{modul}.py")
     m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
+    # D5-F (K5-F P5): ham `Path.exists()` / `is_file()` koşulu da "eser yok" görmeli — yalnız `eser_var_mi` sahtelenirse eser
+    # klonda VARKEN eski ham biçime dönen işaret (ör. `_RNA_PT.exists()`) bu kolu YEŞİL geçiyordu (ölçüldü, K5-F m2).
+    with monkeypatch.context() as mp:
+        mp.setattr(Path, "exists", lambda self, *a, **k: False)
+        mp.setattr(Path, "is_file", lambda self, *a, **k: False)
+        spec.loader.exec_module(m)
     assert bool(getattr(m, isaret).args[0]) is False, (
         f"{modul}: golden kipte eser yokken {isaret} testleri ATLIYOR (SKIP→FAIL delindi)"
     )

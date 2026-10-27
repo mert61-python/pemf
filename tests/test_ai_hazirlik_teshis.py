@@ -21,6 +21,7 @@ der. Kilitlenen davranışlar bu sınıfı görünür kılar:
 import logging
 from pathlib import Path
 
+import capraz
 import pytest
 from fastapi.testclient import TestClient
 
@@ -125,7 +126,7 @@ def test_KRITIK_hazirlik_ucu_KOD_ve_MODEL_ayri_raporlar(client, monkeypatch):
 
     gercek_model = next((m for _a, _i, m in _gercek if m and find_installed_model(m)), None)
     if gercek_model is None:
-        pytest.skip("bu ortamda hiçbir model ağırlığı kurulu değil — 'saglam' senaryosu kurulamaz")
+        capraz.atla("bu ortamda hiçbir model ağırlığı kurulu değil — 'saglam' senaryosu kurulamaz")  # D5-F
     monkeypatch.setattr(
         air,
         "_AI_MODUL_ENVANTERI",

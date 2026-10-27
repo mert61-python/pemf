@@ -17,17 +17,20 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import capraz
 import pytest
 
-pytest.importorskip("torch", reason="torch yok (CI) — gerçek-model testi atlanır")
-pytest.importorskip("celldetection", reason="celldetection kurulu değil — gerçek-model testi atlanır")
-cv2 = pytest.importorskip("cv2")
+# D5-F (K5-F P5): eskiden düz `importorskip` / `pytest.skip(allow_module_level=True)` — yayın makinesinin ZORUNLU kipinde de
+# modül sessizce atlanıyordu. Artık `capraz` (varsayılanda atlar, ZORUNLU=1'de toplama HATASI).
+capraz.paket_yoksa_atla("torch", sebep="torch yok (CI) — gerçek-model testi atlanır")
+capraz.paket_yoksa_atla("celldetection", sebep="celldetection kurulu değil — gerçek-model testi atlanır")
+cv2 = capraz.paket_yoksa_atla("cv2")
 
 KOK = Path(__file__).resolve().parents[1]
 GIRDI = KOK / "ai_hub" / "PEMF_AI_Test_Girdileri"
 
 if importlib.util.find_spec("ai_hub.inference_paper_dilek_hoca.cell.cpn") is None:
-    pytest.skip("cell/cpn.py teslim edilmemiş — gerçek-model testi atlanır", allow_module_level=True)
+    capraz.atla("cell/cpn.py teslim edilmemiş (İZLENİR — yokluğu taşıma/silmedir) — gerçek-model testi atlanır")
 
 import ai_hub.inference_paper_dilek_hoca.inference_paper_dilek_hoca as m  # noqa: E402
 
@@ -38,7 +41,7 @@ try:
 
         pt_coz(m._PT_REL)
 except Exception as _e:  # pragma: no cover - ortam koşulu
-    pytest.skip(f"CPN PT bulunamadı ({_e}) — gerçek-model testi atlanır", allow_module_level=True)
+    capraz.atla(f"CPN PT bulunamadı ({_e}) — gerçek-model testi atlanır")
 
 # Referanslar (4× objektif, pixel_mm=0.0016, scratch_yonu='dikey')
 #

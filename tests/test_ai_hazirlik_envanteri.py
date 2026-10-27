@@ -29,6 +29,7 @@ import importlib
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 from servers.ai_router import _AI_MODUL_ENVANTERI, _model_hazir_mi, _xai_zinciri_durumu
 
@@ -118,7 +119,7 @@ def test_envanterdeki_her_model_yolu_bu_ortamda_COZULEBILIYOR(ad, _imp, model):
     from utils.model_downloader import find_installed_model
 
     if not _model_agaci_kurulu():
-        pytest.skip("AI ağırlık ağacı bu ortamda kurulu değil — eksik ağırlık ile yanlış yol ayırt edilemez")
+        capraz.atla("AI ağırlık ağacı bu ortamda kurulu değil — eksik ağırlık ile yanlış yol ayırt edilemez")  # D5-F
     assert find_installed_model(model), (
         f"'{ad}' için yazılan yol çözülemiyor: {model} — envanterdeki yol YANLIŞ olabilir "
         f"(sahte kırmızı, kapıyı güvenilmez yapar). Gerçek dosya konumunu doğrulayın."
@@ -246,7 +247,7 @@ def test_envanter_yollari_model_paketi_listeleriyle_TUTARLI():
     # EDİLEN bir ağırlık "hiçbir yerde yok" görünür (CI'da ölçüldü). Kategori ayrımı ancak
     # ağaç tamken yapılabilir.
     if not _model_agaci_kurulu():
-        pytest.skip("AI ağırlık ağacı bu ortamda kurulu değil — gömülü/paketli ayrımı ölçülemez")
+        capraz.atla("AI ağırlık ağacı bu ortamda kurulu değil — gömülü/paketli ayrımı ölçülemez")  # D5-F
 
     sys.path.insert(0, str(_KOK / "build_tools"))
     try:

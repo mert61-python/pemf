@@ -128,8 +128,8 @@ def test_KARSIT_KANIT_buyuk_agirliklar_depoya_ALINMAZ(rel):
     assert not _izleniyor_mu(rel), f"{rel} git'e alinmis — GitHub 100 MiB ustunu SERT olarak reddeder, push kirilir"
     assert _kural_disliyor_mu(rel), f"{rel} .gitignore'da DISLANMIYOR — bir sonraki `git add -A` onu depoya alir"
     p = _MODELLER / rel
-    if not p.is_file():
-        pytest.skip(f"buyuk agirlik bu kopyada yok (Releases'te durur) — boyut iddiasi olculemez: {rel}")
+    # D5-F: eski düz pytest.skip — büyük ağırlık İZLENMEZ (Releases'te durur); ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa(f"release_assets/ai_models/{rel}")
     assert p.stat().st_size > _SERT_SINIR, f"{rel} artik kucuk — bu karsit-kanit guncellenmeli"
 
 

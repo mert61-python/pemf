@@ -53,8 +53,9 @@ yolo_pt_gerekir = pytest.mark.skipif(
     and not _zorunlu_mu(),
     reason="torch/YOLO-PT yok (CI) — gerçek tespit hedefli CAM (DetCAM) testi modelli ortamda",
 )
+# D5-F (K5-F P5): `yolo_pt_gerekir` ile AYNI desen — eskiden düz `_RNA_PT.exists()`: golden zorunlu kipte de ATLIYORDU.
 rna_pt_gerekir = pytest.mark.skipif(
-    not (_torch_var() and _RNA_PT.exists()),
+    not (_torch_var() and _eser_var_mi("ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt")) and not _zorunlu_mu(),
     reason="torch/mlp PT yok (CI) — gerçek IG testi modelli ortamda",
 )
 

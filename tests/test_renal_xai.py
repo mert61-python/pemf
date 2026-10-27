@@ -38,8 +38,15 @@ def _torch_var() -> bool:
         return False
 
 
+from golden.eser import eser_var_mi as _eser_var_mi  # noqa: E402
+from golden.eser import zorunlu_mu as _zorunlu_mu  # noqa: E402
+
+# D5-F (K5-F P5): eskiden `_PT.exists()` (yalnız KOK/release_assets) + düz skipif — ağırlık PEMF_AI_MODELS_DIR'dan verilince
+# de atlıyor, `PEMF_GOLDEN_REQUIRED=1` (yayın öncesi süit) kipinde de ATLIYORDU. Kardeşleri (AII-3.13) ile aynı desen: ürünün
+# model kökü görülür, golden zorunlu kipte atlanmaz (koşar ve DÜŞER).
 gercek_pt_gerekir = pytest.mark.skipif(
-    not (_torch_var() and _PT.exists()),
+    not (_torch_var() and _eser_var_mi("ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt"))
+    and not _zorunlu_mu(),
     reason="torch/858MB renal PT yok (CI) — gerçek HiRes-CAM testi modelli ortamda",
 )
 
