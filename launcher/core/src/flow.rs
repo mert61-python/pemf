@@ -145,6 +145,44 @@ pub fn plan_part_paths(manifest_raw: &str, install_root: &Path) -> Vec<PathBuf> 
         .collect()
 }
 
+/// İndirilen paketin SHA doğrulaması + uyuşmazlıkta TEK SEFERLİK temiz yeniden indirme.
+///
+/// ⚠️ SAHA ŞİKÂYETİ 2026-08-11: kullanıcı güncellemede "SHA256 UYUŞMADI — dosya bozuk ya da değiştirilmiş" gördü; oysa hem
+/// yayındaki paket hem sonradan inen kopya DOĞRUYDU (ikisi de manifest sha'sıyla birebir). Bozulma İNDİRME sırasında oluşan
+/// geçici bir durumdu — ama 6-denemeli retry YALNIZ ağ hatalarını kapsıyor; "indi ama sha tutmadı" hâli kullanıcıya hemen hata
+/// olarak çıkıyordu. ÇÖZÜM: sha uyuşmazlığında SIFIRDAN bir kez daha indir; ikinci kez de tutmazsa hata gerçektir ve yukarı
+/// çıkar — güvenlik doğrulaması ZAYIFLATILMAZ, yalnız bir kez telafi edilir. Kullanıcı duraklattı/iptal ettiyse telafi YOK.
+///
+/// D5.20 (B-10.90): karar ve akış eskiden `ensure_package`in içindeydi ve yalnız METİN çapasıyla kapılıydı (`if false && …`
+/// mutantı 3+13+62 testte YEŞİL). Ağ katmanı (HTTPS + host pini) test edilemediği için yeniden indirme ENJEKTE edilir;
+/// birim testleri bu fonksiyonu gerçek dosya + gerçek `verify` ile koşturur.
+fn dogrula_ya_da_bir_kez_temiz_indir(
+    dest: &Path,
+    sha256: &str,
+    label: &str,
+    on: &mut dyn FnMut(Progress),
+    control: &dyn Fn() -> net::Control,
+    temiz_yeniden_indir: &mut dyn FnMut(&mut dyn FnMut(Progress)) -> Result<(), FlowError>,
+) -> Result<(), FlowError> {
+    on(Progress::Verifying { what: label.to_string() });
+    if let Err(e) = verify::verify_file(dest, sha256) {
+        // Bozuk dosyayı BIRAKMA: kalırsa sonraki kurulum onu "önbellek" sanıp aynı hataya tekrar düşer.
+        let _ = fs::remove_file(dest);
+        if temiz_yeniden_indirilebilir(control) {
+            on(Progress::Reconnecting { what: label.to_string(), attempt: 1, max: 1 });
+            temiz_yeniden_indir(on)?;
+            on(Progress::Verifying { what: label.to_string() });
+            if let Err(e2) = verify::verify_file(dest, sha256) {
+                let _ = fs::remove_file(dest);
+                return Err(e2.into());
+            }
+            return Ok(());
+        }
+        return Err(e.into());
+    }
+    Ok(())
+}
+
 pub fn ensure_package(
     pkg: &crate::Package,
     cache: &Path,
@@ -200,42 +238,16 @@ pub fn ensure_package(
         }
     }
 
-    on(Progress::Verifying { what: label.to_string() });
-    if let Err(e) = verify::verify_file(&dest, &pkg.sha256) {
-        // Bozuk dosyayı BIRAKMA: kalırsa sonraki kurulum onu "önbellek" sanıp
-        // aynı hataya tekrar düşer.
-        let _ = fs::remove_file(&dest);
-
-        // ⚠️ SAHA ŞİKÂYETİ 2026-08-11: kullanıcı güncellemede
-        //   "SHA256 UYUŞMADI — dosya bozuk ya da değiştirilmiş"
-        // gördü; oysa hem yayındaki paket hem sonradan inen kopya DOĞRUYDU (ikisi de
-        // manifest sha'sıyla birebir). Yani bozulma İNDİRME sırasında oluşan geçici bir
-        // durumdu — ama yukarıdaki 6-denemeli retry YALNIZ ağ hatalarını kapsıyor;
-        // "indi ama sha tutmadı" hâli döngünün DIŞINDA olduğu için kullanıcıya hemen
-        // hata olarak çıkıyor ve elle tekrar denemesi gerekiyordu.
-        //
-        // Mesaj ayrıca gereksiz korkutucu: metin "değiştirilmiş" diyerek bir güvenlik
-        // olayı ima ediyor, oysa en olası sebep yarım/bayat indirmedir.
-        //
-        // ÇÖZÜM: sha uyuşmazlığında SIFIRDAN bir kez daha indir (`.part` da silinir, yani
-        // Range ile devam DEĞİL, tam yeniden indirme). İkinci kez de tutmazsa hata gerçektir
-        // ve yukarı çıkar — güvenlik doğrulaması ZAYIFLATILMAZ, yalnız bir kez telafi edilir.
-        if temiz_yeniden_indirilebilir(control) {
-            on(Progress::Reconnecting { what: label.to_string(), attempt: 1, max: 1 });
-            let _ = fs::remove_file(net::part_path(&dest, &pkg.sha256));
-            let mut cb = |done, total| {
-                on(Progress::Downloading { what: label.to_string(), done, total });
-            };
-            net::download_to_file(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)?;
-            on(Progress::Verifying { what: label.to_string() });
-            if let Err(e2) = verify::verify_file(&dest, &pkg.sha256) {
-                let _ = fs::remove_file(&dest);
-                return Err(e2.into());
-            }
-            return Ok(dest);
-        }
-        return Err(e.into());
-    }
+    // Telafi kolunun TEMİZ yeniden indirmesi: `.part` SİLİNİR (Range ile devam DEĞİL, tam yeniden indirme).
+    let mut temiz_yeniden_indir = |on: &mut dyn FnMut(Progress)| -> Result<(), FlowError> {
+        let _ = fs::remove_file(net::part_path(&dest, &pkg.sha256));
+        let mut cb = |done, total| {
+            on(Progress::Downloading { what: label.to_string(), done, total });
+        };
+        net::download_to_file(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)?;
+        Ok(())
+    };
+    dogrula_ya_da_bir_kez_temiz_indir(&dest, &pkg.sha256, label, on, control, &mut temiz_yeniden_indir)?;
     Ok(dest)
 }
 
@@ -1935,6 +1947,60 @@ mod tests {
     }
 
     const ABC_SHA: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    /// D5.20 (B-10.90): `dogrula_ya_da_bir_kez_temiz_indir`i gerçek dosya + gerçek `verify` ile koşturur; yeniden indirme
+    /// enjekte (ağ YOK). (sonuç, yeniden-indirme çağrı sayısı, dosya hâlâ var mı, içerik).
+    fn telafi_kos(ilk: &[u8], ikinci: &[u8], kontrol: net::Control) -> (bool, u32, bool, Vec<u8>) {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("paket.zip");
+        fs::write(&dest, ilk).unwrap();
+        let mut cagri = 0u32;
+        let mut on = |_p: Progress| {};
+        let kontrol_fn = move || kontrol;
+        let sonuc = dogrula_ya_da_bir_kez_temiz_indir(
+            &dest,
+            ABC_SHA,
+            "paket",
+            &mut on,
+            &kontrol_fn,
+            &mut |_on: &mut dyn FnMut(Progress)| {
+                cagri += 1;
+                fs::write(&dest, ikinci).map_err(FlowError::from)
+            },
+        );
+        let var = dest.exists();
+        let icerik = fs::read(&dest).unwrap_or_default();
+        (sonuc.is_ok(), cagri, var, icerik)
+    }
+
+    #[test]
+    fn D5_20_sha_uyusmazliginda_BIR_KEZ_temiz_yeniden_indirir_ve_dogrular() {
+        let (ok, cagri, var, icerik) = telafi_kos(b"BOZUK", b"abc", net::Control::Continue);
+        assert_eq!(cagri, 1, "sha uyuşmazlığında temiz yeniden indirme YAPILMADI (ya da birden çok kez yapıldı)");
+        assert!(ok && var && icerik == b"abc", "telafi sonrası doğru dosya kabul edilmedi: ok={ok} var={var}");
+    }
+
+    #[test]
+    fn D5_20_ikinci_indirme_de_bozuksa_HATA_ve_dosya_SILINIR() {
+        let (ok, cagri, var, _) = telafi_kos(b"BOZUK", b"HALA-BOZUK", net::Control::Continue);
+        assert_eq!(cagri, 1, "telafi TEK seferlik olmalı");
+        assert!(!ok, "ikinci indirme de sha'yı tutmadığı hâlde KABUL edildi — telafi sha kontrolünü ZAYIFLATIR");
+        assert!(!var, "bozuk dosya diskte bırakıldı → sonraki kurulum onu önbellek sanar");
+    }
+
+    #[test]
+    fn D5_20_duraklat_ya_da_iptalde_telafi_YAPILMAZ() {
+        for k in [net::Control::Pause, net::Control::Cancel] {
+            let (ok, cagri, var, _) = telafi_kos(b"BOZUK", b"abc", k);
+            assert!(!ok && cagri == 0 && !var, "{k:?}: kullanıcı durdurmuşken yeniden indirildi ya da bozuk dosya kaldı");
+        }
+    }
+
+    #[test]
+    fn D5_20_sha_tutuyorsa_yeniden_indirme_YOK() {
+        let (ok, cagri, var, _) = telafi_kos(b"abc", b"BASKA", net::Control::Continue);
+        assert!(ok && cagri == 0 && var, "doğru dosya varken gereksiz yeniden indirme");
+    }
 
     #[test]
     fn onbellekteki_gecerli_dosya_yeniden_indirilmez() {
