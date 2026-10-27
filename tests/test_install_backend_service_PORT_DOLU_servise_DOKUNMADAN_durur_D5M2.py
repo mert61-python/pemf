@@ -20,6 +20,9 @@ durdurulmaz" iddiası HER koşuda · çekilen kod İZİN LİSTESİNE karşı den
 TUR 3 (çürütücü 2): süreç tablosu (WMI) boşsa belirsizlikte DURUR (p1) · dinleyen ADRESİ modellenir — 127.0.0.1 / ::1'deki launcher çocuğu
 da sayılır (p2) · install öneki betikte tanımlı `$GuiRoot` / `$ExePath` / `$ScriptDir`'i de taşır (p3) · `NssmExe` değişkeninin HER görünüşü
 (atama, `${…}`, kapsam öneki, foreach, param, dize) izin dışı — yalnız `& $NssmExe` çağrısının ilk öğesi serbest (p7 / p7b / A3).
+TUR 3b (çürütücü 3): İLK KURULUM (servis kaydı yok) + launcher çocuğu portta → DURUR, iki yol eşlik (p1c) · değişkeni ADI DİZE ile bağlayan
+ortak parametreler (`-PipelineVariable` / `-OutVariable` / `-ErrorVariable` / `-WarningVariable` / `-InformationVariable`, takma ad ve önek)
+ve splat izin dışı (p7f) · D5 H-1 `_IzinDisi` ile aynı sınıf: dosyaya yönlendirme ve sürücü nitelikli değişken izin dışı (araç kanıtı).
 ⛔ Gerçek ağ / süreç / servis sorgusu ya da işlemi YOK: `Get-NetTCPConnection` / `Get-CimInstance` (Win32_Process, Win32_Service) senaryo
 tablosundan yanıt veren gölgelerdir; `Stop-Process` / `Stop-Service` / `taskkill` / `Stop-PemfKurulumBackendi` / `& $NssmExe` yalnız KAYIT
 tutan gölgelerdir (Get-Command ile İŞLEV kanıtlı, modül otomatik yükleme KAPALI). Betikten yalnız denetim işlevi ve onu kullanan üst düzey
@@ -137,6 +140,10 @@ SENARYOLAR = {
     "launcher_cocugu_ipv6_loopback": _senaryo([(PORT, P_COCUK, "::1")], _SUREC, _SERVIS),
     # TUR 3 (p1): süreç tablosu (Win32_Process) BOŞ (WMI bozuk / yetkisiz) — sahip "kendi" olarak kanıtlanamaz → belirsizlikte DUR
     "surec_tablosu_bos": _senaryo([(PORT, P_COCUK)], [], _SERVIS),
+    # TUR 3b (çürütücü 3 p1c): İLK KURULUM — servis HİÇ kayıtlı değil (Win32_Service boş); E2-2.4'ün asıl senaryosu: launcher çocuğu portu
+    # tutarken klinik ilk kez servis kurar. Servis sorgusu boşken denetimi atlayan gerileme burada görünür. Port boşsa ilk kurulum SÜRER.
+    "ilk_kurulum_servis_yok": _senaryo([(PORT, P_COCUK)], _SUREC, []),
+    "ilk_kurulum_port_bos": _senaryo([], _SUREC, []),
 }
 
 
@@ -250,6 +257,24 @@ foreach ($s in $sec) {
             $v.VariablePath.UserPath -eq 'NssmExe'
         if (-not $serbest) { Write-Output ("IZIN-DISI NssmExe gorunusu: " + $u.Extent.Text); exit 5 }
     }
+    # D5 M-2 TUR 3b (çürütücü 3 p7f): değişkeni ADI DİZE olarak bağlayan ortak parametreler (tam ad / takma ad / >= 3 harfli önek;
+    # VariableExpressionAst YOK) ve splat (parametre adı görünmez).
+    $yazan = @('PipelineVariable', 'OutVariable', 'ErrorVariable', 'WarningVariable', 'InformationVariable')
+    foreach ($pa in @($s.FindAll({ param($n) $n -is [CommandParameterAst] }, $true))) {
+        $pn = "$($pa.ParameterName)"
+        if (@('pv', 'ov', 'ev', 'wv', 'iv') -contains $pn -or ($pn.Length -ge 3 -and @($yazan | Where-Object { $_ -like "$pn*" }).Count)) {
+            Write-Output ("IZIN-DISI degisken yazan parametre: " + $pa.Parent.Extent.Text); exit 5 }
+    }
+    foreach ($sp in @($s.FindAll({ param($n) $n -is [VariableExpressionAst] -and $n.Splatted }, $true))) {
+        Write-Output ("IZIN-DISI splat: " + $sp.Parent.Extent.Text); exit 5 }
+    # D5 M-2 TUR 3b (D5 H-1 `_IzinDisi` ile aynı sınıf): komut / yöntem olmadan GERÇEK diske yazan yönlendirme (yalnız $null hedefi
+    # serbest; 2>&1 birleştirmesi dosya değildir) ve sürücü nitelikli değişken (yalnız env: serbest).
+    foreach ($r in @($s.FindAll({ param($n) $n -is [FileRedirectionAst] }, $true))) {
+        if (-not ($r.Location -is [VariableExpressionAst] -and $r.Location.VariablePath.UserPath -eq 'null')) {
+            Write-Output ("IZIN-DISI yonlendirme: " + $r.Extent.Text); exit 5 }
+    }
+    foreach ($dv in @($s.FindAll({ param($n) $n -is [VariableExpressionAst] -and $n.VariablePath.IsDriveQualified -and $n.VariablePath.DriveName -ne 'env' }, $true))) {
+        Write-Output ("IZIN-DISI surucu nitelikli degisken: " + $dv.Extent.Text); exit 5 }
     $parca.Add($s.Extent.Text)
 }
 [System.IO.File]::WriteAllText(@@CIKTI@@, ($parca -join "`n"), [System.Text.UTF8Encoding]::new($false))
@@ -291,6 +316,27 @@ _NSSM_KACIS = {
     "dize_ici": 'Write-Status "x $NssmExe"',
     "baska_degiskene": "$x = $NssmExe",
     "onekli_cagri": "& $script:NssmExe stop x",
+    # TUR 3b (çürütücü 3 p7f / A3): değişken ADI DİZE olarak bağlanır — `$NssmExe` 'Out-Null'a (gerçek eşdeğeri 'taskkill.exe') bağlanıp
+    # serbest `& $NssmExe` ile KOŞUYORDU. Ortak parametre (tam ad, takma ad, ≥ 3 harfli önek) ve splat (`@p` — parametre adı görünmez).
+    "pipelinevariable": "$null = @('Out-Null') | Select-Object -PipelineVariable NssmExe | Where-Object { & $NssmExe; $false }",
+    "pv_takma_ad": "$null = Select-Object -InputObject 'Out-Null' -pv NssmExe | Where-Object { & $NssmExe; $false }",
+    "outvariable": "$null = Get-CimInstance Win32_Service -OutVariable NssmExe",
+    "errorvariable_onek": "$null = Get-CimInstance Win32_Service -ErrorVar NssmExe",
+    "splat": "$p = @{ PipelineVariable = 'NssmExe' }; $null = @('Out-Null') | Select-Object @p | Where-Object { & $NssmExe; $false }",
+}
+
+# TUR 3b (D5 H-1 `_IzinDisi` ile aynı sınıf — çürütücü 3 a1r / a1v / n7r / n7v): komut / yöntem OLMADAN gerçek diske yazan biçimler.
+_DOSYA_YAZIMI = {
+    "yonlendirme": "Write-Status 'x' *>> 'C:\\SAHTE\\yok.txt'",
+    "akis_yonlendirme": "$null = Get-NetTCPConnection -LocalPort $Port -State Listen 2> 'C:\\SAHTE\\yok.txt'",
+    "surucu_degiskeni": "${C:\\SAHTE\\yok.txt} = 'x'",
+    "function_surucusu": "${function:Write-Status} = { }",
+}
+# KARŞIT: ürünün kullandığı zararsız biçimler (ortak eylem parametresi, `$null` / birleştirme yönlendirmesi, env, `& $NssmExe`) serbest.
+_ZARARSIZ = {
+    "eylem_parametresi": "$null = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue",
+    "null_ve_birlestirme": "$null = Get-NetTCPConnection -LocalPort $Port -State Listen *>$null; Write-Status 'x' 2>&1",
+    "env_ve_nssm": "$x = $env:PEMF_API_PORT; & $NssmExe stop x",
 }
 
 
@@ -314,6 +360,19 @@ def test_ARAC_izin_listesi_NssmExe_her_bicimi_YAKALAR_kod_KOSMAZ(tmp_path, bicim
 def test_ARAC_KARSIT_izinli_tek_bicim_ampersand_NssmExe_ilk_oge(tmp_path):
     p = _sentetik_betik(tmp_path, "& $NssmExe stop x")
     assert "& $NssmExe stop x" in _cek(tmp_path, "install", p)
+
+
+@pytest.mark.parametrize("bicim", list(_DOSYA_YAZIMI))
+def test_ARAC_izin_listesi_DOSYA_YAZAN_yonlendirme_ve_surucu_degiskeni_YAKALAR_kod_KOSMAZ(tmp_path, bicim):
+    p = _sentetik_betik(tmp_path, _DOSYA_YAZIMI[bicim])
+    with pytest.raises(AssertionError, match="izin listesi DIŞINDA"):
+        _cek(tmp_path, "install", p)
+
+
+@pytest.mark.parametrize("bicim", list(_ZARARSIZ))
+def test_ARAC_KARSIT_zararsiz_bicimler_SERBEST_sahte_kirmizi_yok(tmp_path, bicim):
+    p = _sentetik_betik(tmp_path, _ZARARSIZ[bicim])
+    assert _ZARARSIZ[bicim] in _cek(tmp_path, "install", p)
 
 
 def kos(tmp_path: Path, kip: str, senaryo: str, port: int = PORT) -> tuple[int, list[str]]:
@@ -432,6 +491,23 @@ def test_KRITIK_surec_tablosu_BOS_ise_belirsizlikte_DURUR(tmp_path):
     )
 
 
+def test_KRITIK_ILK_KURULUM_servis_YOKKEN_launcher_cocugu_portu_tutuyorsa_DURUR(tmp_path):
+    """Çürütücü 3 p1c (boş girdi, farklı yer): servis kaydı YOK (ilk kurulum) → değiştirilecek servis ağacı boş, portu tutan HER süreç
+    dıştır. `if (-not $Servis) { return $null }` gibi bir gerileme ilk kurulumda denetimi atlar: launcher çocuğu portu tutarken servis
+    kurulur, bind edemeyip döngüde çöker (E2-2.4'ün asıl senaryosu)."""
+    rc, satir = kos(tmp_path, "install", "ilk_kurulum_servis_yok")
+    assert rc == 1 and [s for s in _hata(satir) if str(P_COCUK) in s and LAUNCHER_COCUGU in s and str(PORT) in s], (
+        f"[ilk_kurulum_servis_yok] servis hiç kurulu değilken (ilk kurulum) launcher çocuğu {PORT}'u tutuyor ama kurulum SÜRDÜ:\n{satir}"
+    )
+
+
+def test_KARSIT_ILK_KURULUM_port_BOS_ise_surer(tmp_path):
+    rc, satir = kos(tmp_path, "install", "ilk_kurulum_port_bos")
+    assert rc == 0 and not _hata(satir) and "PAUSE" not in satir, (
+        f"ilk kurulumda (servis kaydı yok) port boşken kurulum durdu:\n{satir}"
+    )
+
+
 def test_KARSIT_port_BOS_ise_kurulum_surer(tmp_path):
     rc, satir = kos(tmp_path, "install", "bos")
     assert rc == 0 and not _hata(satir) and "PAUSE" not in satir, satir
@@ -474,6 +550,8 @@ def test_KARSIT_launcher_BASKA_portta_ise_surer(tmp_path):
         ("iki_dinleyen_launcher_once", True),
         ("launcher_cocugu_loopback", True),
         ("surec_tablosu_bos", True),
+        ("ilk_kurulum_servis_yok", True),
+        ("ilk_kurulum_port_bos", False),
     ],
 )
 def test_KRITIK_ESLIK_setup_services_E2_2_4_ile_AYNI_karar(tmp_path, senaryo, durur):

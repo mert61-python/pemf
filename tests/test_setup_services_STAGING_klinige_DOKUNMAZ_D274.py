@@ -18,6 +18,8 @@ dizininde 101, bu kurulumda 202; `Stop-Process` öldüreni tablodan siler), `Get
 dizinde), güvenlik duvarı, ACİL DURDUR ve teardown kayıtçıdır. `exit N` (iç içe olanlar dahil) ifade metninde "çıkış kodunu kaydet + dön"e
 çevrilir ve koşum orada BİTER. Kaldırma senaryosunda koşulu doğru olan kaldırma dalının gövdesi koşar. `$AppDir` klon TEMP'indeki sahte
 dizindir; "ortak" senaryolarda klinik dizinin TA KENDİSİDİR.
+D5 M-1 TUR 3b: komutsuz dosya yazımı (dosyaya yönlendirme, `${C:\\…}` sürücü nitelikli değişken) da "saf" sayılmaz — izinli bir komuta
+eklenmiş `*>> dosya` artık KOŞMAZ (çürütücü 3 a1r / a1v yükü bu aparatta koşuyordu; E2-2.4 aynı aparatı kullanır).
 """
 
 from __future__ import annotations
@@ -126,6 +128,12 @@ function Saf([string]$m) {
         $ad = $c.GetCommandName()
         if (-not $ad -or -not $izinli.Contains($ad)) { return $false }
     }
+    # D5 M-1 TUR 3b (çürütücü 3 a1r / a1v): komutsuz DOSYA YAZIMI — dosyaya yönlendirme (yalnız $null hedefi saf) ve sürücü nitelikli
+    # değişken (${C:\...} = ...; yalnız env: saf) izinli komutla bile GERÇEK diske yazar → saf DEĞİL, koşmaz (D5 H-1 _IzinDisi ile aynı sınıf).
+    if ($a.Find({ param($n) $n -is [System.Management.Automation.Language.FileRedirectionAst] -and
+            -not ($n.Location -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.Location.VariablePath.UserPath -eq 'null') }, $true)) { return $false }
+    if ($a.Find({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.IsDriveQualified -and
+            $n.VariablePath.DriveName -ne 'env' }, $true)) { return $false }
     $true
 }
 $t = $null; $e = $null

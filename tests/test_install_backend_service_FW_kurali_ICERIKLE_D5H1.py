@@ -16,6 +16,9 @@ LAN güvenilir; yeni kural uzak adres vermeden kurulur, mevcut kuralın uzak adr
 bozuksa backend gibi 8000 (bozuksa eylemli UYARI).
 D5 M-1 TUR 3 (çürütücü 2): yalnız keşif sorgusu fırlarsa API sonucu doğru, keşif False, tek UYARI (n4) · kurulumun SON ÖZETİ gerçek
 ifadesiyle 4 bileşimde KOŞAR (n5) · kör-denetim bekçisi koşullu tanımı ürün gerilemesi olarak söyler (n3i).
+D5 M-1 TUR 3b (çürütücü 3): izin listesi (`_IzinDisi`, IG95 / 4B35 / D5M1 / bu dosya ORTAK) yönlendirmeyi ve sürücü nitelikli değişkeni de
+reddeder — yük komutsuz / yöntemsiz GERÇEK diske yazamaz (n7r / n7v / a1r / a1v; araç kanıtı) · son özet BLOĞUNUN TAMAMI koşar, ikinci bir
+"doğrulandı" satırı da görünür (n5f).
 ⛔ Gerçek güvenlik duvarı YOK: fonksiyonlar ve güvenlik duvarı adımı PowerShell parser'ıyla çekilir; NetSecurity cmdlet'leri durum tutan
 sahtelerle gölgelenir, gölgelerin İŞLEV olduğu Get-Command ile KANITLANIR (değilse çıkış 99) ve modül OTOMATİK YÜKLEME KAPALI. Betiğin kendisi
 (yönetici denetimi, NSSM, servis adımları) ÇALIŞTIRILMAZ.
@@ -146,6 +149,11 @@ IZINLI_KOMUT = (
     "Ensure-PemfBackendFirewallKurali",
 )
 IZINLI_UYE = ("Match", "ToCharArray", "GetNumericValue", "Split")
+# D5 M-1 TUR 3b (çürütücü 3 n7r / n7v / a1r / a1v — aparat sızıntısı, DOSYA YAZIMI sınıfı): komut ve yöntem kapalıyken iki biçim hâlâ GERÇEK
+# diske yazıyordu (yük IG95 / 4B35 / D5M1 aparatlarında KOŞTU, işaret dosyası yazıldı): yönlendirme (`> dosya`, `*>> dosya`, `2> dosya` —
+# `FileRedirectionAst`; yalnız `$null` hedefi serbest, `2>&1` birleştirme yönlendirmesi dosya değildir) ve sürücü nitelikli değişken
+# (`${C:\…} = …` FileSystem içerik sağlayıcısı, `${function:Log} = …` gölgeyi ezer; yalnız `env:` serbest — `$script:` / `$variable:`
+# sürücü nitelikli SAYILMAZ, ölçüldü). Bir ürün gerilemesi (`New-NetFirewallRule … 2>> "$env:ProgramData\…\fw.log"`) artık KOŞMADAN IZIN-DISI.
 IZIN_PS = r"""
 function _IzinDisi($Dugum, [string[]]$Komut, [string[]]$Uye) {
     foreach ($c in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true))) {
@@ -153,6 +161,14 @@ function _IzinDisi($Dugum, [string[]]$Komut, [string[]]$Uye) {
     }
     foreach ($y in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true))) {
         if ($Uye -notcontains "$($y.Member.Extent.Text)") { return ("yontem: " + $y.Extent.Text) }
+    }
+    foreach ($r in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.FileRedirectionAst] }, $true))) {
+        if (-not ($r.Location -is [System.Management.Automation.Language.VariableExpressionAst] -and $r.Location.VariablePath.UserPath -eq 'null')) {
+            return ("yonlendirme: " + $r.Extent.Text) }
+    }
+    foreach ($v in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and
+            $n.VariablePath.IsDriveQualified -and $n.VariablePath.DriveName -ne 'env' }, $true))) {
+        return ("surucu nitelikli degisken: " + $v.Extent.Text)
     }
     $null
 }
@@ -167,10 +183,53 @@ def izin_disi_iletisi(betik: Path, ne: str, cikti: str) -> str:
     satir = [s for s in cikti.splitlines() if s.startswith("IZIN-DISI")]
     return (
         f"{betik.name} {ne}: izin listesi DIŞINDA {satir[0][len('IZIN-DISI ') :]} — aparat onu GERÇEKTEN koşardı "
-        "(gerçek güvenlik duvarı / süreç / servis); kod KOŞTURULMADI. Ürün değişikliğini gözden geçirin ya da komutu gölgeleyip listeye ekleyin."
+        "(gerçek güvenlik duvarı / süreç / servis / dosya sistemi); kod KOŞTURULMADI. Ürün değişikliğini gözden geçirin ya da komutu "
+        "gölgeleyip listeye ekleyin."
         if satir
         else ""
     )
+
+
+# ── ARAÇ KANITI (D5 M-1 TUR 3b): `_IzinDisi` yönlendirmeyi ve sürücü nitelikli değişkeni GERÇEKTEN yakalar (sentetik gövde — ürün kodu
+# KOŞMAZ, yalnız ayrıştırılır; yol `C:\SAHTE\…` hiç açılmaz). Bu sınıf aparat hatasını (kol hiç ateşlemiyor) mutant koşmadan gösterir.
+_DOSYA_YAZIMI = {
+    "yonlendirme_ekle": ("Select-Object -InputObject 'x' *>> 'C:\\SAHTE\\yok.txt'", "yonlendirme"),
+    "yonlendirme_yaz": ("Get-Date > 'C:\\SAHTE\\yok.txt'", "yonlendirme"),
+    "akis_yonlendirme": ("Get-Date 2> 'C:\\SAHTE\\yok.txt'", "yonlendirme"),
+    "surucu_degiskeni_yaz": ("${C:\\SAHTE\\yok.txt} = 'x'", "surucu nitelikli"),
+    "function_surucusu": ("${function:Log} = { 'x' }", "surucu nitelikli"),
+    "KARSIT_null_hedef": ("Select-Object -InputObject 'x' *>$null", None),
+    "KARSIT_birlestirme": ("Get-Date 2>&1", None),
+    "KARSIT_env_ve_kapsam": ("$x = $env:PEMF_API_PORT; $y = $script:z; $w = $variable:x", None),
+}
+
+
+@pytest.mark.parametrize("bicim", list(_DOSYA_YAZIMI))
+def test_ARAC_izin_listesi_YONLENDIRME_ve_SURUCU_DEGISKENI_yakalar_kod_KOSMAZ(tmp_path, bicim):
+    satir, beklenen = _DOSYA_YAZIMI[bicim]
+    p = tmp_path / "sentetik.ps1"
+    p.write_text("function Sentetik {\n    " + satir + "\n}\n", encoding="utf-8-sig")
+    govde = (
+        IZIN_PS
+        + f"""
+$t = $null; $h = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile({_ps_lit(p)}, [ref]$t, [ref]$h)
+if ($h.Count) {{ Write-Output 'PARSE-ERROR'; exit 3 }}
+$f = $ast.Find({{ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }}, $true)
+Write-Output ("SONUC " + (_IzinDisi $f @('Select-Object', 'Get-Date') @()))
+"""
+    )
+    r = _pwsh_file(tmp_path, "arac.ps1", govde)
+    sonuc = [s for s in r.stdout.splitlines() if s.startswith("SONUC")]
+    assert r.returncode == 0 and sonuc, f"araç koşamadı (rc={r.returncode}):\n{r.stdout}\n{r.stderr}"
+    if beklenen:
+        assert beklenen in sonuc[0], (
+            f"izin listesi '{satir}' biçimini YAKALAMADI ({sonuc[0]!r}) — komut / yöntem olmadan GERÇEK diske yazan yük aparatta koşar"
+        )
+    else:
+        assert sonuc[0].strip() == "SONUC", (
+            f"KARŞIT: zararsız biçim '{satir}' IZIN-DISI sayıldı (sahte kırmızı): {sonuc[0]!r}"
+        )
 
 
 def aparat_surucusu(govde: str, golgeler: tuple, izinli: tuple) -> str:
@@ -190,8 +249,8 @@ def aparat_sonucu_denetle(veri: dict, rc: int) -> None:
     )
     assert "izin_disi" not in veri, (
         f"setup_services.ps1 güvenlik duvarı dilimi / işlevi: izin listesi DIŞINDA {veri.get('izin_disi')} — aparat onu GERÇEKTEN koşardı "
-        f"(gerçek güvenlik duvarı / süreç / servis); kod KOŞTURULMADI (rc={rc}). Ürün değişikliğini gözden geçirin ya da komutu "
-        "gölgeleyip listeye ekleyin."
+        f"(gerçek güvenlik duvarı / süreç / servis / dosya sistemi); kod KOŞTURULMADI (rc={rc}). Ürün değişikliğini gözden geçirin ya da "
+        "komutu gölgeleyip listeye ekleyin."
     )
 
 
@@ -569,6 +628,78 @@ def test_KRITIK_install_SON_OZETI_biri_DOGRULANAMADIYSA_dogrulandi_DEMEZ(tmp_pat
         assert "DOĞRULANAMADI" in host[0] and "içerikle doğrulandı" not in host[0], (
             f"(Api={api}, Keşif={kesif}) bir kural doğrulanamadı ama install özeti 'içerikle doğrulandı' diyor — mobil / web istemci "
             f"(ACİL DURDUR dahil) LAN'dan bağlanamayabilir:\n{satir}"
+        )
+
+
+# ── Kurulum SON ÖZET BLOĞUNUN TAMAMI (D5 M-1 TUR 3b, çürütücü 3 n5f — ikiz çağrı yeri): yukarıdaki kol yalnız koşulunda $KesifFirewallOk
+# taşıyan TEK `if`i çeker; aynı bloğa eklenen ikinci bir "doğrulandı" satırı (ör. `if ($ApiFirewallOk) { Write-Host "… doğrulandı" }`)
+# görünmüyordu — operatör (Api=True, Keşif=False)'ta "içerikle doğrulandı" okurdu. Burada "Backend servisi kuruldu." satırından betiğin
+# SONUNA kadar bütün üst düzey ifadeler çekilir; İZİN LİSTESİ yalnız `Write-Host` + `pause` (kayıtçı gölgeler) — başka komut / yöntem /
+# yönlendirme → IZIN-DISI (süzülüp atlanmaz, KIRMIZI), blok 4 bileşimde KOŞAR ve sonuna (`pause`) ulaşır.
+_SON_OZET_CEK = r"""
+using namespace System.Management.Automation.Language
+@@IZIN_PS@@
+$t = $null; $h = $null
+$ast = [Parser]::ParseFile(@@BETIK@@, [ref]$t, [ref]$h)
+if ($h.Count) { Write-Output "PARSE-ERROR"; exit 3 }
+$ust = @($ast.EndBlock.Statements)
+$bas = -1
+for ($i = 0; $i -lt $ust.Count; $i++) { if ($ust[$i].Extent.Text -like 'Write-Host "Backend servisi kuruldu."*') { $bas = $i; break } }
+if ($bas -lt 0) { Write-Output "OZET-YOK"; exit 4 }
+$sec = @($ust[$bas..($ust.Count - 1)])
+foreach ($s in $sec) { $ihlal = _IzinDisi $s @('Write-Host', 'pause') @(); if ($ihlal) { Write-Output ("IZIN-DISI " + $ihlal); exit 5 } }
+[System.IO.File]::WriteAllText(@@CIKTI@@, (($sec | ForEach-Object { $_.Extent.Text }) -join "`n"), [System.Text.UTF8Encoding]::new($false))
+Write-Output ("OK " + $sec.Count)
+"""
+
+
+def install_son_ozet_blogu(tmp_path: Path, betik: Path = BETIK) -> str:
+    cikti = tmp_path / "son_ozet.txt"
+    govde = (
+        _SON_OZET_CEK.replace("@@IZIN_PS@@", IZIN_PS)
+        .replace("@@BETIK@@", _ps_lit(betik))
+        .replace("@@CIKTI@@", _ps_lit(cikti))
+    )
+    r = _pwsh_file(tmp_path, "son_ozet_cek.ps1", govde)
+    assert r.returncode != 5, izin_disi_iletisi(
+        betik, "son özet bloğu ('Backend servisi kuruldu.' → betik sonu)", r.stdout
+    )
+    assert r.returncode == 0 and r.stdout.startswith("OK"), (
+        f"{betik.name}: son özet bloğu ('Write-Host \"Backend servisi kuruldu.\"' ile başlayan üst düzey ifade) bulunamadı:\n"
+        f"{r.stdout}\n{r.stderr}"
+    )
+    return cikti.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(("api", "kesif"), [(True, True), (True, False), (False, True), (False, False)])
+def test_KRITIK_install_SON_OZET_BLOGUNUN_TAMAMI_biri_DOGRULANAMADIYSA_hicbir_satir_dogrulandi_DEMEZ(
+    tmp_path, api, kesif
+):
+    blok = install_son_ozet_blogu(tmp_path)
+    kod = (
+        "function pause { _Olay 'PAUSE' }\n"
+        "if ((Get-Command pause).CommandType -ne 'Function') { _Olay 'GOLGE-YOK pause'; exit 99 }\n"
+        f"$ApiFirewallOk = ${str(api).lower()}\n$KesifFirewallOk = ${str(kesif).lower()}\n$ApiPort = {PORT}\n"
+        "$ServiceName = 'PemfBackend_D5H1_SAHTE'; $UsingExe = $true; $LogDir = 'C:\\SAHTE\\logs'\n"
+        "$ProfilDosyasi = 'C:\\SAHTE\\deploy\\device.env'; $NssmExe = 'C:\\SAHTE\\nssm.exe'\n" + blok
+    )
+    satir, _son = surucu_kos(tmp_path, kod, [])
+    assert satir and satir[-1] == "PAUSE", f"son özet bloğu sonuna (pause) kadar koşmadı:\n{satir}"
+    dogrulandi = [s for s in satir if s.startswith("HOST ") and "doğrulandı" in s]
+    if api and kesif:
+        assert len(dogrulandi) == 1 and str(PORT) in dogrulandi[0], (
+            f"iki kural doğrulandı ama son özet bloğunda TAM bir 'doğrulandı' (TCP {PORT}) satırı yok:\n{satir}"
+        )
+        assert not [s for s in satir if "DOĞRULANAMADI" in s], (
+            f"iki kural doğrulandı ama 'DOĞRULANAMADI' basıldı:\n{satir}"
+        )
+    else:
+        assert not dogrulandi, (
+            f"(Api={api}, Keşif={kesif}) bir kural doğrulanamadı ama install son özet bloğunda 'doğrulandı' satırı var — operatör "
+            f"'içerikle doğrulandı' okur, mobil / web istemci (ACİL DURDUR dahil) LAN'dan bağlanamayabilir:\n{dogrulandi}\n{satir}"
+        )
+        assert [s for s in satir if s.startswith("HOST ") and "DOĞRULANAMADI" in s], (
+            f"(Api={api}, Keşif={kesif}) son özet bloğu 'DOĞRULANAMADI' demiyor:\n{satir}"
         )
 
 

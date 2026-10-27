@@ -17,6 +17,8 @@ TUR 2 (çürütücü): aynı adlı iki doğru kural (x1) · işlev fırlatırsa 
 işlev İZİN LİSTESİ (gölgesiz dış komut aparatta koşmaz).
 TUR 3 (çürütücü 2): yalnız 2. kuralın (keşif) denetimi fırlarsa 1. kuralın sonucu taşınmaz (n4) · özet dilimi yöntem çağrısını da
 izin listesine karşı denetler (n7) · koşullu (iç içe) işlev tanımı kör-denetim bekçisinde ürün gerilemesi olarak söylenir (n3i).
+TUR 3b (çürütücü 3): staging kipinde de doğrulanamayan kural (fırlayan sorgu / silinemeyen uymayan kural) ApiFirewallOk'u False yapar (n4f) ·
+dilim ve özet izin listesi (D5 H-1 `_IzinDisi`) yönlendirmeyi ve sürücü nitelikli değişkeni de reddeder (n7r / n7v / a1r / a1v).
 ⛔ Gerçek güvenlik duvarı YOK: işlev ve döngü dilimi PowerShell parser'ıyla çekilir; NetSecurity cmdlet'leri D5 H-1 kapısının durum tutan
 gölgeleriyle (Get-Command ile İŞLEV kanıtlı, modül otomatik yükleme KAPALI) koşar. Betiğin gerçek `Log`u (C:\\ProgramData'ya yazar) ASLA
 yüklenmez — kayıtçı gölge kullanılır. Özet dilimi yalnız izinli komutlarla (Log / Set-Content gölgesi / Get-Date / Join-Path) koşar.
@@ -200,6 +202,27 @@ def test_KRITIK_yalniz_KESIF_kurali_denetimi_FIRLATIRSA_tek_denetlenemedi_ve_Fal
     )
     assert api == "False|Boolean", (
         f"keşif kuralının denetimi fırladı ama ApiFirewallOk = {api} (beklenen False — 1. kuralın sonucu taşındı)\n{satir}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("kural", "bayrak", "uyari"),
+    [
+        (dict(DOGRU_API, n=STAGING), {"sorguduser": True}, "denetlenemedi"),
+        (dict(DOGRU_API, n=STAGING, en="False"), {"silduser": True}, "silinemedi"),
+    ],
+    ids=["sorgu_firlar", "uymayan_silinemez"],
+)
+def test_KRITIK_STAGING_kipinde_de_kural_DOGRULANAMAZSA_False(tmp_path, kural, bayrak, uyari):
+    """Çürütücü 3 n4f (kip koşullu sayım): staging kipinde (tek, kipe bağlı adlı kural) kural denetimi fırlarsa ya da uymayan kural
+    silinemezse de ApiFirewallOk False olmalı — `if (-not $KuralOk -and -not $StagingMi)` gibi bir gerileme staging kurulumunun özetine /
+    `.install_verified`ine 'apiFirewall=True' yazdırır (staging istemcisi LAN'dan bağlanamazken)."""
+    api, satir, _son = dongu_kos(tmp_path, [kural], staging=True, **bayrak)
+    uy = [s for s in _uyari(satir) if uyari in s]
+    assert len(uy) == 1 and STAGING in uy[0], f"staging kuralı için tek '{uyari}' UYARIsı (kural adıyla) yok:\n{satir}"
+    assert api == "False|Boolean", (
+        f"[staging] kural doğrulanamadı ({uyari}) ama ApiFirewallOk = {api} (beklenen False — staging kural sonucu özete sayılmıyor)\n"
+        f"{satir}"
     )
 
 

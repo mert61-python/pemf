@@ -15,6 +15,9 @@ AYNI karar ve AYNI metin — eşlik bu dosyada ölçülür). Satır yoksa / geç
 (ACİL DURDUR ucu) AYNEN kalır.
 TUR 3 (çürütücü 2): sürücü betiğin `-Mode` parametresini TANIMLAR ve Y44 iki kipte (device / server) ölçülür — kip koşullu koruma (q2 / q2b)
 görünür; değer listesinde çok `_`li geçerli yazım (`8_0_10` = 8010, Python `int()`) SÜRER, çift `_` (`8__010`) DURUR (q4).
+TUR 3b (çürütücü 3): Y44 profil ARAMASIYLA (kip → `deploy\\<Mode>.env`) her kipte koşar — setup device / server / staging, install device /
+server; yalnız o kipin profili bozukken DURUR ve HATA o dosyayı söyler, başka kipin bozuk profili DURDURMAZ (q2c / q2d) · install AST: Y44
+`if` koşulu ve okuduğu dosya servis ortamının profil değişkeni · izin denetimi dosyaya yönlendirmeyi ve sürücü nitelikli değişkeni de reddeder.
 ⛔ Betik GERÇEKTEN koşmaz: yalnız `Test-PemfApiPortDegeri` + `Read-PemfProfilEnv` tanımları ve Y44 üst düzey ifadesi parser ile çekilir,
 koşturulmadan ÖNCE izin listesine karşı denetlenir (dışında komut / yöntem → koşmaz, KIRMIZI); `Write-Status` / `Log` / `Write-Host` /
 `pause` kayıtçı gölgedir (Get-Command ile İŞLEV kanıtlı, modül otomatik yükleme KAPALI). Profil dosyası test geçici dizinindedir.
@@ -74,6 +77,25 @@ IZINLI_KOMUT = (
 )
 IZINLI_UYE = ("Contains", "Trim", "StartsWith", "Split", "Match", "ToCharArray", "GetNumericValue")
 
+# İzin denetimi (D5 M-3 TUR 3b): komut · yöntem · dosyaya yönlendirme (yalnız `$null` hedefi serbest) · sürücü nitelikli değişken (yalnız
+# `env:` serbest) — D5 H-1 `_IzinDisi` ile AYNI sınıf (çürütücü 3 n7r / n7v / a1r / a1v: yük komutsuz / yöntemsiz GERÇEK diske yazıyordu).
+# Bu dosya başka test modülünü içe aktarmaz; denetim burada kendi kopyasıyla durur.
+_IZIN_PS = r"""
+function _IzinDisiY44($Dugum, [string[]]$Komut, [string[]]$Uye) {
+    foreach ($c in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true))) {
+        if ($Komut -notcontains "$($c.GetCommandName())") { return ("komut: " + $c.Extent.Text) } }
+    foreach ($y in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true))) {
+        if ($Uye -notcontains "$($y.Member.Extent.Text)") { return ("yontem: " + $y.Extent.Text) } }
+    foreach ($r in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.FileRedirectionAst] }, $true))) {
+        if (-not ($r.Location -is [System.Management.Automation.Language.VariableExpressionAst] -and $r.Location.VariablePath.UserPath -eq 'null')) {
+            return ("yonlendirme: " + $r.Extent.Text) } }
+    foreach ($v in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and
+            $n.VariablePath.IsDriveQualified -and $n.VariablePath.DriveName -ne 'env' }, $true))) {
+        return ("surucu nitelikli degisken: " + $v.Extent.Text) }
+    $null
+}
+"""
+
 _SURUCU = r"""
 Import-Module Microsoft.PowerShell.Management, Microsoft.PowerShell.Utility
 $PSModuleAutoLoadingPreference = 'None'
@@ -94,6 +116,7 @@ exit 0
 # ölçülür; burada şart koşulmaz ki `exit`siz gerileme davranış kolunda "DURMADI" diye görünsün). İzin listesi denetimi.
 _CEK = r"""
 using namespace System.Management.Automation.Language
+@@IZIN_PS@@
 $t = $null; $h = $null
 $ast = [Parser]::ParseFile(@@BETIK@@, [ref]$t, [ref]$h)
 if ($h.Count) { Write-Output "PARSE-ERROR"; exit 3 }
@@ -102,32 +125,35 @@ $tanim = @($ust | Where-Object { $_ -is [FunctionDefinitionAst] -and @('Test-Pem
 $y44 = @($ust | Where-Object { $_ -isnot [FunctionDefinitionAst] -and
     $_.Find({ param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Test-PemfApiPortDegeri' }, $true) } | Select-Object -First 1)
 if ($tanim.Count -ne 2 -or $y44.Count -ne 1) { Write-Output "Y44-YOK tanim=$($tanim.Count) ifade=$($y44.Count)"; exit 4 }
-$izinli = @@IZINLI@@; $uye = @@UYE@@
-foreach ($s in @($tanim) + @($y44)) {
-    foreach ($c in @($s.FindAll({ param($n) $n -is [CommandAst] }, $true))) {
-        if ($izinli -notcontains "$($c.GetCommandName())") { Write-Output ("IZIN-DISI komut: " + $c.Extent.Text); exit 5 } }
-    foreach ($y in @($s.FindAll({ param($n) $n -is [InvokeMemberExpressionAst] }, $true))) {
-        if ($uye -notcontains "$($y.Member.Extent.Text)") { Write-Output ("IZIN-DISI yontem: " + $y.Extent.Text); exit 5 } }
-}
+foreach ($s in @($tanim) + @($y44)) { $ihlal = _IzinDisiY44 $s @@IZINLI@@ @@UYE@@; if ($ihlal) { Write-Output ("IZIN-DISI " + $ihlal); exit 5 } }
 [System.IO.File]::WriteAllText(@@CIKTI@@, ((@($tanim) + @($y44) | ForEach-Object { $_.Extent.Text }) -join "`n"), [System.Text.UTF8Encoding]::new($false))
 Write-Output "OK"
 """
 
 
+def _ps_dizi(ogeler) -> str:
+    return "@(" + ", ".join(_ps_lit(k) for k in ogeler) + ")"
+
+
+def _izin_disi_denetle(betik: Path, ne: str, stdout: str) -> None:
+    izin_disi = [s for s in stdout.splitlines() if s.startswith("IZIN-DISI")]
+    assert not izin_disi, (
+        f"{betik.name}: {ne} izin listesi DIŞINDA {izin_disi[0][len('IZIN-DISI ') :]} çağırıyor / yazıyor — ön doğrulama yalnız profili "
+        "ARAR + OKUR + HATA + exit yapar; aparat onu GERÇEKTEN koşardı (dosya sistemi / süreç), kod KOŞTURULMADI."
+    )
+
+
 def _cek(tmp_path: Path, betik: Path) -> str:
     cikti = tmp_path / f"cek_{betik.stem}.txt"
     govde = (
-        _CEK.replace("@@BETIK@@", _ps_lit(betik))
-        .replace("@@IZINLI@@", "@(" + ", ".join(_ps_lit(k) for k in IZINLI_KOMUT) + ")")
-        .replace("@@UYE@@", "@(" + ", ".join(_ps_lit(k) for k in IZINLI_UYE) + ")")
+        _CEK.replace("@@IZIN_PS@@", _IZIN_PS)
+        .replace("@@BETIK@@", _ps_lit(betik))
+        .replace("@@IZINLI@@", _ps_dizi(IZINLI_KOMUT))
+        .replace("@@UYE@@", _ps_dizi(IZINLI_UYE))
         .replace("@@CIKTI@@", _ps_lit(cikti))
     )
     r = _pwsh_file(tmp_path, f"cek_{betik.stem}.ps1", govde)
-    izin_disi = [s for s in r.stdout.splitlines() if s.startswith("IZIN-DISI")]
-    assert not izin_disi, (
-        f"{betik.name}: Y44 ön doğrulaması izin listesi DIŞINDA {izin_disi[0][len('IZIN-DISI ') :]} çağırıyor — ön doğrulama yalnız profili "
-        "OKUR + HATA + exit yapar; aparat onu GERÇEKTEN koşardı, kod KOŞTURULMADI."
-    )
+    _izin_disi_denetle(betik, "Y44 ön doğrulaması", r.stdout)
     assert r.returncode == 0 and r.stdout.startswith("OK"), (
         f"{betik.name}: Y44 ön doğrulaması (Test-PemfApiPortDegeri çağıran üst düzey ifade) parser ile bulunamadı "
         f"(rc={r.returncode}) — bozuk PEMF_API_PORT ile servis kurulur:\n{r.stdout}\n{r.stderr}"
@@ -213,6 +239,110 @@ def test_KRITIK_Y44_KIPTEN_BAGIMSIZ_bozuk_portta_iki_kipte_de_DURDURUR(tmp_path,
         )
 
 
+# ── Y44 PROFİL ARAMASIYLA (D5 M-3 TUR 3b, çürütücü 3 q2c / q2d): yukarıdaki kollar profil yolunu önekte DOĞRUDAN verir — kip → dosya bağı
+# (`Get-PemfProfilEnvDosyasi $AppDir $Mode …` + profil değişkeninin ataması) çekilmez; "Y44 hep device profilini doğrular" (q2d) ya da
+# "staging kipinde Y44 atlanır" (q2c) gerilemesi görünmüyordu. Burada betikten: üç tanım (Test-PemfApiPortDegeri · Read-PemfProfilEnv ·
+# Get-PemfProfilEnvDosyasi) + Y44'ten önceki EN YAKIN profil değişkeni ataması + Y44 ifadesi çekilir, izin listesine karşı denetlenir ve
+# betiğin her kipinde (setup: device / server / staging — ValidateSet; install: device / server) yalnız O KİPİN profili bozukken koşar.
+_KIPLER = {"setup": ("device", "server", "staging"), "install": ("device", "server")}
+_PROFIL_DEGISKENI = {"setup": "$OnEnvFile", "install": "$ProfilDosyasi"}
+_ARAMA_IZINLI = (
+    *IZINLI_KOMUT,
+    "Get-PemfProfilEnvDosyasi",
+    "Join-Path",
+    "Test-Path",
+    "Where-Object",
+    "Select-Object",
+    "Split-Path",
+)
+_ARAMA_CEK = r"""
+using namespace System.Management.Automation.Language
+@@IZIN_PS@@
+$t = $null; $h = $null
+$ast = [Parser]::ParseFile(@@BETIK@@, [ref]$t, [ref]$h)
+if ($h.Count) { Write-Output "PARSE-ERROR"; exit 3 }
+$ust = @($ast.EndBlock.Statements)
+$tanim = @($ust | Where-Object { $_ -is [FunctionDefinitionAst] -and @('Test-PemfApiPortDegeri', 'Read-PemfProfilEnv', 'Get-PemfProfilEnvDosyasi') -contains $_.Name })
+$i44 = -1
+for ($i = 0; $i -lt $ust.Count; $i++) {
+    if ($ust[$i] -isnot [FunctionDefinitionAst] -and $ust[$i].Find({ param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Test-PemfApiPortDegeri' }, $true)) { $i44 = $i; break } }
+$j = $i44 - 1
+while ($j -ge 0 -and -not ($ust[$j] -is [AssignmentStatementAst] -and $ust[$j].Left.Extent.Text -eq @@DEGISKEN@@)) { $j-- }
+if ($tanim.Count -ne 3 -or $i44 -lt 0 -or $j -lt 0) { Write-Output "Y44-ARAMA-YOK tanim=$($tanim.Count) y44=$i44 atama=$j"; exit 4 }
+$sec = @($tanim) + @($ust[$j]) + @($ust[$i44])
+foreach ($s in $sec) { $ihlal = _IzinDisiY44 $s @@IZINLI@@ @@UYE@@; if ($ihlal) { Write-Output ("IZIN-DISI " + $ihlal); exit 5 } }
+[System.IO.File]::WriteAllText(@@CIKTI@@, (($sec | ForEach-Object { $_.Extent.Text }) -join "`n"), [System.Text.UTF8Encoding]::new($false))
+Write-Output "OK"
+"""
+
+
+def kos_arama(tmp_path: Path, kip: str, mode: str, bozuk_kip: str) -> tuple[int, list[str], Path]:
+    """Betiğin `kip` kurulum yolu, `-Mode mode`; `deploy\\<m>.env` profillerinin hepsi var, yalnız `bozuk_kip`inki bozuk portlu.
+    → (çıkış kodu, olaylar, `mode`un profil dosyası)."""
+    d = tmp_path / f"{kip}_{mode}_bozuk_{bozuk_kip}"
+    app = d / "app"
+    for m in _KIPLER[kip]:
+        p = app / "deploy" / f"{m}.env"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(
+            f"# {m}\nPEMF_API_PORT={'80O0' if m == bozuk_kip else '8010'}\nPEMF_HEADLESS=1\n", encoding="utf-8"
+        )
+    betik = BETIK if kip == "install" else SETUP
+    cikti = d / "cek.txt"
+    govde = (
+        _ARAMA_CEK.replace("@@IZIN_PS@@", _IZIN_PS)
+        .replace("@@BETIK@@", _ps_lit(betik))
+        .replace("@@DEGISKEN@@", _ps_lit(_PROFIL_DEGISKENI[kip]))
+        .replace("@@IZINLI@@", _ps_dizi(_ARAMA_IZINLI))
+        .replace("@@UYE@@", _ps_dizi(IZINLI_UYE))
+        .replace("@@CIKTI@@", _ps_lit(cikti))
+    )
+    r = _pwsh_file(d, "cek.ps1", govde)
+    _izin_disi_denetle(betik, "Y44 profil araması + ön doğrulaması", r.stdout)
+    assert r.returncode == 0 and r.stdout.startswith("OK"), (
+        f"{betik.name}: Y44 profil araması ({_PROFIL_DEGISKENI[kip]} = Get-PemfProfilEnvDosyasi …) + ön doğrulaması parser ile "
+        f"bulunamadı (rc={r.returncode}):\n{r.stdout}\n{r.stderr}"
+    )
+    olay = d / "olay.txt"
+    olay.write_text("", encoding="utf-8")
+    # Split-Path (setup: betik dizini) kayıtçı değil SABİT gölge — Get-Command ile İŞLEV kanıtlı; $ScriptDir (install) aynı dizin.
+    on = (
+        f"function Split-Path {{ param([switch]$Parent, [Parameter(Position = 0)]$Path) {_ps_lit(app / 'scripts')} }}\n"
+        "if ((Get-Command Split-Path).CommandType -ne 'Function') { _Olay 'GOLGE-YOK Split-Path'; exit 99 }\n"
+        f"$AppDir = {_ps_lit(app)}\n$Mode = {_ps_lit(mode)}\n$ScriptDir = {_ps_lit(app / 'scripts')}\n"
+    )
+    eap = "'Stop'" if kip == "install" else "'Continue'"
+    govde = (
+        _SURUCU.replace("@@OLAY@@", _ps_lit(olay))
+        .replace("@@EAP@@", eap)
+        .replace("@@KOD@@", on + cikti.read_text(encoding="utf-8"))
+    )
+    r = _pwsh_file(d, "surucu.ps1", govde)
+    olaylar = [s for s in olay.read_text(encoding="utf-8-sig").splitlines() if s.strip()]
+    assert r.returncode in (0, 1), f"sürücü düştü (rc={r.returncode}; 99 gölge yok):\n{olaylar}\n{r.stdout}\n{r.stderr}"
+    assert ("DEVAM" in olaylar) == (r.returncode == 0), f"aparat: çıkış kodu / DEVAM tutarsız:\n{olaylar}"
+    return r.returncode, olaylar, app / "deploy" / f"{mode}.env"
+
+
+@pytest.mark.parametrize(
+    ("kip", "mode"), [(k, m) for k, kipler in _KIPLER.items() for m in kipler], ids=lambda v: str(v)
+)
+def test_KRITIK_Y44_KIPIN_KENDI_profilini_ARAR_her_kipte_DURDURUR_baska_kipin_bozuk_profili_DURDURMAZ(
+    tmp_path, kip, mode
+):
+    rc, olaylar, profil = kos_arama(tmp_path, kip, mode, mode)
+    assert rc == 1 and [s for s in _hata(olaylar) if "'80O0'" in s and str(profil) in s], (
+        f"[{kip} / -Mode {mode}] kipin profilindeki ({mode}.env) bozuk PEMF_API_PORT kurulumu DURDURMADI ya da HATA o dosyayı söylemiyor — "
+        f"Y44 kipe bağlı atlanıyor ya da başka kipin profilini doğruluyor (servis {mode}.env ile kurulur):\n{olaylar}"
+    )
+    baska = next(m for m in _KIPLER[kip] if m != mode)
+    rc2, olaylar2, _p = kos_arama(tmp_path, kip, mode, baska)
+    assert rc2 == 0 and not _hata(olaylar2), (
+        f"[{kip} / -Mode {mode}] yalnız BAŞKA kipin profili ({baska}.env) bozukken kurulum durdu — Y44 kendi kipinin profilini değil "
+        f"başka / bütün profilleri doğruluyor:\n{olaylar2}"
+    )
+
+
 def test_KARSIT_PEMF_API_PORT_satiri_YOKSA_kurulum_surer(tmp_path):
     rc, olaylar, _profil = kos(tmp_path, "install", None)
     assert rc == 0 and not _hata(olaylar), f"profilde PEMF_API_PORT yokken (backend 8000) kurulum durdu:\n{olaylar}"
@@ -257,8 +387,13 @@ $okumaArg = @($okuma | ForEach-Object { $e = $_.CommandElements | Select-Object 
 $ortamArg = ''
 $ortam = $ast.Find({ param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Get-PemfServisOrtami' }, $true)
 if ($ortam) { $e = $ortam.CommandElements | Select-Object -Skip 1 -First 1; if ($e -is [VariableExpressionAst]) { $ortamArg = $e.VariablePath.UserPath } }
+$y44Kosul = ''; $y44Okuma = @()
+if ($y44 -ge 0 -and $ust[$y44] -is [IfStatementAst]) { $y44Kosul = $ust[$y44].Clauses[0].Item1.Extent.Text }
+if ($y44 -ge 0) { $y44Okuma = @($ust[$y44].FindAll({ param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Read-PemfProfilEnv' }, $true) | ForEach-Object {
+    $e = $_.CommandElements | Select-Object -Skip 1 -First 1; if ($e -is [VariableExpressionAst]) { $e.VariablePath.UserPath } else { "$e" } }) }
 [pscustomobject]@{
     hata = @($h | ForEach-Object { $_.Message }); y44 = $y44; okuma_arg = @($okumaArg); ortam_arg = $ortamArg
+    y44_kosul = $y44Kosul; y44_okuma = @($y44Okuma)
     y44_exit = [bool]($(if ($y44 -ge 0) { $ust[$y44].Find({ param($n) $n -is [ExitStatementAst] }, $true) }))
     profil = (_Ilk { param($n) $n -is [IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -match '^-not \$AppEnv$' })
     port_dolu = (_Ilk { param($n) $n -is [VariableExpressionAst] -and $n.VariablePath.UserPath -eq 'PortunDisSahibi' })
@@ -280,6 +415,13 @@ def test_KRITIK_Y44_D2_73_sonrasi_port_doludan_ve_servise_DOKUNAN_her_adimdan_ON
     )
     assert a["okuma_arg"] == [a["ortam_arg"]] and a["ortam_arg"], (
         f"Y44 servise giden ortamın profilini (${a['ortam_arg'] or '?'}) okumuyor — denetlenen dosya ile servis ortamı ayrışabilir: {a}"
+    )
+    # TUR 3b (çürütücü 3 q2c / q2d, install kolu): Y44 `if`inin koşulu YALNIZ servis ortamının profil değişkeni (kip / başka koşul
+    # eklenmez — kip koşullu koruma) ve Y44'ün okuduğu dosya o değişken.
+    y44_okuma = a["y44_okuma"] if isinstance(a["y44_okuma"], list) else [a["y44_okuma"]]
+    assert a["y44_kosul"] == f"${a['ortam_arg']}" and y44_okuma == [a["ortam_arg"]], (
+        f"Y44 ön doğrulamasının koşulu / okuduğu dosya servis ortamının profil değişkeni (${a['ortam_arg'] or '?'}) değil "
+        f"(koşul {a['y44_kosul']!r}, okuma {y44_okuma}) — kipe / başka koşula bağlı atlanabilir ya da başka dosyayı doğrular: {a}"
     )
     assert 0 <= a["profil"] < a["y44"], f"Y44 profil (D2.73) korumasından ÖNCE — profil yokken okunamaz: {a}"
     for adim in ("port_dolu", "port_atama", "nssm", "indirme", "gunluk"):

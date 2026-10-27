@@ -14,6 +14,8 @@ kurulum betikleri yalnız OKUR. Tümü UTF-8 → `Get-Content -Encoding UTF8` ik
 SÖZLEŞME: iki betikte `Read-PemfProfilEnv` BİREBİR ve profili UTF-8 okur; aynı (BOM'lu / BOM'suz UTF-8) profil PS 7 ve 5.1'de AYNI haritaya
 ayrışır (Python ayrıştırmasıyla eşit); Y44 kararı iki yorumlayıcıda AYNI ve backend `int()` anlamında (Arap-Hint rakamlı geçerli port SÜRER,
 bozuk değer DURUR ve HATA değeri AYNEN söyler).
+TUR 3b (çürütücü 3 m4f): profil değerinde '=' (base64 jetonu `…==`, DSN sorgusu `?a=b&c=d`) iki betikte, iki yorumlayıcıda AYNEN okunur
+(ilk '='den bölünür) — eşlik kolu iki betik aynı bozulursa yakalamaz, harita kolu Python ayrıştırmasıyla karşılaştırır.
 ⛔ Betik GERÇEKTEN koşmaz: yalnız `Read-PemfProfilEnv` (izinli komut yalnız `Get-Content`) ve D5 M-3 aparatıyla Y44 ifadesi parser ile çekilir,
 izin listesine karşı denetlenir; gölgeli sürücüde (modül otomatik yükleme KAPALI, Get-Command İŞLEV kanıtlı) gerçek `powershell.exe` (5.1)
 ve `pwsh` (7) ile koşar. 5.1 alt süreci PS 7'nin `PSModulePath`ini miras ALMAZ (değişken ortamdan çıkarılır — hafıza: 5.1 aksi hâlde PS 7
@@ -58,6 +60,10 @@ PROFIL_SATIRLARI = [
     "PEMF_API_PORT=\u0668\u0660\u0661\u0660",
     "PEMF_ALLOWED_NAMES=Ayşe,Gülşen,Ömer",
     "PEMF_HEADLESS=1",
+    # D5 M-4 TUR 3b (çürütücü 3 m4f — sınır): DEĞERİNDE '=' taşıyan satırlar (base64 dolgusu, DSN sorgusu; sahte değerler) — ayrıştırma
+    # İLK '='den bölmeli (`Split("=", 2)`); sınırsız bölme değeri keser ve boşlukla birleştirir, servise BOZUK değer gider.
+    "PEMF_API_TOKEN=YWJjZA==",
+    "PEMF_DB_DSN=postgres://u@h/db?sslmode=require&x=1",
 ]
 
 
