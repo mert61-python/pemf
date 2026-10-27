@@ -30,6 +30,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -37,6 +38,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
 GUII = Path(__file__).resolve().parents[1]
@@ -65,7 +67,22 @@ YASAK_SIDLER = {"S-1-5-32-545": "Users", "S-1-5-11": "Authenticated Users", "S-1
 
 SONUCLAR: list[tuple[str, str, bool, str]] = []
 TOHUM_SAGLIK: dict = {}
-_port = 8200
+#: Sahibin / kurulu uygulamanın portları — `kostur` EXE portunu bunlardan ASLA seçmez.
+_YASAK_PORTLAR = frozenset({8000, 8100, 1883, 5173, 8177, 8200})
+
+
+def _bos_loopback_portu() -> int:
+    """İşletim sisteminin verdiği BOŞ loopback portu (build AI kapısının `Get-BosLoopbackPortu` deseni).
+
+    ⚠️ İG-9.84 (D5): eskiden 8201'den başlayan SABİT bir sayaç vardı; portu tutan yetim / elle açılmış bir backend varken
+    senaryo kendi EXE'si hiç açılmasa da YABANCININ yanıtını ölçüyordu. Kapı: tests/test_urun_senaryolari_saglik_KENDI_COCUGU_IG984.py"""
+    for _ in range(20):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        if port not in _YASAK_PORTLAR:
+            return port
+    raise SystemExit("kostur: bos loopback portu bulunamadi (20 deneme)")
 
 
 def kayit(kod: str, baslik: str, gecti: bool, kanit: str) -> None:
@@ -190,14 +207,15 @@ def _guvenlik_ortami() -> dict:
         # ⚠️ KASA: ürünün eski-kaynak okuyucuları önce keyring'e bakar → EXE sahibin GERÇEK kasasındaki
         # PEMF_GUI anahtarlarını okuyup senaryo köküne göçürürdü (A1 "sıfırdan kurulum" da sıfırdan olmazdı).
         "PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring",
+        # ⚠️ İG-9.84 (D5): yalnız loopback. Ürün varsayılanı 0.0.0.0 → her açılış LAN'a açık port + her yeni EXE yolu için
+        # güvenlik duvarı uyarısı (GÖRÜNÜR pencere). Build AI kapısı S-YH.9'dan beri aynısını veriyor.
+        "PEMF_API_HOST": "127.0.0.1",
     }
 
 
 def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, saglik_bekle: bool = True):
-    """EXE'yi baslat, /api/health yesillenene kadar bekle. (surec, log_yolu, ayakta_mi, port)"""
-    global _port
-    _port += 1
-    port = _port
+    """EXE'yi baslat, /api/health KENDI cocugumuzun nonce'unu yansitana kadar bekle. (surec, log_yolu, ayakta_mi, port)"""
+    port = _bos_loopback_portu()
     # ⚠️ İZİN LİSTESİ (D0Ö.09 ek): dış ortamdan HİÇBİR PEMF_*/SUPABASE_* miras alınmaz — ör. PEMF_BACKUP_DIR
     # EXE'nin kurtarma zarfını GERÇEK off-site dizine (aynı adla) yazdırırdı; PEMF_MQTT_CLOUD_* E-stop'u
     # gerçek broker'a aynalardı; PEMF_KEEP_PLAIN_*/PEMF_JETON_ENFORCED senaryoları bozardı. Senaryonun
@@ -211,11 +229,15 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
             "PEMF_SIMULATE": "1",
             "PEMF_ESP_ENABLED": "0",
             "PYTHONIOENCODING": "utf-8",
+            # ⚠️ İG-9.84 (D5): tek-seferlik nonce — sağlık yanıtı onu YANSITMADIKÇA EXE "ayakta" sayılmaz (yanıt portu tutan
+            # yabancı / yetim süreçten gelmiş olabilir). C7/C8 kendi nonce'unu `ek` ile verebilir (aşağıda ezilir).
+            "PEMF_HEALTH_NONCE": uuid.uuid4().hex,
         }
     )
     ortam.update(ek or {})
     # ⚠️ Güvenlik anahtarları `ek`ten SONRA yazılır: bir senaryo onları sessizce EZEMEZ.
     ortam.update(_guvenlik_ortami())
+    nonce = ortam["PEMF_HEALTH_NONCE"]
     log = CALISMA / f"_log_{veri.name}_{port}.txt"
     f = log.open("w", encoding="utf-8", errors="replace")
     p = subprocess.Popen(
@@ -232,7 +254,7 @@ def kostur(veri: Path, sifreli: bool, ek: dict | None = None, sure: int = 180, s
         if saglik_bekle:
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as r:
-                    if r.status == 200:
+                    if r.status == 200 and json.loads(r.read() or b"{}").get("launcherNonce") == nonce:
                         ayakta = True
                         break
             except Exception:
