@@ -394,7 +394,13 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         # ⚠️ --no-mosquitto-ensure: kapı yalnız HTTP uçlarını kullanıyor. Broker'ı başlatırsa,
         # aşağıdaki `finally` yalnız backend'i öldürdüğü için YETİM kalır ve SONRAKİ build'i
         # DLL kilidiyle düşürür (bkz. build başındaki yetim temizliği).
-        $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort", "--no-mosquitto-ensure" `
+        # ⚠️ İG-9.48 (D5, kara kutu ölçümü): --no-headless-services. Kapı başsız destek servislerini (mDNS, UDP keşif,
+        # ağ durumu izleyicisi, broker denetçisi) KULLANMAZ; açılınca build makinesinde LAN'a 0.0.0.0:5051 / :5353 dinleyici
+        # (her yeni EXE yolu için güvenlik duvarı uyarısı = GÖRÜNÜR pencere; LAN'a sahte "PEMF cihazı" ilanı), genel DNS
+        # sunucularına TCP yoklaması (8.8.8.8:53 …), sahibin 1883 portuna yoklama ve sc / tasklist / powershell / mosquitto
+        # alt süreçleri başlatıyordu (ölçüldü). urun_senaryolari.py aynı bayrağı zaten veriyor.
+        # Kapı: tests/test_exe_kapisi_kara_kutu_yalitimi_IG948.py
+        $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort", "--no-mosquitto-ensure", "--no-headless-services" `
             -RedirectStandardOutput $gateLog -RedirectStandardError "$gateLog.err" -PassThru -WindowStyle Hidden
         # Tutamaç önbelleğe alınmazsa Start-Process nesnesinin ExitCode'u süreç bitince boş kalır.
         try { $null = $proc.Handle } catch { }
