@@ -37,6 +37,7 @@ olarak guncellenir.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -45,6 +46,27 @@ KOK = Path(__file__).resolve().parents[1]
 _API = KOK / "apps" / "backend" / "servers" / "api_server.py"
 _SPEC = KOK / "build_tools" / "PEMF_Backend_onedir.spec"
 _INSTALLER = KOK / "build_tools" / "build_installer.ps1"
+
+
+def _takipli_ve_diskte(dizin: str) -> tuple[list[str], list[str]]:
+    """D5.36 (B-10.256): dizinin git'te TAKİPLİ dosyaları ve bunlardan diskte OLMAYANLAR. `-z` + UTF-8 (aksanlı dizin adı).
+    Kod / spec referansı tek başına dizinin VARLIĞINI kanıtlamaz: referans yerindeyken dizin silinse spec kapısı yeşil kalıyordu."""
+    r = subprocess.run(["git", "ls-files", "-z", "--", dizin + "/"], cwd=KOK, capture_output=True, timeout=120)
+    if r.returncode != 0:
+        pytest.skip("git deposu değil")
+    takipli = [x.decode("utf-8") for x in r.stdout.split(b"\x00") if x]
+    return takipli, [t for t in takipli if not (KOK / t).is_file()]
+
+
+@pytest.mark.parametrize(("dizin", "asgari"), [("web_static", 3), ("dema-terapi-simülatörü", 10)])
+def test_KRITIK_D5_36_canli_dizinin_TAKIPLI_dosyalari_DISKTE(dizin: str, asgari: int):
+    """A-37 (sahip): DEMA simülatörü bağımsız tanıtım/eğitim aracıdır ve SİLİNMEZ; `web_static/` spec'le EXE'ye girer. İkisinin de
+    takipli kaynakları depoda VE diskte olmalı (asgari sayılar HEAD 5bc99be1 ölçümünün altında: web_static 3, DEMA 16)."""
+    takipli, eksik = _takipli_ve_diskte(dizin)
+    assert len(takipli) >= asgari, (
+        f"{dizin}/ takipli dosya sayısı {len(takipli)} < {asgari} — dizin silinmiş / git'ten çıkarılmış"
+    )
+    assert not eksik, f"{dizin}/ takipli ama DİSKTE YOK (silinmiş): {eksik[:5]}"
 
 
 def _kod(p: Path) -> str:
