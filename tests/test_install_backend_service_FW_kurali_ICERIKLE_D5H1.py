@@ -68,12 +68,15 @@ _SURUCU = r"""
 Import-Module Microsoft.PowerShell.Management, Microsoft.PowerShell.Utility
 $PSModuleAutoLoadingPreference = 'None'
 $Durum = @@DURUM@@; $Olay = @@OLAY@@; $SilDuser = @@SILDUSER@@; $YeniDuser = @@YENIDUSER@@; $YeniBozuk = @@YENIBOZUK@@
+$SorguDuser = @@SORGUDUSER@@
 function _Oku { $j = Get-Content -LiteralPath $Durum -Raw | ConvertFrom-Json; foreach ($k in @($j)) { if ($k) { $k } } }  # PS 5.1 + 7
 function _Yaz($t) { Set-Content -LiteralPath $Durum -Value (ConvertTo-Json -InputObject @($t) -Depth 5) -Encoding UTF8 }
 function _Olay($m) { Add-Content -LiteralPath $Olay -Value $m -Encoding UTF8 }
 function _Bul($o) { @(_Oku) | Where-Object { $_.id -eq $o.Kimlik } | Select-Object -First 1 }
 function _Nesne($k) { [pscustomobject]@{ DisplayName = $k.n; Enabled = $k.en; Action = $k.act; Direction = $k.dir; Profile = $k.prof; Kimlik = $k.id } }
+# D5 M-1 TUR 2: `sorguduser` — NetSecurity sorgusu FIRLATIR (modül yok / MpsSvc durmuş / beklenmeyen istisna) → çağıranın dış `catch`i ölçülür.
 function Get-NetFirewallRule { [CmdletBinding()] param($DisplayName)
+    if ($SorguDuser) { throw 'NetSecurity sorgusu düştü (sahte: MpsSvc durmuş)' }
     foreach ($k in @(_Oku)) { if ($k.n -eq $DisplayName) { _Nesne $k } } }
 function Get-NetFirewallPortFilter { [CmdletBinding()] param([Parameter(ValueFromPipeline = $true)]$InputObject)
     process { $k = _Bul $InputObject; if ($k) { [pscustomobject]@{ Protocol = $k.p; LocalPort = $k.port } } } }
@@ -111,7 +114,7 @@ def surucu_kos(tmp_path: Path, kod: str, kurallar: list[dict], **bayrak) -> tupl
     durum.write_text(json.dumps([dict(k, id=f"k{i}") for i, k in enumerate(kurallar)]), encoding="utf-8")
     olay.write_text("", encoding="utf-8")
     govde = _SURUCU.replace("@@DURUM@@", _ps_lit(durum)).replace("@@OLAY@@", _ps_lit(olay))
-    for ad in ("SILDUSER", "YENIDUSER", "YENIBOZUK"):
+    for ad in ("SILDUSER", "YENIDUSER", "YENIBOZUK", "SORGUDUSER"):
         govde = govde.replace(f"@@{ad}@@", "$true" if bayrak.get(ad.lower()) else "$false")
     govde = govde.replace("@@GOLGELER@@", ", ".join(_ps_lit(g) for g in GOLGELER)).replace("@@KOD@@", kod)
     r = _pwsh_file(tmp_path, "d5h1.ps1", govde)
@@ -123,38 +126,96 @@ def surucu_kos(tmp_path: Path, kod: str, kurallar: list[dict], **bayrak) -> tupl
     return satir, ([son] if isinstance(son, dict) else son)
 
 
-def betik_fonksiyonu(tmp_path: Path, ad: str, betik: Path = BETIK) -> str:
-    """Fonksiyon metnini PowerShell'in KENDİ parser'ıyla (FunctionDefinitionAst.Extent.Text) çek — regex değil."""
+# D5 M-1 TUR 2 (çürütücü 4. bulgu): betikten çekilen kod aparatta GERÇEKTEN koşar — ürün gerilemesi işleve / dilime gölgesiz bir dış komut
+# (`netsh advfirewall …`, `Start-Process`, `Stop-Process`, `sc.exe`, `& $degisken`, `[Diagnostics.Process]::…`) eklerse test onu yönetici
+# kabuğunda GERÇEKTEN çalıştırırdı. Çekilen her parça İZİN LİSTESİNE karşı denetlenir: listede olmayan komut (modül nitelikli ad ve
+# değişkenle çağrı dahil) ya da yöntem çağrısı → IZIN-DISI (çıkış 5), kod KOŞTURULMAZ. Listedeki her komut sürücüde gölgelidir ya da saftır.
+IZINLI_KOMUT = (
+    *GOLGELER,
+    "Log",
+    "Where-Object",
+    "Select-Object",
+    "ForEach-Object",
+    "Out-Null",
+    "Test-PemfApiPortDegeri",
+    "Get-PemfServisApiPortu",
+    "Ensure-PemfBackendFirewallKurali",
+)
+IZINLI_UYE = ("Match", "ToCharArray", "GetNumericValue", "Split")
+IZIN_PS = r"""
+function _IzinDisi($Dugum, [string[]]$Komut, [string[]]$Uye) {
+    foreach ($c in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true))) {
+        if ($Komut -notcontains "$($c.GetCommandName())") { return ("komut: " + $c.Extent.Text) }
+    }
+    foreach ($y in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true))) {
+        if ($Uye -notcontains "$($y.Member.Extent.Text)") { return ("yontem: " + $y.Extent.Text) }
+    }
+    $null
+}
+"""
+
+
+def ps_dizi(ogeler) -> str:
+    return "@(" + ", ".join(_ps_lit(o) for o in ogeler) + ")"
+
+
+def izin_disi_iletisi(betik: Path, ne: str, cikti: str) -> str:
+    satir = [s for s in cikti.splitlines() if s.startswith("IZIN-DISI")]
+    return (
+        f"{betik.name} {ne}: izin listesi DIŞINDA {satir[0][len('IZIN-DISI ') :]} — aparat onu GERÇEKTEN koşardı "
+        "(gerçek güvenlik duvarı / süreç / servis); kod KOŞTURULMADI. Ürün değişikliğini gözden geçirin ya da komutu gölgeleyip listeye ekleyin."
+        if satir
+        else ""
+    )
+
+
+def betik_fonksiyonu(
+    tmp_path: Path, ad: str, betik: Path = BETIK, izinli: tuple = IZINLI_KOMUT, uye: tuple = IZINLI_UYE
+) -> str:
+    """Fonksiyon metnini PowerShell'in KENDİ parser'ıyla (FunctionDefinitionAst.Extent.Text) çek — regex değil. Gövde izin listesine
+    karşı denetlenir (IZIN-DISI → çıkış 5, metin döndürülmez)."""
     cikti = tmp_path / f"{ad}.txt"
-    govde = f"""
+    govde = (
+        IZIN_PS
+        + f"""
 $t = $null; $h = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile({_ps_lit(betik)}, [ref]$t, [ref]$h)
 if ($h.Count) {{ Write-Output ("PARSE-ERROR: " + (($h | ForEach-Object {{ $_.Message }}) -join ' | ')); exit 3 }}
 $f = $ast.Find({{ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq {_ps_lit(ad)} }}, $true)
 if (-not $f) {{ Write-Output "NOT-FOUND"; exit 4 }}
+$ihlal = _IzinDisi $f {ps_dizi(izinli)} {ps_dizi(uye)}
+if ($ihlal) {{ Write-Output ("IZIN-DISI " + $ihlal); exit 5 }}
 [System.IO.File]::WriteAllText({_ps_lit(cikti)}, $f.Extent.Text, [System.Text.UTF8Encoding]::new($false))
 Write-Output "OK"
 """
+    )
     r = _pwsh_file(tmp_path, f"cek_{ad}.ps1", govde)
+    assert r.returncode != 5, izin_disi_iletisi(betik, f"'{ad}' işlevi", r.stdout)
     assert r.returncode == 0 and "OK" in r.stdout, (
         f"{betik.name} içinde '{ad}' fonksiyonu parser ile bulunamadı (rc={r.returncode}):\n{r.stdout}\n{r.stderr}"
     )
     return cikti.read_text(encoding="utf-8")
 
 
-# Betiğin GERÇEK güvenlik duvarı adımı: üst düzeydeki NetFirewall / port / kural fonksiyonu çağrısı içeren ifadeler (sırasıyla) + o
-# fonksiyonların tanımları. HEAD'de bu, adla arayan `try { if (-not (Get-NetFirewallRule …)) … }` bloğudur (sonda aynı çekiciyi kullanır).
+# Betiğin GERÇEK güvenlik duvarı adımı: üst düzeydeki NetFirewall / port / kural fonksiyonu çağrısı içeren ifadeler + sonuç değişkenlerinin
+# (`$ApiFirewallOk` / `$KesifFirewallOk`) üst düzey atamaları (sırasıyla) + o fonksiyonların tanımları. HEAD'de bu, adla arayan
+# `try { if (-not (Get-NetFirewallRule …)) … }` bloğudur (sonda aynı çekiciyi kullanır). D5 M-1 TUR 2: çekilen her parça İZİN LİSTESİNE karşı
+# denetlenir (IZIN-DISI → çıkış 5); sonuç değişkenlerinin başlangıç ataması da adıma girer (dış `catch` yolunda sonuç ölçülür).
 _ADIM = r"""
 using namespace System.Management.Automation.Language
+@@IZIN_PS@@
 $t = $null; $h = $null
 $ast = [Parser]::ParseFile(@@BETIK@@, [ref]$t, [ref]$h)
 if ($h.Count) { Write-Output "PARSE-ERROR"; exit 3 }
 $adlar = @('Test-PemfApiPortDegeri', 'Get-PemfServisApiPortu', 'Ensure-PemfBackendFirewallKurali')
 $parca = [System.Collections.Generic.List[string]]::new()
-foreach ($f in @($ast.EndBlock.Statements | Where-Object { $_ -is [FunctionDefinitionAst] -and $adlar -contains $_.Name })) { $parca.Add($f.Extent.Text) }
-$adim = @($ast.EndBlock.Statements | Where-Object { $_ -isnot [FunctionDefinitionAst] -and $_.Find({ param($n)
-    $n -is [CommandAst] -and ("$($n.GetCommandName())" -like '*-NetFirewall*' -or $adlar -contains "$($n.GetCommandName())") }, $true) })
+$fonklar = @($ast.EndBlock.Statements | Where-Object { $_ -is [FunctionDefinitionAst] -and $adlar -contains $_.Name })
+foreach ($f in $fonklar) { $parca.Add($f.Extent.Text) }
+$adim = @($ast.EndBlock.Statements | Where-Object { $_ -isnot [FunctionDefinitionAst] -and ($_.Find({ param($n)
+    $n -is [CommandAst] -and ("$($n.GetCommandName())" -like '*-NetFirewall*' -or $adlar -contains "$($n.GetCommandName())") }, $true) -or
+    ($_ -is [AssignmentStatementAst] -and @('$ApiFirewallOk', '$KesifFirewallOk') -contains $_.Left.Extent.Text)) })
 if (-not $adim.Count) { Write-Output "ADIM-YOK"; exit 4 }
+foreach ($s in @($fonklar) + @($adim)) { $ihlal = _IzinDisi $s @@IZINLI@@ @@UYE@@; if ($ihlal) { Write-Output ("IZIN-DISI " + $ihlal); exit 5 } }
 foreach ($s in $adim) { $parca.Add($s.Extent.Text) }
 [System.IO.File]::WriteAllText(@@CIKTI@@, ($parca -join "`n"), [System.Text.UTF8Encoding]::new($false))
 Write-Output ("OK " + $adim.Count)
@@ -163,17 +224,24 @@ Write-Output ("OK " + $adim.Count)
 
 def betik_adimi(tmp_path: Path, betik: Path = BETIK) -> str:
     cikti = tmp_path / "adim.txt"
-    r = _pwsh_file(
-        tmp_path, "adim.ps1", _ADIM.replace("@@BETIK@@", _ps_lit(betik)).replace("@@CIKTI@@", _ps_lit(cikti))
+    govde = (
+        _ADIM.replace("@@IZIN_PS@@", IZIN_PS)
+        .replace("@@BETIK@@", _ps_lit(betik))
+        .replace("@@CIKTI@@", _ps_lit(cikti))
+        .replace("@@IZINLI@@", ps_dizi(IZINLI_KOMUT))
+        .replace("@@UYE@@", ps_dizi(IZINLI_UYE))
     )
+    r = _pwsh_file(tmp_path, "adim.ps1", govde)
+    assert r.returncode != 5, izin_disi_iletisi(betik, "güvenlik duvarı adımı", r.stdout)
     assert r.returncode == 0 and r.stdout.startswith("OK"), f"güvenlik duvarı adımı çekilemedi:\n{r.stdout}\n{r.stderr}"
     return cikti.read_text(encoding="utf-8")
 
 
 def adim_kos(tmp_path: Path, ortam: list[str], kurallar: list[dict], **bayrak) -> tuple[list[str], list[dict]]:
-    """Betiğin güvenlik duvarı ADIMINI (servis ortamı `ortam`, program PROG) gölgeli sürücüde koştur."""
+    """Betiğin güvenlik duvarı ADIMINI (servis ortamı `ortam`, program PROG) gölgeli sürücüde koştur. Son olaylar: `SONUC <Api> <Kesif>`."""
     on = f"$AppEnv = @({', '.join(_ps_lit(s) for s in ortam)})\n$FirewallProgram = {_ps_lit(PROG)}\n"
-    satir, son = surucu_kos(tmp_path, on + betik_adimi(tmp_path) + "\n_Olay 'ADIM-BITTI'\n", kurallar, **bayrak)
+    son_ek = '\n_Olay ("SONUC " + "$ApiFirewallOk" + " " + "$KesifFirewallOk")\n_Olay \'ADIM-BITTI\'\n'
+    satir, son = surucu_kos(tmp_path, on + betik_adimi(tmp_path) + son_ek, kurallar, **bayrak)
     assert "ADIM-BITTI" in satir, f"adım sonuna ulaşılmadı:\n{satir}"
     return satir, son
 
@@ -244,16 +312,58 @@ def test_KRITIK_KESIF_ayni_adli_ICERIGI_UYMAYAN_kural_silinir_DOGRUSU_kurulur(tm
     )
 
 
-def test_KRITIK_uymayan_kural_SILINEMEZSE_FALSE_ve_eylemli_UYARI(tmp_path):
-    kural = dict(DOGRU_API, en="False")
+def _yeniden(son: list[dict]) -> list[dict]:
+    """Bir koşunun son tablosu → sonraki koşunun girdisi (kimlikler sürücüde yeniden verilir)."""
+    return [{x: k[x] for x in k if x != "id"} for k in son]
+
+
+@pytest.mark.parametrize(
+    "kural", [dict(DOGRU_API, en="False"), dict(DOGRU_API, port="8099")], ids=["devre_disi", "baska_port_Allow"]
+)
+def test_KRITIK_uymayan_kural_SILINEMEZSE_ona_DOKUNULMAZ_DOGRUSU_yine_kurulur_FALSE_ve_eylemli_UYARI(tmp_path, kural):
+    """D5 M-1 TUR 2 ürün kararı (4B-3.5 'ilk koşuda doğru portlu kural kurulsun — LAN çalışsın', launcher I-1 ile aynı): silinemeyen
+    (ilke deposu) uymayan aynı adlı kural yerinde kalır, yanına DOĞRU kural kurulur; sonuç yine False + eylemli UYARI (silinemeyen kural
+    Block ise Allow'u ezer — özet görünür kılar). Eskiden (H-1) doğru kural HİÇ kurulmuyor, LAN (mobil ACİL DURDUR dahil) kapalı kalıyordu."""
     sonuc, satir, son = _kos(tmp_path, [kural], silduser=True)
     assert sonuc == "False", f"uymayan kural silinemedi ama sonuç True:\n{satir}"
-    assert [_icerik(k) for k in son] == [_icerik(kural)] and not [s for s in satir if s.startswith("NEW ")], (
-        f"silinemeyen kuralın yanına ikinci kural kuruldu ya da tablo değişti:\n{son}\n{satir}"
+    assert _icerik(kural) in [_icerik(k) for k in son], (
+        f"silinemeyen kurala dokunuldu / tablodan düştü:\n{son}\n{satir}"
+    )
+    assert _yeni(DOGRU_API) in satir and sorted(_icerik(k) for k in son) == sorted(
+        [_icerik(kural), _icerik(DOGRU_API)]
+    ), (
+        f"silinemeyen uymayan kural varken DOĞRU kural (TCP {PORT}, program, Inbound Allow Any) kurulmadı — LAN erişimi kapalı kalır:\n"
+        f"{son}\n{satir}"
     )
     assert [
         s for s in _uyari(satir) if "silinemedi" in s and "Remove-NetFirewallRule" in s and "New-NetFirewallRule" in s
     ], f"silinemeyen kural için eylem söyleyen UYARI yok:\n{satir}"
+
+
+def test_KRITIK_silinemeyen_kural_varken_IKINCI_kosuda_BIRIKMEZ_ve_SIL_KUR_dongusu_yok(tmp_path):
+    """İdempotens: ilk koşu doğruyu yanına kurar; ikinci koşuda doğru kural UYAR → yenisi kurulmaz, uyan silinmez, tablo AYNI kalır."""
+    kural = dict(DOGRU_API, port="8099")
+    (tmp_path / "1").mkdir()
+    (tmp_path / "2").mkdir()
+    birinci, satir1, son1 = _kos(tmp_path / "1", [kural], silduser=True)
+    ikinci, satir2, son2 = _kos(tmp_path / "2", _yeniden(son1), silduser=True)
+    assert len([s for s in satir1 if s.startswith("NEW ")]) == 1, f"ilk koşu doğru kuralı kurmadı:\n{satir1}"
+    assert not [s for s in satir2 if s.startswith(("NEW ", "REMOVE "))], (
+        f"ikinci koşuda kural yeniden kuruldu / silindi:\n{satir2}"
+    )
+    assert sorted(_icerik(k) for k in son2) == sorted(_icerik(k) for k in son1) and len(son2) == 2, (
+        f"silme düşünce aynı adlı kural BİRİKİYOR / değişiyor:\n{son1}\n{son2}"
+    )
+    assert birinci == ikinci == "False", f"silinemeyen uymayan kural duruyor ama sonuç {birinci}/{ikinci}"
+
+
+def test_KARSIT_ayni_adli_IKI_DOGRU_kural_dokunulmaz_TRUE(tmp_path):
+    """Çürütücü x1 (eşik +1: `Count -gt 0` → `-eq 1`): aynı adlı iki doğru kural (ör. elle eklenmiş kopya) LAN'ı açar — dokunulmaz, True."""
+    sonuc, satir, son = _kos(tmp_path, [DOGRU_API, dict(DOGRU_API)])
+    assert not _degisiklik(satir) and not _uyari(satir), f"iki doğru kural varken değişiklik / sahte UYARI:\n{satir}"
+    assert len(son) == 2 and sonuc == "True", (
+        f"aynı adlı iki DOĞRU kural varken sonuç {sonuc} (beklenen True):\n{satir}"
+    )
 
 
 def test_KRITIK_uyan_kuralin_YANINDA_silinemeyen_uymayan_kural_varsa_FALSE(tmp_path):
@@ -348,6 +458,67 @@ def test_KRITIK_ADIM_eski_PORTLU_kural_yeni_profil_portuna_TASINIR(tmp_path):
     satir, son = adim_kos(tmp_path, [f"PEMF_API_PORT={PORT}"], [dict(DOGRU_API, port="8000"), DOGRU_KESIF])
     assert sorted(_icerik(k) for k in son) == sorted([_icerik(DOGRU_API), _icerik(DOGRU_KESIF)]), (
         f"eski porttaki (8000) aynı adlı kural profil portuna ({PORT}) taşınmadı:\n{son}\n{satir}"
+    )
+
+
+def test_KRITIK_ADIM_NetSecurity_sorgusu_FIRLATIRSA_denetlenemedi_UYARISI_ve_sonuc_FALSE(tmp_path):
+    """Çürütücü x2 sınıfı (dış catch yolu): kural işlevi FIRLATIRSA (NetSecurity modülü yok / MpsSvc durmuş) sonuç başlangıç değerinde
+    kalır — o değer False olmalı ve günlük 'denetlenemedi' demeli; özet 'kural DOĞRULANAMADI' der."""
+    satir, _son = adim_kos(tmp_path, [f"PEMF_API_PORT={PORT}"], [], sorguduser=True)
+    assert [s for s in _uyari(satir) if "denetlenemedi" in s], (
+        f"kural denetimi fırladı ama 'denetlenemedi' UYARIsı yok:\n{satir}"
+    )
+    assert "SONUC False False" in satir, f"kural denetimi fırladı ama sonuç (Api / Keşif) 'doğrulandı' kaldı:\n{satir}"
+
+
+def test_KARSIT_ADIM_kural_YOKSA_ikisi_kurulur_sonuc_TRUE(tmp_path):
+    satir, _son = adim_kos(tmp_path, [f"PEMF_API_PORT={PORT}"], [])
+    assert "SONUC True True" in satir and not _uyari(satir), f"iki kural kuruldu ama sonuç / UYARI:\n{satir}"
+
+
+# ── Sıra (AST): betik YUKARIDAN AŞAĞIYA koşar — üst düzeyde çağrılan her betik işlevi ilk çağrısından ÖNCE tanımlı olmalı ──
+_SIRA = r"""
+using namespace System.Management.Automation.Language
+$t = $null; $h = $null
+$ast = [Parser]::ParseFile(@@BETIK@@, [ref]$t, [ref]$h)
+if ($h.Count) { Write-Output "PARSE-ERROR"; exit 3 }
+$ust = @($ast.EndBlock.Statements)
+$tanim = @{}
+for ($i = 0; $i -lt $ust.Count; $i++) { if ($ust[$i] -is [FunctionDefinitionAst] -and -not $tanim.ContainsKey($ust[$i].Name)) { $tanim[$ust[$i].Name] = $i } }
+$ihlal = [System.Collections.Generic.List[string]]::new()
+$denetlenen = [System.Collections.Generic.List[string]]::new()
+for ($i = 0; $i -lt $ust.Count; $i++) {
+    if ($ust[$i] -is [FunctionDefinitionAst]) { continue }
+    foreach ($c in @($ust[$i].FindAll({ param($n) $n -is [CommandAst] }, $true))) {
+        $p = $c.Parent; $ic = $false
+        while ($p -and -not [object]::ReferenceEquals($p, $ust[$i])) { if ($p -is [FunctionDefinitionAst]) { $ic = $true; break }; $p = $p.Parent }
+        $ad = "$($c.GetCommandName())"
+        if ($ic -or -not $tanim.ContainsKey($ad)) { continue }
+        $denetlenen.Add($ad)
+        if ($tanim[$ad] -gt $i) { $ihlal.Add("$ad (tanim ifadesi #$($tanim[$ad]) > cagri ifadesi #$i, satir $($c.Extent.StartLineNumber))") }
+    }
+}
+[pscustomobject]@{ ihlal = @($ihlal); denetlenen = @($denetlenen | Sort-Object -Unique) } | ConvertTo-Json -Compress
+"""
+
+
+def tanim_cagri_sirasi(tmp_path: Path, betik: Path) -> dict:
+    r = _pwsh_file(tmp_path, f"sira_{betik.stem}.ps1", _SIRA.replace("@@BETIK@@", _ps_lit(betik)))
+    assert r.returncode == 0, f"{r.stdout}\n{r.stderr}"
+    a = json.loads(r.stdout.strip().splitlines()[-1])
+    return {k: (v if isinstance(v, list) else [v]) for k, v in a.items()}
+
+
+def test_KRITIK_islev_TANIMI_ilk_UST_DUZEY_cagrisindan_ONCE(tmp_path):
+    """Çürütücü x3 (tanım YERİ): işlev tanımı çağıran ifadenin ARKASINA taşınırsa metin birebir kalır, parser ile çeken aparat işlevi
+    dilimin önüne koyduğu için yeşil kalır — ama gerçek betikte çağrı anında işlev YOKTUR (CommandNotFound → dış catch → kural HİÇ
+    kurulmaz, her kurulumda 'kural DOĞRULANAMADI')."""
+    a = tanim_cagri_sirasi(tmp_path, BETIK)
+    assert {FONK, PORT_FONK} <= set(a["denetlenen"]), (
+        f"aparat: kural / port işlevi çağrısı üst düzeyde bulunamadı (kör denetim): {a}"
+    )
+    assert not a["ihlal"], (
+        f"{BETIK.name}: işlev ilk üst düzey çağrısından SONRA tanımlanmış — çağrı anında işlev YOK: {a['ihlal']}"
     )
 
 

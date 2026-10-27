@@ -204,6 +204,57 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
     }
     return [bool]$MosqFirewallOk
 }
+# D5 M-1 (H-1 kapsam dışı gözlemi; DEV-C4 / G-2 / H-1 sınıfı): API / keşif kuralı döngüsü eskiden İG-9.5 + 4B-3.5 içeriğini doğru ölçüyor
+# ama uymayan bir kural görünce `Remove-NetFirewallRule -DisplayName` ile aynı adlı UYAN kuralı da siliyor (silme düşünce her koşuda
+# yanındaki doğru kural silinip yeniden kuruluyordu), kurulan kuralı yeniden sorgulamıyor ve sonucu hiçbir yere yazmıyordu — mobil / web istemci (ACİL
+# DURDUR dahil) LAN'dan erişemezken kurulum "DOĞRULANDI" diyebilirdi. install_backend_service.ps1 (D5 H-1) ile BİREBİR işlev (yalnız
+# günlükçü `Log`); sonuç özete ve `.install_verified`e (`apiFirewall=`) girer. Programı farklı aynı adlı kural (İG-9.5 taşınmış kurulum)
+# bugünkü gibi silinip doğrusu kurulur. Kapı: tests/test_setup_services_API_FW_kurali_ICERIKLE_ozete_girer_D5M1.py (eşlik dahil)
+function Ensure-PemfBackendFirewallKurali([string]$Ad, [string]$Protokol, [int]$Port, [string]$Program) {
+    # İçerik süzgeci `Where-Object $IcerikUygun` ile uygulanır (`& $blok` DEĞİL): izin listeli kurulum aparatları (D2.74 / E2-2.4) değişkenle
+    # yapılan çağrıyı denetleyemeyip işlevi ATLAR; süzgeç gövdesindeki komutlar ise denetlenir.
+    $IcerikUygun = {
+        $Aday = $_
+        $AdayPortu = $Aday | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        $AdayProgrami = $Aday | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+        [bool]($AdayPortu -and "$($AdayPortu.Protocol)" -eq $Protokol -and "$($AdayPortu.LocalPort)" -eq "$Port" -and
+            $AdayProgrami -and "$($AdayProgrami.Program)" -eq $Program -and "$($Aday.Enabled)" -eq 'True' -and
+            "$($Aday.Action)" -eq 'Allow' -and "$($Aday.Direction)" -eq 'Inbound' -and "$($Aday.Profile)" -eq 'Any')
+    }
+    $ElleKur = "New-NetFirewallRule -DisplayName '$Ad' -Direction Inbound -Program '$($Program -replace "'", "''")' -Action Allow -Protocol $Protokol -LocalPort $Port -Profile Any"
+    $Silinemedi = $false
+    $Uyan = 0
+    foreach ($Kural in @(Get-NetFirewallRule -DisplayName $Ad -ErrorAction SilentlyContinue | Where-Object { $_ })) {
+        if (@($Kural | Where-Object $IcerikUygun).Count) { $Uyan++; continue }
+        $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        $ProgramFiltresi = $Kural | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+        $Icerik = "$($PortFiltresi.Protocol) $($PortFiltresi.LocalPort), Program=$($ProgramFiltresi.Program), Enabled=$($Kural.Enabled), Action=$($Kural.Action), Direction=$($Kural.Direction), Profile=$($Kural.Profile)"
+        try {
+            $Kural | Remove-NetFirewallRule -ErrorAction Stop
+            Log "Firewall: '$Ad' adlı kuralın içeriği uymuyordu ($Icerik) -> silindi; doğrusu ($Protokol $Port, $Program) kurulacak." "Yellow"
+        } catch {
+            Log "UYARI: '$Ad' adlı kuralın içeriği uymuyor ($Icerik) ve silinemedi ($_) — LAN'dan (mobil / web istemci) erişim engelli kalabilir. Elle: Remove-NetFirewallRule -DisplayName '$Ad'; $ElleKur" "Yellow"
+            $Silinemedi = $true
+        }
+    }
+    # D5 M-1 TUR 2 (ürün kararı): uymayan kural SİLİNEMESE de uyan kural yoksa doğrusu kurulur — LAN (mobil / web istemci, ACİL DURDUR
+    # dahil) açık kalır; sonuç yine $false + eylemli UYARI (silinemeyen kural Block ise Allow'u ezer). İkinci koşuda doğrusu uyar → birikme yok.
+    if ($Uyan -eq 0) {
+        try {
+            New-NetFirewallRule -DisplayName $Ad -Direction Inbound -Program $Program -Action Allow -Protocol $Protokol -LocalPort $Port -Profile Any -ErrorAction Stop | Out-Null
+            Log "Firewall: $Protokol $Port inbound eklendi ('$Ad')." "Green"
+        } catch {
+            Log "UYARI: Firewall kuralı oluşturulamadı ($Ad): $_" "Yellow"
+        }
+    }
+    # HER YOLDA yeniden sorgula — adla değil İÇERİKLE (cmdlet sessizce geçse ya da ilke kuralı devre dışı bıraksa da).
+    $UyanKural = @(Get-NetFirewallRule -DisplayName $Ad -ErrorAction SilentlyContinue | Where-Object { $_ } | Where-Object $IcerikUygun)
+    $Ok = $UyanKural.Count -gt 0 -and -not $Silinemedi
+    if (-not $Ok -and -not $Silinemedi) {
+        Log "UYARI: '$Ad' ($Protokol $Port inbound, $Program) kuralı YOK -> LAN'dan (mobil / web istemci) erişim engellenebilir. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) Kural elle: $ElleKur" "Yellow"
+    }
+    return [bool]$Ok
+}
 # D3.07 (B-3.44): kurulan servisin at-rest durumu — `dogrulandi` (atRestEncrypted=true) · `kapali` (false) · `dogrulanamadi` (alan gelmedi).
 # Fonksiyon olarak ayrıldı: testler gerçek porta bağlanmadan Invoke-RestMethod'u gölgeleyip ölçer.
 function Test-PemfAtRestDurumu([int]$Port, [int]$Deneme = 6, [int]$BeklemeSn = 2) {
@@ -609,29 +660,18 @@ $FwKurallar = @(@{n = $(if ($StagingMi) { "PEMF Backend API (staging)" } else { 
 if (-not $StagingMi) { $FwKurallar += @{n = "PEMF UDP Discovery"; p = "UDP"; port = 5051 } }
 # ⚠️ İG-9.5 artığı (4-A devri #3): kural eskiden yalnız ADINA göre denetleniyordu ("bu adda kural VAR → atla"). Aynı adlı ESKİ
 # bir kural farklı port (eski PEMF_API_PORT), protokol ya da program yolu (taşınmış kurulum) taşıyorsa düzeltilmiyor, backend
-# yeni portta dinlerken LAN erişimi engelli kalıyordu. Kural İÇERİĞİYLE (protokol + port + program) doğrulanır; uymayan aynı
-# adlı kurallar silinip doğrusu kurulur. Kapı: tests/test_setup_services_FW_kurali_ADLA_degil_ICERIKLE_IG95.py
+# yeni portta dinlerken LAN erişimi engelli kalıyordu. Kural İÇERİĞİYLE doğrulanır (4B-3.4/4B-3.5: protokol + port + program + etkin +
+# Allow + Inbound + tüm profiller — health yalnız localhost'u ölçer). Kapı: tests/test_setup_services_FW_kurali_ADLA_degil_ICERIKLE_IG95.py
+# ⚠️ D5 M-1: kural kural `Ensure-PemfBackendFirewallKurali` (install_backend_service.ps1 ile BİREBİR): uymayan aynı adlı kural TEK TEK silinir
+# (uyan kural silinmez), uyan varsa yenisi kurulmaz, silinemeyen kurala dokunulmaz ama doğrusu yine kurulur (4B-3.5: LAN çalışsın) + eylemli
+# UYARI + sonuç False; son doğrulama içerikle; sonuç özete ve
+# `.install_verified`e (apiFirewall=) girer. Kapı: tests/test_setup_services_API_FW_kurali_ICERIKLE_ozete_girer_D5M1.py
+$ApiFirewallOk = $true
 foreach ($r in $FwKurallar) {
-    $mevcut = @(Get-NetFirewallRule -DisplayName $r.n -ErrorAction SilentlyContinue)
-    if ($mevcut.Count -gt 0) {
-        $uygun = $true
-        foreach ($k in $mevcut) {
-            # Değişken adları bilinçli UZUN: iki harfli kısaltmalar taşınmış-dizin kapısının aradığı eski dizin adlarıyla çakışıyordu.
-            $portFiltre = $k | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-            $uygFiltre = $k | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
-            # 4B-3.4/4B-3.5: LAN erişimini belirleyen kural alanları da içeriktir — aynı adlı ama Block / devre dışı / giden / dar profilli
-            # kural "uygun" sayılırsa backend dinler, LAN'dan erişim ENGELLİ kalır (health yalnız localhost'u ölçer).
-            if (-not $portFiltre -or "$($portFiltre.Protocol)" -ne $r.p -or "$($portFiltre.LocalPort)" -ne "$($r.port)" -or
-                -not $uygFiltre -or "$($uygFiltre.Program)" -ne $BackendExe -or "$($k.Enabled)" -ne 'True' -or
-                "$($k.Action)" -ne 'Allow' -or "$($k.Direction)" -ne 'Inbound' -or "$($k.Profile)" -ne 'Any') { $uygun = $false }
-        }
-        if ($uygun) { continue }
-        Log "Firewall kuralı '$($r.n)' farklı port/protokol/program/durumla VAR -> yeniden kuruluyor ($($r.p) $($r.port))." "Yellow"
-        try { Remove-NetFirewallRule -DisplayName $r.n -ErrorAction Stop }
-        catch { Log "UYARI: eski firewall kuralı silinemedi ($($r.n)): $_" "Yellow" }
-    }
-    try { New-NetFirewallRule -DisplayName $r.n -Direction Inbound -Program $BackendExe -Action Allow -Protocol $r.p -LocalPort $r.port -Profile Any -ErrorAction Stop | Out-Null }
-    catch { Log "UYARI: Firewall kuralı oluşturulamadı ($($r.n)): $_. LAN'dan (mobil/web) erişim engellenebilir." "Yellow" }
+    $KuralOk = $false
+    try { $KuralOk = Ensure-PemfBackendFirewallKurali -Ad $r.n -Protokol $r.p -Port $r.port -Program $BackendExe }
+    catch { Log "UYARI: Firewall kuralı denetlenemedi / eklenemedi ($($r.n)): $_ — LAN'dan (mobil / web istemci) erişim engellenebilir." "Yellow" }
+    if (-not $KuralOk) { $ApiFirewallOk = $false }
 }
 
 & $NssmExe start $ServiceBackend *>$null   # 'SERVICE_START_PENDING' zararsız uyarısını sustur; gerçek kanıt /api/health
@@ -672,10 +712,12 @@ Log "At-rest şifreleme DOĞRULANDI (atRestEncrypted=true)." "Green"
 if ($MosqFailed) { Log "UYARI: Backend çalışıyor AMA Mosquitto broker başlamadı → ESP bobinleri (6-8) bağlanamaz. Yukarıdaki mosquitto hatasını giderin." "Yellow" }
 # DENETİM 2026-09-06: firewall kuralı yoksa broker yerelde çalışsa bile ESP 6-8 (hotspot subnet) erişemez → özette görünsün.
 if ($Mode -eq "device" -and -not $MosqFirewallOk) { Log "UYARI: Mosquitto firewall kuralı (PEMF Mosquitto MQTT) DOĞRULANAMADI → ESP bobinleri (6-8) broker'a ulaşamaz. Yukarıdaki firewall uyarısındaki komutu elle çalıştırın." "Yellow" }
-Log "Kurulum DOĞRULANDI → http://localhost:$probePort (mosqFirewall=$MosqFirewallOk)" "Green"
+# D5 M-1: API / keşif kuralı içerikle doğrulanamadıysa backend localhost'ta sağlıklı olsa da LAN'dan erişilemeyebilir → özette görünsün.
+if (-not $ApiFirewallOk) { Log "UYARI: Backend güvenlik duvarı kuralı ($($FwKurallar.n -join ' + ')) içerikle DOĞRULANAMADI → mobil / web istemci (ACİL DURDUR dahil) LAN'dan bağlanamayabilir. Yukarıdaki firewall uyarısındaki komutu elle çalıştırın." "Yellow" }
+Log "Kurulum DOĞRULANDI → http://localhost:$probePort (mosqFirewall=$MosqFirewallOk, apiFirewall=$ApiFirewallOk)" "Green"
 # Başarı-bayrağı: Inno bunu [Code] ssPostInstall'da kontrol eder (PowerShell exit kodu Inno'da güvenilmez).
-# Inno yalnız VARLIĞA bakar (FileExists), içeriği ayrıştırmaz → 1. satır zaman damgası, 2. satır firewall kanıtı.
-Set-Content -Path (Join-Path $AppDir ".install_verified") -Value @((Get-Date -Format o), "mosqFirewall=$MosqFirewallOk") -Encoding ASCII -ErrorAction SilentlyContinue
+# Inno yalnız VARLIĞA bakar (FileExists), içeriği ayrıştırmaz → 1. satır zaman damgası, 2.-3. satır firewall kanıtı (mosqFirewall / apiFirewall).
+Set-Content -Path (Join-Path $AppDir ".install_verified") -Value @((Get-Date -Format o), "mosqFirewall=$MosqFirewallOk", "apiFirewall=$ApiFirewallOk") -Encoding ASCII -ErrorAction SilentlyContinue
 
 # ───────────────────── HOTSPOT (PEMF-Gateway WiFi — yalnız KLİNİK/device) ─────────────────────
 # ESP bobinleri (6-8) bu WiFi'ye bağlanıp yerel mosquitto'ya (1883) MQTT yapar. Windows Mobile Hotspot

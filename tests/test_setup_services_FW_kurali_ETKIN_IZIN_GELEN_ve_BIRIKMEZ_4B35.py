@@ -42,9 +42,15 @@ $tokens = $null; $errs = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$tokens, [ref]$errs)
 if ($errs) { throw "ayristirilamadi" }
 $ust = @($ast.EndBlock.Statements)
-$sec = @($ust | Where-Object { $_.Extent.Text -match '^\$FwKurallar\s*=' -or $_.Extent.Text -match '^if \(-not \$StagingMi\) \{ \$FwKurallar \+=' -or
-                               $_.Extent.Text -match '^foreach \(\$r in \$FwKurallar\)' })
-if ($sec.Count -ne 3) { [IO.File]::WriteAllText($Cikti, (@{ cipa = "FwKurallar blogu bulunamadi: $($sec.Count)" } | ConvertTo-Json)); exit 0 }
+# D5 M-1: `$FwKurallar = …` → `foreach ($r in $FwKurallar)` bitişik dilimi + döngünün kullandığı kural işlevi (betikten, parser ile).
+$bas = -1; $bit = -1
+for ($i = 0; $i -lt $ust.Count; $i++) {
+    if ($bas -lt 0 -and $ust[$i].Extent.Text -match '^\$FwKurallar\s*=') { $bas = $i }
+    if ($ust[$i].Extent.Text -match '^foreach \(\$r in \$FwKurallar\)') { $bit = $i }
+}
+if ($bas -lt 0 -or $bit -lt $bas) { [IO.File]::WriteAllText($Cikti, (@{ cipa = "FwKurallar blogu bulunamadi: $bas..$bit" } | ConvertTo-Json)); exit 0 }
+$sec = @($ust | Where-Object { $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -eq 'Ensure-PemfBackendFirewallKurali' }) +
+    @($ust[$bas..$bit])
 $d = Get-Content -LiteralPath $Durum -Raw | ConvertFrom-Json
 $script:Tablo = [System.Collections.Generic.List[object]]::new()
 function _ekle($k) {
@@ -65,11 +71,14 @@ function Get-NetFirewallApplicationFilter { param([Parameter(ValueFromPipeline =
 function New-NetFirewallRule { param($DisplayName, $Direction, $Program, $Action, $Protocol, $LocalPort, $Profile, $ErrorAction)
     $script:Cagri.Add("FW-YENI $DisplayName $Protocol $LocalPort")
     _ekle ([pscustomobject]@{ n = $DisplayName; p = $Protocol; port = $LocalPort; prog = $Program; action = $Action; dir = $Direction; profile = $Profile }) }
-function Remove-NetFirewallRule { param($DisplayName, $ErrorAction)
-    $script:Cagri.Add("FW-SIL $DisplayName")
-    $hedef = @($script:Tablo | Where-Object { $_.DisplayName -eq $DisplayName })
-    foreach ($k in @($hedef | Where-Object { -not $_.Kilitli })) { [void]$script:Tablo.Remove($k) }
-    if (@($hedef | Where-Object { $_.Kilitli }).Count) { throw "Erisim engellendi (sahte: GPO deposundaki kural)" } }
+# D5 M-1: kural TEK TEK (boru hattıyla) silinir — gölge hem nesneyi hem adı kabul eder (gelişmiş işlev: -ErrorAction ortak parametre).
+function Remove-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$InputObject, $DisplayName)
+    process {
+        $ad = $(if ($InputObject) { $InputObject.DisplayName } else { $DisplayName })
+        $script:Cagri.Add("FW-SIL $ad")
+        $hedef = $(if ($InputObject) { @($InputObject) } else { @($script:Tablo | Where-Object { $_.DisplayName -eq $DisplayName }) })
+        foreach ($k in @($hedef | Where-Object { -not $_.Kilitli })) { [void]$script:Tablo.Remove($k) }
+        if (@($hedef | Where-Object { $_.Kilitli }).Count) { throw "Erisim engellendi (sahte: GPO deposundaki kural)" } } }
 function Set-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$InputObject, $DisplayName, $Protocol, $LocalPort, $Program, $Enabled, $Action, $Direction, $Profile)
     process { $script:Cagri.Add("FW-DEGISTIR $DisplayName") } }
 $StagingMi = [bool]$d.staging
@@ -78,7 +87,9 @@ $BackendExe = $d.exe
 foreach ($s in $sec) { . ([scriptblock]::Create($s.Extent.Text)) }
 $son = @($script:Tablo | ForEach-Object { [ordered]@{ n = $_.DisplayName; p = $_.Protocol; port = "$($_.LocalPort)"; prog = $_.Program
     enabled = $_.Enabled; action = $_.Action; dir = $_.Direction; profile = $_.Profile; kilitli = $_.Kilitli } })
-[IO.File]::WriteAllText($Cikti, ([ordered]@{ tablo = $son; cagri = @($script:Cagri) } | ConvertTo-Json -Depth 5))
+$api = Get-Variable -Name ApiFirewallOk -Scope Script -ErrorAction SilentlyContinue
+[IO.File]::WriteAllText($Cikti, ([ordered]@{ tablo = $son; cagri = @($script:Cagri)
+    api = $(if ($api) { "$($api.Value)" } else { 'TANIMSIZ' }) } | ConvertTo-Json -Depth 5))
 """
 
 
@@ -122,11 +133,26 @@ def test_KRITIK_ayni_adli_LAN_ERISIMI_VERMEYEN_kural_duzeltilir(tmp_path, alan):
 
 
 def test_KARSIT_silinemeyen_GPO_kurali_varken_kural_BIRIKMEZ(tmp_path):
+    """4B-3.5 sözleşmesi (D5 M-1 TUR 2 ürün kararıyla GERİ — install_backend_service H-1 ve launcher I-1 ile aynı): silinemeyen uymayan
+    aynı adlı kural varken İLK koşuda doğru portlu kural yanına kurulur (LAN çalışsın), sonraki koşularda o doğru kural UYAR → ne silinir
+    ne yeniden kurulur (birikme / sil-kur döngüsü yok; eskiden `-DisplayName` toplu silme her koşuda uyan kuralı da siliyordu). Silinemeyen
+    kurala dokunulmaz; her koşuda eylemli UYARI + sonuç (ApiFirewallOk) False → özet / `.install_verified` apiFirewall=False."""
     durum = [_k(port=8099, kilitli=True), UDP]
     sayilar = []
     for i in range(3):
         v = _kos(tmp_path, durum, ad=str(i))
         sayilar.append(len(_api(v)))
+        yeni = [c for c in v["cagri"] if c.startswith("FW-YENI")]
+        assert yeni == ([f"FW-YENI {AD} TCP 8000"] if i == 0 else []), (
+            f"{i}. koşu: doğru kural ilk koşuda TAM bir kez kurulmalı, sonra kurulmamalı (birikme): {v['cagri']}"
+        )
+        assert [(x["port"], x["kilitli"]) for x in _api(v)].count(("8000", False)) == 1, (
+            f"{i}. koşu: doğru portlu (8000) kural yok ya da silindi — LAN erişimi kapalı: {_api(v)}"
+        )
+        assert [c for c in v["cagri"] if c.startswith("LOG UYARI") and "silinemedi" in c and "Elle:" in c], (
+            f"{i}. koşu: silinemeyen kural için eylem söyleyen UYARI yok: {v['cagri']}"
+        )
+        assert v["api"] == "False", f"{i}. koşu: silinemeyen uymayan kural kaldı ama ApiFirewallOk = {v['api']}"
         durum = [
             {"n": x["n"], "p": x["p"], "port": x["port"], "prog": x["prog"], "kilitli": x["kilitli"]}
             for x in v["tablo"]
@@ -135,6 +161,7 @@ def test_KARSIT_silinemeyen_GPO_kurali_varken_kural_BIRIKMEZ(tmp_path):
     assert sayilar[0] == 2 and any(x["port"] == "8000" for x in _api(v)), (
         "ilk koşuda doğru portlu kural kurulmalı (LAN çalışsın)"
     )
+    assert ("8099", True) in [(x["port"], x["kilitli"]) for x in _api(v)], f"silinemeyen kurala dokunuldu: {_api(v)}"
 
 
 def test_KARSIT_dogru_kural_ve_karsilastirma_bicimleri_DOKUNULMAZ(tmp_path):

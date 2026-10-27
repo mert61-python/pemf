@@ -95,6 +95,8 @@ $izinli = [System.Collections.Generic.List[string]]@('K', 'Log', 'Write-Host', '
     'Send-PemfAcilDurdur', 'Invoke-PemfTeardown', 'Teardown-Yukle', 'sc.exe', 'Join-Path', 'Split-Path', 'Test-Path', 'Where-Object',
     'Select-Object', 'ForEach-Object', 'Get-Content', 'Get-Date', 'Test-PemfApiPortDegeri', 'Get-PemfProfilEnvDosyasi', 'Read-PemfProfilEnv',
     'Stop-PemfKurulumBackendi', 'Stop-AppProcs', 'Get-ItemProperty',
+    # D5 M-1: API / keşif kuralı işleve alındı (install_backend_service.ps1 ile birebir) — gövdesi saf değilse yüklenmez, döngü ATLANIR.
+    'Ensure-PemfBackendFirewallKurali',
     # D3.07: at-rest doğrulaması işleve alındı (çağrı yeri koşulsuz) — gövdesi saf değilse (Invoke-RestMethod gölgesi yok) düşer.
     'Test-PemfAtRestDurumu')
 # `exit N` → çıkış kodunu kaydet + betik bloğundan dön (iç içe if/for içindekiler dahil); döngü kayıt görünce DURUR.

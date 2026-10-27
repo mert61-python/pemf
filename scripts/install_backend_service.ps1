@@ -178,23 +178,27 @@ function Get-PemfServisApiPortu([string[]]$AppEnv) {
 # Block / giden / yanlış protokol / başka port (eski PEMF_API_PORT) / dar profilli / başka programın (taşınmış kurulum) kuralı "var" sayılıyor,
 # servis LAN'dan (mobil / web istemci — ACİL DURDUR dahil) erişilemezken betik sessiz bitiyordu. İÇERİK setup_services.ps1 API döngüsüyle AYNI
 # (İG-9.5 + 4B-3.5): protokol · port · program · etkin · Allow · Inbound · tüm profiller. Uymayan aynı adlı kural silinir; uyan kural yoksa
-# doğrusu kurulur (çift kural yok); silinemez / kurulamaz → eylemli UYARI + $false. Uzak adres KAPSAMINA dokunulmaz (A-01: LAN güvenilir —
+# doğrusu kurulur (çift kural yok); uymayan kural silinemezse (ilke deposu) ona DOKUNULMAZ ama doğrusu yine kurulur (4B-3.5: LAN çalışsın;
+# ikinci koşuda doğrusu uyar → birikme yok), sonuç yine $false + eylemli UYARI; kurulamaz → eylemli UYARI + $false. Uzak adres KAPSAMINA dokunulmaz (A-01: LAN güvenilir —
 # yeni kural uzak adres vermeden kurulur, mevcut kuralın uzak adresi değiştirilmez). Son doğrulama adla değil içerikle → [bool] özete girer.
-# (setup_services.ps1 ile ortak yardımcıya taşınabilir.) Kapı: tests/test_install_backend_service_FW_kurali_ICERIKLE_D5H1.py
+# D5 M-1: setup_services.ps1 API / keşif döngüsü AYNI işlevi kullanır (BİREBİR kopya; yalnız günlükçü `Log`) — birini değiştiren ötekini de
+# değiştirir. Kapılar: tests/test_install_backend_service_FW_kurali_ICERIKLE_D5H1.py · eşlik: tests/test_setup_services_API_FW_kurali_ICERIKLE_ozete_girer_D5M1.py
 function Ensure-PemfBackendFirewallKurali([string]$Ad, [string]$Protokol, [int]$Port, [string]$Program) {
+    # İçerik süzgeci `Where-Object $IcerikUygun` ile uygulanır (`& $blok` DEĞİL): izin listeli kurulum aparatları (D2.74 / E2-2.4) değişkenle
+    # yapılan çağrıyı denetleyemeyip işlevi ATLAR; süzgeç gövdesindeki komutlar ise denetlenir.
     $IcerikUygun = {
-        param($Kural)
-        $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-        $ProgramFiltresi = $Kural | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
-        [bool]($PortFiltresi -and "$($PortFiltresi.Protocol)" -eq $Protokol -and "$($PortFiltresi.LocalPort)" -eq "$Port" -and
-            $ProgramFiltresi -and "$($ProgramFiltresi.Program)" -eq $Program -and "$($Kural.Enabled)" -eq 'True' -and
-            "$($Kural.Action)" -eq 'Allow' -and "$($Kural.Direction)" -eq 'Inbound' -and "$($Kural.Profile)" -eq 'Any')
+        $Aday = $_
+        $AdayPortu = $Aday | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        $AdayProgrami = $Aday | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+        [bool]($AdayPortu -and "$($AdayPortu.Protocol)" -eq $Protokol -and "$($AdayPortu.LocalPort)" -eq "$Port" -and
+            $AdayProgrami -and "$($AdayProgrami.Program)" -eq $Program -and "$($Aday.Enabled)" -eq 'True' -and
+            "$($Aday.Action)" -eq 'Allow' -and "$($Aday.Direction)" -eq 'Inbound' -and "$($Aday.Profile)" -eq 'Any')
     }
     $ElleKur = "New-NetFirewallRule -DisplayName '$Ad' -Direction Inbound -Program '$($Program -replace "'", "''")' -Action Allow -Protocol $Protokol -LocalPort $Port -Profile Any"
     $Silinemedi = $false
     $Uyan = 0
     foreach ($Kural in @(Get-NetFirewallRule -DisplayName $Ad -ErrorAction SilentlyContinue | Where-Object { $_ })) {
-        if (& $IcerikUygun $Kural) { $Uyan++; continue }
+        if (@($Kural | Where-Object $IcerikUygun).Count) { $Uyan++; continue }
         $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
         $ProgramFiltresi = $Kural | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
         $Icerik = "$($PortFiltresi.Protocol) $($PortFiltresi.LocalPort), Program=$($ProgramFiltresi.Program), Enabled=$($Kural.Enabled), Action=$($Kural.Action), Direction=$($Kural.Direction), Profile=$($Kural.Profile)"
@@ -206,7 +210,9 @@ function Ensure-PemfBackendFirewallKurali([string]$Ad, [string]$Protokol, [int]$
             $Silinemedi = $true
         }
     }
-    if ($Uyan -eq 0 -and -not $Silinemedi) {
+    # D5 M-1 TUR 2 (ürün kararı): uymayan kural SİLİNEMESE de uyan kural yoksa doğrusu kurulur — LAN (mobil / web istemci, ACİL DURDUR
+    # dahil) açık kalır; sonuç yine $false + eylemli UYARI (silinemeyen kural Block ise Allow'u ezer). İkinci koşuda doğrusu uyar → birikme yok.
+    if ($Uyan -eq 0) {
         try {
             New-NetFirewallRule -DisplayName $Ad -Direction Inbound -Program $Program -Action Allow -Protocol $Protokol -LocalPort $Port -Profile Any -ErrorAction Stop | Out-Null
             Write-Status "Firewall: $Protokol $Port inbound eklendi ('$Ad')." "Green"
@@ -215,7 +221,7 @@ function Ensure-PemfBackendFirewallKurali([string]$Ad, [string]$Protokol, [int]$
         }
     }
     # HER YOLDA yeniden sorgula — adla değil İÇERİKLE (cmdlet sessizce geçse ya da ilke kuralı devre dışı bıraksa da).
-    $UyanKural = @(Get-NetFirewallRule -DisplayName $Ad -ErrorAction SilentlyContinue | Where-Object { $_ -and (& $IcerikUygun $_) })
+    $UyanKural = @(Get-NetFirewallRule -DisplayName $Ad -ErrorAction SilentlyContinue | Where-Object { $_ } | Where-Object $IcerikUygun)
     $Ok = $UyanKural.Count -gt 0 -and -not $Silinemedi
     if (-not $Ok -and -not $Silinemedi) {
         Write-Status "UYARI: '$Ad' ($Protokol $Port inbound, $Program) kuralı YOK -> LAN'dan (mobil / web istemci) erişim engellenebilir. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) Kural elle: $ElleKur" "Yellow"

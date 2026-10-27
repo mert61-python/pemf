@@ -39,9 +39,15 @@ $tokens = $null; $errs = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$tokens, [ref]$errs)
 if ($errs) { throw "ayristirilamadi" }
 $ust = @($ast.EndBlock.Statements)
-$sec = @($ust | Where-Object { $_.Extent.Text -match '^\$FwKurallar\s*=' -or $_.Extent.Text -match '^if \(-not \$StagingMi\) \{ \$FwKurallar \+=' -or
-                               $_.Extent.Text -match '^foreach \(\$r in \$FwKurallar\)' })
-if ($sec.Count -ne 3) { [IO.File]::WriteAllText($Cikti, (@{ cipa = "FwKurallar blogu bulunamadi: $($sec.Count)" } | ConvertTo-Json)); exit 0 }
+# D5 M-1: `$FwKurallar = …` → `foreach ($r in $FwKurallar)` bitişik dilimi + döngünün kullandığı kural işlevi (betikten, parser ile).
+$bas = -1; $bit = -1
+for ($i = 0; $i -lt $ust.Count; $i++) {
+    if ($bas -lt 0 -and $ust[$i].Extent.Text -match '^\$FwKurallar\s*=') { $bas = $i }
+    if ($ust[$i].Extent.Text -match '^foreach \(\$r in \$FwKurallar\)') { $bit = $i }
+}
+if ($bas -lt 0 -or $bit -lt $bas) { [IO.File]::WriteAllText($Cikti, (@{ cipa = "FwKurallar blogu bulunamadi: $bas..$bit" } | ConvertTo-Json)); exit 0 }
+$sec = @($ust | Where-Object { $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -eq 'Ensure-PemfBackendFirewallKurali' }) +
+    @($ust[$bas..$bit])
 $d = Get-Content -LiteralPath $Durum -Raw | ConvertFrom-Json
 $script:Tablo = [System.Collections.Generic.List[object]]::new()
 # 4B-3.5: gerçek kural nesnesi Enabled / Action / Direction / Profile da taşır (betik bunları da içerik sayar).
@@ -59,9 +65,13 @@ function New-NetFirewallRule { param($DisplayName, $Direction, $Program, $Action
     $script:Cagri.Add("FW-YENI $DisplayName $Protocol $LocalPort")
     $script:Tablo.Add([pscustomobject]@{ DisplayName = $DisplayName; Protocol = $Protocol; LocalPort = "$LocalPort"; Program = $Program
         Enabled = 'True'; Action = $Action; Direction = $Direction; Profile = $Profile }) }
-function Remove-NetFirewallRule { param($DisplayName, $ErrorAction)
-    $script:Cagri.Add("FW-SIL $DisplayName")
-    foreach ($k in @($script:Tablo | Where-Object { $_.DisplayName -eq $DisplayName })) { [void]$script:Tablo.Remove($k) } }
+# D5 M-1: kural TEK TEK (boru hattıyla) silinir — gölge hem nesneyi hem adı kabul eder (gelişmiş işlev: -ErrorAction ortak parametre).
+function Remove-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$InputObject, $DisplayName)
+    process {
+        $ad = $(if ($InputObject) { $InputObject.DisplayName } else { $DisplayName })
+        $script:Cagri.Add("FW-SIL $ad")
+        $hedef = $(if ($InputObject) { @($InputObject) } else { @($script:Tablo | Where-Object { $_.DisplayName -eq $DisplayName }) })
+        foreach ($k in $hedef) { [void]$script:Tablo.Remove($k) } } }
 function Set-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$InputObject, $DisplayName, $Protocol, $LocalPort, $Program)
     process { $script:Cagri.Add("FW-DEGISTIR $DisplayName $LocalPort") } }
 $StagingMi = [bool]$d.staging
