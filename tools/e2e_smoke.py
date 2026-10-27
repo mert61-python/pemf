@@ -243,7 +243,17 @@ def run_scenarios():
     coils = snap.get("coils", [])
     running = [c for c in coils if c.get("running")]
     check("sim: bobinler calisiyor gorunuyor", len(running) >= 1, f"{len(running)} bobin")
-    check("sim: sicaklik telemetrisi akiyor", any(float(c.get("objectTemp") or 0) > 0 for c in running))
+    # D5.58 (B-10.175): sicaklik YALNIZ olcebilen (ESP/MQTT) bobinden gelir; STM protokolunde sicaklik alani YOK ve sim de
+    # STM bobinine sicaklik UYDURMAZ (test_sim_GERCEGI_ASMAZ). Eskiden "herhangi bir calisan bobinde objectTemp > 0" bekleniyordu —
+    # bu seans yalniz STM bobinleriyle (1, 2, 7) kosuyor: ya kontrol hep KALDI ya da biri STM'e sicaklik uydurursa GECTI.
+    # Kapi: tests/test_e2e_SICAKLIK_yalniz_OLCEN_bobinde_D5_58.py
+    _esp = _esp_bobinleri()
+    _stm_calisan = [c for c in running if int(c.get("id") or c.get("coilId") or 0) not in _esp]
+    check(
+        "sim: STM bobinleri sicaklik UYDURMAZ (objectTemp None)",
+        bool(_stm_calisan) and all(c.get("objectTemp") is None for c in _stm_calisan),
+        str([(c.get("id"), c.get("objectTemp")) for c in _stm_calisan]),
+    )
 
     # ── 6) ACIL DURDURMA: ESP bobinlerinin HEPSI + sessionCoilIds (P0 #2) ─────
     s, es, _ = req("POST", "/api/hardware/emergency_stop")

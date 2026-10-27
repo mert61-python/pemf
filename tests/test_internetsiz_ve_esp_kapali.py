@@ -266,6 +266,115 @@ def test_KRITIK_simulasyon_BAGLANTIDAN_turetilmez():
             assert yasak not in metin, (
                 f"simulasyon karari '{yasak}' ile birlesmis -> baglanti kaybinda SAHTE VERI riski"
             )
+    # ⚠️ D5.58 (B-10.131): yukarıdaki tarama yalnız `Compare` düğümlerine bakıyordu — karar
+    # `os.environ.get("PEMF_SIMULATE") == "1" or _live_state.get("internet") != "online"` olsa ağ koşulu AYRI bir Compare'de
+    # kaldığı için YEŞİLDİ; `!= "0"` (tanımsızken de sim) de YEŞİLDİ (ölçüldü). Artık: (1) PEMF_SIMULATE geçen hiçbir `BoolOp`
+    # yok (ek terim / koşul birleşimi yok); (2) sanal donanım döngüsünü başlatan TEK `if` var ve koşulu TAM OLARAK
+    # `os.environ.get('PEMF_SIMULATE') == '1'`. Davranış kolu: test_KRITIK_DAVRANIS_baglanti_KOPUKKEN_sim_BASLAMAZ.
+    for dugum in ast.walk(agac):
+        if isinstance(dugum, ast.BoolOp) and "PEMF_SIMULATE" in ast.dump(dugum):
+            raise AssertionError(
+                f"simulasyon karari baska bir kosulla BIRLESTIRILMIS (satir {dugum.lineno}): {ast.unparse(dugum)}"
+            )
+    baslatanlar = [
+        d
+        for d in ast.walk(agac)
+        if isinstance(d, ast.If)
+        and "_hardware_simulation_loop" in ast.unparse(ast.Module(body=d.body, type_ignores=[]))
+    ]
+    assert len(baslatanlar) == 1, f"sanal donanim dongusunu baslatan tek `if` bekleniyordu ({len(baslatanlar)})"
+    assert ast.unparse(baslatanlar[0].test) == "os.environ.get('PEMF_SIMULATE') == '1'", (
+        f"sim karari saf ortam degiskeni degil: {ast.unparse(baslatanlar[0].test)}"
+    )
+    # ⚠️ D5.58 TUR 2 (çürütme a2 / a3): yukarıdaki kol başlatıcıyı yalnız `If.body` METNİNDE arıyordu — `else` dalında
+    # (`if stm == "online": pass` + `else: Thread(target=_hardware_simulation_loop)`) ya da BAŞKA bir işlevde (`def _sim_yedegi():
+    # Thread(...)` + STM kopuş olayından çağrı) başlatılan ikinci yol YEŞİLDİ (ölçüldü). Artık: döngü adına modülde TEK başvuru var
+    # (tanımı hariç; ad / öznitelik / dizge), o başvuru `_start_background_threads`'in DOĞRUDAN gövdesindeki saf karar `if`'inin
+    # GÖVDESİNDE (koşul / `else` değil, iç içe işlev değil) ve başka hiçbir backend modülü adı anmaz (dolaylı başlatma yok).
+    hedef_if = baslatanlar[0]
+    ebeveyn = {alt: d for d in ast.walk(agac) for alt in ast.iter_child_nodes(d)}
+    basvurular = [
+        d
+        for d in ast.walk(agac)
+        if (isinstance(d, ast.Name) and d.id == "_hardware_simulation_loop")
+        or (isinstance(d, ast.Attribute) and d.attr == "_hardware_simulation_loop")
+        or (isinstance(d, ast.Constant) and d.value == "_hardware_simulation_loop")
+    ]
+    assert len(basvurular) == 1, (
+        "sanal donanim dongusune TEK basvuru (karar if'inin govdesi) bekleniyordu; basvuru satirlari "
+        f"{[d.lineno for d in basvurular]} -> ikinci / dolayli baslatma yolu (baglanti kopunca SAHTE VERI riski)"
+    )
+    d = basvurular[0]
+    while d is not hedef_if:
+        ust = ebeveyn.get(d)
+        assert ust is not None, (
+            f"sanal donanim dongusu karar if'inin DISINDA baslatiliyor (satir {basvurular[0].lineno})"
+        )
+        assert not isinstance(ust, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)), (
+            f"sanal donanim dongusu karar if'i icinde IC ICE bir islevden baslatiliyor (satir {basvurular[0].lineno})"
+        )
+        if ust is hedef_if:
+            assert any(d is g for g in hedef_if.body), (
+                f"sanal donanim dongusu karar if'inin GOVDESINDE degil (kosul / else dali; satir {basvurular[0].lineno})"
+            )
+        d = ust
+    fonk = ebeveyn.get(hedef_if)
+    assert (
+        isinstance(fonk, ast.FunctionDef)
+        and fonk.name == "_start_background_threads"
+        and any(hedef_if is g for g in fonk.body)
+    ), f"sim karar if'i `_start_background_threads`'in dogrudan govdesinde degil: {getattr(fonk, 'name', fonk)!r}"
+    diger = sorted(
+        str(p.relative_to(KOK))
+        for p in (KOK / "apps" / "backend").rglob("*.py")
+        if p.relative_to(KOK).as_posix() != "apps/backend/servers/api_server.py"
+        and "_hardware_simulation_loop" in p.read_text(encoding="utf-8", errors="replace")
+    )
+    assert not diger, f"sanal donanim dongusunu baska backend modulu aniyor (dolayli baslatma): {diger}"
+
+
+@pytest.mark.parametrize("deger", [None, "", "0", "1"])
+def test_KRITIK_DAVRANIS_baglanti_KOPUKKEN_sim_BASLAMAZ(durum, monkeypatch, deger):
+    """D5.58 (B-10.131) davranış kolu: GERÇEK arka plan başlatıcısı (lifespan'ın çağırdığı), bütün bağlantılar
+    KOPUKKEN (internet / gateway / mqtt / stm) koşar — sanal donanım döngüsü YALNIZ `PEMF_SIMULATE=1` ile başlar.
+    Gerçek daemon AÇILMAZ: Thread kaydedicisi (`test_session_watchdog` deseni). AST kolu adı / biçimi pinler, bu
+    kol karar ifadesinin BAŞKA bir yazılışını (yardımcı işlev, ikinci başlatıcı, varsayılan değer) da yakalar.
+
+    MUTASYON: karara `or _live_state.get("internet") != "online"` · `!= "0"` · ikinci başlatıcı → KIRMIZI."""
+    import threading
+    from types import SimpleNamespace
+
+    from servers import api_server, efield_live
+
+    c = sys.modules.get("conftest")
+    assert c is not None and Path(c.__file__).resolve() == (Path(__file__).parent / "conftest.py").resolve()
+    gercek = c._GERCEK_ARKA_PLAN_BASLATICI
+    assert callable(gercek), "aparat: conftest gerçek arka plan başlatıcısını kaydetmedi"
+    baslatilan: list = []
+
+    class _KayitThread(threading.Thread):
+        def start(self):  # daemon AÇILMAZ — yalnız kayıt
+            baslatilan.append((self.name, self._target))
+
+    monkeypatch.setattr(api_server, "_threading", SimpleNamespace(Thread=_KayitThread))
+    monkeypatch.setattr(api_server, "_bg_threads_started", False)
+    monkeypatch.setattr(efield_live, "start_loop", lambda **k: None)
+    for alan in ("internet", "gateway", "mqtt", "stm"):
+        monkeypatch.setitem(api_server._live_state, alan, "offline")
+    if deger is None:
+        monkeypatch.delenv("PEMF_SIMULATE", raising=False)
+    else:
+        monkeypatch.setenv("PEMF_SIMULATE", deger)
+    gercek()
+    assert baslatilan, "aparat: başlatıcı hiçbir iş parçacığı kaydetmedi (VAKUM)"
+    sim = [ad for ad, hedef in baslatilan if hedef is api_server._hardware_simulation_loop]
+    if deger == "1":
+        assert len(sim) == 1, f"PEMF_SIMULATE=1 iken sanal donanım TEK kez başlamalıydı: {baslatilan}"
+    else:
+        assert not sim, (
+            f"PEMF_SIMULATE={deger!r} iken bağlantı kopuk diye sanal donanım BAŞLADI ({sim}) -> gerçek donanım "
+            "yokken/kopukken UYDURMA veri (sahte telemetri) gösterilir"
+        )
 
 
 def test_KRITIK_ESP_kapaliyken_MQTT_PUBLISH_hic_denenmez(monkeypatch):

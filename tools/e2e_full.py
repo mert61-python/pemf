@@ -1023,8 +1023,16 @@ def c_session_stm():
         abs(float(c1.get("frequencyHz") or 0) - 40.0) < 0.6 and abs(float(c1.get("dutyCycle") or 0) - 30.0) < 0.6,
         f"freq={c1.get('frequencyHz')} duty={c1.get('dutyCycle')}",
     )
+    # D5.58 (B-10.175): sicaklik YALNIZ olcebilen bobinden (ESP/MQTT) gelir — STM bobini 1'in protokolunde sicaklik alani YOK; eskiden
+    # bu kontrol bobin 1'de objectTemp > 0 bekliyordu (sim STM'e sicaklik uydururken GECIYOR, duzeltilince KALIYORDU). Olcen bobin
+    # CALISAN backend'in topolojisinden (`esp_slotlari`); ESP alt sistemi kapaliysa olcen bobin de yoktur.
+    # Kapi: tests/test_e2e_SICAKLIK_yalniz_OLCEN_bobinde_D5_58.py
+    check("STM bobin 1 sicaklik UYDURMAZ (objectTemp None)", c1.get("objectTemp") is None, f"{c1.get('objectTemp')}")
+    _olcen = coil_of(sn, esp_slotlari(sn)[0]) if esp_slotlari(sn) and esp_alt_sistemi_acik(sn) else None
     check(
-        "sicaklik telemetrisi akiyor (objectTemp>0)", float(c1.get("objectTemp") or 0) > 0, f"{c1.get('objectTemp')} °C"
+        "sicaklik telemetrisi YALNIZ olcebilen (ESP) bobinde akiyor (objectTemp>0)",
+        _olcen is None or float(_olcen.get("objectTemp") or 0) > 0,
+        f"{(_olcen or {}).get('objectTemp')} °C",
     )
     check("manyetik alan telemetrisi akiyor (mT)", float(c1.get("magneticMt") or 0) > 0.5, f"{c1.get('magneticMt')} mT")
     check("akim telemetrisi akiyor (A)", float(c1.get("currentA") or 0) > 0, f"{c1.get('currentA')} A")

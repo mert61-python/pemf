@@ -303,6 +303,108 @@ def test_DAVRANIS_sim_STM_bobinine_sicaklik_VERMEZ(izole_sim, monkeypatch):
     assert yayinlanan == (stm | esp), (
         f"sim {sorted(yayinlanan)} yayınladı, topoloji {sorted(stm | esp)} — kapsam AYRIŞTI."
     )
+    # ⚠️ D5.58 (B-10.177): yalnız `coil_status` ölçülüyordu — `sensor_data` yayını (Sensör ekranı / grafik / dakika ortalaması
+    # bunu dinler) kendi sözlüğünü kurar; orada STM bobinine 24.0 °C uydurulsa bu kapı YEŞİLDİ (ölçüldü). İki yayın da ölçülür.
+    sensor_yayinlari = [m for m in yayinlar if m.get("type") == "sensor_data"]
+    assert {m.get("coilId") for m in sensor_yayinlari} == (stm | esp), (
+        "sim sensor_data yayınlamadı / kapsam AYRIŞTI (VAKUM)"
+    )
+    for m in sensor_yayinlari:
+        cid = m.get("coilId")
+        if cid in stm:
+            d = m.get("data") or {}
+            assert d.get("objectTemp") is None and d.get("ambientTemp") is None, (
+                f"bobin {cid} STM'de ama sim sensor_data yayınında sıcaklık uydurdu: {d}"
+            )
+
+
+def _cok_tur(api, monkeypatch, saat_adimlari=(0.0, 1800.0, 36000.0)) -> list[list[dict]]:
+    """Sim döngüsünü `len(saat_adimlari)` TUR koştur; tur k, döngü başlangıcından `saat_adimlari[k]` sn SONRA koşar.
+
+    Sahte saat ve tur sonu YALNIZ bu iş parçacığında (`_tek_tur` / D1.41 ilkesi): öteki iş parçacıkları gerçek `time.time`
+    ve gerçek uykuyu görür. Uyku gerçekten beklenmez — saat ileri atlar (ikinci / sonraki turlar "zaman geçmiş" dalı)."""
+    import threading
+    import time as _gercek_time
+
+    ana = threading.current_thread()
+    gercek_uyku = _gercek_time.sleep
+    gercek_saat = _gercek_time.time
+    adimlar = list(saat_adimlari)
+    kayma = {"sn": 0.0}
+    turlar: list[list[dict]] = [[]]
+
+    def _saat():
+        return gercek_saat() + (kayma["sn"] if threading.current_thread() is ana else 0.0)
+
+    def _uyku(sn):
+        if threading.current_thread() is not ana:
+            return gercek_uyku(sn)
+        if len(turlar) >= len(adimlar):
+            raise KeyboardInterrupt
+        kayma["sn"] = adimlar[len(turlar)]
+        turlar.append([])
+
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda m: turlar[-1].append(m))
+    monkeypatch.setattr(_gercek_time, "sleep", _uyku)
+    monkeypatch.setattr(_gercek_time, "time", _saat)
+    try:
+        api._hardware_simulation_loop()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        monkeypatch.setattr(_gercek_time, "sleep", gercek_uyku)
+        monkeypatch.setattr(_gercek_time, "time", gercek_saat)
+    return turlar
+
+
+@pytest.mark.parametrize("esp_acik", [False, True], ids=["esp_kapali", "esp_acik"])
+@pytest.mark.parametrize("seans", [False, True], ids=["bosta", "seans_tum_bobinler"])
+def test_KRITIK_DAVRANIS_sim_STM_sicaklik_VERMEZ_seans_x_ESP_x_TUR_D5_58(izole_sim, monkeypatch, seans, esp_acik):
+    """D5.58 TUR 2 (çürütme b1 / b2 / b3): yukarıdaki kapı TEK tur, SEANSSIZ, ESP KAPALI koşuyordu — yalnız boşta dalı ölçülüyordu.
+    Ölçüldü (hepsi YEŞİLDİ): çalışan bobin dalında STM'e sıcaklık (`if running`; e2e kontrolleri tam da SEANS sırasında koşar) ·
+    ESP açıkken HER bobine sıcaklık (`(cid in _esp) or esp_acik`) · ilk turda None, sonraki turlarda 24 °C (`or el > 0.25`).
+    Artık {boşta, tüm bobinlerde aktif seans} × {ESP kapalı, açık} × 3 tur (t = 0 sn, 30 dk, 10 sa): her turda `coil_status` VE
+    `sensor_data` yayınında STM bobinlerinin `objectTemp` / `ambientTemp` None. Öncüller (vakum karşıtı): her tur topolojinin
+    tamamını yayınlar; seansta STM bobinleri `running`; ESP açıkken ESP bobini sıcaklık BİLDİRİR (ölçen yol gerçekten koştu)."""
+    api, live_state = izole_sim
+    monkeypatch.setattr(live_state, "esp_etkin", lambda: esp_acik)
+    monkeypatch.setattr(api.live_state, "esp_etkin", lambda: esp_acik, raising=False)
+    stm = set(live_state.STM_COIL_IDS)
+    esp = set(live_state.ESP_COIL_IDS)
+    assert stm, "öncül: topolojide STM bobini yok (VAKUM)"
+    oturum = {"is_active": True, "frequency": 40.0, "duty": 30.0, "coil_ids": sorted(stm | esp)} if seans else {}
+    # Paylaşılan seans sözlüğüne DOKUNULMAZ (D1.41 nöbeti): yalnız modül bağlaması bu tur için değişir, finally'de geri gelir.
+    gercek_oturum = api._active_session
+    api._active_session = oturum
+    try:
+        turlar = _cok_tur(api, monkeypatch)
+    finally:
+        api._active_session = gercek_oturum
+    assert len(turlar) == 3, f"aparat: sim {len(turlar)} tur koştu (3 bekleniyordu)"
+    for no, yayinlar in enumerate(turlar, start=1):
+        for tur in ("coil_status", "sensor_data"):
+            kume = {m.get("coilId") for m in yayinlar if m.get("type") == tur}
+            assert kume == (stm | esp), (
+                f"tur {no}: sim {tur} kapsamı {sorted(kume)} ≠ topoloji {sorted(stm | esp)} (VAKUM)"
+            )
+        for m in yayinlar:
+            if m.get("type") not in ("coil_status", "sensor_data"):
+                continue
+            cid, d = m.get("coilId"), (m.get("data") or {})
+            if cid in stm:
+                assert d.get("objectTemp") is None and d.get("ambientTemp") is None, (
+                    f"tur {no} ({'seans' if seans else 'boşta'}, ESP {'açık' if esp_acik else 'kapalı'}): bobin {cid} STM'de ama "
+                    f"sim {m.get('type')} yayınında sıcaklık uydurdu: objectTemp={d.get('objectTemp')!r} "
+                    f"ambientTemp={d.get('ambientTemp')!r} — STM protokolünde sıcaklık alanı YOK"
+                )
+                if seans and m.get("type") == "coil_status":
+                    assert d.get("running") is True, (
+                        f"öncül: seans aktifken STM bobini {cid} çalışmıyor (çalışan dal ölçülmedi)"
+                    )
+            elif cid in esp and esp_acik:
+                assert d.get("objectTemp") is not None, (
+                    f"öncül: ESP açıkken ESP bobini {cid} sıcaklık bildirmedi ({m.get('type')}) — ölçen yol koşmadı"
+                )
 
 
 def test_DAVRANIS_esp_kapaliyken_mqtt_online_DEMEZ(izole_sim, monkeypatch):
