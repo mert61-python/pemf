@@ -372,6 +372,21 @@ _BEKLENEN_ANON_RPC = {
     "resolve_sessions",
     "usage_counts",
 }
+# D5.02 (B-3.3): beklenen liste AD ile eslesiyordu — sirsiz ESKI imza (`upsert_patient(p_device_id text, p_patient jsonb)`,
+# secure_v2 oncesi) canlida kalsa bile "temiz" sayiliyordu. Artik IMZA da denetlenir: yalniz su ikisi TASARIM GEREGI sirsizdir
+# (eslestirme kodu / yalniz toplamlar); digerleri `p_secret` parametresi TASIMIYORSA bulgudur.
+_SIRSIZ_ANON_RPC = {"resolve_device", "usage_counts"}
+
+
+def _anon_rpc_beklenen(satir: dict) -> bool:
+    """5. madde satiri (fonksiyon + parametreler) depo niyetine uyuyor mu — ad listede VE (sirsiz tasarim YA DA `p_secret` var)."""
+    ad = satir.get("fonksiyon")
+    if ad not in _BEKLENEN_ANON_RPC:
+        return False
+    if ad in _SIRSIZ_ANON_RPC:
+        return True
+    return re.search(r"\bp_secret\b", str(satir.get("parametreler") or "")) is not None
+
 
 # ⚠️ BOS OLMASI KASITLIDIR (sahip karari 2026-08-21: "okumalari RPC'ye tasi").
 # Burada bir donem su uc istisna vardi:
@@ -391,7 +406,7 @@ def denetim(ref: str) -> int:
         satirlar = calistir(ref, sorgu)
         bilgi = baslik.startswith("BILGI")
         if baslik.startswith("5."):
-            satirlar = [s for s in satirlar if s.get("fonksiyon") not in _BEKLENEN_ANON_RPC]
+            satirlar = [s for s in satirlar if not _anon_rpc_beklenen(s)]
         if baslik.startswith("2."):
             satirlar = [s for s in satirlar if (s.get("tablo"), s.get("rol"), s.get("yetkiler")) not in _BEKLENEN_YETKI]
         print(f"\n=== {baslik} ===")
@@ -406,7 +421,8 @@ def denetim(ref: str) -> int:
         print(
             "Sertlestirme: python scripts/supabase_sql.py --dosya apps/backend/database/supabase_sertlestirme.sql --yaz"
         )
-    return 0
+    # D5.11 / D5.24 (B-9.13 · B-10.98): bulgu varken 0 donuyordu — betik / CI denetimi "gecti" saniyordu.
+    return 1 if bulgu else 0
 
 
 def main() -> int:
