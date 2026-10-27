@@ -112,6 +112,39 @@ def _explain_cagrilari(dugumler) -> list:
     ]
 
 
+#: Çağrıyı ERTELEYEN sınırlar: bunların gövdesindeki `.explain(...)` `with` bloğunda TANIMLANIR ama blok bittikten SONRA koşabilir.
+_ERTELEYEN_SINIR = (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def _sinir_asmadan_explain(dugumler) -> list:
+    """TUR 3 (çürütücü 2 y6): `with _XAI_KILIT:` gövdesinde SÖZDİZİMSEL olarak duran ama Lambda / iç işlev / sınıf SINIRININ
+    arkasındaki `.explain(` çağrısı SAYILMAZ (`_calis = lambda: expl.explain(p)` kilit içinde tanımlanıp kilit DIŞINDA çağrılır)."""
+    bulunan, yigin = [], list(dugumler)
+    while yigin:
+        d = yigin.pop()
+        if isinstance(d, _ERTELEYEN_SINIR):
+            continue
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "explain":
+            bulunan.append(d)
+        yigin.extend(ast.iter_child_nodes(d))
+    return bulunan
+
+
+def _islev_ici_kilit_baglamalari(agac) -> list:
+    """TUR 3 (çürütücü 2 y7): bir işlev / lambda İÇİNDE `_XAI_KILIT` adına bağlama (atama, `with … as`, döngü hedefi, parametre,
+    `global` + yeniden atama) — yerel gölge kilit her çağrıda YENİ kilit demektir, dışlama yok."""
+    bulunan = []
+    for f in ast.walk(agac):
+        if not isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        for d in ast.walk(f):
+            if isinstance(d, ast.Name) and d.id == "_XAI_KILIT" and isinstance(d.ctx, (ast.Store, ast.Del)):
+                bulunan.append(f"satır {d.lineno} ({type(d.ctx).__name__})")
+            elif isinstance(d, ast.arg) and d.arg == "_XAI_KILIT":
+                bulunan.append(f"satır {d.lineno} (parametre)")
+    return bulunan
+
+
 def test_YAPISAL_yolo_cam_tek_is_kilidi():
     """AI1.X2/X3: kilit + explain CAM hesabını yapan yardımcıya taşındı (xai_*_isi_haritasi onu çağırır).
 
@@ -133,10 +166,13 @@ def test_YAPISAL_yolo_cam_tek_is_kilidi():
             and any(isinstance(i.context_expr, ast.Name) and i.context_expr.id == "_XAI_KILIT" for i in w.items)
         ]
         assert kilitli, f"{dosya}:{fn} `with _XAI_KILIT:` bloğu YOK — YOLO CAM kilitsiz"
-        icerde = {id(c) for w in kilitli for c in _explain_cagrilari(w.body)}
+        # TUR 3 (y6): Lambda / iç işlev sınırının arkasındaki çağrı "kilit içinde" SAYILMAZ (ertelenmiş çağrı kilit dışında koşar).
+        icerde = {id(c) for w in kilitli for c in _sinir_asmadan_explain(w.body)}
         hepsi = _explain_cagrilari(f.body)
         assert hepsi and icerde, f"{dosya}:{fn} `.explain(...)` kilit gövdesinde DEĞİL (kilitsiz CAM hesabı)"
-        assert all(id(c) in icerde for c in hepsi), f"{dosya}:{fn} kilit DIŞINDA `.explain(...)` çağrısı var"
+        assert all(id(c) in icerde for c in hepsi), (
+            f"{dosya}:{fn} kilit DIŞINDA (ya da kilit içinde Lambda / iç işlev sınırının arkasında) `.explain(...)` çağrısı var"
+        )
 
 
 _XAI_MODULLERI = [
@@ -190,11 +226,98 @@ def test_KRITIK_D557_XAI_kilidi_GERCEK_kilit_ve_MODULDEKI_tum_explain_cagrilari_
     finally:
         kilit.release()
     agac = ast.parse((KOK / dosya).read_text(encoding="utf-8", errors="replace"))
-    icerde = {id(c) for w in _kilitli_govdeler(agac) for c in _explain_cagrilari(w.body)}
+    icerde = {id(c) for w in _kilitli_govdeler(agac) for c in _sinir_asmadan_explain(w.body)}
     hepsi = _explain_cagrilari(agac.body)
     assert hepsi, f"{dosya}: modülde `.explain(...)` çağrısı yok (çıpa kaymış)"
     disarda = [f"satır {c.lineno}" for c in hepsi if id(c) not in icerde]
-    assert not disarda, f"{dosya}: kilit DIŞINDA `.explain(...)` çağrısı var (ikiz çağrı yeri kilitsiz): {disarda}"
+    assert not disarda, (
+        f"{dosya}: kilit DIŞINDA (ya da kilit içinde Lambda / iç işlev sınırının arkasında — ertelenmiş) `.explain(...)` "
+        f"çağrısı var (ikiz çağrı yeri kilitsiz): {disarda}"
+    )
+    # TUR 3 (y7): kilit MODÜL düzeyinde TEK kez bağlanır; işlev içinde `_XAI_KILIT` bağlaması (yerel gölge kilit) YOK.
+    ust_duzey = [
+        d
+        for d in agac.body
+        if isinstance(d, (ast.Assign, ast.AnnAssign))
+        and any(
+            isinstance(t, ast.Name) and t.id == "_XAI_KILIT"
+            for t in (d.targets if isinstance(d, ast.Assign) else [d.target])
+        )
+    ]
+    assert len(ust_duzey) == 1, f"{dosya}: `_XAI_KILIT` modül düzeyinde TEK kez bağlanmalı ({len(ust_duzey)})"
+    golge = _islev_ici_kilit_baglamalari(agac)
+    assert not golge, (
+        f"{dosya}: işlev içinde `_XAI_KILIT` bağlaması var (yerel gölge kilit — çağrılar birbirini DIŞLAMAZ): {golge}"
+    )
+
+
+_CAM_ISLEVLERI = [
+    ("ai_hub.feline_reticulocytes.inference_feline_reticulocytes", "retikulosit_cam_haritasi", "retic"),
+    ("ai_hub.inference_human_kidney_ct.inference_human_kidney_ct", "ct_cam_haritasi", "ct"),
+]
+
+
+@pytest.mark.parametrize("modul_adi,islev,anahtar", _CAM_ISLEVLERI, ids=["retikulosit", "CT"])
+def test_KRITIK_D557_explain_CALISIRKEN_modul_kilidi_TUTULUR_ve_cagrilar_ORTUSMEZ(
+    monkeypatch, modul_adi, islev, anahtar
+):
+    """TUR 3 (çürütücü 2 y6 / y7) — DAVRANIŞ: GERÇEK `*_cam_haritasi` iki iş parçacığından aynı anda çağrılır; önbellekteki sahte
+    açıklayıcı `.explain` içinde (1) MODÜLÜN `_XAI_KILIT`inin TUTULDUĞUNU (`locked()`) ve (2) aynı anda kaç `.explain` koştuğunu
+    kaydeder. Tur 2 kolları kilidin BİÇİMİNE / nesnesine bakıyordu: (y6) `.explain` `with` içinde lambda'ya sarılıp kilit DIŞINDA
+    çağrılınca ve (y7) işlev başında `_XAI_KILIT = Lock()` (her çağrı kendi kilidi) yapılınca geniş kümede (325 passed) YEŞİLDİ.
+    Gerçek model / torch / ağırlık YOK: `ai_hub.xai_utils.yolo_cam` sahte modülle gölgelenir (önbellek dolu → kurucu çağrılmaz),
+    `pt_path` verilir (çözücüye gidilmez). MUTASYON: ertelenmiş explain, yerel gölge kilit, kilit nullcontext → KIRMIZI."""
+    import importlib
+    import sys
+    import threading
+    import time
+    import types
+
+    sahte = types.ModuleType("ai_hub.xai_utils.yolo_cam")
+    sahte.YoloDetCAM = object  # önbellek dolu → kurulmaz; içe aktarma torch / ultralytics'e muhtaç olmasın
+    monkeypatch.setitem(sys.modules, "ai_hub.xai_utils.yolo_cam", sahte)
+    mod = importlib.import_module(modul_adi)
+    tutuluyor: list = []
+    ayni_anda, en_cok = [0], [0]
+    sayac_kilidi = threading.Lock()
+
+    class _Aciklayici:
+        def explain(self, yol):
+            # `locked()` yalnız Lock / RLock'ta var; nullcontext / Semaphore gibi kilit-olmayan nesne kendi iletisiyle KIRMIZI olsun
+            # (iş parçacığında AttributeError → "aparat" kırmızısı DEĞİL).
+            sorgu = getattr(mod._XAI_KILIT, "locked", None)
+            tutuluyor.append(bool(sorgu()) if callable(sorgu) else f"kilit değil: {type(mod._XAI_KILIT).__name__}")
+            with sayac_kilidi:
+                ayni_anda[0] += 1
+                en_cok[0] = max(en_cok[0], ayni_anda[0])
+            time.sleep(0.2)  # ikinci iş parçacığı bu arada girmeye çalışır
+            with sayac_kilidi:
+                ayni_anda[0] -= 1
+            return f"harita:{yol}"
+
+    monkeypatch.setitem(mod._XAI_PT_CACHE, anahtar, _Aciklayici())
+    sonuc: list = []
+    hata: list = []
+
+    def _kos():
+        try:
+            sonuc.append(getattr(mod, islev)("d557.png", pt_path="yok_D557.pt"))
+        except Exception as e:  # noqa: BLE001 — aparat iddiası aşağıda (iş parçacığı istisnası kaybolmasın)
+            hata.append(repr(e))
+
+    isler = [threading.Thread(target=_kos, daemon=True) for _ in range(2)]
+    for t in isler:
+        t.start()
+    for t in isler:
+        t.join(10)
+    assert not hata and sonuc == ["harita:d557.png"] * 2, f"aparat: {islev} iki çağrıda sonuç dönmedi: {sonuc} {hata}"
+    assert tutuluyor == [True, True], (
+        f"{modul_adi}.{islev}: `.explain` çalışırken MODÜLÜN `_XAI_KILIT`i TUTULMUYOR ({tutuluyor}) — CAM hesabı kilitsiz "
+        "(ertelenmiş çağrı / yerel gölge kilit)"
+    )
+    assert en_cok[0] == 1, (
+        f"{modul_adi}.{islev}: iki `.explain` AYNI ANDA koştu (en çok {en_cok[0]}) — hook'lu açıklayıcı paylaşıldı"
+    )
 
 
 # ── 2) RNA IG — gerçek PT ile ────────────────────────────────────────────────

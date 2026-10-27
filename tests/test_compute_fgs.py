@@ -96,3 +96,61 @@ def test_KRITIK_D557_FGS_toplami_EYLEM_BIRIMLERINDEN_ve_GIRDIYE_bagli():
     assert all(sifir_disi), (
         f"aparat: bazı eylem birimleri hiçbir girdide sıfır dışı değil ({sifir_disi}) — toplamdan düşmeleri ölçülemez"
     )
+
+
+# ── TUR 3 (çürütücü 2 y5): YÖN — eylem birimleri ağrı belirtisi ARTTIKÇA azalmaz ─────────────────────────────────────────────
+# Tur 2 kolları iç TUTARLILIĞI ölçüyordu (Σ AU, bant, girdiye bağlılık), YÖNÜ değil: AU2'de `au2 = 0` ↔ `au2 = 2` (açık göz 2, sıkı
+# kapalı göz 0 — ağrılı kediye "Ağrı Yok" yanlış güvencesi) geniş kümede (325 passed) YEŞİLDİ. Kapı: aynı yüzde YALNIZ bir belirti
+# adım adım ağırlaştırılır (göz kapanır / baş iner / kulak ucu tabana yatar) → ilgili eylem birimi AZALMAZ (monoton) ve iki uç
+# arasında ARTAR. Eşikler (THRESH) testte PİNLENMEZ — yalnız sıra; uçlar normalize yüz koordinatlarının iki ucundadır.
+_YON_TOHUMLARI = (557, 1, 2)
+
+
+def _au(kp, ad: str) -> int:
+    return compute_fgs(kp)["action_units"][ad]["score"]
+
+
+def _goz(kp, yari_yukseklik: float):
+    """İki göz de genişliği 0.2 olan yatay çizgi üzerinde; `yari_yukseklik` 0 = tam kapalı (CatFLW: sağ 3-7, sol 8-11)."""
+    kp = kp.copy()
+    a = yari_yukseklik
+    kp[3], kp[7] = [0.30, 0.40], [0.20, 0.40]  # sağ göz merkez / dış köşe (genişlik = 2 × 0.1)
+    kp[9], kp[8] = [0.60, 0.40], [0.80, 0.40]  # sol göz iç / dış köşe
+    kp[4], kp[6], kp[5] = [0.27, 0.40 - a], [0.33, 0.40 - a], [0.30, 0.40 + a]
+    kp[10], kp[11] = [0.70, 0.40 - a], [0.70, 0.40 + a]
+    return kp
+
+
+def _kulak(kp, yukselik: float):
+    """Kulak tabanları y=0.30'da; uçlar tabandan `yukselik` kadar yukarıda, yana 0.11 açık (0 = uç tabana yatmış)."""
+    kp = kp.copy()
+    kp[22], kp[26], kp[27], kp[31] = [0.25, 0.30], [0.35, 0.30], [0.65, 0.30], [0.75, 0.30]
+    kp[24], kp[29] = [0.19, 0.30 - yukselik], [0.81, 0.30 - yukselik]
+    return kp
+
+
+def _bas(kp, kayma: float):
+    """Yüz dikeyde 0.2'ye sıkıştırılıp `kayma` kadar aşağı ötelenir (yalnız baş konumu değişir — öteleme geometriyi bozmaz)."""
+    kp = kp.copy()
+    kp[:, 1] = kp[:, 1] * 0.2 + kayma
+    return kp
+
+
+def _monoton_ve_artan(dizi: list, etiket: str) -> None:
+    dusus = [(i, dizi[i], dizi[i + 1]) for i in range(len(dizi) - 1) if dizi[i + 1] < dizi[i]]
+    assert not dusus, f"{etiket}: belirti AĞIRLAŞIRKEN puan DÜŞTÜ (yön ters) {dizi} — düşüşler {dusus}"
+    assert dizi[-1] > dizi[0], f"{etiket}: en hafif ve en ağır uçta puan aynı {dizi} — eylem birimi belirtiye KÖR"
+
+
+def test_KRITIK_D557_FGS_YONU_goz_kapaninca_AU2_bas_inince_AU5_kulak_yatinca_AU1_AZALMAZ():
+    """MUTASYON: AU2 / AU5 / AU1 dallarında 0 ↔ 2 (ters yön), bir dalı sabitlemek → KIRMIZI. Eşik değeri testte YOK."""
+    for tohum in _YON_TOHUMLARI:
+        kp = np.random.default_rng(tohum).random((48, 2))
+        goz = [
+            _au(_goz(kp, a), "AU2_Orbital_Tightening") for a in (0.30, 0.20, 0.12, 0.10, 0.08, 0.06, 0.04, 0.02, 0.0)
+        ]
+        _monoton_ve_artan(goz, f"tohum {tohum} AU2 (göz açıktan kapalıya)")
+        bas = [_au(_bas(kp, k), "AU5_Head_Position") for k in (0.0, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8)]
+        _monoton_ve_artan(bas, f"tohum {tohum} AU5 (baş yukarıdan aşağıya)")
+        kulak = [_au(_kulak(kp, r), "AU1_Ear_Position") for r in (0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.0)]
+        _monoton_ve_artan(kulak, f"tohum {tohum} AU1 (kulak dikten yatığa)")

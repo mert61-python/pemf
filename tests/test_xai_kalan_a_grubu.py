@@ -397,13 +397,17 @@ def test_KRITIK_D557_landmark_yaniti_FGS_alanlarini_UST_DUZEYDE_tasir(profil, mo
     süreç içi TestClient, port YOK) + sahte YOLO-pose sonucu (48 nokta, tohumlu). Yanıtın ÜST DÜZEYİNDE: `detected` true,
     `fgs_total` = Σ eylem birimi = `raw_fgs.fgs_total` (ürünün `compute_fgs`i ile AYNI girdi → aynı sonuç), `action_units` =
     `raw_fgs.action_units`, `fgs_bantlari` TEK-KAYNAK bantlar (8 ölçüm, p5/p95). MUTASYON: bantlar `hw_params` iç sözlüğüne (dc) /
-    `raw_fgs` hata gövdesine (de) taşınır, değer `{}` olur → KIRMIZI."""
+    `raw_fgs` hata gövdesine (de) taşınır, değer `{}` olur → KIRMIZI.
+    TUR 3 (çürütücü 2 y9): sahte kutu KAREYDİ (100 × 100) — y eksenini GENİŞLİKLE ölçekleyen uç (`/ bw`) görünmezdi. Kutu artık
+    100 × 200 (gerçek kedi yüzü kutusu kare değil) ve `raw_fgs.measurements` beklenenle BİREBİR; ayrıca baş konumu ölçümü
+    (`head_center_y` = normalize y ortalaması) testte SABİT tohumlu girdiden bağımsız hesaplanır."""
     from ai_hub.cat_landmark.inference_cat_landmark import compute_fgs, fgs_bantlari
 
-    kutu = [10.0, 20.0, 110.0, 120.0]
+    x1, y1, gen, yuk = 10.0, 20.0, 100.0, 200.0  # KARE DEĞİL: eksen karışması (x/y ölçek takası) görünür olsun
+    kutu = [x1, y1, x1 + gen, y1 + yuk]
     kp_norm = np.random.default_rng(557).random((48, 2)).astype(np.float32)
-    kp_piksel = kp_norm * np.array([100.0, 100.0], dtype=np.float32) + np.array([10.0, 20.0], dtype=np.float32)
-    beklenen = compute_fgs((kp_piksel - np.array([10.0, 20.0], dtype=np.float32)) / 100.0)
+    kp_piksel = kp_norm * np.array([gen, yuk], dtype=np.float32) + np.array([x1, y1], dtype=np.float32)
+    beklenen = compute_fgs((kp_piksel - np.array([x1, y1], dtype=np.float32)) / np.array([gen, yuk], dtype=np.float32))
     assert beklenen["fgs_total"] >= 0, (
         "48 noktalı tohumlu girdide compute_fgs skor üretmiyor (-1) — landmark ucu hiçbir yüzü tespit edemez"
     )
@@ -445,6 +449,154 @@ def test_KRITIK_D557_landmark_yaniti_FGS_alanlarini_UST_DUZEYDE_tasir(profil, mo
     )
     assert j["action_units"] == (j["raw_fgs"] or {}).get("action_units"), (
         f"{profil}: action_units raw_fgs ile çelişiyor"
+    )
+    olcum = (j["raw_fgs"] or {}).get("measurements") or {}
+    assert olcum == beklenen["measurements"], (
+        f"{profil}: kare OLMAYAN kutuda ölçümler kutuya göre normalize edilmemiş (eksen karışması?): "
+        f"{ {k: olcum.get(k) for k in ('head_center_y', 'eye_aperture_ratio', 'ear_spread')} } ≠ "
+        f"{ {k: beklenen['measurements'][k] for k in ('head_center_y', 'eye_aperture_ratio', 'ear_spread')} }"
+    )
+    assert abs(float(olcum["head_center_y"]) - float(kp_norm[:, 1].mean())) < 1e-3, (
+        f"{profil}: head_center_y {olcum['head_center_y']} ≠ normalize y ortalaması {float(kp_norm[:, 1].mean()):.4f} "
+        "(y ekseni kutu YÜKSEKLİĞİYLE ölçeklenmiyor)"
+    )
+
+
+# ── TUR 3 (çürütücü 2 y10): :8100 EM uçlarında XAI hatası ANALİZİ değiştirmez (davranış) ─────────────────────────────────────
+class _SahteEmSonuc:
+    """`process_image` sonucunun ucun okuduğu yüzeyi (fantom + petri alanları)."""
+
+    def __init__(self, yuk: dict):
+        self._yuk = yuk
+        self.success, self.method, self.error = True, "aruco", None
+        self.mm_per_px, self.timing_ms = 0.5, {"toplam": 1.0}
+        self.n_tumor, self.n_healthy = 1, 0
+        self.n_wells, self.n_cancer = 1, 1
+        self.yolo_ayar, self.resize = {}, None
+
+    def to_dict(self) -> dict:
+        import copy
+
+        return copy.deepcopy(self._yuk)  # her çağrıda TAZE kopya (uç yükü değiştirirse iki koşu birbirini etkilemesin)
+
+
+def _sahte_em_hatti(yuk: dict):
+    class _Hat:
+        def __init__(self, cfg, **kw):
+            self.cfg = cfg
+
+        def process_image(self, img, achieved_B=None, duty_sum=None):
+            return _SahteEmSonuc(yuk), None
+
+        def render_panels(self, ctx, result, lang="tr"):
+            return None  # panel yok → kök görsel orijinal kareden (yan yol; konu değil)
+
+    return _Hat
+
+
+_EM_UCLARI = {
+    # uç: (predictors anahtarı, XAI modülü, sahte yük, analiz alanları)
+    "em_fantom": (
+        "em_fantom",
+        "ai_hub.inference_em_fantom.inference_em_fantom",
+        {
+            "tumor_regions": [
+                {"organ_id": 1, "label": "tumor", "centroid_cabin_mm": [12.0, -4.0, 30.0], "area_mm2": 9.5}
+            ],
+            "healthy_regions": [],
+        },
+        (
+            "success",
+            "method",
+            "n_tumor",
+            "n_healthy",
+            "tumor_regions",
+            "healthy_regions",
+            "mm_per_px",
+            "status",
+            "error",
+        ),
+    ),
+    "em_petri": (
+        "em_petri",
+        "ai_hub.inference_em_petri.inference_em_petri",
+        {
+            "wells": [{"organ_id": 1, "label": "cancer", "centroid_cabin_mm": [5.0, 6.0, 7.0]}],
+            "plausibility": {"ok": True},
+        },
+        (
+            "success",
+            "method",
+            "n_wells",
+            "n_cancer",
+            "n_healthy",
+            "wells",
+            "plausibility",
+            "mm_per_px",
+            "status",
+            "error",
+        ),
+    ),
+}
+
+
+@pytest.mark.parametrize("uc", sorted(_EM_UCLARI))
+def test_KRITIK_D557_ai_service_EM_XAI_hatasi_ANALIZI_DEGISTIRMEZ(uc, monkeypatch):
+    """TUR 3 (çürütücü 2 y10) — DAVRANIŞ: GERÇEK :8100 `/infer/em_fantom` · `/infer/em_petri` (süreç içi TestClient, port YOK) + sahte
+    hat / sahte predictor. Aynı girdi iki kez: (A) açıklama başarılı, (B) açıklama `RuntimeError` fırlatır. B'nin analiz alanları
+    (`tumor_regions` / `n_tumor` / `wells` …) A ile BİREBİR aynı; B'de `xai_error` var, `xaiSensitivity` yok. Tur 2'nin AST kolu
+    yakalayıcının biçimine bakıyordu: yakalayıcı içinde `payload["tumor_regions"] = []` (uyarı + xai_error + raise/return yok) geniş
+    kümede (325 passed) YEŞİLDİ — XAI hatası tümör bölgelerini yanıttan siliyordu (D5.05 sınıfı). Modalite kapısı / PEMF kapısı /
+    YOLO aygıtı bu kapının konusu değil (gölge). MUTASYON: yakalayıcıda analiz alanını boşaltmak / değiştirmek → KIRMIZI."""
+    import importlib
+
+    import ai_service.app as sapp
+
+    anahtar, xai_modulu, yuk, alanlar = _EM_UCLARI[uc]
+    hat = {
+        "cls": _sahte_em_hatti(yuk),
+        "cfg": SimpleNamespace(phantom=SimpleNamespace(achieved_B=0.001, duty_sum=2.4)),
+        "predictor": SimpleNamespace(session=None),
+        "yolo_path": None,
+        "yolo": None,
+    }
+    monkeypatch.setattr(sapp, "_kapi", lambda *a, **k: None)
+    monkeypatch.setattr(sapp, "_yolo_device", lambda: "cpu")
+    monkeypatch.setattr(
+        sapp,
+        "_pemf_alanlari",
+        lambda *a, **k: {"pemf_valid": True, "pemf_kapisi": {"surulebilir": True, "pemf_gecerli": True}},
+    )
+    monkeypatch.setattr(
+        sapp.predictors, "get", lambda ad: hat if ad == anahtar else (_ for _ in ()).throw(KeyError(ad))
+    )
+    xmod = importlib.import_module(xai_modulu)
+    cagri: list = []
+
+    def _basarili(*a, **k):
+        cagri.append("A")
+        return [{"feature": "duty_sum", "etki": 1.0}]
+
+    def _patlayan(*a, **k):
+        cagri.append("B")
+        raise RuntimeError("D557 XAI SIMULE ARIZA")
+
+    istemci = TestClient(sapp.app)
+    jpg = _renkli_jpg()
+    yanitlar = {}
+    for kip, islev in (("A", _basarili), ("B", _patlayan)):
+        monkeypatch.setattr(xmod, "xai_hizli_sensitivity", islev)
+        r = istemci.post(f"/infer/{uc}", files={"file": ("e.jpg", jpg, "image/jpeg")})
+        assert r.status_code == 200, f"{uc} ({kip}): {r.status_code} {r.text[:200]}"
+        yanitlar[kip] = r.json()
+    assert cagri == ["A", "B"], f"aparat: açıklama yoluna iki koşuda da girilmedi ({cagri}) — kapı vakumda"
+    a, b = yanitlar["A"], yanitlar["B"]
+    assert a.get("xaiSensitivity") and "xai_error" not in a, f"aparat: başarılı koşuda açıklama yok: {sorted(a)}"
+    assert b.get("xai_error") and "xaiSensitivity" not in b, f"{uc}: XAI hatası yanıtta söylenmiyor: {sorted(b)}"
+    farkli = {k: (a.get(k), b.get(k)) for k in alanlar if a.get(k) != b.get(k)}
+    assert not farkli, f"{uc}: XAI hatası ANALİZ alanlarını DEĞİŞTİRDİ (açıklama ikincil olmalı): {farkli}"
+    assert all(k in a for k in alanlar), (
+        f"aparat: {uc} yanıtında analiz alanı eksik: {[k for k in alanlar if k not in a]}"
     )
 
 
