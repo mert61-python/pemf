@@ -41,8 +41,11 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[1]
 BELGE = KOK / "docs" / "VERIFICATION.md"
 
-#: Belgede kullanilan durum isaretleri.
-ISARETLER = ("✅", "⏳", "⚠️", "⛔")
+#: Belgede kullanilan durum isaretleri. D5.35 (B-10.230): ❌ da durumdur — eskiden tablo "❌ ACIK" derken baslik "✅" diyebiliyordu
+#: (yalniz baslik isareti sayildigi icin kesisim BOS sayilmiyor, celiski gorunmuyordu).
+ISARETLER = ("✅", "⏳", "⚠️", "⛔", "❌")
+#: Durum hucresindeki / baslikta gecen tarih (YYYY-MM-DD).
+_TARIH = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
 
 _TABLO = re.compile(r"^\|\s*(\d+[a-z]?)\s*\|")
 _BASLIK = re.compile(r"^##\s+(.*?)\s*(\d+[a-z]?)\s+—")
@@ -103,6 +106,45 @@ def test_KRITIK_ozet_tablosu_ile_bolum_basligi_CELISMIYOR():
         + "\n\nHangisinin dogru oldugunu bu kapi bilmez — OLCUN, sonra iki tarafi da duzeltin. "
         "§9'da bu celiski, yapilmamis bir DOZ tezgah dogrulamasini 'yapilmis' gosteriyordu."
     )
+
+
+def _tarih_celiskileri(metin: str) -> list[str]:
+    """D5.35 (B-10.189 kapi onerisi): ozet tablosunun DURUM hucresi ve bolum basligi ikisi de tarih tasiyorsa EN SON tarihleri ayni
+    olmali — tablo "son 2026-09-20" derken baslik "2026-09-17" diyorsa biri bayattir (hangisi oldugunu kapi bilmez)."""
+    tablo, basliklar = _tablo_durumlari(metin), _baslik_durumlari(metin)
+    out = []
+    for no in sorted(set(tablo) & set(basliklar)):
+        t, b = _TARIH.findall(tablo[no]), _TARIH.findall(basliklar[no])
+        if t and b and max(t) != max(b):
+            out.append(f"§{no}: tablo son tarih {max(t)} ≠ baslik son tarih {max(b)}")
+    return out
+
+
+#: ⚠️ SAYAÇLI, BİLİNEN çelişki — D5.35 kapısı ilk koşuda §17'yi buldu (B-10.189: tablo "son: 2026-09-20", başlık "2026-09-17").
+#: Belgeyi düzeltmek D6.72'nin işidir (hangi tarafın doğru olduğunu ölçüm söyler, bu kapı değil). Muafiyet TAM metniyle pinlidir:
+#: yeni bir çelişki eklenirse ya da bu çözülünce (muafiyet bayatlar) kapı KIRMIZI — D6.72 bu girdiyi SİLER.
+BILINEN_TARIH_CELISKILERI = {"§17: tablo son tarih 2026-09-20 ≠ baslik son tarih 2026-09-17": "D6.72 · B-10.189"}
+
+
+def test_KRITIK_D5_35_ozet_tablosu_ile_bolum_basligi_TARIHTE_celismiyor():
+    celiski = _tarih_celiskileri(BELGE.read_text(encoding="utf-8"))
+    yeni = [c for c in celiski if c not in BILINEN_TARIH_CELISKILERI]
+    assert not yeni, "VERIFICATION.md tarihte KENDI KENDISIYLE CELISIYOR:\n  " + "\n  ".join(yeni)
+    bayat = sorted(set(BILINEN_TARIH_CELISKILERI) - set(celiski))
+    assert not bayat, f"bilinen tarih celiskisi COZULMUS — muafiyeti SILIN (kapi sessizce genislemesin): {bayat}"
+    assert len(BILINEN_TARIH_CELISKILERI) <= 1, (
+        "bilinen celiski listesi sismis — yeni celiski belgede duzeltilir, buraya yazilmaz"
+    )
+
+
+def test_KARSIT_KANIT_D5_35_carpi_ve_tarih_celiskisi_GORULUR():
+    sahte = "| 2a | k | ❌ ACIK | n |\n\n## ✅ 2a — k\n"
+    t, b = _isaretler(_tablo_durumlari(sahte)["2a"]), _isaretler(_baslik_durumlari(sahte)["2a"])
+    assert t and b and not (t & b), "❌ durum sayilmiyor — tablo ❌ / baslik ✅ celiskisi gorunmez"
+    tarihli = "| 7 | k | ✅ son 2026-09-20 | n |\n\n## ✅ 7 — k (2026-09-17)\n"
+    assert _tarih_celiskileri(tarihli) == ["§7: tablo son tarih 2026-09-20 ≠ baslik son tarih 2026-09-17"]
+    ayni = "| 7 | k | ✅ son 2026-09-17 | n |\n\n## ✅ 7 — k (2026-09-17)\n"
+    assert _tarih_celiskileri(ayni) == [], "ayni tarih celiski sayildi"
 
 
 def test_KRITIK_9_TEZGAH_dogrulamasi_YAPILMADI_isaretli():
