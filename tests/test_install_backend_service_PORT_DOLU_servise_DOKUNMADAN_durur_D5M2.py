@@ -17,6 +17,9 @@ betik öldürmez → DURUR.
 TUR 2 (çürütücü): iki dinleyen (kendi servisi 0.0.0.0 + launcher çocuğu 127.0.0.1, iki sırada) · 4 kuşak SÜRER / 5 kuşak DURUR (pencere) ·
 install önekinde betikte TANIMLI `$AppDir` (dizin ölçütü gerilemesi görünür) · süreç / servis öldürme KAYITÇI gölgeleri + "öldürülmez /
 durdurulmaz" iddiası HER koşuda · çekilen kod İZİN LİSTESİNE karşı denetlenir · "durdu ama çıkış kodu 0" davranış iletisi.
+TUR 3 (çürütücü 2): süreç tablosu (WMI) boşsa belirsizlikte DURUR (p1) · dinleyen ADRESİ modellenir — 127.0.0.1 / ::1'deki launcher çocuğu
+da sayılır (p2) · install öneki betikte tanımlı `$GuiRoot` / `$ExePath` / `$ScriptDir`'i de taşır (p3) · `NssmExe` değişkeninin HER görünüşü
+(atama, `${…}`, kapsam öneki, foreach, param, dize) izin dışı — yalnız `& $NssmExe` çağrısının ilk öğesi serbest (p7 / p7b / A3).
 ⛔ Gerçek ağ / süreç / servis sorgusu ya da işlemi YOK: `Get-NetTCPConnection` / `Get-CimInstance` (Win32_Process, Win32_Service) senaryo
 tablosundan yanıt veren gölgelerdir; `Stop-Process` / `Stop-Service` / `taskkill` / `Stop-PemfKurulumBackendi` / `& $NssmExe` yalnız KAYIT
 tutan gölgelerdir (Get-Command ile İŞLEV kanıtlı, modül otomatik yükleme KAPALI). Betikten yalnız denetim işlevi ve onu kullanan üst düzey
@@ -42,14 +45,19 @@ SETUP = KOK / "scripts" / "setup_services.ps1"
 FONK = "Get-PemfPortDisSahibi"
 _PWSH = shutil.which("pwsh")
 
-pytestmark = [
-    pytest.mark.skipif(sys.platform != "win32", reason="pwsh aparatı Windows betik anlamını ölçer"),
-    pytest.mark.skipif((_PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
-]
+# D5 M-2 TUR 3: ham `skipif` yerine ZORUNLU'ya bağlı atlama (yayın makinesinde Windows + pwsh yoksa DÜŞER).
+if sys.platform != "win32":
+    capraz.atla("pwsh aparatı Windows betik anlamını ölçer")
+if _PWSH is None:
+    capraz.atla("pwsh (PowerShell 7) bulunamadı")
 
 PORT = 8010  # profil portu bilerek 8000 DEĞİL: sabit 8000 sorgusu bu kapıda görünür
-APP = r"C:\PEMF\dist\PEMF_Backend"
+# Frozen düzen (betik `$ExePath` adaylarından `$GuiRoot\dist\PEMF_Backend\PEMF_Backend.exe`): GUI kökü · betik dizini · EXE dizini.
+GUI_ROOT = r"C:\PEMF"
+SCRIPT_DIR = GUI_ROOT + r"\scripts"
+APP = GUI_ROOT + r"\dist\PEMF_Backend"
 EXE = APP + r"\PEMF_Backend.exe"
+BACKEND_FILE = GUI_ROOT + r"\apps\backend\backend_service.py"
 NSSM = r"C:\Program Files\PEMF\nssm\nssm.exe"
 LAUNCHER = r"C:\Users\klinik\AppData\Local\PEMF Vet Client\PEMF Vet Client.exe"
 LAUNCHER_COCUGU = r"C:\Users\klinik\AppData\Local\PEMF Vet Client\runtime\PEMF_Backend\PEMF_Backend.exe"
@@ -73,8 +81,9 @@ P_KUSAK = (2_000_000_521, 2_000_000_523, 2_000_000_525, 2_000_000_527, 2_000_000
 
 
 def _senaryo(dinleyen=(), surec=(), servis=()) -> dict:
+    """dinleyen: (port, pid) ya da (port, pid, yerel adres) — adres verilmezse 0.0.0.0 (tüm arabirimler)."""
     return {
-        "dinleyen": [{"port": p, "pid": i} for p, i in dinleyen],
+        "dinleyen": [{"port": d[0], "pid": d[1], "adres": d[2] if len(d) > 2 else "0.0.0.0"} for d in dinleyen],
         "surec": [{"pid": i, "ppid": pp, "yol": y} for i, pp, y in surec],
         "servis": [{"ad": a, "pid": i} for a, i in servis],
     }
@@ -118,9 +127,16 @@ SENARYOLAR = {
     # servis kayıtlı ama durmuş (ProcessId 0) — portu launcher tutuyor
     "servis_durmus_launcher": _senaryo([(PORT, P_COCUK)], _SUREC, [(SERVIS_ADI, 0)]),
     # İKİ dinleyen (Windows daha özgül bağlamaya izin verir): kendi servisi 0.0.0.0, launcher çocuğu 127.0.0.1 — localhost istemciler
-    # launcher'a gider (E2-2.4'ün asıl tehlikesi); sıra bağımsız DURUR
-    "iki_dinleyen_kendi_once": _senaryo([(PORT, P_SERVIS), (PORT, P_COCUK)], _SUREC, _SERVIS),
-    "iki_dinleyen_launcher_once": _senaryo([(PORT, P_COCUK), (PORT, P_SERVIS)], _SUREC, _SERVIS),
+    # launcher'a gider (E2-2.4'ün asıl tehlikesi); sıra bağımsız DURUR. TUR 3 (p2): adres GERÇEKTEN modellenir (gölge LocalAddress üretir).
+    "iki_dinleyen_kendi_once": _senaryo([(PORT, P_SERVIS, "0.0.0.0"), (PORT, P_COCUK, "127.0.0.1")], _SUREC, _SERVIS),
+    "iki_dinleyen_launcher_once": _senaryo(
+        [(PORT, P_COCUK, "127.0.0.1"), (PORT, P_SERVIS, "0.0.0.0")], _SUREC, _SERVIS
+    ),
+    # yalnız loopback'te (IPv4 / IPv6) dinleyen launcher çocuğu da portu tutar (yeni servis 0.0.0.0'a bağlansa localhost ona gider)
+    "launcher_cocugu_loopback": _senaryo([(PORT, P_COCUK, "127.0.0.1")], _SUREC, _SERVIS),
+    "launcher_cocugu_ipv6_loopback": _senaryo([(PORT, P_COCUK, "::1")], _SUREC, _SERVIS),
+    # TUR 3 (p1): süreç tablosu (Win32_Process) BOŞ (WMI bozuk / yetkisiz) — sahip "kendi" olarak kanıtlanamaz → belirsizlikte DUR
+    "surec_tablosu_bos": _senaryo([(PORT, P_COCUK)], [], _SERVIS),
 }
 
 
@@ -151,7 +167,8 @@ $Senaryo = Get-Content -LiteralPath @@SENARYO@@ -Raw | ConvertFrom-Json
 function Get-NetTCPConnection { [CmdletBinding()] param($LocalPort, $State)
     _Olay ("PORT-SORGU " + $LocalPort + " " + $State)
     foreach ($b in @($Senaryo.dinleyen)) {
-        if ($b -and [int]$b.port -eq [int]$LocalPort -and "$State" -eq 'Listen') { [pscustomobject]@{ LocalPort = [int]$b.port; State = 'Listen'; OwningProcess = [int]$b.pid } } } }
+        if ($b -and [int]$b.port -eq [int]$LocalPort -and "$State" -eq 'Listen') {
+            [pscustomobject]@{ LocalAddress = "$($b.adres)"; LocalPort = [int]$b.port; State = 'Listen'; OwningProcess = [int]$b.pid } } } }
 function Get-CimInstance { [CmdletBinding()] param([Parameter(Position = 0)]$ClassName, $Filter)
     if ($ClassName -eq 'Win32_Process') {
         foreach ($p in @($Senaryo.surec)) { if ($p) { [pscustomobject]@{ ProcessId = [int]$p.pid; ParentProcessId = [int]$p.ppid; ExecutablePath = $p.yol } } }
@@ -223,8 +240,16 @@ foreach ($s in $sec) {
         if (-not $nssm -and $izinli -notcontains $ad) { Write-Output ("IZIN-DISI komut: " + $c.Extent.Text); exit 5 }
     }
     foreach ($y in @($s.FindAll({ param($n) $n -is [InvokeMemberExpressionAst] }, $true))) { Write-Output ("IZIN-DISI yontem: " + $y.Extent.Text); exit 5 }
-    foreach ($a in @($s.FindAll({ param($n) $n -is [AssignmentStatementAst] -and $n.Left.Extent.Text -match '^\$NssmExe$' }, $true))) {
-        Write-Output ("IZIN-DISI atama: " + $a.Extent.Text); exit 5 }
+    # D5 M-2 TUR 3 (çürütücü 2 A3 / p7 / p7b): `NssmExe` değişkeninin (kapsam / sürücü öneki — `script:`, `global:`, `variable:` … — ve
+    # `${…}` biçiminden bağımsız) TEK serbest görünüşü `& $NssmExe …` çağrısının İLK öğesidir; atama, foreach / param değişkeni, `[ref]`, dize
+    # içi, başka değişkene aktarma → IZIN-DISI. (`VariablePath.UnqualifiedPath` PowerShell'de PUBLIC DEĞİL — $null döner, ölçüldü; önek
+    # UserPath'ten soyulur.)
+    foreach ($v in @($s.FindAll({ param($n) $n -is [VariableExpressionAst] -and ($n.VariablePath.UserPath -replace '^[^:]*:', '') -eq 'NssmExe' }, $true))) {
+        $u = $v.Parent
+        $serbest = $u -is [CommandAst] -and $u.InvocationOperator -eq 'Ampersand' -and [object]::ReferenceEquals($u.CommandElements[0], $v) -and
+            $v.VariablePath.UserPath -eq 'NssmExe'
+        if (-not $serbest) { Write-Output ("IZIN-DISI NssmExe gorunusu: " + $u.Extent.Text); exit 5 }
+    }
     $parca.Add($s.Extent.Text)
 }
 [System.IO.File]::WriteAllText(@@CIKTI@@, ($parca -join "`n"), [System.Text.UTF8Encoding]::new($false))
@@ -232,9 +257,9 @@ Write-Output ("OK " + $sec.Count)
 """
 
 
-def _cek(tmp_path: Path, kip: str) -> str:
+def _cek(tmp_path: Path, kip: str, betik: Path | None = None) -> str:
     cikti = tmp_path / f"cek_{kip}.txt"
-    betik = BETIK if kip == "install" else SETUP
+    betik = betik or (BETIK if kip == "install" else SETUP)
     govde = (
         _CEK.replace("@@BETIK@@", _ps_lit(betik))
         .replace("@@KIP@@", _ps_lit(kip))
@@ -254,6 +279,43 @@ def _cek(tmp_path: Path, kip: str) -> str:
     return cikti.read_text(encoding="utf-8")
 
 
+# ── ARAÇ KANITI (TUR 3): izin listesinin `NssmExe` kolu her biçimi GERÇEKTEN yakalar (sentetik betik — ürün kodu KOŞMAZ, yalnız ayrıştırılır).
+# TUR 3'te ilk sürüm `VariablePath.UnqualifiedPath` (PowerShell'de public DEĞİL → $null) kullandığı için kol hiç ateşlemiyordu; bu kanıt
+# o sınıf aparat hatasını mutant koşmadan gösterir.
+_NSSM_KACIS = {
+    "suslu_atama": "${NssmExe} = 'Out-Null'; & $NssmExe",
+    "kapsam_onekli_atama": "$script:NssmExe = 'Out-Null'",
+    "surucu_onekli_atama": "$variable:NssmExe = 'Out-Null'",
+    "foreach_degiskeni": "foreach ($NssmExe in @('Out-Null')) { }",
+    "ref": "$null = [ref]$NssmExe",
+    "dize_ici": 'Write-Status "x $NssmExe"',
+    "baska_degiskene": "$x = $NssmExe",
+    "onekli_cagri": "& $script:NssmExe stop x",
+}
+
+
+def _sentetik_betik(d: Path, satir: str) -> Path:
+    p = d / "sentetik_install.ps1"
+    p.write_text(
+        f"function {FONK}([int]$Port, [string]$ServisAdi) {{\n    {satir}\n    return $null\n}}\n"
+        f"$PortunDisSahibi = {FONK} -Port $ApiPort -ServisAdi $ServiceName\n",
+        encoding="utf-8-sig",
+    )
+    return p
+
+
+@pytest.mark.parametrize("bicim", list(_NSSM_KACIS))
+def test_ARAC_izin_listesi_NssmExe_her_bicimi_YAKALAR_kod_KOSMAZ(tmp_path, bicim):
+    p = _sentetik_betik(tmp_path, _NSSM_KACIS[bicim])
+    with pytest.raises(AssertionError, match="izin listesi DIŞINDA"):
+        _cek(tmp_path, "install", p)
+
+
+def test_ARAC_KARSIT_izinli_tek_bicim_ampersand_NssmExe_ilk_oge(tmp_path):
+    p = _sentetik_betik(tmp_path, "& $NssmExe stop x")
+    assert "& $NssmExe stop x" in _cek(tmp_path, "install", p)
+
+
 def kos(tmp_path: Path, kip: str, senaryo: str, port: int = PORT) -> tuple[int, list[str]]:
     """`kip` = install (install_backend_service.ps1) | setup (setup_services.ps1 E2-2.4) → (çıkış kodu, olaylar).
     HER koşuda: süreç / servis öldürülmez · durdurulmaz · NSSM çağrılmaz; durursa çıkış kodu 0 OLMAZ."""
@@ -263,8 +325,16 @@ def kos(tmp_path: Path, kip: str, senaryo: str, port: int = PORT) -> tuple[int, 
     olay.write_text("", encoding="utf-8")
     sen.write_text(json.dumps(SENARYOLAR[senaryo]), encoding="utf-8")
     if kip == "install":
-        # betiğin kendi tercihi (EAP Stop) + betikte TANIMLI değişkenler: $ApiPort (M-2 ataması), $ServiceName, $AppDir (frozen EXE dizini)
-        on, eap = f"$ApiPort = {port}\n$ServiceName = {_ps_lit(SERVIS_ADI)}\n$AppDir = {_ps_lit(APP)}\n", "'Stop'"
+        # betiğin kendi tercihi (EAP Stop) + betikte port-dolu denetiminden ÖNCE TANIMLI değişkenler (frozen düzen): $ScriptDir, $GuiRoot,
+        # $ExePath, $BackendFile, $AppDir (EXE dizini), $SvcBinary / $FirewallProgram, $UsingExe, $Mode, $ServiceName, $ApiPort (M-2 ataması).
+        # TUR 3 (p3): dizin ölçütü başka bir betik değişkeniyle ($GuiRoot …) geri gelirse de görünsün. $LogDir test dizinine (ProgramData DEĞİL).
+        on = (
+            f"$ScriptDir = {_ps_lit(SCRIPT_DIR)}\n$GuiRoot = {_ps_lit(GUI_ROOT)}\n$ExePath = {_ps_lit(EXE)}\n"
+            f"$BackendFile = {_ps_lit(BACKEND_FILE)}\n$AppDir = {_ps_lit(APP)}\n"
+            f"$SvcBinary = {_ps_lit(EXE)}\n$FirewallProgram = {_ps_lit(EXE)}\n$UsingExe = $true\n$Mode = 'device'\n"
+            f"$LogDir = {_ps_lit(d / 'log')}\n$ApiPort = {port}\n$ServiceName = {_ps_lit(SERVIS_ADI)}\n"
+        )
+        eap = "'Stop'"
     else:
         on, eap = f"$AppDir = {_ps_lit(APP)}\n$OnPort = [pscustomobject]@{{ Port = {port} }}\n", "'Continue'"
     govde = (
@@ -313,8 +383,9 @@ def test_KRITIK_launcher_cocugu_portu_tutarken_kurulum_DURUR_eylemli_HATA(tmp_pa
 
 def test_KRITIK_kurulum_dizininde_ELLE_baslatilmis_EXE_de_DURDURUR_bilincli_fark(tmp_path):
     """Bu betik eski servisi `nssm stop/remove` ile durdurur, kurulum dizinindeki süreçleri ÖLDÜRMEZ → servis ağacı dışındaki EXE portu
-    tutmaya devam eder; dizin ölçütü (setup_services) burada sessiz çöküşü geri getirirdi. Önekte `$AppDir` betikteki gibi TANIMLI —
-    dizin ölçütü geri gelirse (`$SahipYolu -like "$AppDir\\*"`) bu kol KIRMIZI olur."""
+    tutmaya devam eder; dizin ölçütü (setup_services) burada sessiz çöküşü geri getirirdi. Önekte `$AppDir` (ve TUR 3: `$GuiRoot` /
+    `$ExePath` / `$ScriptDir`) betikteki gibi TANIMLI — dizin ölçütü HANGİ değişkenle geri gelirse gelsin (`$SahipYolu -like "$AppDir\\*"`,
+    `"$GuiRoot\\*"` …) bu kol KIRMIZI olur."""
     rc, satir = kos(tmp_path, "install", "elle_baslatilmis_ayni_dizin")
     assert rc == 1 and [s for s in _hata(satir) if str(P_ELLE) in s and EXE in s], (
         f"kurulum dizinindeki servis ağacı DIŞI süreç 'kendi' sayıldı (dizin ölçütü?) — servis bind edemeyip döngüde çöker:\n{satir}"
@@ -338,6 +409,26 @@ def test_KRITIK_IKI_dinleyenden_biri_DIS_ise_sira_bagimsiz_DURUR(tmp_path, senar
     assert [s for s in _hata(satir) if str(P_COCUK) in s and LAUNCHER_COCUGU in s], (
         f"[{senaryo}] kurulum durdu ama HATA dış dinleyeni (launcher çocuğu PID {P_COCUK} / yol) söylemiyor — kendi servisini 'dış' mı saydı?\n"
         f"{satir}"
+    )
+
+
+@pytest.mark.parametrize("senaryo", ["launcher_cocugu_loopback", "launcher_cocugu_ipv6_loopback"])
+def test_KRITIK_yalniz_LOOPBACK_te_dinleyen_launcher_cocugu_da_DURDURUR(tmp_path, senaryo):
+    """Çürütücü 2 p2 (şema daraltma): dinleyen süzgeci yalnız 0.0.0.0'ı sayarsa 127.0.0.1 / ::1'deki launcher çocuğu görünmez — yeni servis
+    0.0.0.0'a bağlansa da localhost istemciler (launcher arayüzü, yerel sağlık sondası) launcher'a gider, servis çakışmada çöker."""
+    rc, satir = kos(tmp_path, "install", senaryo)
+    assert rc == 1 and [s for s in _hata(satir) if str(P_COCUK) in s and LAUNCHER_COCUGU in s], (
+        f"[{senaryo}] launcher çocuğu {SENARYOLAR[senaryo]['dinleyen'][0]['adres']}:{PORT}'ta dinlerken kurulum sürdü (loopback dinleyen "
+        f"yok sayıldı):\n{satir}"
+    )
+
+
+def test_KRITIK_surec_tablosu_BOS_ise_belirsizlikte_DURUR(tmp_path):
+    """Çürütücü 2 p1 (boş girdi): Win32_Process sorgusu boş dönerse (WMI bozuk / yetkisiz) port sahibinin bu servisin ağacında olduğu
+    KANITLANAMAZ — 'dış sahip yok' deyip sürmek sessiz çöküşü geri getirir; güvenli yön: eylemli HATA ile DUR."""
+    rc, satir = kos(tmp_path, "install", "surec_tablosu_bos")
+    assert rc == 1 and [s for s in _hata(satir) if str(P_COCUK) in s and str(PORT) in s], (
+        f"süreç tablosu okunamadı (WMI boş) ve port {PORT} dışarıdan tutulurken kurulum sürdü:\n{satir}"
     )
 
 
@@ -381,6 +472,8 @@ def test_KARSIT_launcher_BASKA_portta_ise_surer(tmp_path):
         ("baska_portta_launcher", False),
         ("iki_dinleyen_kendi_once", True),
         ("iki_dinleyen_launcher_once", True),
+        ("launcher_cocugu_loopback", True),
+        ("surec_tablosu_bos", True),
     ],
 )
 def test_KRITIK_ESLIK_setup_services_E2_2_4_ile_AYNI_karar(tmp_path, senaryo, durur):
