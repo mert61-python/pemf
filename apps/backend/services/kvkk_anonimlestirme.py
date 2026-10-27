@@ -126,12 +126,57 @@ def _uzlastir(pdb, tdb) -> None:
             "KVKK: %d anonim hastanin adi tedavi gecmisinde yeniden bulundu (geri yukleme / bayat istemci) — yeniden anonimlestiriliyor.",
             len(geri_gelen),
         )
-        tdb.anonim_bekleyen_ekle(geri_gelen)
+        # ⚠️ E-4b (D5): var olan girdi EZİLMEZ — tedavi adımı düşen hastanın girdisi kanonik karttan (sahip adıyla) yazılmıştı; ayna
+        # satırında sahip adı yok (üretim `upsert_patient`'a yalnız ad + e-posta verir) → ezilince sahip adı serbest metinde SÜRESİZ
+        # kalıyordu (ölçüldü). Ayna satırının girdide olmayan metinleri SONA eklenir (ad başta kalır).
+        # Kapı: tests/test_kvkk_uzlastirma_bekleyen_girdiyi_EZMEZ_D5E4b.py
+        mevcut = tdb.anonim_bekleyen_oku()
+        tdb.anonim_bekleyen_ekle(
+            {
+                k: (mevcut[k] + [m for m in v if m and m not in mevcut[k]]) if mevcut.get(k) else v
+                for k, v in geri_gelen.items()
+            }
+        )
+
+
+def _silinen_kartlari_dus(pdb, tdb, bekleyen: dict) -> None:
+    """⚠️ 2-F incelemesi §10 #4 (D5): kanonik KARTI SİLİNMİŞ hastanın girdisi listeden düşer. Eskiden hiç işlenmiyor, hiç düşmüyordu
+    (`get_patient` → None → "anonim değil") → düz ad / sahip / e-posta kopyası SÜRESİZ kalıyor, her tur yeniden okunuyordu (ölçüldü).
+    Varlık KATI okunur (`operator_sahipleri`: yalnız var olanlar, hata YÜKSELİR) — okunamazsa bu turda hiçbir girdi düşmez.
+    Tedavi geçmişine DOKUNULMAZ (kartı silinen hastanın seansları hasta silmenin bugünkü kuralıyla kalır — [SAHİBE] S-E4).
+    `bekleyen` yerinde güncellenir. Kapı: tests/test_kvkk_bekleyen_SILINEN_hasta_listeden_DUSER_D5E4.py"""
+    try:
+        var = pdb.operator_sahipleri(list(bekleyen))
+    except Exception:
+        logger.warning(
+            "KVKK bekleyen listesi: hasta kartlarinin varligi okunamadi — silinmis kart girdisi bu turda dusurulmedi.",
+            exc_info=True,
+        )
+        return
+    silinen = sorted(k for k in bekleyen if k not in var)
+    if not silinen:
+        return
+    tdb.anonim_bekleyen_dus(silinen)
+    for k in silinen:
+        bekleyen.pop(k, None)
+    tdb.denetim_yaz(
+        "kvkk.bekleyen_silinen_hasta",
+        scope="otomatik",
+        item_count=len(silinen),
+        detail={"neden": "hasta_karti_silinmis"},
+    )
+    logger.warning(
+        "KVKK: %d hastanin karti silinmis — tedavi-DB anonimlestirme bekleyen listesinden dusuruldu (tedavi gecmisine dokunulmadi).",
+        len(silinen),
+    )
 
 
 def _bekleyenleri_isle(pdb, tdb) -> int:
     """@return tedavi adımı BAŞARIYLA uygulanan hasta sayısı."""
     bekleyen = tdb.anonim_bekleyen_oku()
+    if not bekleyen:
+        return 0
+    _silinen_kartlari_dus(pdb, tdb, bekleyen)
     if not bekleyen:
         return 0
     # Yalnız kanonik tarafı GERÇEKTEN anonim olanlar (kanonik adım düştüyse hasta hâlâ adaydır — tedavi tarafına dokunulmaz).
