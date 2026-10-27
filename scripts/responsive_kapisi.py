@@ -21,8 +21,8 @@ Kullanım:
     python scripts/responsive_kapisi.py --hedef pf --pf-dist apps/ui/dist
     python scripts/responsive_kapisi.py --hedef site --site-dist apps/web/dist
     python scripts/responsive_kapisi.py --hedef launcher --mutasyon "#btn-install{display:none}"  # → 1 bekle
-Çıkış: 0 temiz (yalnız baseline'daki bilinenler) · 1 YENİ bulgu · 2 kullanım/altyapı hatası
-       · 3 ortam yok (tarayıcı ya da derleme çıktısı yok; --zorunlu ile 2'ye döner — CI'da ŞART)
+Çıkış: 0 temiz (yalnız baseline'daki bilinenler) · 1 YENİ bulgu · 2 kullanım/altyapı hatası (VAR ama çalışmayan tarayıcı:
+       CDP portu açılmadı — D5.37) · 3 ortam yok (tarayıcı ya da derleme çıktısı yok; --zorunlu ile 2'ye döner — CI'da ŞART)
 """
 
 from __future__ import annotations
@@ -144,7 +144,9 @@ HEDEFLER = {
         "ana": {"yol": "/", "kritik": [{"ad": "üst çubuk: Giriş yap / Menü", "css": "header button"}]},
         "download": {
             "yol": "/download",
-            "kritik": [{"ad": "birincil indirme düğmesi", "css": "main button[data-kapi='indir'], main button"}],
+            # ⚠️ D5.37 (B-10.217): `main button` GERİ DÜŞÜŞÜ YOK — eskiden Windows indirme düğmesi gizlense bile sayfadaki BAŞKA bir
+            # düğme kritiği karşılıyordu (mutasyon YEŞİL). Çıpa `Download.tsx`'teki birincil kartın `data-kapi="indir"` özniteliği.
+            "kritik": [{"ad": "birincil indirme düğmesi", "css": "main [data-kapi='indir']"}],
         },
         "features": {"yol": "/features", "kritik": []},
         "pricing": {"yol": "/pricing", "kritik": []},
@@ -485,8 +487,7 @@ def tarayici_baslat(exe: str, profil: Path) -> tuple[subprocess.Popen, int]:
         f"  günlük   : {gunluk_yolu}\n"
         + (f"  son satırlar:\n{iz}\n" if iz else "  (tarayıcı stderr'e hiçbir şey yazmadı)\n")
         + "  YAPILACAK: 'Failed to move to new namespace' / 'No usable sandbox' geçiyorsa çekirdek\n"
-        "  sandbox'ı engelliyordur — POSIX'te --no-sandbox zaten veriliyor, verilmiyorsa ekleyin.\n"
-        "  Tarayıcı hiç kurulamıyorsa kapı ORTAM YOK (çıkış 3) ile atlanmalı, bu yol değil."
+        "  sandbox'ı engelliyordur — POSIX'te --no-sandbox zaten veriliyor, verilmiyorsa ekleyin."
     )
 
 
@@ -666,7 +667,17 @@ def main(argv: list[str] | None = None) -> int:
         srv, port_http = sunucu_baslat(dist)
         url_uret = lambda durum: f"http://127.0.0.1:{port_http}{HEDEFLER[a.hedef][durum].get('yol', '/')}"  # noqa: E731
 
-    proc, port = tarayici_baslat(exe, cikti / "_profil")
+    # ⚠️ D5.37 (B-10.216): VAR ama çalışmayan tarayıcı (CDP portu açılmadı) = ALTYAPI HATASI → çıkış 2. Eskiden istisna yakalanmıyor,
+    # Python iz dökümüyle 1 ("YENİ bulgu") dönüyordu — sözleşme dışı. 9e14312 kararı korunur: bozuk tarayıcı KIRMIZI kalır (2 de kırmızı).
+    try:
+        proc, port = tarayici_baslat(exe, cikti / "_profil")
+    except RuntimeError as e:
+        print(f"ALTYAPI: {e}")
+        if not a.zorunlu:  # --zorunlu altında "3 ile atla" önerisi GEÇERSİZ (orada 3 hiç dönmez)
+            print("  Tarayıcı bu makinede HİÇ yoksa kapı ORTAM YOK (çıkış 3) der; bozuk tarayıcı ise 2'dir.")
+        if srv:
+            srv.shutdown()
+        return 2
     bulgular: list[dict] = []
     olcumler: list[dict] = []
     try:

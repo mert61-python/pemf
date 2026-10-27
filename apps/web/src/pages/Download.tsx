@@ -53,6 +53,8 @@ function PlatformCard({
         <button
           type="button"
           onClick={() => download(target)}
+          /* D5.37: responsive kapısının /download kritiği BU düğmeye pinli (`main [data-kapi='indir']`) — yalnız birincil kart. */
+          data-kapi={primary ? 'indir' : undefined}
           disabled={loading}
           aria-busy={loading}
           aria-label={gated ? t('indirme.girisYapipIndir', { label }) : t('indirme.icinIndir', { label })}
