@@ -19,6 +19,7 @@ import json
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from fastapi.testclient import TestClient
 
@@ -220,8 +221,7 @@ def test_KRITIK_site_APK_surumu_versions_json_ile_AYNI():
     (Bu boşluk mutasyon testiyle bulundu: `androidVersion`ı uydurma bir sürüme çevirmek site
     testlerinin HİÇBİRİNİ kırmıyordu.)"""
     cfg = KOK / "apps/web" / "src" / "config.ts"
-    if not cfg.exists():
-        pytest.skip("site kaynağı yok")
+    capraz.atla_yoksa("apps/web/src/config.ts", izlenen=True)  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     beklenen = json.loads((KOK / "versions.json").read_text(encoding="utf-8"))["mobile"]["name"]
     m = re.search(r"androidVersion:\s*'([^']+)'", cfg.read_text(encoding="utf-8"))
     assert m, "site config'inde androidVersion bulunamadı"
@@ -234,8 +234,7 @@ def test_KRITIK_site_APK_surumu_versions_json_ile_AYNI():
 def test_CHANGELOG_yayindaki_paket_shasini_ICERIR():
     """`buildId` sahadan `90cf004f9fa1` gelince karşılığı burada bulunabilmeli."""
     man = KOK / "pemf-app-packages" / "manifest.json"
-    if not man.exists():
-        pytest.skip("manifest yok")
+    capraz.atla_yoksa("pemf-app-packages/manifest.json", izlenen=True)  # D5-F: İZLENEN dosya — ZORUNLU kipte DÜŞER
     m = json.loads(man.read_text(encoding="utf-8"))
     sha = (m.get("base") or {}).get("sha256", "")
     if not sha:

@@ -27,6 +27,7 @@ import ast
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -55,8 +56,7 @@ def gorunen_legal() -> str:
 
 @pytest.fixture(scope="module")
 def metin():
-    if not LEGAL.exists():
-        pytest.skip("apps/web kaynagi yok")
+    capraz.atla_yoksa("apps/web/src/pages/Legal.tsx", izlenen=True)  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     return gorunen_legal()
 
 

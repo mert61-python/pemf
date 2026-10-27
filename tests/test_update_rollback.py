@@ -201,8 +201,9 @@ def test_rust_ve_python_pin_ikizleri_ayni_yazimlari_reddediyor():
     from pathlib import Path
 
     rs = Path(__file__).resolve().parent.parent / "launcher" / "core" / "src" / "net.rs"
-    if not rs.exists():
-        pytest.skip("launcher kaynagi yok")
+    import capraz
+
+    capraz.atla_yoksa("launcher/core/src/net.rs", izlenen=True)  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     src = rs.read_text(encoding="utf-8", errors="replace")
     assert "fn path_has_traversal" in src, (
         "Rust tarafinda path_has_traversal YOK — pin atlatma orada hala acik olabilir."

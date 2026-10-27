@@ -15,6 +15,7 @@ slug'ları. SPA rewrite'ı (vercel.json) her yolu 200 döndürür — HTTP koduy
 import pathlib
 import re
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
@@ -22,7 +23,15 @@ _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _APP = _KOK / "apps/web" / "src" / "App.tsx"
 _CONFIG = _KOK / "apps/web" / "src" / "config.ts"
 
-pytestmark = pytest.mark.skipif(not (_UI.exists() and _APP.exists()), reason="launcher/ veya apps/web/ yok")
+
+@pytest.fixture(autouse=True)
+def _izlenen_kaynak():
+    """D5-F (K5-F P3): `launcher/` ve `apps/web/` İZLENEN kaynaktır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU. Dosyadaki HER test okur.
+    """
+    capraz.atla_yoksa("launcher/app/ui/index.html", izlenen=True)
+    capraz.atla_yoksa("apps/web/src/App.tsx", izlenen=True)
 
 
 def _soy_js(metin: str) -> str:

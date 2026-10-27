@@ -40,12 +40,20 @@ import sys
 import zipfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "scripts" / "make_manifest.py"
 
-pytestmark = pytest.mark.skipif(not BETIK.exists(), reason="make_manifest.py yok")
+
+@pytest.fixture(autouse=True)
+def _izlenen_kaynak():
+    """D5-F (K5-F P3): `scripts/make_manifest.py` İZLENEN kaynaktır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU. Dosyadaki HER test okur.
+    """
+    capraz.atla_yoksa("scripts/make_manifest.py", izlenen=True)
 
 
 def _manifest_yaz(dizin: Path, runtimes: dict | None) -> None:

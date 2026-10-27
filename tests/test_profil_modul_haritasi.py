@@ -27,6 +27,7 @@ import re
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -102,8 +103,8 @@ def test_KRITIK_profil_adlari_manifest_anahtarlariyla_AYNI():
     import json
 
     manifest = _KOK / "pemf-app-packages" / "manifest.json"
-    if not manifest.is_file():
-        pytest.skip("manifest.json yok (paketleme yapılmamış)")
+    # D5-F: `pemf-app-packages/manifest.json` İZLENİR — eski düz pytest.skip, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("pemf-app-packages/manifest.json", izlenen=True)
     anahtarlar = set(json.loads(manifest.read_text(encoding="utf-8")).get("models", {}))
     profiller = set(_rust_haritasi().values())
     assert profiller <= anahtarlar, (

@@ -19,15 +19,18 @@ tipleri yok → `npx tsc -b` kırmızı olurdu (ölçüldü; site CI'ının tip 
 import pathlib
 import re
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
 _CSS = _KOK / "apps/web" / "src" / "index.css"
 
-pytestmark = pytest.mark.skipif(not _CSS.exists(), reason="apps/web/ yok — kapı atlanır")
+# D5-F (K5-F P3): burada modül düzeyi düz `skipif(not ….exists())` vardı — İZLENEN kaynak; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de de
+# sessizce ATLIYORDU. Atlama artık kaynağı OKUYAN yolda ve `capraz` üzerinden (zorunlu kipte DÜŞER).
 
 
 def _css() -> str:
+    capraz.atla_yoksa("apps/web/src/index.css", izlenen=True)
     return _CSS.read_text(encoding="utf-8")
 
 

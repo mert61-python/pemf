@@ -30,6 +30,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -260,8 +261,7 @@ def test_kosum_belgesi_GUNCEL_yolu_verir(belge):
     """Kullanım kılavuzundaki komut, kopyalanıp yapıştırıldığında ÇALIŞMALI."""
     rel = _betik_yolu()
     p = KOK / belge
-    if not p.exists():
-        pytest.skip(f"{belge} yok")
+    capraz.atla_yoksa(belge, izlenen=True)  # D5-F: belgeler İZLENİR — eski düz pytest.skip, ZORUNLU kipte DÜŞER
     metin = p.read_text(encoding="utf-8")
     assert BETIK_ADI in metin, f"{belge} {BETIK_ADI}'den hiç söz etmiyor — kılavuz eksik"
 

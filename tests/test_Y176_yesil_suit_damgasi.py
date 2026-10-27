@@ -23,6 +23,7 @@ import time
 import zipfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -295,10 +296,11 @@ def test_KRITIK_rollout_VERILMEDEN_fren_DEGIL(depo):
     assert r.returncode == 1 and "damga YOK" in r.stderr, r.stderr[-800:]
 
 
-@pytest.mark.skipif(not YAYINDAKI.exists(), reason="yayındaki manifest kopyası yok")
 def test_KARSIT_GERCEK_yayin_manifestiyle_launcher_FRENI_damgasiz_gecer(depo):
     """BUILD.md "Bozuk bir yayını geri çekmek": yayındaki manifestin kopyası + paketsiz dizin + `--launcher-rollout 0` → damgasız
     geçmeli (paket kimliği yayınla AYNI kalmalı — betiğin ürettiği yapı yayındakiyle uyumlu)."""
+    # D5-F: eski düz skipif — `pemf-app-packages/manifest.json` İZLENİR, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("pemf-app-packages/manifest.json", izlenen=True)
     hedef = depo / "pemf-app-packages" / "manifest.json"
     shutil.copy2(YAYINDAKI, hedef)
     m = json.loads(hedef.read_text(encoding="utf-8"))

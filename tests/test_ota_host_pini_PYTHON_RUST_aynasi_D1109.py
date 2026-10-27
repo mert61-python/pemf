@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -30,6 +31,7 @@ def _yorumsuz(metin: str) -> str:
 
 
 def _rust_dizi(ad: str) -> set[str]:
+    capraz.atla_yoksa("launcher/core/src/net.rs", izlenen=True)
     kaynak = NET_RS.read_text(encoding="utf-8")
     m = re.search(r"\bconst\s+" + re.escape(ad) + r"\s*:\s*&\[&str\]\s*=\s*&\[(.*?)\];", kaynak, flags=re.S)
     assert m, f"ön koşul: net.rs'te `{ad}` sabit dizisi bulunamadı (çapa bayat — ayrıştırıcıyı güncelleyin)"
@@ -37,13 +39,15 @@ def _rust_dizi(ad: str) -> set[str]:
 
 
 def _rust_dize(ad: str) -> str:
+    capraz.atla_yoksa("launcher/core/src/net.rs", izlenen=True)
     kaynak = NET_RS.read_text(encoding="utf-8")
     m = re.search(r"\bconst\s+" + re.escape(ad) + r"\s*:\s*&str\s*=\s*\"([^\"\\]*)\"\s*;", kaynak)
     assert m, f"ön koşul: net.rs'te `{ad}` dize sabiti bulunamadı (çapa bayat)"
     return m.group(1)
 
 
-pytestmark = pytest.mark.skipif(not NET_RS.exists(), reason="launcher kaynağı yok")
+# D5-F (K5-F P3): burada modül düzeyi düz `skipif(not ….exists())` vardı — İZLENEN kaynak; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de de
+# sessizce ATLIYORDU. Atlama artık kaynağı OKUYAN yolda ve `capraz` üzerinden (zorunlu kipte DÜŞER).
 
 
 def test_KRITIK_ALLOWED_HOSTS_python_rust_KUME_ESIT():

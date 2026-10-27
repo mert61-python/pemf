@@ -26,6 +26,7 @@ import json
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
@@ -43,15 +44,14 @@ def _gb(bayt: int) -> float:
 
 @pytest.fixture(scope="module")
 def manifest() -> dict:
-    if not _MANIFEST.is_file():
-        pytest.skip(f"paket manifesti yok (yerel yapı çıktısı): {_MANIFEST}")
+    # D5-F: `pemf-app-packages/manifest.json` İZLENİR (git ls-files) — eski düz pytest.skip, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("pemf-app-packages/manifest.json", izlenen=True)
     return json.loads(_MANIFEST.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def site() -> str:
-    if not _SITE_CONFIG.is_file():
-        pytest.skip(f"site deposu bu çalışma kopyasında yok: {_SITE_CONFIG}")
+    capraz.atla_yoksa("apps/web/src/config.ts", izlenen=True)  # D5-F: eski düz pytest.skip — ZORUNLU kipte DÜŞER
     return _SITE_CONFIG.read_text(encoding="utf-8")
 
 

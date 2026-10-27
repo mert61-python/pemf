@@ -18,15 +18,18 @@ TAŞIDIĞINI kaynak düzeyinde kilitler (modeller CI'da yüklü değil).
 import ast
 import pathlib
 
+import capraz
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
 _ROUTER = _KOK / "apps" / "backend" / "servers" / "ai_router.py"
 
-pytestmark = pytest.mark.skipif(not _ROUTER.exists(), reason="apps/backend/servers/ai_router.py yok")
+# D5-F (K5-F P3): burada modül düzeyi düz `skipif(not ….exists())` vardı — İZLENEN kaynak; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de de
+# sessizce ATLIYORDU. Atlama artık kaynağı OKUYAN yolda ve `capraz` üzerinden (zorunlu kipte DÜŞER).
 
 
 def _kaynak() -> str:
+    capraz.atla_yoksa("apps/backend/servers/ai_router.py", izlenen=True)
     return _ROUTER.read_text(encoding="utf-8")
 
 
