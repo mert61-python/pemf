@@ -106,6 +106,33 @@ def test_KARSIT_KANIT_kosucu_OLUYU_GORUYOR(tmp_path):
     assert "saglam_betik.py" not in adlar, "koşucu SAĞLAM betiği ölü sandı"
 
 
+def test_KARSIT_KANIT_D5_55_kosucu_BILESIK_deyimdeki_olu_importu_GORUR(tmp_path):
+    """D5.55 (B-10.103, M4b): son düz import'tan sonra `if True:` altındaki kırık import önsözdür — eskiden hiç koşmuyordu."""
+    (tmp_path / "bilesik.py").write_text(
+        "import json\nif True:\n    import kesinlikle_olmayan_modul_d555\n", encoding="utf-8"
+    )
+    sonuc = _onsozleri_kostur(["bilesik.py"], kok=tmp_path)
+    assert [r for r, _ in sonuc] == ["bilesik.py"], f"bileşik deyimdeki ölü import GÖRÜLMEDİ: {sonuc}"
+
+
+def test_KARSIT_KANIT_D5_55_ilk_taraf_import_hatasindan_dogan_SystemExit_RAPORLANIR(tmp_path):
+    """D5.55 (B-10.111, M2b): `except ImportError: raise SystemExit(...)` birinci-taraf kırığını yutmaz; üçüncü-taraf eksikliği
+    (paho deseni) raporlanmaz."""
+    (tmp_path / "ilktaraf_d555").mkdir()
+    (tmp_path / "ilktaraf_d555" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "ilk.py").write_text(
+        "try:\n    from ilktaraf_d555 import olmayan\nexcept ImportError as exc:\n    raise SystemExit('eksik') from exc\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "ucuncu.py").write_text(
+        "try:\n    import kesinlikle_olmayan_ucuncu_d555\nexcept ImportError as exc:\n    raise SystemExit('pip install x') from exc\n",
+        encoding="utf-8",
+    )
+    sonuc = _onsozleri_kostur(["ilk.py", "ucuncu.py"], kok=tmp_path)
+    assert [r for r, _ in sonuc] == ["ilk.py"], f"SystemExit ayrımı bozuk: {sonuc}"
+    assert sonuc[0][1].startswith("SystemExit<-ImportError"), sonuc
+
+
 def test_KARSIT_KANIT_kosucu_YOLU_DARALTIYOR(tmp_path):
     """`apps/backend` yolu BIRAKILIRSA ölü betik sağlam görünür — daraltma ŞART."""
     (tmp_path / "backend_isteyen.py").write_text("import utils.path_utils\n", encoding="utf-8")

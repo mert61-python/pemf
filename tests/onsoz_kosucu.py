@@ -79,6 +79,14 @@ def onsoz_dugumleri(agac: ast.Module) -> list[ast.stmt]:
     for i, d in enumerate(agac.body):
         if isinstance(d, (ast.Import, ast.ImportFrom)):
             son_import = i
+        # ⚠️ D5.55 (B-10.103): üst düzey BİLEŞİK deyim (if / try / with) içindeki import da önsözdür — eskiden son DÜZ import'ta
+        # kesiliyordu: `if True:` altına (ya da paho'nun `try/except ImportError` bloğu gibi) konan kırık import HİÇ koşmuyordu.
+        elif (
+            isinstance(d, (ast.If, ast.Try, ast.With))
+            and not _main_blogu_mu(d)
+            and any(isinstance(n, (ast.Import, ast.ImportFrom)) for n in ast.walk(d))
+        ):
+            son_import = i
     if son_import < 0:
         return []
     return [d for d in agac.body[: son_import + 1] if not _main_blogu_mu(d)]
@@ -402,8 +410,15 @@ def bir_betik(
             sonuc.append((rel, f"ModuleNotFoundError: {e}"))
         except ImportError as e:
             sonuc.append((rel, f"ImportError: {e}"))
-        except SystemExit:
-            pass
+        except SystemExit as e:
+            # ⚠️ D5.55 (B-10.111): import hatasından DOĞAN SystemExit (`except ImportError: sys.exit(...)`) betiği açılışta
+            # öldürür — eskiden yutuluyordu. Birinci-taraf ad ise betik kusurudur (raporlanır); üçüncü-taraf isteğe bağlı
+            # bağımlılık eksikliği (ör. `paho` → kurulum ipucuyla çıkış) ortam koşuludur, raporlanmaz.
+            neden = e.__cause__ or e.__context__
+            if isinstance(neden, ImportError):
+                ad = (getattr(neden, "name", None) or "").split(".")[0]
+                if ad and ad in ilk_taraf_adlari(kok):
+                    sonuc.append((rel, f"SystemExit<-{type(neden).__name__}: {neden}"))
         except RuntimeError as e:
             # ⚠️ D0Ö.19 ek: `_depo_koku` işaret bulamayınca RuntimeError atar → betik AÇILIŞTA ölür
             # ve önsözde ondan sonraki import'lar HİÇ denenmez. Yutulursa kapı YEŞİL kalırdı.

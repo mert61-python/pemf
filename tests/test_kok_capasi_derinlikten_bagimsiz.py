@@ -80,9 +80,36 @@ def kok_capasi_satirlari(kaynak: str) -> list[int]:
 
     def _file_temelli(d: ast.AST) -> bool:
         for alt in ast.walk(d):
-            if isinstance(alt, ast.Name) and alt.id == "__file__":
+            if isinstance(alt, ast.Name) and (alt.id == "__file__" or alt.id in turev):
                 return True
         return False
+
+    # ⚠️ D5.55 (B-10.136): `__file__`'dan TÜREYEN adlar veri akışıyla izlenir (sabit ad listesi `_b = dirname(abspath(__file__));
+    # dirname(_b)` biçimini görmüyordu). Sabit noktaya kadar: türev bir addan atanan ad da türevdir.
+    turev: set[str] = set(_DIZIN_DEGISKENLERI)
+    while True:
+        yeni = {
+            h.id
+            for d in ast.walk(agac)
+            if isinstance(d, ast.Assign) and _file_temelli(d.value)
+            for h in d.targets
+            if isinstance(h, ast.Name)
+        } - turev
+        if not yeni:
+            break
+        turev |= yeni
+
+    def _ust_dizin_birlesimi(d: ast.AST) -> bool:
+        """`os.path.join(<__file__ türevi>, "..")` ya da `<__file__ türevi> / ".."` — sabit derinlikle yukarı çıkış (D5.55)."""
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "join":
+            parcalar = d.args
+        elif isinstance(d, ast.BinOp) and isinstance(d.op, ast.Div):
+            parcalar = [d.left, d.right]
+        else:
+            return False
+        return any(isinstance(p, ast.Constant) and p.value == ".." for p in parcalar) and any(
+            _file_temelli(p) for p in parcalar
+        )
 
     def _dirname_zinciri(d: ast.AST) -> bool:
         """`os.path.dirname(os.path.dirname(x))` ya da `os.path.dirname(<baska_dizin_degiskeni>)`.
@@ -101,12 +128,12 @@ def kok_capasi_satirlari(kaynak: str) -> list[int]:
         # dirname(dirname(...)) -> iki kat yukari = kok varsayimi
         if isinstance(ic, ast.Call) and isinstance(ic.func, ast.Attribute) and ic.func.attr == "dirname":
             return True
-        # dirname(current_dir) gibi: argüman `__file__`den türetilmiş bir DİZİN değişkeni
-        return isinstance(ic, ast.Name) and ic.id in _DIZIN_DEGISKENLERI
+        # dirname(current_dir) gibi: argüman `__file__`den türetilmiş bir DİZİN değişkeni (D5.55: veri akışıyla)
+        return isinstance(ic, ast.Name) and ic.id in turev
 
     bulgu: list[int] = []
     for d in ast.walk(agac):
-        if _dirname_zinciri(d):
+        if _dirname_zinciri(d) or _ust_dizin_birlesimi(d):
             bulgu.append(d.lineno)
         # parents[N]  (N >= 1)
         if isinstance(d, ast.Subscript) and isinstance(d.value, ast.Attribute) and d.value.attr == "parents":
@@ -286,6 +313,11 @@ def test_KARSIT_KANIT_kapi_gercekten_yakaliyor():
         # ⚠️ `os.path` biçimi — kapının 2026-09-18'deki KÖR NOKTASI, üç dosyada vardı:
         "project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
         "project_root = os.path.dirname(current_dir)",
+        # D5.55 (B-10.136): `..` birleşimi ve veri akışıyla türeyen ad:
+        "project_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')",
+        "_b = os.path.dirname(os.path.abspath(__file__))\nproject_root = os.path.dirname(_b)",
+        "kok = Path(__file__).resolve().parent / '..'",
+        "a = os.path.abspath(__file__)\nb = a\nproject_root = os.path.join(b, '..')",
     ):
         assert kok_capasi_satirlari(bozuk), f"kapı KAÇIRIYOR: {bozuk}"
 
@@ -301,6 +333,8 @@ def test_KARSIT_KANIT_mesru_kullanim_YANLIS_KIRMIZI_vermez():
         # Modülün KENDİ dizini — taşımada birlikte gider, derinlik varsayımı YOK:
         '_DIR = os.path.dirname(os.path.abspath(__file__))',
         'HERE = os.path.dirname(os.path.abspath(__file__))',
+        # D5.55: türev adın modülün yanındaki alt yola birleşimi meşru ('..' yok):
+        "_b = os.path.dirname(os.path.abspath(__file__))\nveri = os.path.join(_b, 'assets')",
     ):
         assert not kok_capasi_satirlari(temiz), f"YANLIŞ KIRMIZI: {temiz}"
 
