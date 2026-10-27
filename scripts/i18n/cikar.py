@@ -494,11 +494,25 @@ _RUST_GUNLUK = re.compile(
 )
 
 
-def _rust_soy(metin: str) -> tuple[str, list[tuple[int, int, str, bool]]]:
-    """Yorumları boşlukla değiştirir; dizgi değişmezlerini (bas, son, içerik, ham_mi) döker. Uzunluk korunur (satır numarası için)."""
+def _rust_soy(metin: str, dizge_bosalt: bool = False) -> tuple[str, list[tuple[int, int, str, bool]]]:
+    """Yorumları boşlukla değiştirir; dizgi değişmezlerini (bas, son, içerik, ham_mi) döker. Uzunluk korunur (satır numarası için).
+
+    ⚠️ DEV-C2 (LN L8c): `dizge_bosalt=True` → dizge ve karakter sabiti İÇERİKLERİ de BOŞLUKLANIR (tırnaklar kalır) — `_rust_test_bolgeleri`
+    süslü parantez sayarken `"\\n}\\n"` / `'}'` içindeki parantezi saymasın (test bölgesi erken kapanıyor, test metni ürün metni
+    sayılıyordu). Varsayılan çıktı DEĞİŞMEZ (K-3 / K-6 kapıları dizge içeriğini, ör. `include_str!("…")`, soyulmuş metinde arar).
+    Bayt-ham dizge (`br"…"`, `br#"…"#`) ham dizge olarak tanınır (önündeki `b` tanımlayıcı sanılıyor, `\\"` kaçış sayılıp dizge bir
+    sonraki tırnağa uzuyordu)."""
     out = list(metin)
     dizgiler = []
     i, n = 0, len(metin)
+
+    def bosalt(a: int, b: int) -> None:
+        if not dizge_bosalt:
+            return
+        for k in range(a, min(b, n)):
+            if out[k] != "\n":
+                out[k] = " "
+
     while i < n:
         c = metin[i]
         if metin.startswith("//", i):
@@ -515,22 +529,24 @@ def _rust_soy(metin: str) -> tuple[str, list[tuple[int, int, str, bool]]]:
                     out[k] = " "
             i = j
         elif (
-            c == "r"
-            and re.match(r'r#*"', metin[i:])
+            c in "rb"
+            and re.match(r'b?r#*"', metin[i:])
             and (i == 0 or not (metin[i - 1].isalnum() or metin[i - 1] == "_"))
         ):
-            m = re.match(r'r(#*)"', metin[i:])
+            m = re.match(r'b?r(#*)"', metin[i:])
             kapanis = '"' + m.group(1)
             bas = i + len(m.group(0))
             j = metin.find(kapanis, bas)
             j = n if j < 0 else j
             dizgiler.append((i, j + len(kapanis), metin[bas:j], True))
+            bosalt(bas, j)
             i = j + len(kapanis)
         elif c == '"' and not (i > 0 and metin[i - 1] == "'" and i + 1 < n and metin[i + 1] == "'"):
             j = i + 1
             while j < n and metin[j] != '"':
                 j += 2 if metin[j] == "\\" else 1
             dizgiler.append((i, j + 1, metin[i + 1 : j], False))
+            bosalt(i + 1, j)
             i = j + 1
         elif (
             c == "'"
@@ -538,6 +554,8 @@ def _rust_soy(metin: str) -> tuple[str, list[tuple[int, int, str, bool]]]:
             and (metin[i + 2] == "'" or (metin[i + 1] == "\\" and metin.find("'", i + 2) - i <= 10))
         ):
             j = metin.find("'", i + 2 if metin[i + 1] != "\\" else i + 3)
+            if j > 0:
+                bosalt(i + 1, j)  # karakter sabiti içeriği (ör. '}') parantez sayımına girmesin
             i = (j + 1) if j > 0 else i + 1
         else:
             i += 1
@@ -579,7 +597,8 @@ def _rust_test_bolgeleri(soyulmus: str) -> list[tuple[int, int]]:
 
 def rust_adaylari(yol: str, metin: str) -> list[dict]:
     soyulmus, dizgiler = _rust_soy(metin)
-    testler = _rust_test_bolgeleri(soyulmus)
+    # DEV-C2: test bölgeleri DİZGE İÇERİKLERİ boşluklanmış metinde bulunur (dizgedeki / karakter sabitindeki `}` sayılmaz).
+    testler = _rust_test_bolgeleri(_rust_soy(metin, dizge_bosalt=True)[0])
     satir_bas = [0] + [m.end() for m in re.finditer("\n", metin)]
     ns = Path(yol).stem
     adaylar = []

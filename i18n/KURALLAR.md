@@ -270,7 +270,7 @@ ACİL DURDUR / STOP, seans başlat / durdur, bobin ve alan uyarıları, firmware
 ## 9. Kapılar
 
 K-1 eşlik (`test_i18n_esle_K1.py`) · K-2 sabit metin yasağı (`test_i18n_sabit_metin_K2.py` + jest `sabitMetinYasagi.test.ts` — kanca
-bağımlılığı kuralı da orada) · K-3 kullanılan anahtar katalogda + dinamik anahtar izin listesi (`test_i18n_anahtar_K3.py`,
+bağımlılığı kuralı da orada; çıkarıcının Rust dizge / karakter sabiti / bayt-ham dizge sınırları: `test_i18n_cikar_RUST_dizge_sinirlari_DEV_C2.py`) · K-3 kullanılan anahtar katalogda + dinamik anahtar izin listesi (`test_i18n_anahtar_K3.py`,
 `i18n/dinamik-anahtarlar.json`) · K-4 terim (`test_i18n_terim_K4.py`) · K-5 kritik + bayrak + bekleyen (`test_i18n_kritik_K5.py`) · K-6 paket
 (`test_i18n_paket_K6.py`) · K-7 AI etiket eşliği (`test_i18n_ai_etiket_K7.py`) · araçlar (`test_i18n_araclar.py`,
 `test_i18n_parti_araclari.py`) · yardımcı (`test_i18n_yardimci.py`) · altyapı (`test_i18n_sunucu_altyapi.py`, `test_i18n_launcher_altyapi.py`,
