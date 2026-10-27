@@ -26,10 +26,13 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import logging
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 GUII = Path(__file__).resolve().parent.parent
 HOME = Path(os.path.expanduser("~"))
@@ -72,8 +75,8 @@ def cmd_backup(args) -> int:
     out.write_text(json.dumps(arsiv, indent=2), encoding="utf-8")
     try:
         os.chmod(out, 0o600)
-    except Exception:
-        pass
+    except Exception:  # D5.31: izin daraltılamadı — arşiv yazıldı; Windows'ta etkisi sınırlı, sessiz yutulmaz
+        _log.debug("sir arsivi izinleri daraltilamadi: %s", out, exc_info=True)
     print(f"\n[OK] {len(kalemler)} sir toplandi -> {out}")
     print("⚠️ ŞİFRESİZ arsiv (parola YOK). Git'e KOYMA; genel bulut/e-postayla YOLLAMA;")
     print("   USB + sifre-yoneticisi gibi ERISIMI SINIRLI ortamda tasi.")
@@ -170,8 +173,8 @@ def cmd_restore(args) -> int:
         yol.write_bytes(veri)
         try:
             os.chmod(yol, 0o600)
-        except Exception:
-            pass
+        except Exception:  # D5.31: izin daraltılamadı — dosya geri yüklendi; sessiz yutulmaz
+            _log.debug("geri yuklenen sir dosyasinin izinleri daraltilamadi: %s", yol, exc_info=True)
         print(f"  [OK] {ad} -> {yol} (<{len(veri)} B>)")
         yazilan += 1
 

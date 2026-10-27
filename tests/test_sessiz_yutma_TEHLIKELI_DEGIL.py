@@ -269,7 +269,9 @@ def tara(kaynak: str, rel: str) -> list[tuple[str, str, int, str]]:
 
 def _backend_dosyalari() -> list[str]:
     ch = subprocess.run(
-        ["git", "ls-files", "apps/backend/*.py"],
+        # D5.31 (B-10.209): `build_tools/*.py` de (sır yedeği / geri yükleme / paket kapıları — riskli bağlam). Eskiden
+        # yalnız `apps/backend` taranıyordu; `secrets_backup.cmd_restore`a eklenen sessiz `shutil.move` yutması YEŞİLDİ.
+        ["git", "ls-files", "apps/backend/*.py", "build_tools/*.py"],
         cwd=KOK,
         capture_output=True,
         text=True,
@@ -291,6 +293,11 @@ def test_KRITIK_riskli_baglamda_SESSIZ_yutma_YOK():
     """🔴 Durum değiştiren bir iş, veri/kurtarma/güvenlik bağlamında sessizce yutulmasın."""
     dosyalar = _backend_dosyalari()
     assert len(dosyalar) > 50, f"tarama çok dar ({len(dosyalar)}) — kapı boş dönüyor olabilir"
+    for kok in (
+        "apps/backend/",
+        "build_tools/",
+    ):  # D5.31: her kök gerçekten taranıyor (kök düşerse kapı sessizce daralır)
+        assert any(d.startswith(kok) for d in dosyalar), f"tarama kökü BOŞ: {kok}"
 
     hepsi = []
     for rel in dosyalar:

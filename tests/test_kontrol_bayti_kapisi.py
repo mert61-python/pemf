@@ -60,11 +60,13 @@ URETILMIS = ("pemf_vet_landing/",)
 
 
 def _izlenen_metin_dosyalari() -> list[Path]:
-    ch = subprocess.run(["git", "ls-files", "-z"], cwd=KOK, capture_output=True, text=True, timeout=120)
+    # ⚠️ D5.31 (B-10.208): `text=True` çıktıyı YEREL kodlamayla (Windows'ta cp1254) çözüyordu — UTF-8 aksanlı yol
+    # (`dema-terapi-simülatörü/…`) bozuk adla `is_file()` False olup SESSİZCE düşüyordu. Bayt alınır, UTF-8 çözülür.
+    ch = subprocess.run(["git", "ls-files", "-z"], cwd=KOK, capture_output=True, timeout=120)
     if ch.returncode != 0:
         pytest.skip("git deposu değil")
     yollar = []
-    for ad in ch.stdout.split(NUL):
+    for ad in ch.stdout.decode("utf-8").split(NUL):
         if not ad:
             continue
         if ad.startswith(URETILMIS):
@@ -73,6 +75,14 @@ def _izlenen_metin_dosyalari() -> list[Path]:
         if p.suffix.lower() in METIN_UZANTILARI and p.is_file():
             yollar.append(p)
     return yollar
+
+
+def test_KARSIT_KANIT_D5_31_aksanli_yol_TARANAN_kumede():
+    """Vakum değil: UTF-8 aksanlı izlenen metin dosyası (DEMA simülatörü ağacı) taranan kümede — kod çözümü bozulursa düşer."""
+    taranan = {p.relative_to(KOK).as_posix() for p in _izlenen_metin_dosyalari()}
+    assert "dema-terapi-simülatörü/README.md" in taranan, (
+        "aksanlı yol taramadan düşüyor (yerel kodlama ile çözülmüş olabilir)"
+    )
 
 
 def _kusurlu(ham: bytes) -> set[int]:
