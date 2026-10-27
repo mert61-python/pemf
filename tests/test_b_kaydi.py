@@ -20,6 +20,7 @@ import re
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -203,7 +204,14 @@ def test_KRITIK_NTP_YOKSA_uptime_eki_KALIYOR():
 
 
 # ══ 3) FIRMWARE TARAFI (yapısal — C burada derlenemez) ═════════════════════════════════════
-firmware_yok = pytest.mark.skipif(not INO.exists(), reason="firmware/ agaci yok")
+@pytest.fixture
+def _firmware_kaynagi():
+    """D5-F (K5-F P2): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ (eskiden düz
+    `skipif(not INO.exists())`: zorunlu kipte de sessizce atlıyordu)."""
+    capraz.atla_yoksa("firmware/esps3_pemf_coil/esps3_pemf_coil.ino", izlenen=True)
+
+
+firmware_yok = pytest.mark.usefixtures("_firmware_kaynagi")
 
 
 @firmware_yok

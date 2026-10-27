@@ -13,6 +13,7 @@ Donanımsız, saf metin/aritmetik testler — firmware kaynağı `#define`'larda
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 from utils import stm32_protocol_limits as lim
 
@@ -21,8 +22,8 @@ _FW = Path(__file__).resolve().parent.parent / "firmware" / "stm32_pemf" / "Core
 
 @pytest.fixture(scope="module")
 def fw_src() -> str:
-    if not _FW.exists():  # firmware ağacı yoksa (kod-only checkout) atla
-        pytest.skip(f"firmware kaynağı yok: {_FW}")
+    # firmware ağacı yoksa (kod-only checkout) atla — D5-F: `capraz` üzerinden, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/main.c", izlenen=True)
     return _FW.read_text(encoding="utf-8", errors="replace")
 
 
@@ -71,8 +72,7 @@ def sim():
     import importlib.util
 
     p = Path(__file__).resolve().parent.parent / "tools" / "stm32_simulator.py"
-    if not p.exists():
-        pytest.skip("stm32_simulator.py yok")
+    capraz.atla_yoksa("tools/stm32_simulator.py", izlenen=True)  # D5-F: eski düz pytest.skip
     spec = importlib.util.spec_from_file_location("_stm32_sim", p)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

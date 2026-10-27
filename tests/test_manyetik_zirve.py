@@ -36,6 +36,7 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -47,7 +48,16 @@ S3_H = KOK / "firmware" / "esps3_pemf_coil" / "SensorManager.h"
 S3_SHARED = KOK / "firmware" / "esps3_pemf_coil" / "SharedDefs.h"
 S3_INO = KOK / "firmware" / "esps3_pemf_coil" / "esps3_pemf_coil.ino"
 
-pytestmark = pytest.mark.skipif(not STM.exists() or not S3.exists(), reason="firmware kaynagi yok")
+
+@pytest.fixture(autouse=True)
+def _firmware_kaynagi():
+    """D5-F (K5-F P2): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU (D4.04 sınıfı). Dosyadaki
+    HER test STM ya da S3 kaynağını okur.
+    """
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/pemf_sensor.c", izlenen=True)
+    capraz.atla_yoksa("firmware/esps3_pemf_coil/SensorManager.cpp", izlenen=True)
 
 
 def _oku(p: Path) -> str:

@@ -32,6 +32,7 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -42,7 +43,14 @@ MAIN = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 # Sebep: surus kipi artik `PEMF_BOBIN_UNIPOLAR_MASKESI` ile BOBIN BASINA seciliyor,
 # ikinci bir derleme gerekmiyor. TEK kaynak = firmware/stm32_pemf.
 
-pytestmark = pytest.mark.skipif(not SRC.exists(), reason="pemf_akim.c yok")
+
+def _firmware_kaynagi():
+    """D5-F (K5-F P2): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU ve kaynağa muhtaç OLMAYAN
+    saf model / karşıt testleri de atlatıyordu (D5.48 sınıfı). Artık yalnız kaynağı OKUYAN testler çağırır.
+    """
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/pemf_akim.c", izlenen=True)
 
 
 def _oku(p: Path) -> str:
@@ -138,6 +146,7 @@ def test_KRITIK_ACS712_30A_sabitleri_DOGRU():
     yanlış gösterir ve bu SESSİZDİR: sayı makul görünür, doz kaydına öyle girer.
     MUTASYON: 0.066 → 0.100 (20 A sürümü) yaz → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = _oku(SRC)
     assert _sabit(kod, "ACS712_30A_V_PER_A") == 0.066, (
         f"hassasiyet {_sabit(kod, 'ACS712_30A_V_PER_A')} V/A; ACS712-**30A** 0.066 "
@@ -155,6 +164,7 @@ def test_KRITIK_SEVIYE_UYUSMAZLIGI_BELGELENMIS():
     30 A'lık yük bağlar ve pini yakar. Sınırın kaynakta durması, kablolayanın onu
     görmesinin TEK yolu (şema deposu yok).
     """
+    _firmware_kaynagi()
     h = _oku(HDR)
     assert "12,1 A" in h or "12.1 A" in h, "ADC tavani (+12,1 A) baslikta belgelenmemis"
     assert "16,7 A" in h or "16.7 A" in h, "pin absolute-maximum (+16,7 A) belgelenmemis"
@@ -168,6 +178,7 @@ def test_KRITIK_DOYGUNLUK_TESPIT_EDILIYOR():
     MUTASYON: `if (ham >= ADC_DOYGUNLUK_HAM)` satırını sil → KIRMIZI.
     Sahadaki etki: kırpılmış akım (ör. 12,1 A) gerçek 25 A yerine doz kaydına girer.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert "ADC_DOYGUNLUK_HAM" in kod, "doygunluk esigi sabiti YOK"
     assert re.search(r"ham\s*>=\s*ADC_DOYGUNLUK_HAM", kod), "doygunluk KARSILASTIRILMIYOR"
@@ -183,6 +194,7 @@ def test_KRITIK_TURETILEN_HASSASIYET_GERCEKTEN_KULLANILIYOR():
     Sahadaki etki: bir gerilim bölücü eklendiği an akım oran kadar (ör. 1,5x) yanlış olur
     ve bu SESSİZDİR — sayı makul görünmeye devam eder.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert re.search(r"g_hassasiyet\[i\]\s*=\s*ACS712_30A_V_PER_A\s*\*\s*k", kod), (
         "ratiometrik hassasiyet (0.066 * k) TURETILMIYOR"
@@ -201,6 +213,7 @@ def test_KRITIK_TURETILEN_HASSASIYET_GERCEKTEN_KULLANILIYOR():
 
 def test_KRITIK_RMS_ve_OFFSET_KALIBRASYONU_VAR():
     """PWM'li akım tek örnekle ölçülemez → RMS; ve offset 0 A'da kalibre edilmeli."""
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert re.search(r"sqrtf\(kareler\s*/", kod), "RMS hesaplanmiyor (tek ornek = rastgele nokta)"
     assert "KALIBRASYON_ORNEK" in kod and "RMS_ORNEK" in kod, "ornek sayilari sihirli sayi"
@@ -214,6 +227,7 @@ def test_KRITIK_Init_PWM_BASLAMADAN_ONCE():
     kalıcı olarak kayar — hem de makul görünen bir sayıyla.
     MUTASYON: `PEMF_Akim_Init();`i `Coil_TimInit();`ten SONRAYA taşı → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(MAIN))
     i_init = kod.find("PEMF_Akim_Init();")
     i_tim = kod.find("Coil_TimInit();")
@@ -227,6 +241,7 @@ def test_KRITIK_Init_PWM_BASLAMADAN_ONCE():
 
 def test_KRITIK_BLOKLAMAZ():
     """`HAL_Delay` yok; her `while` çevrim bütçeli."""
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert "HAL_Delay" not in kod, (
         "pemf_akim.c icinde HAL_Delay var — ana dongu tikanir, olu-adam watchdog'u SAHTE "
@@ -243,6 +258,7 @@ def test_KRITIK_NTC_ile_ADC_CAKISMASI_DERLEME_ZAMANI_YAKALANIR():
     MUTASYON: `#error` satırını sil → KIRMIZI. Sahadaki etki: iki modül ADC1'i ayrı ayrı
     yapılandırır, kanal sırası birbirini ezer ve akım/sıcaklık ikisi de yanlış okunur.
     """
+    _firmware_kaynagi()
     kod = _oku(SRC)
     assert "#error" in kod and "PEMF_NTC_TERMAL_ENABLED" in kod, (
         "NTC ile ADC catismasi icin derleme-zamani kapisi (#error) YOK"
@@ -251,6 +267,7 @@ def test_KRITIK_NTC_ile_ADC_CAKISMASI_DERLEME_ZAMANI_YAKALANIR():
 
 def test_KRITIK_kanal_tablosu_NUM_ile_BAGLI():
     """Kanal listesi elle yazılı (kablolamaya özgü) → uzunluğu derleme-zamanı iddiasıyla bağlı."""
+    _firmware_kaynagi()
     kod = _oku(SRC)
     assert "_Static_assert" in kod and "g_kanal" in kod, "kanal tablosu uzunluk iddiasi YOK"
     i = kod.find("g_kanal[PEMF_AKIM_BOBIN_SAYISI]")

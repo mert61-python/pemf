@@ -24,6 +24,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import capraz
 import pytest
 from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 
@@ -256,8 +257,7 @@ def test_KRITIK_S3_firmware_mag_eksenlerini_YAYINLIYOR():
     engeller.
     """
     nm = KOK / "firmware" / "esps3_pemf_coil" / "NetworkManager.cpp"
-    if not nm.exists():
-        pytest.skip("firmware/ agaci yok")
+    capraz.atla_yoksa("firmware/esps3_pemf_coil/NetworkManager.cpp", izlenen=True)  # D5-F: eski düz pytest.skip
     kaynak = nm.read_text(encoding="utf-8", errors="replace")
     for alan, ic in (("mag_x", "magX"), ("mag_y", "magY"), ("mag_z", "magZ")):
         assert f'doc["{alan}"]' in kaynak, f"S3 status JSON'unda {alan} YOK"

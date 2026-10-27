@@ -35,12 +35,21 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 SRC = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "pemf_sensor.c"
 
-pytestmark = pytest.mark.skipif(not SRC.exists(), reason="pemf_sensor.c yok")
+
+def _firmware_kaynagi():
+    """D5-F (K5-F P2): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU ve kaynağa muhtaç OLMAYAN
+    saf model / karşıt testleri de atlatıyordu (D5.48 sınıfı). Artık yalnız kaynağı OKUYAN testler çağırır.
+    """
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/pemf_sensor.c", izlenen=True)
+
 
 #: Kaynaktaki `I2C_KURTARMA_ESIGI` — kaç ardışık hatadan sonra hat kurtarma tetiklenir.
 KURTARMA_ESIGI = 5
@@ -234,6 +243,7 @@ def _kod() -> str:
 
 def test_KRITIK_model_KAYNAKLA_ayrismis_DEGIL():
     """Modelin üç dayanağı kaynakta gerçekten var mı? Yoksa model değil KAPI kırılır."""
+    _firmware_kaynagi()
     kod = _kod()
     # 1) Kurtarma esigi modelle AYNI
     m = re.search(r"#define\s+I2C_KURTARMA_ESIGI\s+(\d+)", kod)
@@ -290,6 +300,7 @@ def test_KRITIK_acilis_raporu_KABLOLAMAYI_soyluyor():
 
     Telemetri satırı iki durumda da o alanı taşımaz; fark yalnız açılış raporunda görünür.
     """
+    _firmware_kaynagi()
     ana = io.open(
         KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c", encoding="utf-8", errors="replace"
     ).read()

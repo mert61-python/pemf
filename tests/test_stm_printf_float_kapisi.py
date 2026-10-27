@@ -50,6 +50,7 @@ import io
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 from akim_olcumu_aparati import akim_olcumu_acik  # noqa: F401  (CH4 · Y154: akım sensörü AÇIKKEN yolu)
 
@@ -96,13 +97,14 @@ def _c_yorumsuz(kod: str) -> str:
 # ============================================================================
 
 
-@pytest.mark.skipif(not MAIN.exists(), reason="firmware kaynagi yok")
 def test_KRITIK_main_c_printf_float_SEMBOLUNU_zorluyor():
     """MUTASYON: `g_printf_float_zorla` satırını sil → KIRMIZI.
 
     Sahadaki etki: sıcaklık + manyetik alan + akım telemetrisi TAMAMEN durur,
     hiçbir hata mesajı çıkmadan.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/main.c", izlenen=True)
     kod = _c_yorumsuz(_oku(MAIN))
     # ⚠️ BILDIRIM YETMEZ, BASVURU GEREKIR. `extern int _printf_float(void);` tek basina
     # bagalayiciya HICBIR sey yaptirmaz: sembol yalniz ADI GECMIS olur, tanimi
@@ -127,7 +129,6 @@ def test_KRITIK_main_c_printf_float_SEMBOLUNU_zorluyor():
 # ============================================================================
 
 
-@pytest.mark.skipif(not DERLE.exists(), reason="derleme betigi yok")
 def test_KRITIK_derleme_betigi_bayragi_SAGLAMAZ_urunu_OLCER():
     """⚠️ Betik `-u _printf_float` eklerse KENDİ bayrağını doğrular.
 
@@ -137,6 +138,8 @@ def test_KRITIK_derleme_betigi_bayragi_SAGLAMAZ_urunu_OLCER():
 
     MUTASYON: betiğe `-u _printf_float` ekle → KIRMIZI.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("scripts/firmware_derle.py", izlenen=True)
     betik = _oku(DERLE)
     # ⚠️ YORUM SATIRLARI DUSULUR: bu betigin kendi aciklamasi bayragin adini ANLATIYOR
     # ("... `-u _printf_float` EKLENMEZ ..."). Duz metin aramasi o aciklamayi ihlal sanar

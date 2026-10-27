@@ -28,6 +28,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -35,7 +36,15 @@ PROJE = KOK / "firmware" / "stm32_pemf"
 MAIN = PROJE / "Core" / "Src" / "main.c"
 SURUS = PROJE / "Core" / "Inc" / "pemf_surus.h"
 
-pytestmark = pytest.mark.skipif(not MAIN.exists(), reason="firmware kaynagi yok")
+
+def _firmware_kaynagi():
+    """D5-F (K5-F P2): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU ve kaynağa muhtaç OLMAYAN
+    saf model / karşıt testleri de atlatıyordu (D5.48 sınıfı). Artık yalnız kaynağı OKUYAN testler çağırır.
+    """
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/main.c", izlenen=True)
+
 
 #: `pemf_surus.h` PEMF_BOBIN_TERS_MASKESI — sahip kararı 2026-09-10: KULLANILMIYOR.
 MASKE = 0x00
@@ -60,6 +69,7 @@ def test_KRITIK_AYNA_projesi_ve_senkron_betigi_KALKTI():
 
     Kip artık bobin başına maskeyle seçildiği için ikinci projenin sebebi YOK.
     """
+    _firmware_kaynagi()
     assert not (KOK / "firmware" / "stm32_pemf_unipolar").exists(), (
         "stm32_pemf_unipolar GERI GELMIS -> tek kaynak bozuldu; kip artik maskeyle secilir"
     )
@@ -75,6 +85,7 @@ def test_KRITIK_OLU_bayrak_PEMF_SURUS_UNIPOLAR_kalmadi():
 
     MUTASYON: `#define PEMF_SURUS_UNIPOLAR 0` satırını geri ekle → KIRMIZI.
     """
+    _firmware_kaynagi()
     hdr = SURUS.read_text(encoding="utf-8", errors="replace")
     assert not re.search(r"^#define\s+PEMF_SURUS_UNIPOLAR\s", hdr, re.M), (
         "olu bayrak geri gelmis -> kip maskeden mi bayraktan mi belirsizlesir"
@@ -89,6 +100,7 @@ def test_KRITIK_OLU_bayrak_PEMF_SURUS_UNIPOLAR_kalmadi():
 
 
 def test_KRITIK_polarite_maskesi_SIFIR_ve_ISRde_dogru_uygulaniyor():
+    _firmware_kaynagi()
     hdr = SURUS.read_text(encoding="utf-8", errors="replace")
     assert re.search(r"^#define PEMF_BOBIN_TERS_MASKESI 0x00U$", hdr, re.M), (
         "polarite maskesi 0x00 DEGIL. SAHIP KARARI 2026-09-10: ters sargi bobin UCLARI "

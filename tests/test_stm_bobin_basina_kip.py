@@ -32,13 +32,21 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 MAIN = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 SURUS = KOK / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_surus.h"
 
-pytestmark = pytest.mark.skipif(not MAIN.exists(), reason="firmware kaynagi yok")
+
+def _firmware_kaynagi():
+    """D5-F (K5-F P2): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU ve kaynağa muhtaç OLMAYAN
+    saf model / karşıt testleri de atlatıyordu (D5.48 sınıfı). Artık yalnız kaynağı OKUYAN testler çağırır.
+    """
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/main.c", izlenen=True)
 
 
 def _oku(p: Path) -> str:
@@ -68,6 +76,7 @@ def test_KRITIK_saha_projesinde_bobin_6_7_UNIPOLAR_digerleri_BIPOLAR():
     MUTASYON: maskeyi 0x00 yap → KIRMIZI (bobin 6-7 bipolar sürülmeye çalışılır;
     sürücüleri bunu yapamaz).
     """
+    _firmware_kaynagi()
     n = _num_coils()
     m = _maske(SURUS)
     uni = [bool((m >> i) & 1) for i in range(n)]
@@ -87,6 +96,7 @@ def test_KRITIK_duty_klempi_ve_CIKIS_asamasi_AYNI_kaynagi_okur():
 
     MUTASYON: klemplerden birini `g_unipolar[i]` yerine sabit `1` yap → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = _oku(MAIN)
     # iki klemp + cikis asamasi: ucu de g_unipolar[i] okumali
     klempler = re.findall(r"int32_t\s+max_d(?:_now)?\s*=\s*([^;]+);", kod, re.S)
@@ -103,6 +113,7 @@ def test_KRITIK_duty_klempi_ve_CIKIS_asamasi_AYNI_kaynagi_okur():
 
 def test_KRITIK_kip_DERLEME_ZAMANI_dallanmasi_KALMADI():
     """`#if PEMF_SURUS_UNIPOLAR` sürüş yolunda kalırsa maske ETKİSİZ olur."""
+    _firmware_kaynagi()
     kod = _oku(MAIN)
     kalan = [ln for ln in kod.splitlines() if "#if PEMF_SURUS_UNIPOLAR" in ln]
     assert not kalan, f"surus yolunda hala derleme-zamani dal var ({len(kalan)}) -> maske ETKISIZ"
@@ -117,6 +128,7 @@ def test_KRITIK_YETENEK_tabani_MASKEDEN_turetilir():
     Bu test katman 1'i kilitler. Dizi elle doldurulursa maske yalan söyler ve bobin 6-7
     bipolar sürülmeye çalışılır (sürücüde ikinci yarım köprü YOK).
     """
+    _firmware_kaynagi()
     kod = _oku(MAIN)
     m = re.search(r"g_yalniz_unipolar\[i\]\s*=\s*([^;]+);", kod)
     assert m, "yetenek dizisi (g_yalniz_unipolar) HIC doldurulmuyor"
@@ -131,6 +143,7 @@ def test_KRITIK_operator_istegi_YETENEGI_KALDIRAMAZ():
 
     MUTASYON: `Coil_KipUygula` içindeki `g_yalniz_unipolar[i] ||` kısmını sil → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = _oku(MAIN)
     m = re.search(r"Coil_KipUygula\(uint8_t\s+\w+\)\s*\{(.+?)\n\}", kod, re.S)
     assert m, "Coil_KipUygula fonksiyonu BULUNAMADI -> calisma-zamani kip yolu YOK"
@@ -150,6 +163,7 @@ def test_KRITIK_kip_PWM_BASLAMADAN_uygulanir():
     Sonra uygulanırsa ilk periyot(lar) ESKİ kiple sürülür: bipolar→unipolar geçişinde
     zararsız, ama unipolar→bipolar geçişinde tek yönlü sürücüye bir B darbesi gider.
     """
+    _firmware_kaynagi()
     kod = _oku(MAIN)
     i_kip = kod.find("Coil_KipUygula(pkt_local.unipolar_maskesi)")
     assert i_kip > 0, "paketteki kip alani HIC uygulanmiyor"

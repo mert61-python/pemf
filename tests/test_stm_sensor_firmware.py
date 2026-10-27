@@ -31,6 +31,7 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -41,7 +42,14 @@ MAIN = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 # Sebep: surus kipi artik `PEMF_BOBIN_UNIPOLAR_MASKESI` ile BOBIN BASINA seciliyor,
 # ikinci bir derleme gerekmiyor. TEK kaynak = firmware/stm32_pemf.
 
-pytestmark = pytest.mark.skipif(not SRC.exists(), reason="pemf_sensor.c yok")
+
+def _firmware_kaynagi():
+    """D5-F (K5-F P2): `firmware/` İZLENEN ağaçtır — yoksa atla, `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`de DÜŞ.
+
+    Eskiden modül düzeyi düz `skipif(not ….exists())` idi: zorunlu kipte de sessizce ATLIYORDU ve kaynağa muhtaç OLMAYAN
+    saf model / karşıt testleri de atlatıyordu (D5.48 sınıfı). Artık yalnız kaynağı OKUYAN testler çağırır.
+    """
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/pemf_sensor.c", izlenen=True)
 
 
 def _oku(p: Path) -> str:
@@ -99,6 +107,7 @@ def test_KRITIK_BLOKLAMAZ_HAL_Delay_ve_butcesiz_while_YOK():
     Sahadaki etki: ana döngü tıkanır → ölü-adam watchdog'u SAHTE kopuş görür → tedavi
     ortasında tüm bobinler kesilir.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert "HAL_Delay" not in kod, (
         "pemf_sensor.c icinde HAL_Delay var — ana dongu tikanir ve olu-adam watchdog'u "
@@ -125,6 +134,7 @@ def test_KRITIK_donusum_suresi_DAMGA_ile_beklenir():
     Sahadaki etki: ana döngü ~400 Hz'de 2 ms bloklanır, ölü-adam watchdog'u sahte kopuş
     görüp tedavi ortasında bobinleri keser.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert "S_MAG_BEKLE" in kod, "donusum bekleme durumu yok -> sure BLOKLAYARAK bekleniyor olabilir"
     assert "mag_hazir_cyc" in kod or "mag_hazir_ms" in kod, "donusum damgasi YOK"
@@ -149,6 +159,7 @@ def test_KRITIK_DWT_sayaci_OLCULEREK_dogrulanir():
 
     MUTASYON: `g_dwt_var = (DWT->CYCCNT != t0);` → `g_dwt_var = true;` yap → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert "g_dwt_var" in kod, "DWT kullanilabilirlik bayragi YOK"
     # ⚠️ TUM atamalar taranir: ilki `static bool g_dwt_var = false;` BASLANGIC degeridir,
@@ -212,6 +223,7 @@ def test_KRITIK_olcek_sabitleri_ADAFRUIT_TABLOSU_ile_AYNI():
     MUTASYON A: `MLX90393_GAIN_SEL 0` → `4` (LSB'lere dokunmadan) → KIRMIZI.
     MUTASYON B: `MLX90393_LSB_XY_UT 0.751f` → `0.161f` → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = _oku(SRC)
     gain = int(_mlx_sabiti(kod, "MLX90393_GAIN_SEL"))
     assert gain in ADAFRUIT_LSB_RES16, f"GAIN_SEL={gain} Adafruit tablosunda YOK (0-7 olmali)"
@@ -241,6 +253,7 @@ def test_KRITIK_olcum_araligi_SAHIBIN_BANDINI_KAPSAR():
     tutarlılık kapısını MEMNUN EDEREK) → bu kapı KIRMIZI. İki kapı birlikte, "tutarlı ama
     yetersiz" ayarı da yakalar.
     """
+    _firmware_kaynagi()
     kod = _oku(SRC)
     xy = float(_mlx_sabiti(kod, "MLX90393_LSB_XY_UT"))
     z = float(_mlx_sabiti(kod, "MLX90393_LSB_Z_UT"))
@@ -265,6 +278,7 @@ def test_KRITIK_okuma_hizi_DARBEYI_yakalayacak_kadar():
 
     MUTASYON: `MLX90393_OSR 0` → `3` yap → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = _oku(SRC)
     tconv = {
         0: (1.27, 1.84, 3.00, 5.30),
@@ -287,6 +301,7 @@ def test_KRITIK_okuma_hizi_DARBEYI_yakalayacak_kadar():
 
 def test_KRITIK_buyukluk_mT_ve_ESP_ile_AYNI_TANIM():
     """`magneticMt` = sqrt(x²+y²+z²)/1000. ESP: SensorManager.cpp:418-419 ile birebir."""
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert re.search(r"sqrtf\(.*\)\s*/\s*1000\.0f", kod, re.S), (
         "|B| buyuklugu mT'ye cevrilmiyor (sqrtf(...)/1000.0f yok) -> ESP ile AYRI birim: "
@@ -301,6 +316,7 @@ def test_KRITIK_TERMAL_KESME_EKLENMEMIS():
     Ters yön de tehlikeli: eşik kimse tarafından ölçülmemiş olur ve sahip kararı sessizce
     iptal edilir.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     for yasak in ("g_shadow", "g_active", "coil_gpio", "duty", "TERMAL_KESME", "NTC_KESME_C"):
         assert yasak not in kod, (
@@ -321,6 +337,7 @@ def test_KRITIK_TERMAL_KESME_EKLENMEMIS():
 
 def test_KRITIK_I2C_HAT_KURTARMA_VAR():
     """Takılı bus kurtarılmazsa sıcaklık SESSİZCE DONAR (8266'da sahada yaşandı)."""
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert "i2c_hat_kurtar" in kod, "hat kurtarma fonksiyonu YOK"
     assert "I2C_CR1_SWRST" in kod, "cevre birimi SWRST ile sifirlanmiyor"
@@ -339,6 +356,7 @@ def test_KRITIK_SENSOR_satiri_AKIM_alani_TASIMAZ():
     yerde yok". Ölçülmeyen alanı göndermek (özellikle 0.0) aşağı akışta "ölçüldü" olarak
     kaydedilir — PDF'e "0.0 °C ölçüldü" yazdıran desen.
     """
+    _firmware_kaynagi()
     ana = _oku(MAIN)
     i = ana.find("BOBIN 6-7 SENSOR TELEMETRISI")
     assert i > 0, "main.c'de sensor telemetri blogu yok -> telemetri hic gonderilmiyor"
@@ -359,6 +377,7 @@ def test_KRITIK_AKIM_satiri_SICAKLIK_ALAN_tasimaz():
     MUTASYON: akım satırına `,T=%.2f` ekle → KIRMIZI. Sahadaki etki: bobin 1-5 için DB'ye
     ve PDF'e "0.0 °C ölçüldü" satırı girer (deponun tekrar eden sahte-ölçüm sınıfı).
     """
+    _firmware_kaynagi()
     ana = _oku(MAIN)
     i = ana.find("BOBIN 1-5 AKIM TELEMETRISI")
     assert i > 0, "akim telemetri blogu yok"
@@ -376,6 +395,7 @@ def test_KRITIK_AKIM_satiri_SICAKLIK_ALAN_tasimaz():
 
 def test_KRITIK_Init_ISR_BASLAMADAN_ONCE_cagriliyor():
     """`PEMF_Sensor_Init()` adres taraması yapar (ms'ler) → 50 kHz ISR başlamadan ÖNCE."""
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(MAIN))
     i_init = kod.find("PEMF_Sensor_Init();")
     i_tim = kod.find("Coil_TimInit();")
@@ -420,6 +440,7 @@ def test_KRITIK_CIHAZ_BAZINDA_VARLIK_TESPITI():
 
     MUTASYON: `S_TOBJ`taki `if (h->sicaklik_adres == 0U)` erken-çıkışını sil → KIRMIZI.
     """
+    _firmware_kaynagi()
     kod = yorumsuz(_oku(SRC))
     assert "sicaklik_adres" in kod, "sicaklik cihazi icin VARLIK alani YOK"
     assert "cihaz_var" in kod, "adres yoklama yardimcisi YOK"
@@ -469,6 +490,7 @@ def test_KRITIK_iki_sensor_TEK_BUSTA_cakismaz():
     için aynı hatta konamaz. Adresler eşitlenirse (biri yanlış yazılırsa) iki cihaz aynı
     adreste yanıt verir ve okumalar birbirine karışır — sessiz ve teşhisi zor bir arıza.
     """
+    _firmware_kaynagi()
     kod = _oku(SRC)
     m614 = re.search(r"#define\s+MLX90614_ADRES\s+0x([0-9A-Fa-f]+)U", kod)
     m393 = re.search(r"#define\s+MLX90393_ADRES_VARSAYILAN\s+0x([0-9A-Fa-f]+)U", kod)

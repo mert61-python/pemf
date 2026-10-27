@@ -33,6 +33,7 @@ import io
 import re
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -147,8 +148,9 @@ def test_KRITIK_UC_YOKSA_sutun_BOS_kalir_SIFIR_DEGIL(tmp_path, monkeypatch):
 # ============================================================================
 
 
-@pytest.mark.skipif(not MAIN.exists(), reason="firmware kaynagi yok")
 def test_KRITIK_firmware_ALTI_UCU_da_basar():
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/main.c", izlenen=True)
     kod = io.open(MAIN, encoding="utf-8", errors="replace").read()
     m = re.search(r'",B=%\.3f,N=%u([^"]*)"', kod)
     assert m, "telemetri bicim dizesi bulunamadi"
@@ -156,21 +158,23 @@ def test_KRITIK_firmware_ALTI_UCU_da_basar():
         assert alan in m.group(1), f"firmware {alan} basmiyor"
 
 
-@pytest.mark.skipif(not SENSOR_C.exists(), reason="firmware kaynagi yok")
 def test_KRITIK_ILK_ornek_uclari_ORNEGE_kurar_SIFIRA_DEGIL():
     """⚠️ Uçları 0.0'dan başlatmak, alan hiç 0'ı geçmiyorsa (tek yönlü sürüş + DC ofset)
     SAHTE bir salınım uydurur ve tepeden-tepeyeyi olduğundan BÜYÜK gösterir.
 
     MUTASYON: `if (h->zirve_ornek == 0U)` dalını sil → KIRMIZI.
     """
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Src/pemf_sensor.c", izlenen=True)
     kod = io.open(SENSOR_C, encoding="utf-8", errors="replace").read()
     assert re.search(r"if \(h->zirve_ornek == 0U\) \{\s*\n\s*h->uc_x_min = h->uc_x_max = xm;", kod), (
         "ilk ornekte uclar ORNEGE kurulmuyor -> sahte salinim uydurulur"
     )
 
 
-@pytest.mark.skipif(not SENSOR_H.exists(), reason="firmware kaynagi yok")
 def test_KRITIK_veri_yapisi_alti_ucu_TASIR():
+    # D5-F: eski düz skipif — İZLENEN ağaç, ZORUNLU kipte DÜŞER
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Inc/pemf_sensor.h", izlenen=True)
     kod = io.open(SENSOR_H, encoding="utf-8", errors="replace").read()
     for alan in ("uc_x_min", "uc_x_max", "uc_y_min", "uc_y_max", "uc_z_min", "uc_z_max"):
         assert alan in kod, f"PEMF_SensorVerisi_t '{alan}' tasimiyor"

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import queue
 
+import capraz
 import pytest
 from controllers.hardware_controller import HardwareController  # noqa: E402
 from servers import live_state  # noqa: E402
@@ -358,8 +359,7 @@ def test_KRITIK_bipolarYetenek_FIRMWARE_maskesiyle_AYNI():
     from pathlib import Path as _P
 
     surus_h = _P(__file__).resolve().parents[1] / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_surus.h"
-    if not surus_h.exists():
-        pytest.skip("firmware kaynagi yok")
+    capraz.atla_yoksa("firmware/stm32_pemf/Core/Inc/pemf_surus.h", izlenen=True)  # D5-F: eski düz pytest.skip
     m = re.search(
         r"#define\s+PEMF_BOBIN_UNIPOLAR_MASKESI\s+0x([0-9A-Fa-f]+)U?",
         surus_h.read_text(encoding="utf-8", errors="replace"),
