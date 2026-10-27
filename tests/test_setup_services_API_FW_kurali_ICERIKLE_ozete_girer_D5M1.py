@@ -15,6 +15,8 @@ silinemezse ona dokunulmaz ama doğrusu yine kurulur (TUR 2 ürün kararı — 4
 `False`; son doğrulama içerikle; uzak adres VERİLMEZ (A-01). Programı farklı aynı adlı kural (İG-9.5 "taşınmış kurulum") bugünkü gibi silinir.
 TUR 2 (çürütücü): aynı adlı iki doğru kural (x1) · işlev fırlatırsa dış catch sonucu (x2) · işlev tanımı çağrıdan ÖNCE (x3) · çekilen dilim /
 işlev İZİN LİSTESİ (gölgesiz dış komut aparatta koşmaz).
+TUR 3 (çürütücü 2): yalnız 2. kuralın (keşif) denetimi fırlarsa 1. kuralın sonucu taşınmaz (n4) · özet dilimi yöntem çağrısını da
+izin listesine karşı denetler (n7) · koşullu (iç içe) işlev tanımı kör-denetim bekçisinde ürün gerilemesi olarak söylenir (n3i).
 ⛔ Gerçek güvenlik duvarı YOK: işlev ve döngü dilimi PowerShell parser'ıyla çekilir; NetSecurity cmdlet'leri D5 H-1 kapısının durum tutan
 gölgeleriyle (Get-Command ile İŞLEV kanıtlı, modül otomatik yükleme KAPALI) koşar. Betiğin gerçek `Log`u (C:\\ProgramData'ya yazar) ASLA
 yüklenmez — kayıtçı gölge kullanılır. Özet dilimi yalnız izinli komutlarla (Log / Set-Content gölgesi / Get-Date / Join-Path) koşar.
@@ -47,6 +49,7 @@ from test_install_backend_service_FW_kurali_ICERIKLE_D5H1 import (
     ps_dizi,
     surucu_kos,
     tanim_cagri_sirasi,
+    tanim_ust_duzey_iletisi,
 )
 from test_setup_services_firewall_kaniti import _ps_lit, _pwsh_file
 
@@ -56,10 +59,11 @@ KESIF = "PEMF UDP Discovery"
 STAGING = "PEMF Backend API (staging)"
 _PWSH = shutil.which("pwsh")
 
-pytestmark = [
-    pytest.mark.skipif(sys.platform != "win32", reason="pwsh aparatı Windows betik anlamını ölçer"),
-    pytest.mark.skipif((_PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
-]
+# D5 M-1 TUR 3: ham `skipif` yerine ZORUNLU'ya bağlı atlama (yayın makinesinde Windows + pwsh yoksa DÜŞER).
+if sys.platform != "win32":
+    capraz.atla("pwsh aparatı Windows betik anlamını ölçer")
+if _PWSH is None:
+    capraz.atla("pwsh (PowerShell 7) bulunamadı")
 
 # setup_services.ps1'in GERÇEK API / keşif güvenlik duvarı dilimi: `$FwKurallar = …` ifadesinden `foreach ($r in $FwKurallar)` döngüsüne
 # kadar (dahil) bitişik üst düzey ifadeler + dilimin çağırdığı İZİNLİ işlev tanımları. `Log` ASLA alınmaz (gerçeği ProgramData'ya yazar).
@@ -183,6 +187,22 @@ def test_KRITIK_kural_islevi_FIRLATIRSA_denetlenemedi_UYARISI_ve_False(tmp_path)
     assert api == "False|Boolean", f"kural denetimi fırladı ama ApiFirewallOk = {api} (beklenen False)\n{satir}"
 
 
+def test_KRITIK_yalniz_KESIF_kurali_denetimi_FIRLATIRSA_tek_denetlenemedi_ve_False(tmp_path):
+    """Çürütücü 2 n4 (ikinci tur / durum taşınması): 1. kural (API) doğrulanır, YALNIZ 2. kuralın (keşif) denetimi fırlar → döngünün her
+    turu kendi sonucuyla başlamalı; önceki kuralın True'su taşınırsa keşif kuralı doğrulanamasa da özet 'apiFirewall=True' der."""
+    api, satir, son = dongu_kos(tmp_path, [DOGRU_API, DOGRU_KESIF], kesifsorguduser=True)
+    den = [s for s in _uyari(satir) if "denetlenemedi" in s]
+    assert len(den) == 1 and KESIF in den[0] and API not in den[0], (
+        f"yalnız keşif kuralının denetimi fırladı ama tek (keşif adlı) 'denetlenemedi' UYARIsı yok:\n{satir}"
+    )
+    assert not [s for s in satir if s.startswith(("SET ", "REMOVE ", "NEW "))] and len(son) == 2, (
+        f"doğru API kuralı varken güvenlik duvarı değişti:\n{satir}"
+    )
+    assert api == "False|Boolean", (
+        f"keşif kuralının denetimi fırladı ama ApiFirewallOk = {api} (beklenen False — 1. kuralın sonucu taşındı)\n{satir}"
+    )
+
+
 def test_KRITIK_uyanin_yaninda_SILINEMEYEN_Block_ikiz_varsa_False(tmp_path):
     """Windows güvenlik duvarında Block Allow'u ezer: uyan kural dursa da silinemeyen aynı adlı Block kuralı LAN erişimini keser."""
     api, satir, son = dongu_kos(tmp_path, [DOGRU_API, dict(DOGRU_API, act="Block"), DOGRU_KESIF], silduser=True)
@@ -245,6 +265,7 @@ _OZET = r"""
 using namespace System.Management.Automation.Language
 Import-Module Microsoft.PowerShell.Management, Microsoft.PowerShell.Utility
 $PSModuleAutoLoadingPreference = 'None'
+@@IZIN_PS@@
 $script:Kayit = [System.Collections.Generic.List[string]]::new()
 function Log($m, $c = 'White') { $script:Kayit.Add("LOG " + $m) }
 function Set-Content { [CmdletBinding()] param($Path, $LiteralPath, $Value, $Encoding)
@@ -261,11 +282,11 @@ for ($i = 0; $i -lt $ust.Count; $i++) {
             $n.Extent.Text -like '*.install_verified*' }, $true)) { $son = $i }
 }
 if ($bas -lt 0 -or $son -le $bas) { [Console]::Out.WriteLine("DILIM-YOK $bas $son"); exit 4 }
-$izinli = 'Log', 'Set-Content', 'Get-Date', 'Join-Path'
+# D5 M-1 TUR 3 (çürütücü 2 n7 / A2): dilim `. ([ScriptBlock]::Create(...))` ile KOŞAR — komut VE yöntem çağrısı (`[Diagnostics.Process]::Start`,
+# `[IO.File]::WriteAllText('C:\ProgramData\…')` …) izin listesine karşı denetlenir (D5 H-1 `_IzinDisi`; izinli üye YOK).
 foreach ($s in $ust[($bas + 1)..$son]) {
-    foreach ($c in $s.FindAll({ param($n) $n -is [CommandAst] }, $true)) {
-        if ($izinli -notcontains "$($c.GetCommandName())") { [Console]::Out.WriteLine("IZIN-DISI " + $c.Extent.Text); exit 5 }
-    }
+    $ihlal = _IzinDisi $s @('Log', 'Set-Content', 'Get-Date', 'Join-Path') @()
+    if ($ihlal) { [Console]::Out.WriteLine("IZIN-DISI " + $ihlal); exit 5 }
 }
 $MosqFailed = $false; $Mode = 'device'; $MosqFirewallOk = $true; $probePort = @@PORT@@; $AppDir = 'C:\PEMF_SAHTE\app'
 $StagingMi = $false
@@ -279,12 +300,14 @@ foreach ($s in $ust[($bas + 1)..$son]) { . ([ScriptBlock]::Create($s.Extent.Text
 def _ozet(tmp_path: Path, api_ok: bool) -> list[str]:
     cikti = tmp_path / f"ozet_{api_ok}.json"
     govde = (
-        _OZET.replace("@@BETIK@@", _ps_lit(SETUP))
+        _OZET.replace("@@IZIN_PS@@", IZIN_PS)
+        .replace("@@BETIK@@", _ps_lit(SETUP))
         .replace("@@PORT@@", str(PORT))
         .replace("@@APIOK@@", "$true" if api_ok else "$false")
         .replace("@@CIKTI@@", _ps_lit(cikti))
     )
     r = _pwsh_file(tmp_path, f"ozet_{api_ok}.ps1", govde)
+    assert r.returncode != 5, izin_disi_iletisi(SETUP, "özet / .install_verified dilimi", r.stdout)
     assert r.returncode == 0 and cikti.exists(), (
         f"özet dilimi koşamadı (rc={r.returncode}; 4 dilim yok, 5 izin dışı komut, 99 gölge yok):\n{r.stdout}\n{r.stderr}"
     )
@@ -335,7 +358,7 @@ def test_KRITIK_islev_TANIMI_dongudan_ve_her_UST_DUZEY_cagrisindan_ONCE(tmp_path
     (CommandNotFound → dış catch → kural HİÇ kurulmaz, her kurulum apiFirewall=False). Genel kural: üst düzeyde çağrılan her betik işlevi
     ilk çağrısından ÖNCE tanımlı (D5 H-1'deki install_backend_service kolu ile aynı denetim)."""
     a = tanim_cagri_sirasi(tmp_path, SETUP)
-    assert FONK in a["denetlenen"], f"aparat: {FONK} üst düzey çağrısı bulunamadı (kör denetim): {a}"
+    assert FONK in a["denetlenen"], tanim_ust_duzey_iletisi(SETUP, [FONK], a)
     assert not a["ihlal"], (
         f"setup_services.ps1: işlev ilk üst düzey çağrısından SONRA tanımlanmış — çağrı anında işlev YOK: {a['ihlal']}"
     )

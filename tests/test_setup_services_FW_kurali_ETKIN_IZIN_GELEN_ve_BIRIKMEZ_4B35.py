@@ -10,6 +10,9 @@ YENİ kural ekler; sonraki her koşuda eski kural yine "uymaz", silme yine düş
 
 ⛔ Gerçek güvenlik duvarına DOKUNULMAZ: GERÇEK `$FwKurallar` + `foreach` deyimleri AST'den alınır; bütün NetFirewall cmdlet'leri sürücüde
 durum tutan sahte tabloya gölgelenir (İG-9.5 kapısının deseni, tablo genişletilmiş).
+D5 M-1 TUR 3 (çürütücü 2 A1 — aparat sızıntısı): sürücü PAYLAŞILAN `Ensure-PemfBackendFirewallKurali` gövdesini de koşar → modül otomatik
+yükleme KAPALI (NetSecurity YÜKLENEMEZ), gölgeler Get-Command ile İŞLEV kanıtlı (değilse çıkış 99), çekilen her parça koşmadan ÖNCE izin
+listesine karşı denetlenir (D5 H-1 `_IzinDisi`; dışında komut / yöntem → çıkış 5, KOŞMAZ).
 """
 
 from __future__ import annotations
@@ -30,13 +33,30 @@ EXE = r"C:\PEMF\runtime\PEMF_Backend\PEMF_Backend.exe"
 AD = "PEMF Backend API"
 UDP = {"n": "PEMF UDP Discovery", "p": "UDP", "port": 5051, "prog": EXE}
 
-pytestmark = [
-    pytest.mark.skipif(sys.platform != "win32", reason="pwsh aparatı Windows betik anlamını ölçer"),
-    pytest.mark.skipif((PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
-]
+# D5 M-1 TUR 3: ham `skipif` yerine ZORUNLU'ya bağlı atlama (yayın makinesinde Windows + pwsh yoksa DÜŞER).
+if sys.platform != "win32":
+    capraz.atla("pwsh aparatı Windows betik anlamını ölçer")
+if PWSH is None:
+    capraz.atla("pwsh (PowerShell 7) bulunamadı")
+
+from test_install_backend_service_FW_kurali_ICERIKLE_D5H1 import aparat_sonucu_denetle, aparat_surucusu  # noqa: E402
+
+_GOLGELER = (
+    "Log",
+    "Out-Null",
+    "Get-NetFirewallRule",
+    "Get-NetFirewallPortFilter",
+    "Get-NetFirewallApplicationFilter",
+    "New-NetFirewallRule",
+    "Remove-NetFirewallRule",
+    "Set-NetFirewallRule",
+)
+_IZINLI = (*_GOLGELER, "Where-Object", "Select-Object", "ForEach-Object", "Ensure-PemfBackendFirewallKurali")
 
 _SURUCU = r"""
 param([string]$Setup, [string]$Durum, [string]$Cikti)
+Import-Module Microsoft.PowerShell.Management, Microsoft.PowerShell.Utility
+$PSModuleAutoLoadingPreference = 'None'
 $ErrorActionPreference = 'Stop'
 $tokens = $null; $errs = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$tokens, [ref]$errs)
@@ -81,6 +101,15 @@ function Remove-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$I
         if (@($hedef | Where-Object { $_.Kilitli }).Count) { throw "Erisim engellendi (sahte: GPO deposundaki kural)" } } }
 function Set-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$InputObject, $DisplayName, $Protocol, $LocalPort, $Program, $Enabled, $Action, $Direction, $Profile)
     process { $script:Cagri.Add("FW-DEGISTIR $DisplayName") } }
+# D5 M-1 TUR 3 (A1): gölge kanıtı + izin listesi — ikisi de çekilen kod KOŞMADAN önce.
+foreach ($g in @@GOLGELER@@) {
+    if ((Get-Command $g -ErrorAction SilentlyContinue).CommandType -ne 'Function') { [IO.File]::WriteAllText($Cikti, (@{ golge_yok = $g } | ConvertTo-Json)); exit 99 }
+}
+@@IZIN_PS@@
+foreach ($s in $sec) {
+    $ihlal = _IzinDisi $s @@IZINLI@@ @()
+    if ($ihlal) { [IO.File]::WriteAllText($Cikti, (@{ izin_disi = $ihlal } | ConvertTo-Json)); exit 5 }
+}
 $StagingMi = [bool]$d.staging
 $probePort = [int]$d.port
 $BackendExe = $d.exe
@@ -95,7 +124,7 @@ $api = Get-Variable -Name ApiFirewallOk -Scope Script -ErrorAction SilentlyConti
 
 def _kos(tmp_path: Path, kurallar: list[dict], ad: str = "k") -> dict:
     surucu, durum, cikti = tmp_path / "surucu.ps1", tmp_path / f"durum_{ad}.json", tmp_path / f"cikti_{ad}.json"
-    surucu.write_text(_SURUCU, encoding="utf-8-sig")
+    surucu.write_text(aparat_surucusu(_SURUCU, _GOLGELER, _IZINLI), encoding="utf-8-sig")
     durum.write_text(json.dumps({"staging": False, "port": 8000, "exe": EXE, "kurallar": kurallar}), encoding="utf-8")
     r = subprocess.run(
         [PWSH, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(surucu), "-Setup", str(SETUP),
@@ -104,6 +133,7 @@ def _kos(tmp_path: Path, kurallar: list[dict], ad: str = "k") -> dict:
     )  # fmt: skip
     assert cikti.exists(), f"sürücü sonuç yazmadı (rc={r.returncode}):\n{r.stdout[-800:]}\n{r.stderr[-800:]}"
     v = json.loads(cikti.read_text(encoding="utf-8-sig"))
+    aparat_sonucu_denetle(v, r.returncode)
     assert "cipa" not in v, v
     t = v.get("tablo") or []
     v["tablo"] = [t] if isinstance(t, dict) else t

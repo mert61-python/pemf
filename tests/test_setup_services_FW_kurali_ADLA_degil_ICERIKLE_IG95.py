@@ -9,6 +9,10 @@ taşıyorsa düzeltilmez → backend yeni portta dinler ama LAN'dan (mobil / web
 metinleriyle koşar; `Get-NetFirewallRule` / `Get-NetFirewallPortFilter` / `Get-NetFirewallApplicationFilter` / `New-` / `Remove-` / `Set-NetFirewallRule`
 durum tutan sahte bir kural tablosuna gölgelenir. (Boru hattı girdili gölgeler gelişmiş işlevdir — ortak `-ErrorAction`'ı zaten taşır,
 ayrıca bildirilmez.)
+D5 M-1 TUR 3 (çürütücü 2 A1 — aparat sızıntısı): sürücü PAYLAŞILAN `Ensure-PemfBackendFirewallKurali` gövdesini de koşar → modül otomatik
+yükleme KAPALI (yalnız Management + Utility içe aktarılır; NetSecurity YÜKLENEMEZ), gölgelerin İŞLEV olduğu Get-Command ile kanıtlanır
+(değilse çıkış 99) ve çekilen her parça koşmadan ÖNCE izin listesine karşı denetlenir (D5 H-1 `_IzinDisi`; dışında komut / yöntem → çıkış 5,
+KOŞMAZ). Bir ürün gerilemesi işleve gölgesiz bir NetSecurity cmdlet'i / `netsh` eklerse bu kapı onu gerçek güvenlik duvarında ÇALIŞTIRMAZ.
 """
 
 from __future__ import annotations
@@ -20,20 +24,37 @@ import sys
 from pathlib import Path
 
 import capraz
-import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 SETUP = KOK / "scripts" / "setup_services.ps1"
 PWSH = shutil.which("pwsh")
 EXE = r"C:\PEMF\runtime\PEMF_Backend\PEMF_Backend.exe"
 
-pytestmark = [
-    pytest.mark.skipif(sys.platform != "win32", reason="pwsh aparatı Windows betik anlamını ölçer"),
-    pytest.mark.skipif((PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
-]
+# D5 M-1 TUR 3: ham `skipif` yerine ZORUNLU'ya bağlı atlama (yayın makinesinde Windows + pwsh yoksa DÜŞER).
+if sys.platform != "win32":
+    capraz.atla("pwsh aparatı Windows betik anlamını ölçer")
+if PWSH is None:
+    capraz.atla("pwsh (PowerShell 7) bulunamadı")
+
+from test_install_backend_service_FW_kurali_ICERIKLE_D5H1 import aparat_sonucu_denetle, aparat_surucusu  # noqa: E402
+
+# Sürücünün gölgeleri (Get-Command ile İŞLEV kanıtlı) ve çekilen koda izin verilen komutlar (gölgeler + saf boru komutları + kural işlevi).
+_GOLGELER = (
+    "Log",
+    "Out-Null",
+    "Get-NetFirewallRule",
+    "Get-NetFirewallPortFilter",
+    "Get-NetFirewallApplicationFilter",
+    "New-NetFirewallRule",
+    "Remove-NetFirewallRule",
+    "Set-NetFirewallRule",
+)
+_IZINLI = (*_GOLGELER, "Where-Object", "Select-Object", "ForEach-Object", "Ensure-PemfBackendFirewallKurali")
 
 _SURUCU = r"""
 param([string]$Setup, [string]$Durum, [string]$Cikti)
+Import-Module Microsoft.PowerShell.Management, Microsoft.PowerShell.Utility
+$PSModuleAutoLoadingPreference = 'None'
 $ErrorActionPreference = 'Stop'
 $tokens = $null; $errs = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$tokens, [ref]$errs)
@@ -74,6 +95,15 @@ function Remove-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$I
         foreach ($k in $hedef) { [void]$script:Tablo.Remove($k) } } }
 function Set-NetFirewallRule { param([Parameter(ValueFromPipeline = $true)]$InputObject, $DisplayName, $Protocol, $LocalPort, $Program)
     process { $script:Cagri.Add("FW-DEGISTIR $DisplayName $LocalPort") } }
+# D5 M-1 TUR 3 (A1): gölge kanıtı + izin listesi — ikisi de çekilen kod KOŞMADAN önce.
+foreach ($g in @@GOLGELER@@) {
+    if ((Get-Command $g -ErrorAction SilentlyContinue).CommandType -ne 'Function') { [IO.File]::WriteAllText($Cikti, (@{ golge_yok = $g } | ConvertTo-Json)); exit 99 }
+}
+@@IZIN_PS@@
+foreach ($s in $sec) {
+    $ihlal = _IzinDisi $s @@IZINLI@@ @()
+    if ($ihlal) { [IO.File]::WriteAllText($Cikti, (@{ izin_disi = $ihlal } | ConvertTo-Json)); exit 5 }
+}
 $StagingMi = [bool]$d.staging
 $probePort = [int]$d.port
 $BackendExe = $d.exe
@@ -85,7 +115,7 @@ $son = @($script:Tablo | ForEach-Object { [ordered]@{ n = $_.DisplayName; p = $_
 
 def _kos(tmp_path: Path, staging: bool, port: int, kurallar: list[dict]) -> dict:
     surucu, durum, cikti = tmp_path / "surucu.ps1", tmp_path / "durum.json", tmp_path / "cikti.json"
-    surucu.write_text(_SURUCU, encoding="utf-8-sig")
+    surucu.write_text(aparat_surucusu(_SURUCU, _GOLGELER, _IZINLI), encoding="utf-8-sig")
     durum.write_text(json.dumps({"staging": staging, "port": port, "exe": EXE, "kurallar": kurallar}), encoding="utf-8")
     r = subprocess.run(
         [PWSH, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(surucu), "-Setup", str(SETUP),
@@ -94,6 +124,7 @@ def _kos(tmp_path: Path, staging: bool, port: int, kurallar: list[dict]) -> dict
     )  # fmt: skip
     assert cikti.exists(), f"sürücü sonuç yazmadı (rc={r.returncode}):\n{r.stdout[-800:]}\n{r.stderr[-800:]}"
     veri = json.loads(cikti.read_text(encoding="utf-8-sig"))
+    aparat_sonucu_denetle(veri, r.returncode)
     assert "cipa" not in veri, veri
     veri["tablo"] = veri.get("tablo") or []
     if isinstance(veri["tablo"], dict):
