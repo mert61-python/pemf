@@ -26,6 +26,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 import test_teardown_ve_nssm_DAVRANIS_pwsh as h
 
@@ -34,8 +35,12 @@ ISS = KOK / "build_tools" / "PEMF_Backend_Setup.iss"
 _PS51 = shutil.which("powershell.exe") or shutil.which("powershell")
 _PS7 = shutil.which("pwsh")
 YORUMLAYICILAR = [
-    pytest.param(_PS51, id="PS5.1", marks=pytest.mark.skipif(_PS51 is None, reason="Windows PowerShell 5.1 yok")),
-    pytest.param(_PS7, id="pwsh7", marks=pytest.mark.skipif(_PS7 is None, reason="pwsh yok")),
+    pytest.param(
+        _PS51,
+        id="PS5.1",
+        marks=pytest.mark.skipif((_PS51 is None) and not capraz.ZORUNLU, reason="Windows PowerShell 5.1 yok"),
+    ),
+    pytest.param(_PS7, id="pwsh7", marks=pytest.mark.skipif((_PS7 is None) and not capraz.ZORUNLU, reason="pwsh yok")),
 ]
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows betik anlamı")
 

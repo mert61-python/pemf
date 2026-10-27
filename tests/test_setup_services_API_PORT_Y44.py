@@ -23,6 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -31,7 +32,7 @@ _PWSH = shutil.which("pwsh")
 
 pytestmark = [
     pytest.mark.skipif(sys.platform != "win32", reason="pwsh aparatı Windows betik anlamını ölçer"),
-    pytest.mark.skipif(_PWSH is None, reason="pwsh (PowerShell 7) bulunamadı"),
+    pytest.mark.skipif((_PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
 ]
 
 #: Backend'in (`int()`) kabul ettiği/etmediği yazımlar — sınırlar, işaret, alt çizgi, Unicode rakam, ondalık/onaltılık.

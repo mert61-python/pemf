@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import secrets
 
+import capraz
 import pytest
 from test_setup_services_firewall_kaniti import PS1, PWSH, _extract_function, _ps_lit, _pwsh_file  # noqa: F401 — aparat
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz"
+)
 
 
 def test_KRITIK_D3_08_sir_adli_degerler_GUNLUGE_DUSMEZ_adlar_gorunur(tmp_path):

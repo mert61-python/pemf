@@ -41,6 +41,7 @@ import time
 import uuid
 from pathlib import Path
 
+import capraz
 import kayitci_cmdkey
 import pytest
 
@@ -52,8 +53,8 @@ _PS51 = shutil.which("powershell")  # Windows PowerShell 5.1 — üretim ana bil
 
 pytestmark = [
     pytest.mark.skipif(sys.platform != "win32", reason="cmdkey / schtasks / Credential Manager yalnız Windows"),
-    pytest.mark.skipif(_PWSH is None, reason="pwsh (PowerShell 7) bulunamadı"),
-    pytest.mark.skipif(_PS51 is None, reason="powershell.exe (5.1) bulunamadı"),
+    pytest.mark.skipif((_PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
+    pytest.mark.skipif((_PS51 is None) and not capraz.ZORUNLU, reason="powershell.exe (5.1) bulunamadı"),
 ]
 
 _KABUKLAR = [pytest.param(_PWSH, id="pwsh7"), pytest.param(_PS51, id="ps51")]

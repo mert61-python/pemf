@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import json
 
+import capraz
 import pytest
 from test_setup_services_firewall_kaniti import PS1, PWSH, _extract_function, _ps_lit, _pwsh_file  # noqa: F401 — aparat
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — PS işlevi koşturulamaz")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — PS işlevi koşturulamaz"
+)
 
 
 @pytest.mark.parametrize(

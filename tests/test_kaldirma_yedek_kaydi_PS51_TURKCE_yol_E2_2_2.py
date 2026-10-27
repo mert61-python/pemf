@@ -19,6 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -91,20 +92,20 @@ def _dogru(s: dict, hedef: Path) -> None:
     )
 
 
-@pytest.mark.skipif(_PS51 is None, reason="Windows PowerShell 5.1 yok")
+@pytest.mark.skipif((_PS51 is None) and not capraz.ZORUNLU, reason="Windows PowerShell 5.1 yok")
 def test_KRITIK_ps51_BOMsuz_turkce_yedek_yolu_DOGRU_okunur_ve_DURUYOR_raporlanir_E2_2_2(tmp_path):
     s, hedef = _kos(tmp_path, _PS51, bom=False)
     assert s["surum"].startswith("5."), s["surum"]
     _dogru(s, hedef)
 
 
-@pytest.mark.skipif(_PS51 is None, reason="Windows PowerShell 5.1 yok")
+@pytest.mark.skipif((_PS51 is None) and not capraz.ZORUNLU, reason="Windows PowerShell 5.1 yok")
 def test_KARSIT_ps51_BOMlu_dosya_HEADde_de_dogru_E2_2_2(tmp_path):
     s, hedef = _kos(tmp_path, _PS51, bom=True)
     _dogru(s, hedef)
 
 
-@pytest.mark.skipif(_PWSH is None, reason="pwsh yok")
+@pytest.mark.skipif((_PWSH is None) and not capraz.ZORUNLU, reason="pwsh yok")
 def test_KARSIT_pwsh7_BOMsuz_dosya_dogru_E2_2_2(tmp_path):
     s, hedef = _kos(tmp_path, _PWSH, bom=False)
     assert s["surum"].startswith("7."), s["surum"]

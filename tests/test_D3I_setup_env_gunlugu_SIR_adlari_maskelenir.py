@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import secrets
 
+import capraz
 import pytest
 from test_setup_services_firewall_kaniti import PWSH, _extract_function, _ps_lit, _pwsh_file
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz"
+)
 
 #: backend `os.getenv` taramasından (D3I-A2.8 ölçümü) SIR taşıyan adlar — hepsi maskelenmeli
 SIR_ADLARI = (

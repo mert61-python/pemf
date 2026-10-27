@@ -38,6 +38,7 @@ import sys
 import uuid
 from pathlib import Path
 
+import capraz
 import kayitci_cmdkey
 import pytest
 
@@ -52,7 +53,7 @@ _PWSH = shutil.which("pwsh")
 
 pytestmark = [
     pytest.mark.skipif(sys.platform != "win32", reason="cmdkey / Credential Manager yalnız Windows"),
-    pytest.mark.skipif(_PWSH is None, reason="pwsh (PowerShell 7) bulunamadı"),
+    pytest.mark.skipif((_PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) bulunamadı"),
 ]
 
 # Sürücü betik: pemf_teardown.ps1'den YALNIZ Remove-PemfCredentials'ı AST ile çıkarır,

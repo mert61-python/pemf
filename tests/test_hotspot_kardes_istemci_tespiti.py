@@ -20,12 +20,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 PS1 = REPO / "scripts" / "start_hotspot.ps1"
 PWSH = shutil.which("pwsh")
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — PS fonksiyonu koşturulamaz"
+)
 
 
 def _pwsh_file(tmp_path: Path, name: str, body: str) -> subprocess.CompletedProcess:
