@@ -25,6 +25,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -166,7 +167,7 @@ def _kos(tmp_path: Path, vekil_var: bool) -> tuple[subprocess.CompletedProcess, 
         vekil.kapat()
 
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh yok — build betiği pwsh ile koşar")
+pytestmark = pytest.mark.skipif((PWSH is None) and not capraz.ZORUNLU, reason="pwsh yok — build betiği pwsh ile koşar")
 
 
 def test_KARSIT_vekilsiz_makinede_saglam_EXE_kapidan_GECER(tmp_path):

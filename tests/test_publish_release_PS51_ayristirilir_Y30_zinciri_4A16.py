@@ -19,6 +19,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -36,7 +37,9 @@ try { & $Publish -Branch exe -Version 9.9.9 -AssetPath $Asset; Write-Host 'PUBLI
 catch { Write-Host ('PUBLISH-HATA: ' + $_.Exception.Message); exit 9 }
 """
 
-pytestmark = pytest.mark.skipif(os.name != "nt" or not _PS51, reason="Windows PowerShell 5.1 yalnız Windows'ta")
+pytestmark = pytest.mark.skipif(
+    (os.name != "nt" or not _PS51) and not capraz.ZORUNLU, reason="Windows PowerShell 5.1 yalnız Windows'ta"
+)
 
 
 def _bom(yol: Path, metin: str) -> None:

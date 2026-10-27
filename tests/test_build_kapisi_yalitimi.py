@@ -22,10 +22,13 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlparse
 
+import capraz
 import pytest
 from exe_kapisi_surucusu import PWSH, build_makinesi_ortami, kapi_blogunu_kostur
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — build betiği pwsh ile koşar")
+pytestmark = pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — build betiği pwsh ile koşar"
+)
 
 _KOK_DEGISKENLERI = ("PEMF_DATA_DIR", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PEMF_DEVICE_IDENTITY_DIR")
 

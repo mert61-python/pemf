@@ -22,6 +22,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -262,7 +263,7 @@ def _ps51() -> str:
     s = Path(os.environ.get("SystemRoot", r"C:\Windows"))
     p = s / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     if sys.platform != "win32" or not p.is_file():
-        pytest.skip("Windows PowerShell 5.1 yok")
+        capraz.atla("Windows PowerShell 5.1 yok")
     return str(p)
 
 

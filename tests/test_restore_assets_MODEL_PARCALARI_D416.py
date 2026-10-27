@@ -22,13 +22,14 @@ import subprocess
 import zipfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "scripts" / "restore_assets.ps1"
 MANIFEST_URL = "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/manifest.json"
 
-pytestmark = pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh yok")
+pytestmark = pytest.mark.skipif((shutil.which("pwsh") is None) and not capraz.ZORUNLU, reason="pwsh yok")
 
 _SARMAL = r"""
 param([string]$Betik, [string]$Harita, [Parameter(ValueFromRemainingArguments = $true)][string[]]$Kalan)
@@ -176,7 +177,9 @@ def test_KARSIT_parcasiz_manifest_eski_davranisla_GECER(tmp_path):
 _PS51 = shutil.which("powershell.exe")
 
 
-@pytest.mark.skipif(os.name != "nt" or not _PS51, reason="Windows PowerShell 5.1 yalnız Windows'ta")
+@pytest.mark.skipif(
+    (os.name != "nt" or not _PS51) and not capraz.ZORUNLU, reason="Windows PowerShell 5.1 yalnız Windows'ta"
+)
 def test_KRITIK_PS51_ayristiricisi_HATASIZ_S4B1(tmp_path):
     betik = (
         "$t = $null; $e = $null; "
@@ -200,7 +203,9 @@ def test_KRITIK_PS51_ayristiricisi_HATASIZ_S4B1(tmp_path):
     )
 
 
-@pytest.mark.skipif(os.name != "nt" or not _PS51, reason="Windows PowerShell 5.1 yalnız Windows'ta")
+@pytest.mark.skipif(
+    (os.name != "nt" or not _PS51) and not capraz.ZORUNLU, reason="Windows PowerShell 5.1 yalnız Windows'ta"
+)
 def test_KRITIK_PS51_ile_model_parcasi_ACILIR_S4B1(tmp_path):
     """Ayrışması yetmez: 5.1'de de profil + parça + çekirdek akışı tamamlanır (D4.16'nın 5.1 ikizi)."""
     r, ai_hub, gunluk = _kur(tmp_path, kabuk=_PS51)

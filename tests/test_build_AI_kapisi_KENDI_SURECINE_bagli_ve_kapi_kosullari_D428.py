@@ -27,13 +27,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "scripts" / "build_backend_exe.ps1"
 PWSH = shutil.which("pwsh")
 
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh yok — build betiği pwsh ile koşar")
+pytestmark = pytest.mark.skipif((PWSH is None) and not capraz.ZORUNLU, reason="pwsh yok — build betiği pwsh ile koşar")
 
 _ORTAM = {**os.environ, "POWERSHELL_TELEMETRY_OPTOUT": "1", "POWERSHELL_UPDATECHECK": "Off"}
 

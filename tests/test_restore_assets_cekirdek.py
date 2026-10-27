@@ -22,6 +22,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -35,7 +36,7 @@ def _powershell():
     return None
 
 
-pytestmark = pytest.mark.skipif(_powershell() is None, reason="PowerShell bulunamadi")
+pytestmark = pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="PowerShell bulunamadi")
 
 
 def _kostur(*ek_args: str) -> subprocess.CompletedProcess:

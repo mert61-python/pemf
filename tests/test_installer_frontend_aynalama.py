@@ -36,6 +36,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -69,7 +70,7 @@ def _aynalama_blogu() -> str:
     return "\n".join(satirlar[bas : son + 1])
 
 
-@pytest.mark.skipif(_powershell() is None, reason="PowerShell bulunamadi")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="PowerShell bulunamadi")
 def test_KRITIK_aynalama_pf_dist_i_SILMEZ():
     """Blok gerçekten koşturulur; `apps/ui\\dist` ve içindeki export hayatta kalmalı."""
     blok = _aynalama_blogu()
@@ -114,7 +115,7 @@ def test_KRITIK_aynalama_pf_dist_i_SILMEZ():
     )
 
 
-@pytest.mark.skipif(_powershell() is None, reason="PowerShell bulunamadi")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="PowerShell bulunamadi")
 def test_kaynak_ve_hedef_FARKLIYSA_aynalama_hala_calisir_karsit_kanit():
     """Karşı-kanıt: düzeltme kopyalamayı TAMAMEN kaldırmamalı.
 

@@ -23,6 +23,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -70,7 +71,7 @@ def test_KRITIK_build_backend_exe_sync_cagirir():
     )
 
 
-@pytest.mark.skipif(_powershell() is None, reason="PowerShell bulunamadi")
+@pytest.mark.skipif((_powershell() is None) and not capraz.ZORUNLU, reason="PowerShell bulunamadi")
 def test_KARSIT_KANIT_sync_check_temiz_agacta_yesil():
     """sync_versions -Check senkron ağaçta 0 ile çıkmalı — version_info desenleri dosyayla
     GERÇEKTEN eşleşiyor (desen kayarsa -Check mismatch verir ve bu test kırmızı olur)."""

@@ -19,6 +19,7 @@ import sys
 import textwrap
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -133,7 +134,7 @@ def test_KARSIT_saglam_defter_okunur_ve_eklenir_ARTIK_birakmaz(tmp_path, monkeyp
     assert sorted(p.name for p in j._defter_yolu().parent.iterdir()) == [DEFTER], "geçici/karantina artığı kaldı"
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh yok")
+@pytest.mark.skipif((shutil.which("pwsh") is None) and not capraz.ZORUNLU, reason="pwsh yok")
 def test_KRITIK_urunun_biraktigi_artik_dosyalar_KVKK_tam_temizlik_izinde(tmp_path, monkeypatch):
     j = _jeton(tmp_path, monkeypatch)
     _cokme(tmp_path / "cokme")

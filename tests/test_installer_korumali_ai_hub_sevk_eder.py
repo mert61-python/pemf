@@ -34,6 +34,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -202,7 +203,9 @@ def test_iss_varsayilani_KORUMALI_agaci_gosterir():
 
 # ── T1-T3: gerçek PowerShell blokları, stub'larla ────────────────────────────
 
-pwsh_gerekli = pytest.mark.skipif(_PWSH is None or os.name != "nt", reason="Windows PowerShell yok")
+pwsh_gerekli = pytest.mark.skipif(
+    (_PWSH is None or os.name != "nt") and not capraz.ZORUNLU, reason="Windows PowerShell yok"
+)
 
 
 @pwsh_gerekli

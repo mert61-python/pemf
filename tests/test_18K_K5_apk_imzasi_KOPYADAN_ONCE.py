@@ -18,6 +18,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -37,7 +38,7 @@ def _bolum() -> str:
 
 def _kos(tmp_path: Path, apksigner: tuple[list[str], int] | None) -> tuple[int, list[str], str]:
     if not _PWSH or os.name != "nt":
-        pytest.skip("pwsh + Windows gerekir (build_apk.ps1 yalnız Windows'ta koşar)")
+        capraz.atla("pwsh + Windows gerekir (build_apk.ps1 yalnız Windows'ta koşar)")
     android = tmp_path / "android"
     apk = android / "app" / "build" / "outputs" / "apk" / "release" / "app-release.apk"
     apk.parent.mkdir(parents=True)

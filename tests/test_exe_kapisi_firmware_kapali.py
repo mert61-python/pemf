@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import capraz
 import pytest
 from exe_kapisi_surucusu import PWSH, build_makinesi_ortami, kapi_blogunu_kostur, kostur_ortami
 
@@ -34,7 +35,9 @@ def _gercek_com_mu(port: str) -> bool:
     return not (p.upper() == "SIM" or p.lower().startswith(("socket://", "loop://")))
 
 
-@pytest.mark.skipif(PWSH is None, reason="pwsh (PowerShell 7) yok — build betiği pwsh ile koşar")
+@pytest.mark.skipif(
+    (PWSH is None) and not capraz.ZORUNLU, reason="pwsh (PowerShell 7) yok — build betiği pwsh ile koşar"
+)
 def test_KRITIK_build_AI_kapisi_EXE_ortami_firmware_YAKAMAZ(tmp_path):
     veri = kapi_blogunu_kostur(tmp_path, build_makinesi_ortami(tmp_path))
     assert veri.get("yakalanan"), f"kapı bloğu EXE'yi başlatmadı (Start-Process çağrılmadı): {veri.get('hata')}"
