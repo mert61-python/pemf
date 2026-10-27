@@ -14,14 +14,16 @@
  * Bant, operatör "makine dışına kopyaladım" diyene kadar KALICI kalır (kapatma düğmesi YOK):
  * bu, ertelenirse maliyeti tüm klinik geçmişi olan tek seferlik bir iştir.
  *
- * ⚠️ HASTA GÜVENLİĞİ: seans sürerken gösterilmez — bobinler hastanın üzerindeyken operatörün
+ * ⚠️ HASTA GÜVENLİĞİ: donanım çalışırken gösterilmez — bobinler hastanın üzerindeyken operatörün
  * ekranını yönetimsel bir uyarıyla bölmek kabul edilemez (MobileUpdateBanner ile aynı ilke).
+ * D5.08 (B-6.14): ölçü TEK KAYNAK `useDonanimCalisiyor` (seans VEYA çalışan bobin). Eskiden yalnız
+ * `activeTreatment.isActive` bakılıyordu → seanssız sürülen bobin (AI Pro, bobin paneli) varken bant çiziliyordu.
  */
 import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ShieldAlert } from "lucide-react-native";
 
-import { useLiveData } from "@/context/LiveDataContext";
+import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { apiGet, apiPost } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useTranslation } from "react-i18next";
@@ -33,8 +35,7 @@ interface KurtarmaDurumu {
 
 export function RecoveryCodeBanner() {
   const { t } = useTranslation();
-  const { snapshot } = useLiveData();
-  const seansAktif = !!snapshot?.activeTreatment?.isActive;
+  const donanimCalisiyor = useDonanimCalisiyor();
   const [durum, setDurum] = useState<KurtarmaDurumu | null>(null);
   const [mesgul, setMesgul] = useState(false);
 
@@ -56,7 +57,7 @@ export function RecoveryCodeBanner() {
     if (r?.status === "success") setDurum({ warn: false });
   }, []);
 
-  if (!durum?.warn || seansAktif) return null;
+  if (!durum?.warn || donanimCalisiyor) return null;
 
   return (
     <View style={styles.bant} accessibilityRole="alert">

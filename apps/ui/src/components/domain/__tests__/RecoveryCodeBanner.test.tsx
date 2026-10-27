@@ -14,7 +14,7 @@
  */
 jest.mock("@/services/apiClient", () => ({ apiGet: jest.fn(), apiPost: jest.fn() }));
 
-const mockSnapshot: { activeTreatment?: { isActive: boolean } } = {};
+const mockSnapshot: { activeTreatment?: { isActive: boolean }; coils?: { id: number; running: boolean }[] } = {};
 jest.mock("@/context/LiveDataContext", () => ({
   useLiveData: () => ({ snapshot: mockSnapshot }),
 }));
@@ -30,6 +30,7 @@ beforeEach(() => {
   mockGet.mockReset();
   mockPost.mockReset();
   delete mockSnapshot.activeTreatment;
+  delete mockSnapshot.coils;
 });
 
 it("KRİTİK: backend uyarı isterse bant GÖRÜNÜR", async () => {
@@ -52,6 +53,24 @@ it("KRİTİK — HASTA GÜVENLİĞİ: SEANS SÜRERKEN gösterilmez", async () =>
   const { queryByText } = render(<RecoveryCodeBanner />);
   await act(async () => {});
   expect(queryByText(/Kurtarma kodunuzu/)).toBeNull();
+});
+
+it("KRİTİK D5.08: SEANSSIZ ama BOBİN ÇALIŞIRKEN de gösterilmez (tek ölçü useDonanimCalisiyor)", async () => {
+  // AI Pro / bobin paneli / başka istemci bobini seans kaydı açmadan sürer: isActive false, bobin enerjili.
+  mockSnapshot.activeTreatment = { isActive: false };
+  mockSnapshot.coils = [{ id: 1, running: true }];
+  mockGet.mockResolvedValue({ warn: true });
+  const { queryByText } = render(<RecoveryCodeBanner />);
+  await act(async () => {});
+  expect(queryByText(/Kurtarma kodunuzu/)).toBeNull();
+});
+
+it("KARŞIT D5.08: bobin DURURKEN (running:false) bant görünür", async () => {
+  mockSnapshot.activeTreatment = { isActive: false };
+  mockSnapshot.coils = [{ id: 1, running: false }];
+  mockGet.mockResolvedValue({ warn: true });
+  const { getByText } = render(<RecoveryCodeBanner />);
+  await waitFor(() => expect(getByText(/Kurtarma kodunuzu makine dışına/)).toBeTruthy());
 });
 
 it("KRİTİK: KAPATMA düğmesi YOK — ertelemenin bedeli tüm klinik geçmişi", async () => {
