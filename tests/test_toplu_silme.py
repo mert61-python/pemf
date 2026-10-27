@@ -227,6 +227,34 @@ def test_KRITIK_hasta_ONAYSIZ_silinmez(istemci, hastalar):
     assert len(db.get_all_patients()) == len(kimlikler), "ONAYSIZ istek SILDI"
 
 
+#: D5.19 (B-10.89): onay kapısı yalnız BOŞ onayla sınanıyordu — `!= "DELETE_SELECTED"` yerine `not payload.confirm` yazılınca
+#: 14 test YEŞİL kalıyordu (her dolu dizge silmeye izin verir). YANLIŞ dolu onaylar: başka dil, küçük harf, boşluklu, öteki
+#: ucun (tümünü silme) dizgesi, ön-ek.
+_YANLIS_ONAYLAR = ["EVET", "delete_selected", " DELETE_SELECTED", "DELETE_SELECTED ", "DELETE_ALL", "DELETE", "true"]
+
+
+@pytest.mark.parametrize("yanlis", _YANLIS_ONAYLAR)
+def test_KRITIK_D519_YANLIS_onay_dizgesiyle_seans_toplu_silme_REDDEDILIR(istemci, gecmis, yanlis):
+    """MUTASYON: `history_router` `if payload.confirm != "DELETE_SELECTED"` → `if not payload.confirm` → KIRMIZI."""
+    db, kimlikler = gecmis
+    y = istemci.post("/api/history/delete_bulk", json={"session_ids": kimlikler, "confirm": yanlis})
+    assert y.status_code == 400, (
+        f"yanlış onay {yanlis!r} ile toplu seans silme 400 dönmedi: {y.status_code} {y.text[:120]}"
+    )
+    assert len(db.get_session_history(limit=100)) == len(kimlikler), f"yanlış onay {yanlis!r} ile seans SİLİNDİ"
+
+
+@pytest.mark.parametrize("yanlis", _YANLIS_ONAYLAR)
+def test_KRITIK_D519_YANLIS_onay_dizgesiyle_hasta_toplu_silme_REDDEDILIR(istemci, hastalar, yanlis):
+    """MUTASYON: `patient_router` `if payload.confirm != "DELETE_SELECTED"` → `if not payload.confirm` → KIRMIZI."""
+    db, kimlikler = hastalar
+    y = istemci.post("/api/patients/delete_bulk", json={"patient_ids": kimlikler, "confirm": yanlis})
+    assert y.status_code == 400, (
+        f"yanlış onay {yanlis!r} ile toplu hasta silme 400 dönmedi: {y.status_code} {y.text[:120]}"
+    )
+    assert len(db.get_all_patients()) == len(kimlikler), f"yanlış onay {yanlis!r} ile hasta SİLİNDİ"
+
+
 def test_silinen_hasta_ARAMA_indeksinden_de_gider(istemci, hastalar):
     """⚠️ `patient_search_index` orphan kalırsa silinmiş hasta aramada GÖRÜNMEYE devam eder
     (KVKK "unutulma hakkı" ihlali; kayıt gitti sanılır).
