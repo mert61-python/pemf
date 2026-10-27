@@ -10804,6 +10804,41 @@
      "turler": [
       "rust"
      ]
+    },
+    {
+     "metin": "function PemfKuralUyar($r, $proto, $port) { $pf = $r | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue; $af = $r | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue; [bool]($pf -and $af -and \"$($pf.Protocol)\" -eq $proto -and \"$($pf.LocalPort)\" -eq \"$port\" -and (-not $p -or \"$($af.Program)\" -ieq $p) -and \"$($r.Enabled)\" -eq 'True' -and \"$($r.Action)\" -eq 'Allow' -and \"$($r.Direction)\" -eq 'Inbound' -and \"$($r.Profile)\" -eq 'Any') }; function PemfKuralBizim($r) { $af = $r | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue; [bool]($p -and $af -and \"$($af.Program)\" -ieq $p) };",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "function PemfPortuKapsar($r, $port) { $pf = $r | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue; if (-not $pf -or @('TCP', 'Any') -notcontains \"$($pf.Protocol)\") { return $false }; foreach ($lp in @($pf.LocalPort)) { if (\"$lp\" -eq 'Any' -or \"$lp\" -eq \"$port\") { return $true }; if (\"$lp\" -match '^(\\d+)-(\\d+)$' -and [int]$Matches[1] -le $port -and $port -le [int]$Matches[2]) { return $true } }; return $false };",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "$ErrorActionPreference='Stop'; $p='{{p}}'; {{islevler}}foreach ($k in @(@('{{api}}', 'TCP', {{tcp}}), @('{{kesif}}', 'UDP', {{udp}}))) {{ $uyan = 0; foreach ($r in @(Get-NetFirewallRule -DisplayName $k[0] -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ if (PemfKuralUyar $r $k[1] $k[2]) {{ $uyan++ }} elseif (PemfKuralBizim $r) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }}; if ($uyan -eq 0) {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any | Out-Null }} }}",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
+     "turler": [
+      "rust-sablon"
+     ]
+    },
+    {
+     "metin": "$p='{{p}}'; {{islevler}}$a = @(Get-NetFirewallRule -DisplayName '{{api}}' -ErrorAction SilentlyContinue | Where-Object {{ $_ -and (PemfKuralUyar $_ 'TCP' {{tcp}}) }}); $b = @(Get-NetFirewallRule -DisplayName '{{kesif}}' -ErrorAction SilentlyContinue | Where-Object {{ $_ -and (PemfKuralUyar $_ 'UDP' {{udp}}) }}); $adli = [bool]($a.Count -gt 0 -and $b.Count -gt 0);",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
+     "turler": [
+      "rust-sablon"
+     ]
+    },
+    {
+     "metin": "{{adli}} $exe='{{p}}'; $izin=$false; $engel=$false; {{kapsam}}try {{ $f = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $exe) }}; foreach ($x in $f) {{ $r = $x | Get-NetFirewallRule -ErrorAction SilentlyContinue; foreach ($rr in $r) {{ if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True') {{ if ($rr.Action -eq 'Block') {{ $engel = $true }} elseif ($rr.Action -eq 'Allow' -and @('{{api}}', '{{kesif}}') -notcontains $rr.DisplayName -and (PemfPortuKapsar $rr {{tcp}})) {{ $izin = $true }} }} }} }} }} catch {{ }} if ($engel) {{ 'ENGEL' }} elseif ($adli -or $izin) {{ 'VAR' }} else {{ 'YOKSA' }}",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
+     "turler": [
+      "rust-sablon"
+     ]
     }
    ],
    "birlesikIstisna": [],

@@ -20,7 +20,7 @@ eski "1.9.5" notu gerçek sürüm 1.9.31'ken hâlâ burada duruyordu, 2026-08-18
 | `auth.rs` | **Supabase Auth (REST)** — client girişi. Kendi host-pini + kendi ajanı (Supabase `net::ALLOWED_HOSTS`'a **EKLENMEZ**; o liste `update_manager.py` ile eş). `Session::Debug` jetonları `***` maskeler |
 | `secret_store.rs` | **"Beni hatırla"** — Windows DPAPI (`CryptProtectData`, kullanıcı kapsamı + entropi), blob `install_root/auth_session.bin`. Windows dışında **kalıcı saklama YOK** (düz metin yazılmaz). `rotasyonu_isle()` = döndürülen refresh jetonunu işle (kayıt-yok / boş-jeton / başka-eposta → YAZMAZ) |
 | `disk.rs` | Kurulum-öncesi **boş alan kapısı** + manifest'te ARTIK geçmeyen ölü önbellek paketlerini temizle. **Ölçülemezse ENGELLEMEZ** (kolaylık, güvenlik kapısı değil) |
-| `firewall.rs` | Windows inbound kural durumu — API 8000 + keşif UDP 5051 (mobil klinik bağlantısı). **Fail-open**, ÜÇ-durumlu (kural-yok / engelli / gereksiz); kural ekleme YÖNETİCİ ister (launcher bilerek yükseltilmemiş) |
+| `firewall.rs` | Windows inbound kural durumu — API (çocuğun GERÇEK portu: `backend.port`, yoksa 8000) + keşif UDP 5051 (mobil klinik bağlantısı); adlı kural İÇERİKLE (protokol · port · program · etkin · Allow · gelen · tüm profiller) doğrulanır, başka programın aynı adlı kuralına dokunulmaz. **Fail-open**, ÜÇ-durumlu (kural-yok / engelli / gereksiz); kural ekleme YÖNETİCİ ister (launcher bilerek yükseltilmemiş) |
 | `install.rs` · `platform.rs` · `lib.rs` | Kurulum yerleşimi (+ off-site yedek hedefi `PEMF_BACKUP_DIR`) · platform yardımcıları · API |
 
 ### `app/` — `pemf-vet-client` (Tauri v2 binary `PEMFVetClient`)

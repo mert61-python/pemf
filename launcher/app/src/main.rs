@@ -2274,13 +2274,15 @@ async fn firewall_durumu() -> serde_json::Value {
 }
 
 fn firewall_durumu_blocking() -> serde_json::Value {
-    use pemf_launcher_core::firewall::{durum_icin, Durum};
+    use pemf_launcher_core::firewall::{api_portu, durum_icin, Durum};
     // ⚠️ backend exe YOLUNU ver: Windows'un KENDİ otomatik izni de sayılsın. Yol verilmezse
     // denetim yalnız bizim adlandırılmış kurallarımıza bakar ve Windows zaten izin vermiş
     // olsa bile "engelli" der → kullanıcı GEREKSİZ bir UAC istemine itilir (sahip bildirimi
     // 2026-08-11: "eskiden buna gerek olmadan buluyordu").
-    let exe = install::backend_path(&install::default_install_root(&home_dir()));
-    let d = durum_icin(Some(&exe));
+    // D5 I-1: port = çocuğun GERÇEK portu (`backend.port`; 8000 doluysa 8001+) — kural onu kapsamalı.
+    let root = install::default_install_root(&home_dir());
+    let exe = install::backend_path(&root);
+    let d = durum_icin(Some(&exe), api_portu(&root));
     serde_json::json!({
         // AÇIKÇA engellenmiş (Block kuralı) — her zaman uyar, kalıcı engel.
         "engelli": d == Durum::Engelli,
@@ -2403,13 +2405,15 @@ fn firewall_kurali_ekle_blocking() -> Result<serde_json::Value, String> {
     { return Ok(serde_json::json!({ "status": "gereksiz" })); }
     #[cfg(windows)]
     {
-        use pemf_launcher_core::firewall::ekleme_betigi;
-        let exe = install::backend_path(&install::default_install_root(&home_dir()));
+        use pemf_launcher_core::firewall::{api_portu, ekleme_betigi};
+        let root = install::default_install_root(&home_dir());
+        let exe = install::backend_path(&root);
         if !exe.exists() {
             return Err(pemf_launcher_core::dil::t("rust.hata.backendKurulDegil"));
         }
         // Ortak yardımcı (base64 + UAC) — silme yolu da aynısını kullanır, kopya yok.
-        ps_yukselterek_kos(&ekleme_betigi(&exe))
+        // D5 I-1: kural İÇERİKLE + çocuğun GERÇEK portu (8000'e sabit değil).
+        ps_yukselterek_kos(&ekleme_betigi(&exe, api_portu(&root)))
             .map_err(|_| pemf_launcher_core::dil::t("rust.hata.guvenlikDuvariIzinYok"))?;
         Ok(serde_json::json!({ "status": "ok" }))
     }
