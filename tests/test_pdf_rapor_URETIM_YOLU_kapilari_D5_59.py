@@ -20,8 +20,9 @@ KAPI: GERÇEK üretim yolu koşar — gerçek DB'ye (geçici kök) seans + bobin
   (b) kapanmamış etiketli not ile rapor üretilir, not PDF'te VERİ olarak (aynen) durur;
   (c) üretilen XAI PDF'indeki gerçek görüntü XObject'leri (`/Subtype /Image`) boyutlarıyla sayılır;
   (d) TUR 2 (çürütücü n4): `_esc`in ikiz çağrı yeri — HASTA raporu başlığı `<b>…` adlı hastanın adını VERİ olarak taşır.
-Bobin tablosu DIŞINDAKİ tablolar (seans bilgisi / hasta raporu geçmişi; çürütücü n2b / n3b): `test_mt_dose_honesty.py`
-`test_KRITIK_hasta_raporunda_YOGUNLUK_SATIRI_YOK` / `test_KRITIK_ozet_tablosunda_YOGUNLUK_SUTUNU_YOK` (aynı üretim yolu, TR + EN).
+Bobin tablosu DIŞINDAKİ tablolar ve TÜM paragraflar (seans bilgisi / hasta raporu geçmişi / istatistik; çürütücü n2b / n3b, TUR 3
+y1 / y2 / y4 — iki seanslı aparat, bobin tablosunda ikiz mT sütunu): `test_mt_dose_honesty.py`
+`test_KRITIK_seans_raporunda_YOGUNLUK_SATIRI_ve_mT_YOK` / `test_KRITIK_hasta_raporunda_YOGUNLUK_SUTUNU_ve_mT_YOK` (aynı üretim yolu, TR + EN).
 MUTASYON: (a) başlığı `"Yoğunluk (mT)"` literali / başka anahtar yapmak; (b) `Paragraph(_esc(patient_notes), …)` → `Paragraph(patient_notes, …)`
 ya da `_esc` yalnız `<img` kaçırır; (c) `story.append(Image(...))` → `pass` / görsel yerine dosya adı metni; (d) başlıkta `_esc` yok /
 çift kaçış / etiket ayıklama → KIRMIZI.
@@ -40,6 +41,7 @@ _PNG_1x1_RGBA = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8B
 #: Ürün kataloğundan OKUNMAZ (mutasyon hedefi) — beklenen başlık burada sabittir (TR birebir, Y157).
 _AYARLANAN_BASLIK = {"tr": "Ayarlanan (mT)", "en": "Set (mT)"}
 _OLCULMUS_GIBI = re.compile(r"(?i)şiddet|siddet|yoğunluk|yogunluk|intensity|strength|ölçülen|measured")
+_MT_ALAN = re.compile(r"(?i)\(\s*mt\s*\)|\bmt\b|\balan|field|tesla|gauss")
 _NOT = "<b>kapanmamış <img src='yok_D559.png'/> & notu"
 
 
@@ -97,6 +99,9 @@ def test_KRITIK_D559a_bobin_kosu_tablosu_basligi_AYARLANAN_mT_rapor_yolunda(uret
     assert beklenen in baslik, f"bobin koşu tablosu başlığı '{beklenen}' değil ({dil}): {baslik}"
     olculmus = [h for h in baslik if _OLCULMUS_GIBI.search(h)]
     assert not olculmus, f"başlık uygulanmamış ayarı ÖLÇÜLMÜŞ gibi okutuyor ({dil}): {olculmus}"
+    # TUR 3 (çürütücü 2 y4): beklenen başlığın YANINA ikinci bir mT / alan sütunu ("Ort.Alan(mT)" = ölçülmüş ortalama gibi) da yasak.
+    ikiz = [h for h in baslik if h != beklenen and _MT_ALAN.search(h)]
+    assert not ikiz, f"bobin koşu tablosunda '{beklenen}' DIŞINDA mT / alan etiketli sütun var ({dil}): {ikiz}"
     satir = [str(v) for v in tablo._cellvalues[1]]
     assert satir[baslik.index(beklenen)] == "2.5", (
         f"ayarlanan değer (2.5 mT) '{beklenen}' sütununda değil: {list(zip(baslik, satir))}"

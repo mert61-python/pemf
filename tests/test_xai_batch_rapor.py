@@ -81,7 +81,15 @@ def test_KRITIK_tarama_cikti_icine_cozumlenen_yollari_ATLAR(cli, tmp_path):
     try:
         link.symlink_to(cikti, target_is_directory=True)
     except OSError:
-        pytest.skip("bu ortamda symlink izni yok (Windows dev-mode kapalı)")
+        # D5.59 TUR 3: Windows dev-mode kapalıyken symlink izni yok — HAM `pytest.skip` yerine aynı deliğin ikizi DİZİN BAĞLANTISI
+        # (junction; izin gerektirmez, `rglob` içine iner → ürünün çözümlenmiş-yol bekçisi GERÇEKTEN ölçülür). İkisi de kurulamazsa
+        # `capraz.atla` (ZORUNLU kipte DÜŞER). Bağlantı tmp_path içinde; hedefi de tmp_path içinde.
+        try:
+            import _winapi
+
+            _winapi.CreateJunction(str(cikti), str(link))
+        except (ImportError, AttributeError, OSError) as e:
+            capraz.atla(f"bu ortamda symlink izni yok ve dizin bağlantısı (junction) kurulamadı ({type(e).__name__})")
     dosyalar = cli._dosyalari_tara(girdi, cikti, {".jpg"}, None)
     adlar = [p.name for p in dosyalar]
     assert "a.jpg" in adlar and "eski_xai.jpg" not in adlar, adlar
