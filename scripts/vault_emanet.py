@@ -447,7 +447,10 @@ def tatbikat() -> int:
                 try:
                     n_satir = c.execute(f"SELECT COUNT(*) FROM {tablo}").fetchone()[0]
                 except Exception as e:
-                    n_satir = f"HATA {type(e).__name__}"
+                    # D5.25 (B-10.102): hedef tablo SAYILAMADIYSA (yanlis dosya / bos sema / bozuk sayfa) zincir KANITLANMADI —
+                    # eskiden satir "HATA" yazilip yine "ACILDI" sayiliyor, tatbikat BASARILI diyordu.
+                    sonuc.append((ad, f"HEDEF TABLO OKUNAMADI ({tablo}: {type(e).__name__})", None))
+                    continue
                 sonuc.append((ad, f"ACILDI ({n_tablo} tablo)", f"{tablo}={n_satir}"))
             finally:
                 c.close()
