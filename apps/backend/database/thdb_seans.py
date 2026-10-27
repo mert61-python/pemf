@@ -199,12 +199,17 @@ class SeansKarisimi:
             return 0
         # ⚠️ İZ `with` bloğunun DIŞINDA (purge_old_coil_runs ile aynı gerekçe: `denetim_yaz` kilidi alır, istisna atmaz). Yalnız
         # gerçekten silinen turda — boş turlar 6 saatte bir iz satırı biriktirmez. İçerik YOK: yalnız sayı, süre, korunan kritik sayısı.
+        # ⚠️ 2-F incelemesi §10 #18 (D5): `kritik_korunan` BİRİKİMLİDİR — silmeden sonra süresi dolmuş TÜM olaylar (= saklanan süresi dolmuş
+        # kritikler, yalnız bu turda yaşlananlar DEĞİL); her turun izi büyüyen aynı toplamı yazar. Ad "bu turda korunan" gibi okunuyordu;
+        # anlamı adında taşıyan `suresi_dolmus_kritik_toplam` eklendi, eski anahtar eski okuyucular için KALIR. (Seans silme izlerindeki
+        # aynı adlı anahtar ise O silmenin koruduğu kritik olaylardır — `seans_silme_ozeti`.)
+        # Kapı: tests/test_saklama_izi_SAYAC_birimleri_ACIK_D5E18.py
         if removed:
             self.denetim_yaz(
                 "retention.olay_silindi",
                 scope="otomatik",
                 item_count=removed,
-                detail={"gun": int(retain_days), "kritik_korunan": korunan},
+                detail={"gun": int(retain_days), "kritik_korunan": korunan, "suresi_dolmus_kritik_toplam": korunan},
             )
         return removed
 

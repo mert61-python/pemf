@@ -370,6 +370,12 @@ class BakimKarisimi:
                         bekleyen,
                     )
             else:
+                # ⚠️ 2-F incelemesi §10 #18 (D5): izin BİRİMİ — `item_count` seans SÜTUNU maskelenen seans SATIRI, `parametre` parametre SATIRI;
+                # operatörün onayladığı / ekranın "N kayıt" dediği ise ETKİLENEN SEANS (`redaksiyon_bekleyen_sayisi`, D2.58 tek ölçütü).
+                # Yalnız parametresi maskelenen seans izde hiç görünmüyordu (ölçüldü: onay 2, iz 1 + parametre 1). Maskelemeden HEMEN ÖNCE
+                # aynı ölçütle sayılır → iz `etkilenen_seans` (sayılamazsa null); eski anahtarlar eski okuyucular için KALIR.
+                # Kapı: tests/test_saklama_izi_SAYAC_birimleri_ACIK_D5E18.py
+                etkilenen_seans = self.redaksiyon_bekleyen_sayisi(pii_retain_days)
                 pii_report = self.redact_old_session_pii(pii_retain_days)
                 report['sessions_pii_redacted'] = int(pii_report.get('sessions_redacted', 0))
                 report['parameters_pii_redacted'] = int(pii_report.get('parameters_redacted', 0))
@@ -381,7 +387,11 @@ class BakimKarisimi:
                         "retention.pii_maskelendi",
                         scope="otomatik",
                         item_count=report['sessions_pii_redacted'],
-                        detail={"gun": int(pii_retain_days), "parametre": report['parameters_pii_redacted']},
+                        detail={
+                            "gun": int(pii_retain_days),
+                            "parametre": report['parameters_pii_redacted'],
+                            "etkilenen_seans": etkilenen_seans,
+                        },
                     )
 
         return report
