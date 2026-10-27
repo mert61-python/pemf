@@ -470,6 +470,7 @@
     "selfTestAtlandi": "Coil {{coil}} self-test: skipped (PWM inactive)",
     "selfTestBasarisiz": "🚨 Coil {{coil}} self-test FAILED — {{ayrinti}}",
     "selfTestGecti": "Coil {{coil}} self-test: passed",
+    "sensorKaydiYazilamiyor": "⚠️ The sensor telemetry log (CSV) cannot be written — the treatment is not affected. Free up disk space or check that the log folder is writable; telemetry rows are not recorded until this is fixed.",
     "sistemBaglandi": "System connection established",
     "sistemKesildi": "System connection lost",
     "sonuc": {

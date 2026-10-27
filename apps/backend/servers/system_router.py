@@ -80,6 +80,10 @@ async def system_info(request: Request):
         "pairingCode": (pairing_code if _local else None),
         "tunnelUrl": ((tunnel_url or None) if _local else None),
         "stmConnected": _api.state.core.stm_is_connected if _api.state.core else False,
+        # 2-F incelemesi §10 #7 (D5 · yalnız-ek): sensör telemetri kaydı yazılabiliyor mu (`hata`, `sonHata`, yazılan / atılan satır) —
+        # eskiden yazım hatası yalnız DEBUG'dı ve `durum()` hiçbir uçta yoktu. Yol taşımaz; yalnız yerel/LAN, tünel (uzak) istemcisine None.
+        # `/api/health`e DEĞİL buraya: sağlık ucu saniyede birkaç kez çekilir ve gzip eşiğinin (1024 B) altında kalmalı (test_gzip_sikistirma).
+        "sensorKaydi": (_sensor_kaydi_durumu() if _local else None),
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -463,6 +467,29 @@ def _firmware_guncelleme_durumu() -> dict | None:
 
         return firmware_manager.durum()
     except Exception:
+        return None
+
+
+def _sensor_kaydi_durumu() -> dict | None:
+    """2-F incelemesi §10 #7 (D5): sensör telemetri kaydının sağlığı (`sensor_kaydedici.durum()`; YOL YOK). Kaydedici henüz kurulmadıysa
+    YARATILMAZ (kurucu veri kökünü `mkdir` eder — sağlık ucunda disk G/Ç'si yok, A-8/A-9). Okunamazsa None (sağlık ucu düşmez).
+    Kapı: tests/test_sensor_kaydi_HATASI_gorunur_YARIM_satir_birlesmez_D5E7.py"""
+    try:
+        from servers import sensor_kaydedici as _sk
+
+        k = _sk._kaydedici
+        if k is None:
+            return {"acik": _sk._acik_mi(), "hata": False, "sonHata": None, "yazilan": 0, "atilan": 0}
+        d = k.durum()
+        return {
+            "acik": d["acik"],
+            "hata": d["hata"],
+            "sonHata": d["son_hata"],
+            "yazilan": d["yazilan"],
+            "atilan": d["atilan"],
+        }
+    except Exception:
+        logger.debug("sensor kaydi durumu okunamadi", exc_info=True)
         return None
 
 

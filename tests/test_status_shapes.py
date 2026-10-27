@@ -98,6 +98,9 @@ GOLDEN_SHAPES = {
         "stmConnected",
         "timestamp",
         "tunnelUrl",
+        # 2-F incelemesi §10 #7 (D5, BILINCLI sekil eki): sensor telemetri kaydi yazilabiliyor mu {acik, hata, sonHata, yazilan,
+        # atilan}. Yol tasimaz; yerel/LAN'a dict, tunel istemcisine None. Bkz. tests/test_sensor_kaydi_HATASI_gorunur_YARIM_satir_birlesmez_D5E7.py.
+        "sensorKaydi",
     },
     "/api/gateway/status": {
         "bridgeConnected",

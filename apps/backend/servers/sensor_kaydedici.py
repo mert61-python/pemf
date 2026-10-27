@@ -172,6 +172,10 @@ class SensorKaydedici:
         self._son_flush = 0.0
         self.yazilan = 0
         self.atilan = 0
+        #: 2-F incelemesi §10 #7 (D5): yazım hatası SERİSİ sürüyor mu (ilk hatada WARNING + bildirim, ilk başarıda kapanır) ve son
+        #: hatanın zamanı — `/api/health` `sensorKaydi` alanı.
+        self._hatada = False
+        self.son_hata: str | None = None
 
     # ── iç yardımcılar ────────────────────────────────────────────────────────────────────
     def _dosya_yolu(self, etiket: str) -> Path:
@@ -198,9 +202,15 @@ class SensorKaydedici:
             n += 1
             yol = self.dizin / f"sensor_{etiket}_{n}.csv"
         yeni = not yol.exists() or yol.stat().st_size == 0
+        yarim = not yeni and not self._satir_sonuyla_bitiyor(yol)
         self._dosya = open(yol, "a", encoding="utf-8", newline="")
         if yeni:
             self._dosya.write(baslik + "\n")
+        elif yarim:
+            # ⚠️ 2-F incelemesi §10 #7 (D5): önceki süreç satırın ORTASINDA öldüyse (güç kesintisi, disk dolu) dosya satır sonu olmadan
+            # biter — yeni satır yarım satırın SONUNA eklenip iki kaydı tek bozuk satırda birleştiriyordu (ölçüldü: 32 yerine 38 sütun).
+            # Yarım satır OLDUĞU GİBİ kalır (veri silinmez); yeni satırlar kendi satırında başlar.
+            self._dosya.write("\n")
         self._gun_etiketi = etiket
         self._aktif_ad = yol.name
         self._temizle(simdi)
@@ -212,6 +222,16 @@ class SensorKaydedici:
                 return f.readline().rstrip("\r\n")
         except OSError:
             return ""
+
+    @staticmethod
+    def _satir_sonuyla_bitiyor(yol: Path) -> bool:
+        """Dosyanın son baytı satır sonu mu. Okunamazsa False (en kötü sonuç boş bir satır — iki kaydın birleşmesi değil)."""
+        try:
+            with open(yol, "rb") as f:
+                f.seek(-1, os.SEEK_END)
+                return f.read(1) == b"\n"
+        except OSError:
+            return False
 
     def _temizle(self, simdi: datetime) -> None:
         """Gün sınırı + TOPLAM BOYUT tavanı. ⚠️ Tavan olmadan disk sessizce dolar."""
@@ -291,11 +311,39 @@ class SensorKaydedici:
                 if time.monotonic() - self._son_flush >= _FLUSH_ARALIGI_SN:
                     self._dosya.flush()
                     self._son_flush = time.monotonic()
+            if self._hatada:
+                self._hatada = False
+                logger.info("Sensor telemetri kaydi yeniden yaziliyor (toplam atilan satir: %d).", self.atilan)
             return True
         except Exception:
             self.atilan += 1
-            logger.debug("sensor telemetri kaydi basarisiz (canli akis etkilenmedi)", exc_info=True)
+            self._hatayi_bildir()
             return False
+
+    def _hatayi_bildir(self) -> None:
+        """⚠️ 2-F incelemesi §10 #7 (D5): yazım hatası eskiden YALNIZ DEBUG'dı ve `durum()` hiçbir uçta yoktu — disk dolu / klasör
+        yazılamaz olunca araştırma telemetrisi kimseye söylenmeden duruyordu (ölçüldü). Hata SERİSİNİN ilk satırında WARNING (istisna
+        zinciriyle) + operatöre TEK bildirim (TR + EN); seri sürerken DEBUG; ilk başarılı yazım seriyi kapatır. `except` bloğunun
+        İÇİNDEN çağrılır (zinciri o istisnadan alır). ASLA fırlatmaz (MQTT işleyicisi / arka plan işçisi).
+        Kapı: tests/test_sensor_kaydi_HATASI_gorunur_YARIM_satir_birlesmez_D5E7.py"""
+        self.son_hata = datetime.now().isoformat(timespec="seconds")
+        if self._hatada:
+            logger.debug("sensor telemetri kaydi basarisiz (canli akis etkilenmedi)", exc_info=True)
+            return
+        self._hatada = True
+        logger.warning(
+            "Sensor telemetri kaydi YAZILAMIYOR (%s) — canli akis ve tedavi etkilenmez; duzelene dek satirlar atiliyor.",
+            self.dizin,
+            exc_info=True,
+        )
+        try:
+            from utils import ceviri
+
+            from servers import live_state
+
+            live_state._bildir(lambda d: ceviri.t("bildirim.sensorKaydiYazilamiyor", dil=d), "warning")
+        except Exception:
+            logger.debug("sensor kaydi hata bildirimi gonderilemedi", exc_info=True)
 
     def flush(self) -> None:
         """Tampondaki satırları diske indir.
@@ -336,6 +384,8 @@ class SensorKaydedici:
             "yazilan": self.yazilan,
             "atilan": self.atilan,
             "sutunlar": len(SUTUNLAR),
+            "hata": self._hatada,
+            "son_hata": self.son_hata,
         }
 
 

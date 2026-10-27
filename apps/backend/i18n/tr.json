@@ -470,6 +470,7 @@
     "selfTestAtlandi": "Bobin {{coil}} self-test: atlandı (PWM pasif)",
     "selfTestBasarisiz": "🚨 Bobin {{coil}} self-test BAŞARISIZ — {{ayrinti}}",
     "selfTestGecti": "Bobin {{coil}} self-test: geçti",
+    "sensorKaydiYazilamiyor": "⚠️ Sensör telemetri kaydı (CSV) yazılamıyor — tedavi etkilenmedi. Diskte yer açın ya da kayıt klasörünün yazılabilir olduğunu denetleyin; düzelene dek telemetri satırları kaydedilmiyor.",
     "sistemBaglandi": "Sistem bağlantısı kuruldu",
     "sistemKesildi": "Sistem bağlantısı kesildi",
     "sonuc": {
