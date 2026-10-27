@@ -134,6 +134,95 @@ function Get-PemfServisOrtami([string]$ProfilDosyasi, [string]$LogDir, [bool]$Us
     @($EnvMap.Keys | ForEach-Object { "$_=$($EnvMap[$_])" })
 }
 
+# Y44 (setup_services.ps1 ile BİREBİR — eşlik kapıda ölçülür): `PEMF_API_PORT` backend'in `ortam_portu` kuralıyla (Python `int()` — baş/son
+# boşluk, isteğe bağlı +/-, rakamlar arasında tek `_`, Unicode ondalık rakamlar — ve 1..65535). Bu betik `.Hata` metnini KULLANMAZ.
+function Test-PemfApiPortDegeri([AllowNull()][string]$Ham) {
+    $sonuc = [pscustomobject]@{ Port = $null; Hata = "" }
+    $m = [regex]::Match([string]$Ham, '^\s*([+-]?)(\d+(?:_\d+)*)\s*$')
+    $deger = $null
+    if ($m.Success) {
+        $deger = [long]0
+        foreach ($ch in $m.Groups[2].Value.ToCharArray()) {
+            if ($ch -eq '_') { continue }
+            $deger = $deger * 10 + [long][char]::GetNumericValue($ch)
+            if ($deger -gt 65535) { break }
+        }
+        if ($m.Groups[1].Value -eq '-') { $deger = -$deger }
+    }
+    if ($null -ne $deger -and $deger -ge 1 -and $deger -le 65535) {
+        $sonuc.Port = [int]$deger
+    } else {
+        $sonuc.Hata = "PEMF_API_PORT geçersiz: '$Ham' — 1-65535 arası tamsayı olmalı (backend bu değerde uyarıyla " +
+            "8000'e düşer, kurulumun sağlık sondası yanlış porta bakar). Profil dosyasında düzeltin ya da satırı silin (varsayılan 8000)."
+    }
+    $sonuc
+}
+
+# D5 H-1: servisin GERÇEKTEN dinleyeceği API portu — servise giden ortamdaki (profil) `PEMF_API_PORT`, backend'in kuralıyla; yoksa ya da
+# bozuksa backend gibi 8000 (`ortam_portu` bozuk değerde uyarıyla 8000'e düşer — kural da o portu açar). Eskiden güvenlik duvarı SABİT 8000
+# açıyordu: profil başka port verirse backend o portta dinler, LAN'dan (mobil / web istemci) erişim engelli kalırdı.
+function Get-PemfServisApiPortu([string[]]$AppEnv) {
+    $Ham = $null
+    foreach ($Satir in @($AppEnv)) {
+        $Anahtar, $Deger = "$Satir".Split("=", 2)
+        if ($Anahtar -eq 'PEMF_API_PORT') { $Ham = "$Deger" }
+    }
+    if ($null -eq $Ham) { return 8000 }
+    $Port = (Test-PemfApiPortDegeri $Ham).Port
+    if ($Port) { return $Port }
+    Write-Status "UYARI: profildeki PEMF_API_PORT geçersiz ('$Ham') — backend uyarıyla 8000'e düşer; güvenlik duvarı kuralı 8000'i açar. Profil dosyasında düzeltin ya da satırı silin (1-65535 arası tamsayı)." "Yellow"
+    return 8000
+}
+
+# D5 H-1 (DEV-C4 / G-2 sınıfı): 'PEMF Backend API' / 'PEMF UDP Discovery' kuralları eskiden YALNIZ ADIYLA aranıyordu — aynı adlı devre dışı /
+# Block / giden / yanlış protokol / başka port (eski PEMF_API_PORT) / dar profilli / başka programın (taşınmış kurulum) kuralı "var" sayılıyor,
+# servis LAN'dan (mobil / web istemci — ACİL DURDUR dahil) erişilemezken betik sessiz bitiyordu. İÇERİK setup_services.ps1 API döngüsüyle AYNI
+# (İG-9.5 + 4B-3.5): protokol · port · program · etkin · Allow · Inbound · tüm profiller. Uymayan aynı adlı kural silinir; uyan kural yoksa
+# doğrusu kurulur (çift kural yok); silinemez / kurulamaz → eylemli UYARI + $false. Uzak adres KAPSAMINA dokunulmaz (A-01: LAN güvenilir —
+# yeni kural uzak adres vermeden kurulur, mevcut kuralın uzak adresi değiştirilmez). Son doğrulama adla değil içerikle → [bool] özete girer.
+# (setup_services.ps1 ile ortak yardımcıya taşınabilir.) Kapı: tests/test_install_backend_service_FW_kurali_ICERIKLE_D5H1.py
+function Ensure-PemfBackendFirewallKurali([string]$Ad, [string]$Protokol, [int]$Port, [string]$Program) {
+    $IcerikUygun = {
+        param($Kural)
+        $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        $ProgramFiltresi = $Kural | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+        [bool]($PortFiltresi -and "$($PortFiltresi.Protocol)" -eq $Protokol -and "$($PortFiltresi.LocalPort)" -eq "$Port" -and
+            $ProgramFiltresi -and "$($ProgramFiltresi.Program)" -eq $Program -and "$($Kural.Enabled)" -eq 'True' -and
+            "$($Kural.Action)" -eq 'Allow' -and "$($Kural.Direction)" -eq 'Inbound' -and "$($Kural.Profile)" -eq 'Any')
+    }
+    $ElleKur = "New-NetFirewallRule -DisplayName '$Ad' -Direction Inbound -Program '$($Program -replace "'", "''")' -Action Allow -Protocol $Protokol -LocalPort $Port -Profile Any"
+    $Silinemedi = $false
+    $Uyan = 0
+    foreach ($Kural in @(Get-NetFirewallRule -DisplayName $Ad -ErrorAction SilentlyContinue | Where-Object { $_ })) {
+        if (& $IcerikUygun $Kural) { $Uyan++; continue }
+        $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        $ProgramFiltresi = $Kural | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+        $Icerik = "$($PortFiltresi.Protocol) $($PortFiltresi.LocalPort), Program=$($ProgramFiltresi.Program), Enabled=$($Kural.Enabled), Action=$($Kural.Action), Direction=$($Kural.Direction), Profile=$($Kural.Profile)"
+        try {
+            $Kural | Remove-NetFirewallRule -ErrorAction Stop
+            Write-Status "Firewall: '$Ad' adlı kuralın içeriği uymuyordu ($Icerik) -> silindi; doğrusu ($Protokol $Port, $Program) kurulacak." "Yellow"
+        } catch {
+            Write-Status "UYARI: '$Ad' adlı kuralın içeriği uymuyor ($Icerik) ve silinemedi ($_) — LAN'dan (mobil / web istemci) erişim engelli kalabilir. Elle: Remove-NetFirewallRule -DisplayName '$Ad'; $ElleKur" "Yellow"
+            $Silinemedi = $true
+        }
+    }
+    if ($Uyan -eq 0 -and -not $Silinemedi) {
+        try {
+            New-NetFirewallRule -DisplayName $Ad -Direction Inbound -Program $Program -Action Allow -Protocol $Protokol -LocalPort $Port -Profile Any -ErrorAction Stop | Out-Null
+            Write-Status "Firewall: $Protokol $Port inbound eklendi ('$Ad')." "Green"
+        } catch {
+            Write-Status "UYARI: Firewall kuralı oluşturulamadı ($Ad): $_" "Yellow"
+        }
+    }
+    # HER YOLDA yeniden sorgula — adla değil İÇERİKLE (cmdlet sessizce geçse ya da ilke kuralı devre dışı bıraksa da).
+    $UyanKural = @(Get-NetFirewallRule -DisplayName $Ad -ErrorAction SilentlyContinue | Where-Object { $_ -and (& $IcerikUygun $_) })
+    $Ok = $UyanKural.Count -gt 0 -and -not $Silinemedi
+    if (-not $Ok -and -not $Silinemedi) {
+        Write-Status "UYARI: '$Ad' ($Protokol $Port inbound, $Program) kuralı YOK -> LAN'dan (mobil / web istemci) erişim engellenebilir. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) Kural elle: $ElleKur" "Yellow"
+    }
+    return [bool]$Ok
+}
+
 # --- Servis ikilisi: önce frozen EXE, yoksa python + backend_service.py ---
 # Ortak argüman: Mosquitto kendi servisi olduğu için broker'ı backend BAŞLATMAZ,
 # sadece izler -> --no-mosquitto-ensure.
@@ -276,20 +365,16 @@ if (Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue) {
     Write-Status "UYARI: 'mosquitto' servisi yok. Önce install_mosquitto_service.ps1 çalıştırın." "Yellow"
 }
 
-# --- Firewall (API 8000 TCP + keşif 5051 UDP) ---
+# --- Firewall (API TCP <servis portu> + keşif UDP 5051) — adla değil İÇERİKLE (D5 H-1; bkz. Ensure-PemfBackendFirewallKurali) ---
+# API portu servise giden ortamdan ($AppEnv → PEMF_API_PORT, backend'in kuralıyla); keşif portu backend'de sabit (headless_core: 5051).
+$ApiPort = Get-PemfServisApiPortu $AppEnv
+$ApiFirewallOk = $false
+$KesifFirewallOk = $false
 try {
-    if (-not (Get-NetFirewallRule -DisplayName "PEMF Backend API" -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName "PEMF Backend API" -Direction Inbound `
-            -Program $FirewallProgram -Action Allow -Protocol TCP -LocalPort 8000 -Profile Any | Out-Null
-        Write-Status "Firewall: TCP 8000 inbound eklendi." "Green"
-    }
-    if (-not (Get-NetFirewallRule -DisplayName "PEMF UDP Discovery" -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName "PEMF UDP Discovery" -Direction Inbound `
-            -Program $FirewallProgram -Action Allow -Protocol UDP -LocalPort 5051 -Profile Any | Out-Null
-        Write-Status "Firewall: UDP 5051 inbound eklendi." "Green"
-    }
+    $ApiFirewallOk = Ensure-PemfBackendFirewallKurali -Ad "PEMF Backend API" -Protokol "TCP" -Port $ApiPort -Program $FirewallProgram
+    $KesifFirewallOk = Ensure-PemfBackendFirewallKurali -Ad "PEMF UDP Discovery" -Protokol "UDP" -Port 5051 -Program $FirewallProgram
 } catch {
-    Write-Status "Firewall kuralı eklenemedi: $_" "Yellow"
+    Write-Status "UYARI: Firewall kuralı denetlenemedi / eklenemedi: $_" "Yellow"
 }
 
 # --- Başlat ---
@@ -302,10 +387,15 @@ Write-Status "Servis durumu: $status" "Cyan"
 Write-Host ""
 Write-Host "Backend servisi kuruldu." -ForegroundColor Green
 Write-Host "  Servis : $ServiceName  (ikili: $(if($UsingExe){'frozen EXE'}else{'python+script'}))"
-Write-Host "  URL    : http://localhost:8000"
+Write-Host "  URL    : http://localhost:$ApiPort"
 Write-Host "  Loglar : $LogDir\backend_service.log"
 Write-Host "  Profil : $ProfilDosyasi (at-rest şifreleme / veri kökü / STM portu / izinli adlar profilden)"
 Write-Host "  Broker : mosquitto servisi (SCM bağımlılığı yok; backend yeniden dener)"
+if ($ApiFirewallOk -and $KesifFirewallOk) {
+    Write-Host "  Firewall: 'PEMF Backend API' (TCP $ApiPort) + 'PEMF UDP Discovery' (UDP 5051) içerikle doğrulandı"
+} else {
+    Write-Host "  Firewall: kural DOĞRULANAMADI — yukarıdaki UYARI'ya bakın; mobil / web istemci LAN'dan bağlanamayabilir." -ForegroundColor Yellow
+}
 Write-Host ""
 Write-Host "Yönetim: $NssmExe (status|stop|start|restart|remove) $ServiceName"
 Write-Host ""
