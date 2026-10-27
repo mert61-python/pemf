@@ -540,6 +540,14 @@ def geri_al(token: str | None) -> int:
 
 def main() -> int:
     global _KURTARMA_TOKENI
+    # D0Ö §6.4 (D5; hasta_anahtari_emanet'in ikizi): cp1254 Türkçe konsolda "✓" / "⚠️" / "⛔" kodlanamıyordu → `--tatbikat` ve
+    # `--dogrula` SONUÇ satırından önce UnicodeEncodeError ile düşüyordu. Kodlama DEĞİŞMEZ; yalnız kodlanamayan simge `?` olur.
+    # Kapı: tests/test_vault_emanet_CP1254_konsolda_COKMEZ_D5.py
+    for _akis in (sys.stdout, sys.stderr):
+        try:
+            _akis.reconfigure(errors="replace")  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001 — eski / yönlendirilmiş akışta reconfigure yoksa geç
+            pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--durum", action="store_true")
