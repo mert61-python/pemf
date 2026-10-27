@@ -106,19 +106,12 @@ def bayat_ikili_nobeti() -> None:
     # YENI modul ekledi (`thdb_outbox` · `thdb_denetim` · `thdb_ai_gecmisi` · `thdb_telemetri`
     # · `thdb_pii`) ve elle yazilmis liste onlari GORMUYORDU. O hâlde `thdb_pii.py` degistirilip
     # senaryolar ESKI EXE'ye karsi kosturulsa nobet SESSIZCE gecerdi — yani olcum, olctugunu
-    # sandigi kodu hic calistirmamis olurdu. Liste artik TURETILIYOR: `apps/backend/database/` altindaki her
-    # `.py` otomatik izlenir; asagisi yalnizca o dizin DISINDAKI kritik dosyalar.
-    izlenen = sorted(
-        f"apps/backend/database/{p.name}" for p in (GUII / "apps" / "backend" / "database").glob("*.py")
-    ) + [
-        "apps/backend/utils/path_utils.py",
-        "apps/backend/utils/file_acl.py",
-        "apps/backend/utils/runtime_guards.py",
-        "apps/backend/servers/api_server.py",
-        "apps/backend/servers/ai_router.py",
-        "apps/backend/servers/jeton.py",
-        "apps/backend/backend_service.py",
-    ]
+    # sandigi kodu hic calistirmamis olurdu. Liste artik TURETILIYOR.
+    # ⚠️ D5.54 (B-10.99): turetme eskiden YALNIZ `apps/backend/database/` idi + elle yedi dosya — `services/`, `controllers/`,
+    # `utils/`un geri kalani, `headless_core.py` vb. degisip ESKI EXE'ye karsi olculse nobet yine SESSIZCE geciyordu.
+    # Artik EXE'ye giren backend agacinin TAMAMI: `apps/backend/**/*.py`.
+    # Kapi: tests/test_urun_senaryolari_olcum_kapilari_D5_54.py
+    izlenen = sorted(p.relative_to(GUII).as_posix() for p in (GUII / "apps" / "backend").rglob("*.py"))
     bayat = [k for k in izlenen if (GUII / k).exists() and (GUII / k).stat().st_mtime > e]
     if bayat:
         raise SystemExit(f"[DUR] EXE BAYAT — sonradan degismis kaynaklar: {bayat}")
@@ -842,10 +835,7 @@ def grup_b() -> None:
             sirlar = json.loads(sir_dosyasi.read_text(encoding="utf-8"))
         except Exception:
             sirlar = {}
-        for ad, deger in sirlar.items() if isinstance(sirlar, dict) else []:
-            d = deger.get("value") if isinstance(deger, dict) else deger
-            if isinstance(d, str) and len(d) >= 12 and d in metin:
-                sizan.append(ad)  # ⚠️ DEGER ASLA BASILMAZ — yalniz ADI
+        sizan = _log_sizan_sir_adlari(sirlar, metin)
     kayit(
         "B8",
         "Sir DEGERLERI backend log'una sizmiyor",
@@ -857,6 +847,28 @@ def grup_b() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # C GRUBU — GUVENLIK DEGISMEZLERI
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _log_sizan_sir_adlari(sirlar, metin: str, yol: str = "") -> list[str]:
+    """B8: sır dosyasındaki HER düz-metin değerin (bölüm içindekiler dahil) log metninde geçip geçmediği → sızan alanların
+    ADLARI (`bolum.anahtar`). ⚠️ DEĞER ASLA BASILMAZ — yalnız ADI.
+
+    ⚠️ D5.54 (B-10.101): eskiden yalnız ÜST DÜZEY değerlere bakılıyordu; sır dosyası ise BÖLÜMLÜ (`secrets_manager._empty_doc`:
+    `auto` / `operator` / `embedded`) → her değer bir sözlüğün İÇİNDE kalıyor ve B8 HİÇBİR sırrı ölçmüyordu (`auto.api_token`
+    log'a yazılsa bile "sızan YOK"). `_` önekli üst veri (`_comment`, `_version`) sır değildir."""
+    sizan: list[str] = []
+    if isinstance(sirlar, dict):
+        for ad, deger in sirlar.items():
+            if str(ad).startswith("_"):
+                continue
+            alt = f"{yol}.{ad}" if yol else str(ad)
+            if isinstance(deger, dict) and "value" in deger and not isinstance(deger.get("value"), dict):
+                deger = deger.get("value")  # eski {ad: {"value": …}} biçimi
+            if isinstance(deger, dict):
+                sizan += _log_sizan_sir_adlari(deger, metin, alt)
+            elif isinstance(deger, str) and len(deger) >= 12 and deger in metin:
+                sizan.append(alt)
+    return sizan
 
 
 def jeton_kodda_acik() -> bool:
