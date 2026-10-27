@@ -87,8 +87,9 @@ def test_centroid_eksikse_baglam_kurulmaz():
 def test_gercek_model_ile_E_uretir_ve_duty_ile_DEGISIR():
     """Vekil model gerçekten çağrılıyor mu ve canlı girdiye TEPKİ veriyor mu?
     (Sabit bir sayı döndüren sahte bir 'canlı' bar işe yaramaz.)"""
-    if ef._predictor() is None:
-        pytest.skip("vekil model yok (ai_models kurulu değil)")
+    from em_vekil_aparati import vekil_gerekli  # D5.56: ortam eksiği → atla; ürün hatası (kırık import) → DÜŞ
+
+    vekil_gerekli(ef, None)
     ef.set_context([{"centroid_cabin_mm": [0.0, 0.0, 0.0], "organ_id": 1}])
     # ⚠️ İG-5.83 (D1.61/D1.76, 2026-10-02): B modelin EĞİTİM aralığında tutulur (eskiden 4 mT kullanılıyordu — aralık
     # dışı, model orada anlamsız E üretir ve bar artık '—' gösterir). Tepkiyi duty değişimi ölçer.
@@ -112,3 +113,15 @@ def test_bobin_durunca_E_sifirlanir():
     v = ef.compute([{"running": False, "magneticMt": 0.0, "dutyCycle": 0.0}])
     assert v is not None
     assert v["cancer"] == 0.0 and v["healthy"] == 0.0 and v["activeCoils"] == 0
+
+
+def test_KRITIK_D556_vekil_yukleme_NEDENI_ortam_eksigini_urun_hatasindan_AYIRIR():
+    """D5.56 (B-10.106): `_predictor` istisnayı NEDENE çevirir; kapılar yalnız ortam eksiğinde atlar (`em_vekil_aparati`).
+    Kırık import (yanlış ad), depo içi eksik modül ve kod hatası "hata"dır — "ağırlık yok" diye ATLANMAZ.
+    MUTASYON: `ImportError`ı da "agirlik_yok" saymak → KIRMIZI."""
+    n = ef._yukleme_nedeni
+    assert n(FileNotFoundError("BiLSTM_XXL_Raw.onnx yok")) == "agirlik_yok"
+    assert n(ModuleNotFoundError("No module named 'onnxruntime'", name="onnxruntime")) == "paket_yok"
+    assert n(ImportError("cannot import name 'PetriPredictorX'")) == "hata"
+    assert n(ModuleNotFoundError("No module named 'ai_hub.x'", name="ai_hub.inference_em_petri.x")) == "hata"
+    assert n(AttributeError("predict")) == "hata"

@@ -140,10 +140,12 @@ def test_KRITIK_baglam_MODELI_tasir_ve_vekil_model_ona_gore_secilir(env):
     ctx = ef.get_context()
     assert ctx is not None and ctx.get("model") == "petri", f"bağlam modeli taşımıyor: {ctx}"
 
+    # D5.56 (B-10.106): yalnız ORTAM eksiğinde atlar; vekil ürün hatasıyla yüklenemediyse DÜŞER (eskiden her None atlıyordu).
+    from em_vekil_aparati import vekil_gerekli
+
+    vekil_gerekli(ef, "fantom", "petri")
     fantom = ef._predictor("fantom")
     petri = ef._predictor("petri")
-    if fantom is None or petri is None:
-        pytest.skip("EM vekil ağırlıkları bu ortamda yok — model seçimi yalnız bağlam düzeyinde ölçüldü")
     assert type(fantom) is not type(petri), (
         "petri bağlamında da fantom vekili kullanılıyor — canlı E barı yanlış ölçeğe oturur"
     )
@@ -156,10 +158,11 @@ def test_KARSIT_KANIT_model_verilmezse_FANTOM_vekili_korunur(env):
     ctx = ef.get_context()
     assert ctx is not None and ctx.get("model") is None, f"model verilmedi ama bağlama yazıldı: {ctx}"
 
+    from em_vekil_aparati import vekil_gerekli  # D5.56: ortam eksiği → atla; ürün hatası → DÜŞ
+
+    vekil_gerekli(ef, None)
     varsayilan = ef._predictor(None)
     fantom = ef._predictor("fantom")
-    if varsayilan is None:
-        pytest.skip("EM vekil ağırlıkları bu ortamda yok")
     assert varsayilan is fantom, "model verilmeyince fantom vekili dönmüyor (eski davranış bozuldu)"
 
 

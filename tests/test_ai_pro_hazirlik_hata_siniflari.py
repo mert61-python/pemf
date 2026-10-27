@@ -231,14 +231,31 @@ def test_KRITIK_seans_kamerayi_acamazsa_oturum_PASIFE_alinir(env, monkeypatch):
 def test_KRITIK_kamera_devri_join_suresi_SAGLAYICIDAN_okunur(env):
     """Ağır sağlayıcı daha uzun bekleme ister; sabit 6 sn petri turunu kaçırıp çift kamera açar.
     MUTASYON: `t.join(timeout=6.0)` sabitine dönün → KIRMIZI."""
+    import ast
     from pathlib import Path
 
     air, apis, client, sag, izler = env
     src = Path(air.__file__).read_text(encoding="utf-8")
-    i = src.index("def _ai_hazirlik_durdur_ic")
-    govde = src[i : src.index("\ndef ", i + 10)]
-    assert "join_timeout_s" in govde, (
-        "kamera devri sabit bir join süresi kullanıyor — sağlayıcı bazlı süre okunmalı "
-        "(petri gibi ağır modellerde bir lokalizasyon turu 6 sn'yi aşabilir)"
+    # ⚠️ D5.56 (B-10.107): eskiden fonksiyon METNİNDE "join_timeout_s" aranıyordu — `t.join(timeout=6.0)  # join_timeout_s`
+    # (sabit + yorum) YEŞİLDİ (ölçüldü). Artık AST: `.join(timeout=…)` argümanı sağlayıcıdan `join_timeout_s` OKUYAN bir ifade.
+    fn = next(
+        d for d in ast.walk(ast.parse(src)) if isinstance(d, ast.FunctionDef) and d.name == "_ai_hazirlik_durdur_ic"
     )
+    joinler = [
+        c
+        for c in ast.walk(fn)
+        if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "join"
+    ]
+    assert joinler, "aparat: _ai_hazirlik_durdur_ic'te join çağrısı yok"
+    for c in joinler:
+        sure = next((k.value for k in c.keywords if k.arg == "timeout"), c.args[0] if c.args else None)
+        okur = sure is not None and any(
+            (isinstance(x, ast.Constant) and x.value == "join_timeout_s")
+            or (isinstance(x, ast.Attribute) and x.attr == "join_timeout_s")
+            for x in ast.walk(sure)
+        )
+        assert okur, (
+            f"kamera devri join süresi sağlayıcıdan OKUNMUYOR ({ast.unparse(sure) if sure is not None else 'yok'}) — "
+            "petri gibi ağır modellerde bir lokalizasyon turu 6 sn'yi aşabilir, çift kamera açılır"
+        )
     assert float(getattr(sag, "join_timeout_s")) == 11.0, "test sağlayıcısı beklenen süreyi taşımıyor"

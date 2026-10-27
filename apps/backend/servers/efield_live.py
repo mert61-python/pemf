@@ -269,6 +269,27 @@ def compute(coils: list[dict]) -> dict | None:
 
 _pred_lock = threading.Lock()
 _pred = None
+#: D5.56 (B-10.106): vekil yüklenemediyse NEDEN — "agirlik_yok" (ağırlık dosyası yok: `FileNotFoundError`), "paket_yok" (üçüncü
+#: parti çalışma-zamanı paketi yok: depo dışı `ModuleNotFoundError`, ör. CI'da onnxruntime) ya da "hata" (her şey: kırık import /
+#: yanlış ad / kod hatası). Eskiden üçü tek `except Exception → False`du: ağırlıklar VARKEN import kırılsa da canlı bar sessizce
+#: kapalı kalıyor, kapılar "ağırlık yok" diye ATLIYORDU. Kapılar yalnız ilk ikisinde atlar.
+_pred_neden: dict = {}
+_DEPO_PAKETLERI = ("ai_hub", "servers", "utils", "database", "controllers", "services")
+
+
+def _yukleme_nedeni(hata: BaseException) -> str:
+    if isinstance(hata, FileNotFoundError):
+        return "agirlik_yok"
+    if isinstance(hata, ModuleNotFoundError) and (hata.name or "").split(".")[0] not in _DEPO_PAKETLERI:
+        return "paket_yok"
+    return "hata"
+
+
+def vekil_yuklenemedi_nedeni(model: str | None = None) -> str | None:
+    """`_predictor(model)` None döndüyse nedeni ("agirlik_yok" / "paket_yok" / "hata"); yüklendiyse ya da denenmediyse None."""
+    _anahtar = "petri" if (model or "").strip().lower() == "petri" else "fantom"
+    with _pred_lock:
+        return _pred_neden.get(_anahtar)
 
 
 def _predictor(model: str | None = None):
@@ -284,6 +305,7 @@ def _predictor(model: str | None = None):
             return _pred[_anahtar] or None
         if not isinstance(_pred, dict):
             _pred = {}
+        _pred_neden.pop(_anahtar, None)  # D5.56: yeniden deneme (önbellek sıfırlandı) eski nedeni taşımasın
         try:
             if _anahtar == "petri":
                 from ai_hub.inference_em_petri.inference_em_petri import PetriPredictor
@@ -293,8 +315,11 @@ def _predictor(model: str | None = None):
                 from ai_hub.inference_em_fantom.inference_em_fantom import PhantomPredictor
 
                 _pred[_anahtar] = PhantomPredictor()
-        except Exception:
-            logger.warning("E-alanı vekil modeli yüklenemedi; canlı bar kapalı kalacak", exc_info=True)
+        except Exception as e:
+            _pred_neden[_anahtar] = _yukleme_nedeni(e)
+            logger.warning(
+                "E-alanı vekil modeli yüklenemedi (%s); canlı bar kapalı kalacak", _pred_neden[_anahtar], exc_info=True
+            )
             _pred[_anahtar] = False
         return _pred[_anahtar] or None
 

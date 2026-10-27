@@ -80,7 +80,20 @@ def test_KRITIK_cikarim_cagrilari_AI_TIMEOUT_MS_kullanir():
         f"AI_TIMEOUT_MS kullanan cagri sayisi beklenenden az ({len(kullanan)}) — "
         "cikarim cagrilarindan biri tek kaynaktan koparilmis olabilir"
     )
-    assert "AI_TIMEOUT_MS" in src.split("\n")[0] or "AI_TIMEOUT_MS" in src, "sabit import edilmemis"
+    # ⚠️ D5.56 (B-10.109): eskiden `"AI_TIMEOUT_MS" in src.split("\n")[0] or "AI_TIMEOUT_MS" in src` — kullanım sayısı ≥ 10
+    # olduğu sürece HER ZAMAN doğru (totoloji): import silinip `const AI_TIMEOUT_MS = 60000` YEREL tanım yazılsa da YEŞİLDİ
+    # (ölçüldü) — tek kaynak (`apiClient.ts`) koparılmış olurdu. Artık yorum-soyulmuş KODDA: sabit apiClient'tan import edilir,
+    # ekranda yerel tanımı YOK; `ctrl.abort()` sınırı olarak kullanılan adlandırılmış yerel sabitler AÇIK izin listesinde.
+    kod = _kod(src)
+    assert re.search(r'import \{[^}]*\bAI_TIMEOUT_MS\b[^}]*\} from "@/services/apiClient"', kod), (
+        "AI_TIMEOUT_MS apiClient'tan IMPORT edilmiyor — tek kaynak koptu"
+    )
+    assert not re.search(r"\b(?:const|let|var)\s+AI_TIMEOUT_MS\b", kod), "AiHubScreen'de YEREL AI_TIMEOUT_MS tanımı var"
+    _YEREL_IZINLI = {"AI_TIMEOUT_MS", "SCRATCH_TIMEOUT_MS"}  # SCRATCH: yara-kapanma 300 sn (bilinçli, ayrı süre)
+    adlar = {d for _, d in _iptal_sinirlari(src) if not d.isdigit()}
+    assert adlar <= _YEREL_IZINLI, (
+        f"izin listesinde OLMAYAN adlandırılmış iptal sınırı: {sorted(adlar - _YEREL_IZINLI)}"
+    )
 
 
 def test_KRITIK_canli_dongu_KISA_kalir():
