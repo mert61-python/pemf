@@ -9,7 +9,7 @@
     "portGecersiz": "PEMF: backend.port geçersiz ('$1') — varsayılan port deneniyor.",
     "portVeriKokunden": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
     "surecDurduruluyor": "PEMF: artık backend süreçleri durduruluyor…",
-    "temizlikTamam": "PEMF Vet Client temizliği tamamlandı.",
+    "temizlikTamam": "PEMF Vet temizliği tamamlandı.",
     "veriSilIsaretli": "PEMF: 'Uygulama verilerini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
     "veriSilIsaretsiz": "PEMF: 'Uygulama verilerini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",
     "yukseltmeKorunuyor": "PEMF: yükseltme — indirilen modeller ve önbellek korunuyor (tekrar inmez)."
@@ -156,7 +156,7 @@
     "kurulum": {
       "appGeriAlinamadi": "app guncellemesi GERI ALINAMADI ({{geri}}) — cihaz DOGRULANMAMIS/yarim app agaciyla kalmis olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {{adim}})",
       "appYedegiYok": "app yedeği bulunamadı — geri alma YAPILAMADI (cihaz doğrulanmamış sürümde)",
-      "baskaPencere": "Başka bir PEMF Vet Client penceresi kurulum/güncelleme yapıyor. Onun bitmesini bekleyin ya da diğer pencereyi kapatın. ({{hata}})",
+      "baskaPencere": "Başka bir PEMF Vet başlatıcı penceresi kurulum/güncelleme yapıyor. Onun bitmesini bekleyin ya da diğer pencereyi kapatın. ({{hata}})",
       "enAzBirProfil": "En az bir profil kurulu kalmalı — önce başka bir profil kurun, sonra bunu kaldırın.",
       "eskiAppYedekleniyor": "eski uygulama sürümü yedekleniyor",
       "eskiKurulumAlgilandi": "eski kurulum algılandı ({{adet}} profil)",
@@ -269,7 +269,7 @@
           "does": "Kedinizin kamera görüntüsüyle yapay zekâ ön-teşhisi yapar: hastalık, organ, görüntü ve ses analizi. Cihaz veya seans İÇERMEZ.",
           "key": "home",
           "use": {
-            "u01": "Uygulama açılınca ‘Ev Sahibi’ profilini seçip hesabınızla girin.",
+            "u01": "Uygulama açılınca ‘Evcil Hayvan Sahibi’ profilini seçip hesabınızla girin.",
             "u02": "‘Akıllı Teşhis’ ekranına gidin.",
             "u03": "Kameranızı kediye doğrultun ya da bir fotoğraf/ses dosyası yükleyin.",
             "u04": "Sonucu ve önerileri okuyun — kesin tanı için mutlaka bir veteriner hekime danışın."
@@ -277,13 +277,13 @@
           "who": "Evcil hayvan (kedi) sahipleri için"
         },
         "p02": {
-          "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, KPI paneli ve simülatör. Ev Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
+          "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, klinik istatistikleri (‘Raporlar’) ve simülatör. Evcil Hayvan Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
           "key": "vet",
           "use": {
             "u01": "‘Veteriner Hekim’ profilini seçip girin.",
             "u02": "‘Hastalar’ ekranından yeni hasta ekleyin.",
             "u03": "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.",
-            "u04": "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘KPI’ ile klinik istatistiklerinizi görün."
+            "u04": "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘Raporlar’ ile klinik istatistiklerinizi görün."
           },
           "who": "Veteriner hekimler ve klinikler için"
         },
@@ -291,7 +291,7 @@
           "does": "Petri, histopatoloji, böbrek ve fantom yapay zekâ modelleri; örnek/veri kaydı ve geçmiş. Cihaz İÇERMEZ.",
           "key": "research",
           "use": {
-            "u01": "‘Araştırma Modu’ profilini seçip girin.",
+            "u01": "‘Araştırma’ profilini seçip girin.",
             "u02": "‘Akıllı Teşhis’ten ilgili araştırma modelini seçin.",
             "u03": "Görüntü veya veri dosyanızı yükleyin.",
             "u04": "Sonuçları inceleyip ‘Geçmiş’e kaydedin."
@@ -301,7 +301,7 @@
       },
       "steps": {
         "s01": {
-          "b": "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam yalnız gerçekten inecekleri sayar (kurulu değilse ana uygulama + yeni seçtikleriniz). 'Profilleri değiştir'de zaten kurulu profil 'kurulu' der ve sayılmaz; işaretini kaldırdığınız kurulu profil 'kaldırılacak' rozeti alır ve düğmeye basınca bu bilgisayardan silinir.",
+          "b": "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Evcil Hayvan Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam yalnız gerçekten inecekleri sayar (kurulu değilse ana uygulama + yeni seçtikleriniz). 'Profilleri değiştir'de zaten kurulu profil 'kurulu' der ve sayılmaz; işaretini kaldırdığınız kurulu profil 'kaldırılacak' rozeti alır ve düğmeye basınca bu bilgisayardan silinir.",
           "t": "Profil(ler)inizi seçin"
         },
         "s02": {
@@ -337,13 +337,13 @@
     "langLabel": "dil",
     "loginBtn": "Giriş yap",
     "loginEmail": "E-posta",
-    "loginEmpty": "E-posta ve parola gerekli.",
+    "loginEmpty": "E-posta ve şifre gerekli.",
     "loginForgot": "Şifremi unuttum",
     "loginLead": "PEMF Vet hesabınızla giriş yapın — uygulama sizden bir daha giriş istemeyecek.",
     "loginNoPersist": "Bu platformda oturum güvenli biçimde saklanamıyor — giriş yalnız bu açılış için geçerli.",
-    "loginPass": "Parola",
-    "loginPwInvisible": "Parolada görünmeyen bir karakter var (kopyala-yapıştırdan gelmiş olabilir). Silip elle yazmayı deneyin.",
-    "loginPwSpace": "Parolanızın başında veya sonunda boşluk var — genelde yapıştırmadan gelir. “Göster” ile kontrol edin.",
+    "loginPass": "Şifre",
+    "loginPwInvisible": "Şifrede görünmeyen bir karakter var (kopyala-yapıştırdan gelmiş olabilir). Silip elle yazmayı deneyin.",
+    "loginPwSpace": "Şifrenizin başında veya sonunda boşluk var — genelde yapıştırmadan gelir. “Göster” ile kontrol edin.",
     "loginRemember": "Beni hatırla",
     "loginRequired": "Kurulum ve onarım için giriş yapmalısınız.",
     "loginSignup": "Hesap oluştur",
@@ -373,11 +373,11 @@
     "profilMeta": {
       "home": {
         "aciklama": "Kedi teşhis modelleri — hastalık, organ, görüntü, ses",
-        "ad": "Ev Sahibi"
+        "ad": "Evcil Hayvan Sahibi"
       },
       "research": {
         "aciklama": "Araştırma modelleri — petri, histopatoloji, böbrek, fantom",
-        "ad": "Araştırma Modu"
+        "ad": "Araştırma"
       },
       "vet": {
         "aciklama": "Klinik teşhis + seans (em_kedi, termal)",
@@ -385,9 +385,9 @@
       }
     },
     "pwHide": "Gizle",
-    "pwHideTitle": "Parolayı gizle",
+    "pwHideTitle": "Şifreyi gizle",
     "pwShow": "Göster",
-    "pwShowTitle": "Parolayı göster",
+    "pwShowTitle": "Şifreyi göster",
     "ready": "hazır — tarayıcıda açıldı",
     "readyLead": "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
     "readyTitle": "Hazır!",

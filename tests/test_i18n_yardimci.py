@@ -78,7 +78,8 @@ def test_launcher_ui_agaci_iki_dilde_ayni_anahtarlar_ve_js_sabiti():
 
     tr, en = iy.launcher_ui("tr"), iy.launcher_ui("en")
     assert tr.keys() == en.keys(), sorted(tr.keys() ^ en.keys())
-    assert tr["profilMeta"]["home"]["ad"] == "Ev Sahibi" and en["profilMeta"]["home"]["ad"] == "Pet Owner"
+    # D6.67: kart adı METIN-KILAVUZU §2 — "Ev Sahibi" (mülk sahibi çağrışımı) → "Evcil Hayvan Sahibi"
+    assert tr["profilMeta"]["home"]["ad"] == "Evcil Hayvan Sahibi" and en["profilMeta"]["home"]["ad"] == "Pet Owner"
     assert tr["kilavuz"]["steps"]["s01"]["t"] and en["kilavuz"]["steps"]["s01"]["t"]
     js = json.loads(iy.launcher_katalog_js())
     assert set(js) == {"tr", "en"} and js["tr"] == tr and js["en"] == en

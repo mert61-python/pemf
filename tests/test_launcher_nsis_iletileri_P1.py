@@ -44,7 +44,7 @@ GOLDEN_TR = {
     "portGecersiz": "PEMF: backend.port geçersiz ('$1') — varsayılan port deneniyor.",
     "portVeriKokunden": "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu.",
     "surecDurduruluyor": "PEMF: artık backend süreçleri durduruluyor…",
-    "temizlikTamam": "PEMF Vet Client temizliği tamamlandı.",
+    "temizlikTamam": "PEMF Vet temizliği tamamlandı.",  # D6.67: ekranda ürün adı PEMF Vet (METIN-KILAVUZU §1)
     # Y164 (S-I18N.8, sahip 2026-10-20; YH A3): ileti kutunun KENDİ yazısını aynen anar ("'uygulama verisini sil'" → "'Uygulama verilerini sil'")
     "veriSilIsaretli": "PEMF: 'Uygulama verilerini sil' işaretli — indirilen çalışma-zamanı ve modeller kaldırılıyor…",
     "veriSilIsaretsiz": "PEMF: 'Uygulama verilerini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin.",

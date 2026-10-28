@@ -199,7 +199,8 @@ def test_KRITIK_cekirdek_karti_ILK_sirada_secili_ve_kilitli(tmp_path):
     assert c["label"] == "CORE_TR" and c["tag"] == "TAG_TR", f"çekirdek etiketi t().coreName/coreTag'den gelmiyor: {c}"
     assert c["title"] == "LOCK_TR", "çekirdek ipucu (title) kilit açıklamasını taşımalı"
     # profiller sırayla ve çekirdekten SONRA
-    assert [k["label"] for k in kartlar[1:]] == ["Ev Sahibi", "Veteriner Hekim", "Araştırma Modu"]
+    # D6.67: METIN-KILAVUZU §2-§3 — "Evcil Hayvan Sahibi" (ev sahibi = mülk sahibi), kurulum profili "Araştırma" (mod ❌)
+    assert [k["label"] for k in kartlar[1:]] == ["Evcil Hayvan Sahibi", "Veteriner Hekim", "Araştırma"]
 
 
 @_node_gerekir

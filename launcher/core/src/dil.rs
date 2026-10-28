@@ -250,7 +250,8 @@ mod tests {
     #[test]
     fn t_yer_tutucu_doldurur_eksik_anahtar_testte_panik() {
         // nsis.* katalogda var; bayrak kapalıyken etkin dil tr
-        assert!(t("nsis.temizlikTamam").contains("PEMF Vet Client"));
+        // D6.67: ekranda ürün adı "PEMF Vet" (METIN-KILAVUZU §1) — iki dilde de değer, anahtar adı değil
+        assert!(t("nsis.temizlikTamam").starts_with("PEMF Vet "));
         let r = std::panic::catch_unwind(|| t("olmayan.anahtar"));
         assert!(r.is_err(), "eksik anahtar testte panik etmeli (sessizce anahtar basmamalı)");
     }

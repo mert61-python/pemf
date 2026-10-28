@@ -75,13 +75,13 @@ window.PEMF_I18N_KATALOG = {
      "who": "For pet (cat) owners"
     },
     "p02": {
-     "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, KPI panel and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
+     "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, clinic statistics (‘Reports’) and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
      "key": "vet",
      "use": {
       "u01": "Choose ‘Veterinarian’ and sign in.",
       "u02": "Add a new patient from ‘Patients’.",
       "u03": "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.",
-      "u04": "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘KPI’."
+      "u04": "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘Reports’."
      },
      "who": "For veterinarians and clinics"
     },
@@ -89,7 +89,7 @@ window.PEMF_I18N_KATALOG = {
      "does": "Well plate, histopathology, kidney and tumor phantom AI models; sample/data records and history. Does NOT include a device.",
      "key": "research",
      "use": {
-      "u01": "Choose ‘Research Mode’ and sign in.",
+      "u01": "Choose ‘Research’ and sign in.",
       "u02": "Pick the relevant research model from ‘Smart Diagnosis’.",
       "u03": "Upload your image or data file.",
       "u04": "Review the results and save them to ‘History’."
@@ -175,7 +175,7 @@ window.PEMF_I18N_KATALOG = {
    },
    "research": {
     "aciklama": "Research models — well plate, histopathology, kidney, tumor phantom",
-    "ad": "Research Mode"
+    "ad": "Research"
    },
    "vet": {
     "aciklama": "Clinical diagnosis + session (em_kedi, thermal)",
@@ -306,7 +306,7 @@ window.PEMF_I18N_KATALOG = {
      "does": "Kedinizin kamera görüntüsüyle yapay zekâ ön-teşhisi yapar: hastalık, organ, görüntü ve ses analizi. Cihaz veya seans İÇERMEZ.",
      "key": "home",
      "use": {
-      "u01": "Uygulama açılınca ‘Ev Sahibi’ profilini seçip hesabınızla girin.",
+      "u01": "Uygulama açılınca ‘Evcil Hayvan Sahibi’ profilini seçip hesabınızla girin.",
       "u02": "‘Akıllı Teşhis’ ekranına gidin.",
       "u03": "Kameranızı kediye doğrultun ya da bir fotoğraf/ses dosyası yükleyin.",
       "u04": "Sonucu ve önerileri okuyun — kesin tanı için mutlaka bir veteriner hekime danışın."
@@ -314,13 +314,13 @@ window.PEMF_I18N_KATALOG = {
      "who": "Evcil hayvan (kedi) sahipleri için"
     },
     "p02": {
-     "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, KPI paneli ve simülatör. Ev Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
+     "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, klinik istatistikleri (‘Raporlar’) ve simülatör. Evcil Hayvan Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
      "key": "vet",
      "use": {
       "u01": "‘Veteriner Hekim’ profilini seçip girin.",
       "u02": "‘Hastalar’ ekranından yeni hasta ekleyin.",
       "u03": "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.",
-      "u04": "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘KPI’ ile klinik istatistiklerinizi görün."
+      "u04": "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘Raporlar’ ile klinik istatistiklerinizi görün."
      },
      "who": "Veteriner hekimler ve klinikler için"
     },
@@ -328,7 +328,7 @@ window.PEMF_I18N_KATALOG = {
      "does": "Petri, histopatoloji, böbrek ve fantom yapay zekâ modelleri; örnek/veri kaydı ve geçmiş. Cihaz İÇERMEZ.",
      "key": "research",
      "use": {
-      "u01": "‘Araştırma Modu’ profilini seçip girin.",
+      "u01": "‘Araştırma’ profilini seçip girin.",
       "u02": "‘Akıllı Teşhis’ten ilgili araştırma modelini seçin.",
       "u03": "Görüntü veya veri dosyanızı yükleyin.",
       "u04": "Sonuçları inceleyip ‘Geçmiş’e kaydedin."
@@ -338,7 +338,7 @@ window.PEMF_I18N_KATALOG = {
    },
    "steps": {
     "s01": {
-     "b": "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam yalnız gerçekten inecekleri sayar (kurulu değilse ana uygulama + yeni seçtikleriniz). 'Profilleri değiştir'de zaten kurulu profil 'kurulu' der ve sayılmaz; işaretini kaldırdığınız kurulu profil 'kaldırılacak' rozeti alır ve düğmeye basınca bu bilgisayardan silinir.",
+     "b": "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Evcil Hayvan Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam yalnız gerçekten inecekleri sayar (kurulu değilse ana uygulama + yeni seçtikleriniz). 'Profilleri değiştir'de zaten kurulu profil 'kurulu' der ve sayılmaz; işaretini kaldırdığınız kurulu profil 'kaldırılacak' rozeti alır ve düğmeye basınca bu bilgisayardan silinir.",
      "t": "Profil(ler)inizi seçin"
     },
     "s02": {
@@ -374,13 +374,13 @@ window.PEMF_I18N_KATALOG = {
   "langLabel": "dil",
   "loginBtn": "Giriş yap",
   "loginEmail": "E-posta",
-  "loginEmpty": "E-posta ve parola gerekli.",
+  "loginEmpty": "E-posta ve şifre gerekli.",
   "loginForgot": "Şifremi unuttum",
   "loginLead": "PEMF Vet hesabınızla giriş yapın — uygulama sizden bir daha giriş istemeyecek.",
   "loginNoPersist": "Bu platformda oturum güvenli biçimde saklanamıyor — giriş yalnız bu açılış için geçerli.",
-  "loginPass": "Parola",
-  "loginPwInvisible": "Parolada görünmeyen bir karakter var (kopyala-yapıştırdan gelmiş olabilir). Silip elle yazmayı deneyin.",
-  "loginPwSpace": "Parolanızın başında veya sonunda boşluk var — genelde yapıştırmadan gelir. “Göster” ile kontrol edin.",
+  "loginPass": "Şifre",
+  "loginPwInvisible": "Şifrede görünmeyen bir karakter var (kopyala-yapıştırdan gelmiş olabilir). Silip elle yazmayı deneyin.",
+  "loginPwSpace": "Şifrenizin başında veya sonunda boşluk var — genelde yapıştırmadan gelir. “Göster” ile kontrol edin.",
   "loginRemember": "Beni hatırla",
   "loginRequired": "Kurulum ve onarım için giriş yapmalısınız.",
   "loginSignup": "Hesap oluştur",
@@ -410,11 +410,11 @@ window.PEMF_I18N_KATALOG = {
   "profilMeta": {
    "home": {
     "aciklama": "Kedi teşhis modelleri — hastalık, organ, görüntü, ses",
-    "ad": "Ev Sahibi"
+    "ad": "Evcil Hayvan Sahibi"
    },
    "research": {
     "aciklama": "Araştırma modelleri — petri, histopatoloji, böbrek, fantom",
-    "ad": "Araştırma Modu"
+    "ad": "Araştırma"
    },
    "vet": {
     "aciklama": "Klinik teşhis + seans (em_kedi, termal)",
@@ -422,9 +422,9 @@ window.PEMF_I18N_KATALOG = {
    }
   },
   "pwHide": "Gizle",
-  "pwHideTitle": "Parolayı gizle",
+  "pwHideTitle": "Şifreyi gizle",
   "pwShow": "Göster",
-  "pwShowTitle": "Parolayı göster",
+  "pwShowTitle": "Şifreyi göster",
   "ready": "hazır — tarayıcıda açıldı",
   "readyLead": "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
   "readyTitle": "Hazır!",

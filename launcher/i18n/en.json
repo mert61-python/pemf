@@ -9,7 +9,7 @@
     "portGecersiz": "PEMF: backend.port is invalid ('$1') — trying the default port.",
     "portVeriKokunden": "PEMF: backend.port not found in $INSTDIR — read from the data folder.",
     "surecDurduruluyor": "PEMF: stopping the remaining backend processes…",
-    "temizlikTamam": "PEMF Vet Client cleanup completed.",
+    "temizlikTamam": "PEMF Vet cleanup completed.",
     "veriSilIsaretli": "PEMF: 'Delete the application data' is checked — removing the downloaded runtime and models…",
     "veriSilIsaretsiz": "PEMF: 'Delete the application data' is not checked — downloaded profiles/models are KEPT (they will not be downloaded again when you reinstall). To delete them completely, check the box when uninstalling.",
     "yukseltmeKorunuyor": "PEMF: upgrade — downloaded models and cache are kept (they will not be downloaded again)."
@@ -156,7 +156,7 @@
     "kurulum": {
       "appGeriAlinamadi": "the app update could NOT BE ROLLED BACK ({{geri}}) — the device may be left with an unverified/half-written app tree; run 'Repair'. (step that triggered the rollback: {{adim}})",
       "appYedegiYok": "app backup not found — the rollback COULD NOT BE DONE (the device is on an unverified version)",
-      "baskaPencere": "Another PEMF Vet Client window is installing/updating. Wait for it to finish or close the other window. ({{hata}})",
+      "baskaPencere": "Another PEMF Vet launcher window is installing/updating. Wait for it to finish or close the other window. ({{hata}})",
       "enAzBirProfil": "At least one profile must stay installed — install another profile first, then remove this one.",
       "eskiAppYedekleniyor": "backing up the old app version",
       "eskiKurulumAlgilandi": "old installation detected ({{adet}} profiles)",
@@ -277,13 +277,13 @@
           "who": "For pet (cat) owners"
         },
         "p02": {
-          "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, KPI panel and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
+          "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, clinic statistics (‘Reports’) and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
           "key": "vet",
           "use": {
             "u01": "Choose ‘Veterinarian’ and sign in.",
             "u02": "Add a new patient from ‘Patients’.",
             "u03": "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.",
-            "u04": "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘KPI’."
+            "u04": "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘Reports’."
           },
           "who": "For veterinarians and clinics"
         },
@@ -291,7 +291,7 @@
           "does": "Well plate, histopathology, kidney and tumor phantom AI models; sample/data records and history. Does NOT include a device.",
           "key": "research",
           "use": {
-            "u01": "Choose ‘Research Mode’ and sign in.",
+            "u01": "Choose ‘Research’ and sign in.",
             "u02": "Pick the relevant research model from ‘Smart Diagnosis’.",
             "u03": "Upload your image or data file.",
             "u04": "Review the results and save them to ‘History’."
@@ -377,7 +377,7 @@
       },
       "research": {
         "aciklama": "Research models — well plate, histopathology, kidney, tumor phantom",
-        "ad": "Research Mode"
+        "ad": "Research"
       },
       "vet": {
         "aciklama": "Clinical diagnosis + session (em_kedi, thermal)",

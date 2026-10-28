@@ -82,7 +82,8 @@ ESKI_TR = {
     "rust.giris.yanitOkunamadi": "Giriş yanıtı okunamadı",
     "rust.kurulum.appGeriAlinamadi": "app guncellemesi GERI ALINAMADI ({{geri}}) — cihaz DOGRULANMAMIS/yarim app agaciyla kalmis olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {{adim}})",
     "rust.kurulum.appYedegiYok": "app yedeği bulunamadı — geri alma YAPILAMADI (cihaz doğrulanmamış sürümde)",
-    "rust.kurulum.baskaPencere": "Başka bir PEMF Vet Client penceresi kurulum/güncelleme yapıyor. Onun bitmesini bekleyin ya da diğer pencereyi kapatın. ({{hata}})",
+    # D6.67: ekranda süreç adı "başlatıcı" (METIN-KILAVUZU §1)
+    "rust.kurulum.baskaPencere": "Başka bir PEMF Vet başlatıcı penceresi kurulum/güncelleme yapıyor. Onun bitmesini bekleyin ya da diğer pencereyi kapatın. ({{hata}})",
     "rust.kurulum.enAzBirProfil": "En az bir profil kurulu kalmalı — önce başka bir profil kurun, sonra bunu kaldırın.",
     "rust.kurulum.eskiAppYedekleniyor": "eski uygulama sürümü yedekleniyor",
     "rust.kurulum.eskiKurulumAlgilandi": "eski kurulum algılandı ({{adet}} profil)",

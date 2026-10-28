@@ -27,7 +27,8 @@ fn KRITIK_ayni_anda_IKINCI_kurulum_engellenir() {
     {
         let m = ikinci.unwrap_err();
         assert!(
-            m.contains("Başka bir PEMF Vet Client"),
+            // D6.67: ekranda süreç adı "başlatıcı" (METIN-KILAVUZU §1)
+            m.contains("Başka bir PEMF Vet başlatıcı penceresi"),
             "mesaj kullaniciya ne yapacagini soylemiyor: {m}"
         );
     }

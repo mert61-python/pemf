@@ -21,6 +21,7 @@ yanlış-KIRMIZI verir — bu deponun beş kez düştüğü tuzak.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -140,3 +141,132 @@ def test_KARSIT_KANIT_INGILIZCE_bolum_de_guncellenmis():
     en = "\n".join(_ui_degerleri("en"))
     assert "Lightweight client" not in en, "İngilizce metin eski adlandırmada kalmış"
     assert "SHA-256" not in en, "İngilizce metinde kriptografi terimi kalmış"
+
+
+# ─────────────── D6.67 (B-7.22 · B-7.23): METIN-KILAVUZU yasak adları — ekrana giden TÜM kaynaklar ───────────────
+# Eski kapı yalnız `ui.*` değerlerinde "client" arıyordu: profil kartı adı (`ui.profilMeta`), kılavuz (`ui.kilavuz`), Rust iletileri
+# (`rust.*` — giriş / kurulum hataları ekranda), NSIS kaldırıcı satırları (`nsis.*`) ve index.html'in HTML varsayılan metni (JS
+# çalışmadan önce görünen etiket / başlık) yasak adları taşıyordu ve kapı YEŞİLDİ.
+_YASAK = {
+    "tr": {
+        "Ev Sahibi": (r"\bEv Sahibi", "'Evcil Hayvan Sahibi' (Türkçede 'ev sahibi' = mülk sahibi) — METIN-KILAVUZU §2"),
+        "Araştırma Modu": (r"(?i)araştırma modu", "kurulum profili 'Araştırma' (mod ❌) — METIN-KILAVUZU §3"),
+        "PEMF Vet Client": (
+            r"PEMF Vet Client",
+            "ekranda ürün adı 'PEMF Vet', süreç adı 'başlatıcı' — METIN-KILAVUZU §1",
+        ),
+        "Parola": (r"(?i)\bparola", "giriş bilgisi 'şifre' (parola ❌) — METIN-KILAVUZU §3"),
+        "KPI": (r"\bKPI\b", "'klinik istatistikleri' / uygulamadaki menü adı 'Raporlar' — METIN-KILAVUZU §2"),
+        "client": (r"(?i)\bclient\b", "süreç adı 'başlatıcı' — METIN-KILAVUZU §1"),
+    },
+    "en": {
+        "Research Mode": (r"(?i)\bresearch mode\b", "install profile 'Research' (TR 'Araştırma Modu' ile eş)"),
+        "PEMF Vet Client": (r"PEMF Vet Client", "product name 'PEMF Vet', process name 'launcher'"),
+        "KPI": (r"\bKPI\b", "'clinic statistics' / app menu 'Reports'"),
+        "client": (r"(?i)\bclient\b", "process name 'launcher'"),
+        "Home Owner": (r"(?i)\bhome ?owner", "'Pet Owner'"),
+    },
+}
+# Bilinçli, DAR istisna: giriş hatası iletisi arayüz SÖZLEŞMESİ — `index.html::doLogin` kimlik hatasında şifre alanını METNE bakarak
+# ("parola hatalı") temizler ve `launcher/core/src/auth.rs` KRITIK testi bunu pinler. KURALLAR §4.11: metne göre dallanan ileti ÖNCE
+# makine-okur koda geçer, sonra yeniden yazılır — o iş ayrı madde. İstisna BAYATLARSA (ileti düzeltildiyse) aşağıdaki kapı kırmızıdır.
+_ISTISNA = {
+    (
+        "tr",
+        "rust.giris.kimlikHatali",
+        "Parola",
+    ): "arayüz sözleşmesi m.includes(\"parola hatalı\") — auth.rs KRITIK testi",
+    ("tr", "rust.giris.girdiBos", "Parola"): "aynı giriş iletisi çifti (boş girdi ≠ kimlik hatası sözleşmesi, auth.rs)",
+    (
+        "tr",
+        "index.html:js",
+        "Parola",
+    ): "doLogin karşılaştırma değeri \"parola hatalı\" / \"parola hatali\" (kod içi karşılaştırma, ekrana gitmez)",
+}
+
+
+def _duz(d: dict, yol: str = ""):
+    for k, v in d.items():
+        y = f"{yol}.{k}" if yol else k
+        if isinstance(v, dict):
+            yield from _duz(v, y)
+        elif isinstance(v, str):
+            yield y, v
+
+
+def _katalog_kaynaklari(dil: str) -> list[tuple[str, str]]:
+    """`launcher/i18n/<dil>.json` — ui (arayüz), rust (başlatıcı iletileri), nsis (kaldırıcı) — HER değer."""
+    veri = json.loads((KOK / "launcher" / "i18n" / f"{dil}.json").read_text(encoding="utf-8"))
+    return list(_duz(veri))
+
+
+def _js_dizgeleri(js: str) -> list[str]:
+    """Yorumları soyulmuş betikteki '…', "…" ve `…` dizgelerinin içeriği (ters bölü kaçışı bilinçli)."""
+    out, i, n = [], 0, len(js)
+    while i < n:
+        c = js[i]
+        if c in "'\"`":
+            j, buf = i + 1, []
+            while j < n and js[j] != c:
+                if js[j] == "\\" and j + 1 < n:
+                    buf.append(js[j : j + 2])
+                    j += 2
+                    continue
+                buf.append(js[j])
+                j += 1
+            out.append("".join(buf))
+            i = j + 1
+            continue
+        i += 1
+    return out
+
+
+def _html_kaynaklari() -> list[tuple[str, str]]:
+    """index.html (yorumlar soyulmuş): HTML metin düğümleri + görünen öznitelikler (JS çalışmadan önceki VARSAYILAN metin) ve betik dizgeleri."""
+    src = _soy(UI.read_text(encoding="utf-8"))
+    betikler = re.findall(r"<script\b[^>]*>(.*?)</script>", src, flags=re.S | re.I)
+    isaret = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", src, flags=re.S | re.I)
+    out = [("index.html:html", m.strip()) for m in re.findall(r">([^<>]+)<", isaret) if m.strip()]
+    out += [
+        ("index.html:html", m)
+        for m in re.findall(r'\b(?:title|placeholder|aria-label|alt|content)\s*=\s*"([^"]*)"', isaret, flags=re.I)
+    ]
+    out += [("index.html:js", s) for b in betikler for s in _js_dizgeleri(b) if s.strip()]
+    return out
+
+
+def _yasak_bulgulari() -> list[str]:
+    kotu = []
+    for dil in ("tr", "en"):
+        kaynaklar = _katalog_kaynaklari(dil) + (_html_kaynaklari() if dil == "tr" else [])
+        for yol, metin in kaynaklar:
+            for ad, (desen, dogru) in _YASAK[dil].items():
+                if re.search(desen, metin) and (dil, yol, ad) not in _ISTISNA:
+                    kotu.append(f"[{dil}] {yol}: '{ad}' → {dogru}: {metin[:120]!r}")
+    return kotu
+
+
+def test_KRITIK_METIN_KILAVUZU_yasak_adlari_ekrana_giden_HICBIR_kaynakta_YOK_D6_67():
+    kotu = _yasak_bulgulari()
+    assert not kotu, f"{len(kotu)} ekran metni METIN-KILAVUZU yasak adını taşıyor:\n" + "\n".join(kotu)
+
+
+def test_KARSIT_D6_67_istisnalar_BAYAT_degil_ve_dogru_adlar_EKRANDA():
+    """İstisna yalnız sözleşmeli iletide durur; ileti düzeltilince istisna da kalkmalı (yoksa kapı ileride kör kalır). Aşırı-temizlik
+    koruması: doğru adlar ekranda — kart / kılavuz 'Evcil Hayvan Sahibi', kurulum profili 'Araştırma', giriş etiketi 'Şifre'."""
+    tr = dict(_katalog_kaynaklari("tr"))
+    js = [s for y, s in _html_kaynaklari() if y == "index.html:js"]
+    for dil, yol, ad in _ISTISNA:
+        desen = _YASAK[dil][ad][0]
+        if yol == "index.html:js":
+            assert any(re.search(desen, s) for s in js), (
+                f"istisna BAYAT: {yol} artık '{ad}' taşımıyor — _ISTISNA'dan çıkarın"
+            )
+        else:
+            assert yol in tr and re.search(desen, tr[yol]), (
+                f"istisna BAYAT: {yol} artık '{ad}' taşımıyor — _ISTISNA'dan çıkarın"
+            )
+    assert tr["ui.profilMeta.home.ad"] == "Evcil Hayvan Sahibi", tr["ui.profilMeta.home.ad"]
+    assert tr["ui.profilMeta.research.ad"] == "Araştırma", tr["ui.profilMeta.research.ad"]
+    assert tr["ui.loginPass"] == "Şifre", tr["ui.loginPass"]
+    assert "Raporlar" in tr["ui.kilavuz.profiles.p02.use.u04"], tr["ui.kilavuz.profiles.p02.use.u04"]

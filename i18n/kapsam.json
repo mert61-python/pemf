@@ -9965,14 +9965,14 @@
      ]
     },
     {
-     "metin": "Parola",
+     "metin": "Şifre",
      "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.loginPass` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)",
      "turler": [
       "html-metin"
      ]
     },
     {
-     "metin": "Parolayı göster",
+     "metin": "Şifreyi göster",
      "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.pwShowTitle` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)",
      "turler": [
       "html-oznitelik"
@@ -11203,7 +11203,7 @@
      ]
     },
     {
-     "metin": "PEMF Vet Client temizliği tamamlandı.",
+     "metin": "PEMF Vet temizliği tamamlandı.",
      "gerekce": "`$(PEMF_…)` LangString BAŞVURUSU — metin değil; metin üretilmiş blokta (kaynak katalog nsis.*), dil kurulum diline göre seçilir",
      "turler": [
       "nsis"
