@@ -114,3 +114,46 @@ def test_KARSIT_KANIT_bolum_ayiricisi_ve_desen():
     assert "Adım 7" in _bolum(ornek, r"^## 5\. Devreye alma")
     assert KOD_KAPALI.search("jeton KOD düzeyinde kapalı (Y194)") and KOD_KAPALI.search("KOD düzeyinde KAPALI")
     assert not KOD_KAPALI.search("jeton kapısı uykuda")
+
+
+# TUR 2 (çürütücü kolu): yukarıdaki kapı yalnız DOĞRU ifadenin VARLIĞINA bakıyordu; aynı bölüme "`PEMF_JETON_ENFORCED=1` yapılınca jeton devreye
+# girer" gibi ÇELİŞEN bir cümle eklenince yeşil kalıyordu (mutant `cur645_n2` YAŞIYORDU). Bugünkü durumu anlatan yüzeylerde ortam bayrağını
+# AÇICI diye anan her cümle kod anahtarını (JETON_SAHIP_ACIK) ya da sınırı ("tek başına açamaz", "olsa bile", "etkisiz") da söylemeli.
+_ACAR = re.compile(r"devreye\s+gir|devrede|açılır|açar\b|etkin|bakiyeden\s+düş|\b402\b", re.I)
+_SINIRLI = re.compile(r"JETON_SAHIP_ACIK|tek\s+başına|açamaz|açmaz|olsa\s+bile|etkisiz|no-op", re.I)
+
+
+def _ortam_tek_basina_acar_diyen_cumleler(metin: str) -> list[str]:
+    duz = re.sub(r"\s+", " ", metin)
+    return [
+        c
+        for c in re.split(r"(?<=[.!?])\s", duz)
+        if "PEMF_JETON_ENFORCED=1" in c and _ACAR.search(c) and not _SINIRLI.search(c)
+    ]
+
+
+def test_KRITIK_bugunku_durum_ortam_bayraginin_TEK_BASINA_actigini_SOYLEMEZ():
+    jeton = JETON_BELGESI.read_text(encoding="utf-8")
+    durum = _bolum(jeton, r"^## 5\. Devreye alma").split("\n### ", 1)[0]
+    yuzeyler = {
+        "JETON-SISTEMI §5": durum,
+        "METIN-KILAVUZU": KILAVUZ.read_text(encoding="utf-8"),
+        "SAHA-TEST 8.4": _saha_84(),
+    }
+    sorun = [f"{ad}: {c!r}" for ad, m in yuzeyler.items() for c in _ortam_tek_basina_acar_diyen_cumleler(m)]
+    assert not sorun, (
+        "belge ortam bayrağının jetonu TEK BAŞINA açtığını söylüyor (Y194: kod anahtarı JETON_SAHIP_ACIK da gerekir):\n  "
+        + "\n  ".join(sorun)
+    )
+
+
+def test_KARSIT_KANIT_celiski_deseni_AYIRIYOR():
+    assert _ortam_tek_basina_acar_diyen_cumleler(
+        "Servis ortamında `PEMF_JETON_ENFORCED=1` yapılınca jeton devreye girer."
+    )
+    assert _ortam_tek_basina_acar_diyen_cumleler("`PEMF_JETON_ENFORCED=1` ise her AI analizi bakiyeden düşer.")
+    assert not _ortam_tek_basina_acar_diyen_cumleler("Ortamdaki `PEMF_JETON_ENFORCED=1` tek başına açamaz.")
+    assert not _ortam_tek_basina_acar_diyen_cumleler(
+        "Jeton (`JETON_SAHIP_ACIK = True` VE `PEMF_JETON_ENFORCED=1`) açıkken devreye girer."
+    )
+    assert not _ortam_tek_basina_acar_diyen_cumleler("Servis ortamında `PEMF_JETON_ENFORCED=1` olsa bile kapalı.")
