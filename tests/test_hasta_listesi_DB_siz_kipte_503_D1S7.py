@@ -12,18 +12,30 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+def _ucun_db_modulu():
+    """Liste ucunun GERÇEKTEN çağırdığı `get_patient_database`'in modül durumu (işlevin kendi globals'ı).
+
+    D5 kapanış süiti (ölçüldü): `test_anahtar_uyusmazligi_karantina.py` `database.patient_database`'i sys.modules'tan silip yeniden
+    içe aktarıyor; `servers.patient_router` ise işlevi içe aktarma anında bağladığı için ESKİ modülü kullanmaya devam ediyor. Aparat
+    sys.modules'taki YENİ modülü yamalarsa uç eski modülün canlı DB'sini açar (200) — kapı ürünü değil aparatı ölçer. Bu yüzden durum,
+    ucun kullandığı işlevin modülünde kurulur."""
+    from servers import patient_router
+
+    return patient_router.get_patient_database.__globals__
+
+
 @pytest.fixture
 def db_siz(monkeypatch):
-    from database import patient_database as pdb
-    from servers import api_server
+    from servers import api_server, patient_router
     from utils.path_utils import get_app_data_directory
 
+    g = _ucun_db_modulu()
     kok = get_app_data_directory()
-    monkeypatch.setattr(pdb, "_patient_db", None)
-    monkeypatch.setattr(pdb, "_acilis_kilidi", {})
-    pdb.acilis_hatasini_kilitle(kok, RuntimeError("test: hasta DB'si açılışta açılamadı"))
+    monkeypatch.setitem(g, "_patient_db", None)
+    monkeypatch.setitem(g, "_acilis_kilidi", {})
+    g["acilis_hatasini_kilitle"](kok, RuntimeError("test: hasta DB'si açılışta açılamadı"))
     with pytest.raises(RuntimeError):
-        pdb.get_patient_database()  # aparat: DB'siz kip GERÇEKTEN kurulu
+        patient_router.get_patient_database()  # aparat: DB'siz kip ucun KENDİ erişimcisinde GERÇEKTEN kurulu
     return TestClient(api_server.app, client=("127.0.0.1", 50000), raise_server_exceptions=False)
 
 
@@ -37,9 +49,8 @@ def test_KRITIK_DB_siz_kipte_hasta_listesi_503_ve_EYLEM_iletisi(db_siz, dil, par
 
 
 def test_KARSIT_DB_varken_liste_200(monkeypatch):
-    from database import patient_database as pdb
     from servers import api_server
 
-    monkeypatch.setattr(pdb, "_acilis_kilidi", {})
+    monkeypatch.setitem(_ucun_db_modulu(), "_acilis_kilidi", {})
     r = TestClient(api_server.app, client=("127.0.0.1", 50000)).get("/api/patients")
     assert r.status_code == 200, r.text[:200]
