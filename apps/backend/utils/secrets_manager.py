@@ -478,11 +478,13 @@ def _kimlik_deposu_yaz(deger: str) -> None:
 
 
 def _bulut_sirri_oku() -> str:
-    """`device_registry_secret` için eski-kaynak okuyucusu: env → MAKİNE DEPOSU.
+    """`device_registry_secret` için eski-kaynak okuyucusu: MAKİNE DEPOSU → env.
 
     `get_secret` bu değeri bulursa veri kökündeki dosyaya migrate eder; yani veri kökü
-    yenilendiğinde sır AYNI kalır ve TOFU mührü bozulmaz."""
-    return (os.getenv("PEMF_DEVICE_REGISTRY_SECRET", "").strip() or _kimlik_deposu_oku()).strip()
+    yenilendiğinde sır AYNI kalır ve TOFU mührü bozulmaz.
+    ⚠️ Y204 (S-D5.7): depo ÖNCE — kaldır-kur sonrası (veri kökü boş, depo dolu) env kurulu bulut kimliğini EZMEZ; env yalnız depo
+    da boşken (hiç kurulmamış cihaz, Y14 ilk taşıma) kaynak olur."""
+    return (_kimlik_deposu_oku() or os.getenv("PEMF_DEVICE_REGISTRY_SECRET", "").strip()).strip()
 
 
 def _bulut_sirri_uret() -> str:

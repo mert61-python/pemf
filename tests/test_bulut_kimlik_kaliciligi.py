@@ -165,6 +165,44 @@ def test_KRITIK_Y14_ortam_degiskeni_ILK_tasimada_KAYNAK_olur(tmp_path, ortam):
     assert _tur(kok, ortam) == beklenen, "ilk taşımada gelen env değeri kalıcılaşmadı (env kalkınca sır değişti)"
 
 
+def test_KRITIK_Y204_kaldir_kur_DEPO_doluyken_env_kurulu_kimligi_EZMEZ_S_D5_7(tmp_path, ortam):
+    """Y204 (S-D5.7): kaldır-kur sonrası (veri kökü BOŞ, makine deposu DOLU) env verilse de İLK okuma DEPODAKİ kurulu sırrı döndürür.
+
+    ÖLÇÜLEN (D5 yardımcı A, D5.03): okuma sırası env → depo idi → kaldır-kur sonrası ilk okuma env değerini döndürüp veri köküne yazıyor,
+    kurulu bulut kimliği EZİLİYORDU (sonraki okumalar AYRIŞMA kuralıyla depoya dönse de bir kez yanlış sırla bulut çağrısı + kalıcı AYRIŞMA
+    uyarısı). Sahip kararı Y204: önce depo, sonra env (env yalnız depo da boşken kaynak — Y14 ilk-taşıma kolu yukarıdaki testte)."""
+    eski_kok, yeni_kok = tmp_path / "kurulum", tmp_path / "kaldir_kur"
+    eski_kok.mkdir()
+    yeni_kok.mkdir()
+    kurulu = _tur(eski_kok, ortam)  # ilk kurulum: veri kökü + makine deposu dolu
+    assert (ortam / "device_identity.json").is_file()
+    zorlanan = "kaldir-kur-sonrasi-ortamdaki-sir-1234567890"
+    ozet = hashlib.sha256(zorlanan.encode()).hexdigest()[:16]
+    ilk = _tur(yeni_kok, ortam, zorlanan)  # kaldır-kur: veri kökü BOŞ, depo DOLU, env DOLU
+    assert ilk == kurulu and ilk != ozet, (
+        "kaldır-kur sonrası İLK okumada PEMF_DEVICE_REGISTRY_SECRET kurulu bulut kimliğini EZDİ (depo dolu iken env kazandı) → "
+        "bir kez yanlış sırla bulut çağrısı + AYRIŞMA (Y204 / S-D5.7: önce depo, sonra env)"
+    )
+    assert _tur(yeni_kok, ortam) == kurulu, "env kalkınca sır değişti — env değeri veri köküne yazılmış"
+
+
+def test_KRITIK_Y14_ESKI_kurulum_DEPO_yok_kok_dolu_env_kurulu_kimligi_EZMEZ(tmp_path, ortam):
+    """Y14 + Y204: makine deposu YOK (depodan önceki kurulum), veri kökü DOLU, env DOLU → kurulu sır döner, depoya o taşınır.
+
+    SON incelemesi: depo-önce sırasıyla "`device_registry_secret` `_GOMULU_USTUN`'da (env her okumada üstün)" mutantı depo DOLU senaryolarında
+    eşdeğer kalıyordu (eski okuyucu depo değerini döndürür) — bu kol depo BOŞKEN env'in kurulu kökü ezmediğini ölçer (mutant burada KIRMIZI)."""
+    kok = tmp_path / "eski_kurulum"
+    kok.mkdir()
+    kurulu = _tur(kok, ortam)
+    (ortam / "device_identity.json").unlink()  # depodan önceki kurulum: depo YOK, veri kökü DOLU
+    zorlanan = "eski-kurulumda-ortamdaki-sir-1234567890"
+    assert _tur(kok, ortam, zorlanan) == kurulu, (
+        "depo YOK + veri kökü DOLU iken env kurulu bulut kimliğini EZDİ (Y14: env yalnız ilk taşımada kaynak)"
+    )
+    assert (ortam / "device_identity.json").is_file(), "kurulu sır makine deposuna taşınmadı"
+    assert _tur(tmp_path / "yenilenmis", ortam) == kurulu, "depoya taşınan değer kurulu sır değil (env taşınmış)"
+
+
 def test_ayni_kok_ikinci_kez_AYNI_sirri_verir(tmp_path, ortam):
     """Karşıt-kanıt: sıradan davranış bozulmadı (her çağrıda yeni sır üretilmiyor)."""
     kok = tmp_path / "k"
