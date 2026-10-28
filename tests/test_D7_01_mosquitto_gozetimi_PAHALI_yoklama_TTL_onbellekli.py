@@ -116,6 +116,22 @@ def test_KRITIK_TTL_dolunca_YENIDEN_yoklanir(ortam):
     )
 
 
+def test_KRITIK_TTL_SINIRI_tam_TTL_yasinda_kayit_GECERSIZ(ortam):
+    """Tur 2 kolu (D67 çürütme, mutant r1 `<` → `<=`): kaydın yaşı TAM TTL olduğunda önbellek geçersiz (TTL uzamaz); yarım saniye
+    önce geçerli."""
+    _windows(ortam)
+    sup, kos = ortam["sup"], ortam["kos"]
+    sup.check_once()
+    ortam["saat"][0] += TTL - 0.5
+    sup.check_once()
+    assert kos.say("-h") == 1, "TTL dolmadan yeniden yoklandı"
+    ortam["saat"][0] += 0.5  # yaş = TAM TTL (1000.0 + 60.0 — kayan nokta tam)
+    sup.check_once()
+    assert (kos.say("-h"), kos.say("sc"), kos.say("tasklist")) == (2, 2, 2), (
+        f"yaşı TAM TTL olan kayıt hâlâ önbellekten okundu (TTL uzadı): {kos.say('-h')} / {kos.say('sc')} / {kos.say('tasklist')}"
+    )
+
+
 def test_KRITIK_GUVENLIK_kayitli_servisin_CALISMA_durumu_ONBELLEKLENMEZ(ortam):
     """Servis kayıtlıyken `running` her turda TAZE: çöken broker hemen görülür (yeniden başlatma gecikmez)."""
     _windows(ortam)
