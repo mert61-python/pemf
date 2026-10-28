@@ -257,6 +257,22 @@ function Ensure-PemfBackendFirewallKurali([string]$Ad, [string]$Protokol, [int]$
     return [bool]$Ok
 }
 
+# Y205 · S-D5.22 (sahip): servis "Running" demek backend'in istek KABUL ETTİĞİ demek değil (açılış, DB / donanım hazırlığı, port
+# çakışması). Kurulum sonunda YALNIZ yerel döngü adresindeki sağlık ucu süreyle yoklanır (LAN'a istek yok; `/api/health` kimlik
+# doğrulamasından muaf). Yanıt yoksa `$false` — kurulum DURMAZ (servis kendini yeniden dener), eylemli uyarı verilir.
+function Test-PemfServisSagligi([int]$Port, [int]$SureSn) {
+    $son = (Get-Date).AddSeconds($SureSn)
+    while ((Get-Date) -lt $son) {
+        try {
+            $null = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/health" -TimeoutSec 3 -ErrorAction Stop
+            return $true
+        } catch {
+            Start-Sleep -Seconds 2
+        }
+    }
+    return $false
+}
+
 # --- Servis ikilisi: önce frozen EXE, yoksa python + backend_service.py ---
 # Ortak argüman: Mosquitto kendi servisi olduğu için broker'ı backend BAŞLATMAZ,
 # sadece izler -> --no-mosquitto-ensure.
@@ -440,6 +456,12 @@ Write-Status "Servis başlatılıyor..." "Yellow"
 Start-Sleep -Seconds 4
 $status = & $NssmExe status $ServiceName 2>&1
 Write-Status "Servis durumu: $status" "Cyan"
+$Saglik = Test-PemfServisSagligi -Port $ApiPort -SureSn 60
+if ($Saglik) {
+    Write-Status "Sağlık sondası: http://127.0.0.1:$ApiPort/api/health yanıt verdi." "Green"
+} else {
+    Write-Status "UYARI: servis başladı ama 60 sn içinde http://127.0.0.1:$ApiPort/api/health yanıt vermedi — backend hazır değil. Günlüğe bakın: $LogDir\backend_service.log ($NssmExe status $ServiceName)" "Yellow"
+}
 
 Write-Host ""
 Write-Host "Backend servisi kuruldu." -ForegroundColor Green
@@ -448,6 +470,7 @@ Write-Host "  URL    : http://localhost:$ApiPort"
 Write-Host "  Loglar : $LogDir\backend_service.log"
 Write-Host "  Profil : $ProfilDosyasi (at-rest şifreleme / veri kökü / STM portu / izinli adlar profilden)"
 Write-Host "  Broker : mosquitto servisi (SCM bağımlılığı yok; backend yeniden dener)"
+Write-Host "  Sağlık : $(if ($Saglik) { "http://127.0.0.1:$ApiPort/api/health yanıt verdi" } else { 'YANIT YOK — günlüğe bakın' })"
 if ($ApiFirewallOk -and $KesifFirewallOk) {
     Write-Host "  Firewall: 'PEMF Backend API' (TCP $ApiPort) + 'PEMF UDP Discovery' (UDP 5051) içerikle doğrulandı"
 } else {
