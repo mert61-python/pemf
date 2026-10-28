@@ -131,6 +131,8 @@ def _rehber_basvurulari_GECERLI(sebep: str) -> None:
         assert (KOK / yol).exists(), f"mesaj olmayan dosyaya yonlendiriyor: {yol} — {sebep!r}"
     for yol, bolum in re.findall(_BOLUM_RE, sebep):
         bolum = bolum.strip("'").replace("§", "").strip()
+        # Tur 2 (D67 çürütme, mutant c1): önek-siz / olmayan dosyaya bölüm başvurusu AssertionError ile kırmızı (çöküş değil).
+        assert (KOK / yol).is_file(), f"mesaj olmayan dosyanin bolumune yonlendiriyor: {yol} '{bolum}' — {sebep!r}"
         basliklar = [s for s in (KOK / yol).read_text(encoding="utf-8").splitlines() if s.startswith("#")]
         hedef = [b for b in basliklar if re.search(rf"(?<![\w-]){re.escape(bolum)}(?![\w])", b)]
         assert hedef, f"mesajin gosterdigi bolum {yol} '{bolum}' YOK — {sebep!r}"
@@ -197,6 +199,9 @@ def test_KRITIK_servis_betigi_ESKI_firmware_cozumu_GUNCEL_yolu_onerir_D6_57(monk
         "firmware/stm32_pemf/README.md",
     ):
         assert yol in out and (KOK / yol).exists(), f"{yol} onerilmiyor ya da yok:\n{out}"
+    # Tur 2 kolu (D67 çürütme, mutant c2): betiğin önerdiği BÖLÜM başvuruları (ör. README 'CubeIDE'de açma / derleme') da GERÇEK
+    # ve kaldırılmamış başlık — KESİN mesajlarla aynı doğrulayıcı.
+    _rehber_basvurulari_GECERLI(out)
 
 
 def _headless_agac():
