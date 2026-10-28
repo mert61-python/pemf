@@ -149,7 +149,11 @@ def test_KARSIT_KANIT_INGILIZCE_bolum_de_guncellenmis():
 # çalışmadan önce görünen etiket / başlık) yasak adları taşıyordu ve kapı YEŞİLDİ.
 _YASAK = {
     "tr": {
-        "Ev Sahibi": (r"\bEv Sahibi", "'Evcil Hayvan Sahibi' (Türkçede 'ev sahibi' = mülk sahibi) — METIN-KILAVUZU §2"),
+        # Tur 2 kolu (D67 çürütme, mutant u1): büyük / küçük harf ve Türkçe İ / ı biçimlerinden bağımsız ("ev sahibi", "EV SAHİBİ").
+        "Ev Sahibi": (
+            r"(?i)\bev sah[iıİI]b[iıİI]",
+            "'Evcil Hayvan Sahibi' (Türkçede 'ev sahibi' = mülk sahibi) — METIN-KILAVUZU §2",
+        ),
         "Araştırma Modu": (r"(?i)araştırma modu", "kurulum profili 'Araştırma' (mod ❌) — METIN-KILAVUZU §3"),
         "PEMF Vet Client": (
             r"PEMF Vet Client",
