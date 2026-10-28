@@ -1,5 +1,8 @@
 // Jest global setup (audit B-3.2). AsyncStorage native modülü resmî jest mock'u ile değiştirilir
-// (config.ts token/device-id saklama testleri için). fetch her testte mock'lanır.
+// (config.ts token/device-id saklama testleri için).
+// ⚠️ İG-6.199: fetch burada mock'lanMAZ. Global `fetch`, jest-expo ön ayarının kurduğu expo fetch'tir (`expo/src/winter/fetch`);
+// yerel istek modülü ön ayarda saplamadır (`ExpoFetchModule.NativeRequest.start() {}`) → istek ağa ÇIKMAZ. fetch'e bakan test kendi
+// mock'unu kurar (`global.fetch = jest.fn(...)`) ya da `@/services/apiClient`'i mock'lar.
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
