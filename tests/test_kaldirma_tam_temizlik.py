@@ -85,6 +85,29 @@ def test_KRITIK_firewall_temizligi_kaldirmayi_DUSURMEZ():
     )
 
 
+def test_KRITIK_firewall_temizligi_CIKIS_KODUNU_gunluge_yazar_DEV_D5b():
+    """DEV-D5.b (D5 'SONRAKİ OTURUM'): temizlik eskiden kodsuz sarmalayıcıyla koşuyordu — yükseltilmiş betiğin çıkış kodu OKUNMUYOR,
+    yalnız UAC reddi görülüyordu. Artık kodlu sarmalayıcı (`ps_yukselterek_kos_kodlu`, `-PassThru`) koşar; kod günlüğe yazılır ve sonuç
+    YİNE yutulur (davranış aynı: kaldırma her durumda sürer)."""
+    kaynak = _MAIN_RS.read_text(encoding="utf-8")
+    i = kaynak.find("async fn uninstall(")
+    assert i != -1, "uninstall komutu bulunamadı"
+    govde = kaynak[i : i + 4000]
+    j = govde.find("firewall::silme_betigi()")
+    assert j != -1, "kaldırma akışı firewall temizliğini çağırmıyor"
+    satir = govde[govde.rfind("\n", 0, j) : govde.find("\n", j)]
+    assert "ps_yukselterek_kos_kodlu(" in satir, (
+        f"temizlik çıkış kodunu okumayan sarmalayıcıyla koşuyor: {satir.strip()}"
+    )
+    sonra = govde[j : j + 700]
+    assert re.search(r"if let Ok\(kod\)[^\n]*\n[^\n]*eprintln!\([^\n]*\{kod\}", sonra), (
+        "temizliğin çıkış kodu günlüğe YAZILMIYOR (eprintln … {kod})"
+    )
+    assert "if let Err(" in sonra and "?;" not in sonra.split("\n", 1)[0], (
+        "temizlik sonucu YUTULMUYOR — kaldırma düşebilir"
+    )
+
+
 def test_KRITIK_WINDOWSUN_KENDI_kurallarina_DOKUNULMAZ():
     """⚠️ KAPSAM SINIRI — "temiz kaldırma" adına fazlasını silmek YANLIŞ olur.
 

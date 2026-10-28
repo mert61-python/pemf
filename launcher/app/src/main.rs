@@ -1481,7 +1481,13 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
         // ⚠️ HATA YUTULUR: kullanıcı UAC'yi reddederse kaldırma NORMAL devam eder — yetim bir
         // firewall kuralı, kaldırmayı düşürmeyi haklı çıkarmaz. Tam temizlik için
         // `scripts/pemf_teardown.ps1` zaten var.
-        if let Err(e) = ps_yukselterek_kos(&pemf_launcher_core::firewall::silme_betigi()) {
+        // DEV-D5.b: temizliğin ÇIKIŞ KODU da günlüğe yazılır (kodlu sarmalayıcı; eskiden yalnız UAC reddi görülüyordu).
+        // Sonuç yine YUTULUR — kaldırma her durumda sürer.
+        let fw_temizlik = ps_yukselterek_kos_kodlu(&pemf_launcher_core::firewall::silme_betigi());
+        if let Ok(kod) = &fw_temizlik {
+            eprintln!("[uninstall] güvenlik duvarı temizliği çıkış kodu {kod}{} (0 = tamam) — kaldırma sürer", if *kod == pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI { format!(": {}", pemf_launcher_core::dil::t("rust.hata.yoneticiIzniVerilmedi")) } else { String::new() });
+        }
+        if let Err(e) = fw_temizlik {
             eprintln!("[uninstall] güvenlik duvarı kuralları temizlenemedi (yok sayıldı): {e}");
         }
 
@@ -2293,33 +2299,6 @@ fn firewall_durumu_blocking() -> serde_json::Value {
     })
 }
 
-/// Kuralları YÜKSELTİLMİŞ olarak ekle (UAC istemi çıkar). Kullanıcı reddederse hata döner.
-///
-/// Launcher bilerek yükseltilmemiş çalışır (sessiz oto-güncelleme UAC'siz olsun diye) → kural
-/// ekleme ancak kullanıcının AÇIK onayıyla, tek seferlik bir yükseltmeyle yapılabilir.
-
-/// PowerShell betiğini UAC ile YÜKSELTEREK çalıştır (firewall kuralları admin ister).
-///
-/// ⚠️ D5 J-3: betiğin ÇIKIŞ KODU OKUNMAZ (yalnız UAC reddi görülür) — yalnız sonucu bilerek yutulan kaldırma temizliği
-/// (`silme_betigi`) kullanır. Sonucu önemli olan yükseltme `ps_yukselterek_kos_kodlu` ile koşar.
-///
-/// ⚠️ Base64 taşıma KASITLI: betik kullanıcı-etkili yollar içerebilir; tırnak/kaçış katmanları
-/// arasında bozulmasın (bkz. firewall.rs enjeksiyon notu). Konsol penceresi açılmaz.
-#[cfg(windows)]
-fn ps_yukselterek_kos(betik: &str) -> Result<(), String> {
-    let b64 = ps_b64(betik);
-    let arg = format!(
-        "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden              -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}'");
-    let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &arg])
-        .output()
-        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.yukseltmeBaslatilamadi", &[("e", &e.to_string())]))?;
-    if !cikti.status.success() {
-        return Err(pemf_launcher_core::dil::t("rust.hata.yoneticiIzniVerilmedi"));
-    }
-    Ok(())
-}
-
 /// `-EncodedCommand` taşıması: UTF-16LE + base64 (ortak; kaçış katmanlarında bozulmaz).
 #[cfg(windows)]
 fn ps_b64(betik: &str) -> String {
@@ -2346,7 +2325,10 @@ fn ps_b64(betik: &str) -> String {
 #[cfg_attr(not(windows), allow(dead_code))]
 const KOD_YUKSELTILMIS_CIKIS_KODU_YOK: i32 = 1;
 
-/// D3 T-g: `ps_yukselterek_kos` gibi, ama yükseltilmiş betiğin ÇIKIŞ KODUNU döndürür (`-PassThru`); UAC reddi / yükseltme
+/// PowerShell betiğini UAC ile YÜKSELTEREK çalıştırır (firewall / paylaşım / kaldırma temizliği admin ister). ⚠️ Base64 taşıma
+/// KASITLI: betik kullanıcı-etkili yollar içerebilir; tırnak/kaçış katmanları arasında bozulmasın (bkz. firewall.rs enjeksiyon
+/// notu). Konsol penceresi açılmaz. DEV-D5.b: kaldırma temizliği (`silme_betigi`) de bunu kullanır — kod günlüğe, sonuç yutulur.
+/// D3 T-g: yükseltilmiş betiğin ÇIKIŞ KODUNU döndürür (`-PassThru`); UAC reddi / yükseltme
 /// başlatılamadı → `paylasim::KOD_UAC_REDDEDILDI` (1223 = ERROR_CANCELLED). D5 J-3: güvenlik duvarı "İzin ver" yolu da bunu kullanır.
 /// D5 J-3 tur 3: çıkış kodu boşsa → `KOD_YUKSELTILMIS_CIKIS_KODU_YOK` (fail-closed; davranışı gölge PowerShell'le ölçen kapı
 /// `tests/test_launcher_izin_ver_sarmalayici_GOLGE_cikis_kodu_D5_J3.py`).
@@ -2493,7 +2475,7 @@ fn yedek_hedefi_durumu_blocking() -> serde_json::Value {
 /// okunmuyor, `o.stderr` düşüyordu. Oysa PowerShell'in KENDİSİ düşmüş olabilir: CLM/WDAC altında
 /// `Add-Type` yasak, WinForms yüklenemez, PS çöker → stdout boş, stderr dolu, çıkış ≠ 0. Bu,
 /// operatörün "İptal"inden AYIRT EDİLEMEZDİ; UI yalnız düğmeyi geri açıyor, launcher'da günlük yok
-/// (Tier-1 özellik sessiz ölüyor). Kardeş spawn'lar (`ps_yukselterek_kos`, firewall) status'u okur;
+/// (Tier-1 özellik sessiz ölüyor). Kardeş spawn'lar (`ps_yukselterek_kos_kodlu`, firewall) status'u okur;
 /// bu bir boşluktu, konvansiyon değil. Kural: çıkış başarısız YA DA (stdout boş VE stderr dolu) →
 /// hata; boş stdout + başarı → iptal; dolu stdout → yol.
 #[cfg_attr(not(windows), allow(dead_code))]
