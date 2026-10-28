@@ -105,6 +105,7 @@
       "guvenlikDuvariGorevCoktu": "The firewall task crashed: {{e}}",
       "guvenlikDuvariIzinYok": "Administrator permission was not granted — the firewall rule could not be added.",
       "guvenlikDuvariKuralEklenemedi": "The firewall rule could not be added (code {{kod}}) — the mobile app may not be able to connect to this computer; contact your IT administrator.",
+      "guvenlikDuvariWindowsEngelKurali": "Windows has a firewall rule blocking this program from receiving connections (code {{kod}}) — remove it: Windows Defender Firewall › Advanced settings › Inbound Rules. Until the rule is removed, the mobile app and web cannot connect to this computer.",
       "indirmeAdresiGecersizKarakter": "A download address containing invalid characters was rejected",
       "indirmeAdresiIzinsiz": "Download address not allowed: {{url}}",
       "kaldiriciYok": "The uninstaller (uninstall.exe) was not found. You can uninstall from Windows 'Settings → Apps'.",

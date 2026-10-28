@@ -105,6 +105,7 @@
       "guvenlikDuvariGorevCoktu": "Güvenlik duvarı görevi çöktü: {{e}}",
       "guvenlikDuvariIzinYok": "Yönetici izni verilmedi — güvenlik duvarı kuralı eklenemedi.",
       "guvenlikDuvariKuralEklenemedi": "Güvenlik duvarı kuralı eklenemedi (kod {{kod}}) — mobil uygulama bu bilgisayara bağlanamayabilir; BT yöneticinize başvurun.",
+      "guvenlikDuvariWindowsEngelKurali": "Windows'ta bu programın bağlantı almasını engelleyen bir güvenlik duvarı kuralı var (kod {{kod}}) — kaldırın: Windows Güvenlik Duvarı › Gelişmiş ayarlar › Gelen Kurallar. Kural kaldırılmadan mobil uygulama ve web bu bilgisayara bağlanamaz.",
       "indirmeAdresiGecersizKarakter": "Geçersiz karakter içeren indirme adresi reddedildi",
       "indirmeAdresiIzinsiz": "İzin verilmeyen indirme adresi: {{url}}",
       "kaldiriciYok": "Kaldırıcı (uninstall.exe) bulunamadı. Windows 'Ayarlar → Uygulamalar'dan kaldırabilirsiniz.",

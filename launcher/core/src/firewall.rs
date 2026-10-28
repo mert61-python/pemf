@@ -119,9 +119,16 @@ pub fn ekleme_betigi(backend_exe: &Path, api_port: u16) -> String {
              try {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p \
                -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any -ErrorAction Stop | Out-Null }} \
              catch {{ $kurulamadi++ }} }} }}; \
+         $engel = 0; \
+         try {{ foreach ($x in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | \
+                  Where-Object {{ $_.Program -and ($_.Program -ieq $p) }})) {{ \
+                  foreach ($rr in @($x | Get-NetFirewallRule -ErrorAction SilentlyContinue)) {{ \
+                    if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True' -and $rr.Action -eq 'Block' -and \
+                        @('{api}', '{kesif}') -notcontains $rr.DisplayName) {{ $engel++ }} }} }} }} catch {{ }}; \
+         if ($engel -gt 0) {{ exit {kod_engel} }}; \
          if ($kurulamadi -gt 0) {{ exit {kod_kur} }}; if ($silinemedi -gt 0) {{ exit {kod_sil} }}; exit {kod_tamam}",
         p = p, islevler = ICERIK_ISLEVLERI, api = KURAL_API, kesif = KURAL_KESIF, tcp = api_port, udp = DISCOVERY_PORT,
-        kod_kur = KOD_KURAL_KURULAMADI, kod_sil = KOD_BOZUK_KURAL_SILINEMEDI, kod_tamam = KOD_TAMAM,
+        kod_kur = KOD_KURAL_KURULAMADI, kod_sil = KOD_BOZUK_KURAL_SILINEMEDI, kod_tamam = KOD_TAMAM, kod_engel = KOD_WINDOWS_ENGEL_KURALI,
     )
 }
 
@@ -132,6 +139,10 @@ pub const KOD_TAMAM: i32 = 0;
 pub const KOD_KURAL_KURULAMADI: i32 = 2;
 /// Doğru kurallar kuruldu ama bu programın BOZUK (ör. Block) eski kuralı SİLİNEMEDİ — engel sürebilir.
 pub const KOD_BOZUK_KURAL_SILINEMEDI: i32 = 3;
+/// Y209 · S-D5.13 (sahip): bu programı engelleyen Windows'un KENDİ (program kapsamlı, etkin, gelen) Block kuralı var — Block, Allow'dan
+/// önce gelir, kurduğumuz kurallar engeli AÇMAZ. Kural SİLİNMEZ (kullanıcının / Windows'un kararı); kullanıcıya "kaldırın" denir.
+/// Eskiden betik 0 dönüyor, uyarı kapanıyor, LAN'dan (mobil / web, ACİL DURDUR dahil) erişim kapalı kalıyordu (SON-A1.51).
+pub const KOD_WINDOWS_ENGEL_KURALI: i32 = 4;
 
 /// Yükseltilmiş ekleme betiğinin çıkış kodu → arayüze dönecek hata anahtarı (`None` = kurallar kuruldu). UAC reddi MEVCUT metni
 /// korur ("Yönetici izni verilmedi …"); sıfır dışı başka her kod "tamam" SAYILMAZ (D5 J-3).
@@ -140,6 +151,7 @@ pub fn ekleme_hata_anahtari(kod: i32) -> Option<&'static str> {
         KOD_TAMAM => None,
         crate::paylasim::KOD_UAC_REDDEDILDI => Some("rust.hata.guvenlikDuvariIzinYok"),
         KOD_BOZUK_KURAL_SILINEMEDI => Some("rust.hata.guvenlikDuvariBozukKuralSilinemedi"),
+        KOD_WINDOWS_ENGEL_KURALI => Some("rust.hata.guvenlikDuvariWindowsEngelKurali"),
         _ => Some("rust.hata.guvenlikDuvariKuralEklenemedi"),
     }
 }
@@ -555,14 +567,20 @@ mod tests {
         assert_eq!(ekleme_hata_anahtari(0), None, "başarı (0) hata sayıldı");
         assert_eq!(ekleme_hata_anahtari(1223), Some("rust.hata.guvenlikDuvariIzinYok"), "UAC reddinin MEVCUT iletisi değişti");
         assert_eq!(ekleme_hata_anahtari(3), Some("rust.hata.guvenlikDuvariBozukKuralSilinemedi"), "silinemeyen bozuk kural ayrı söylenmiyor");
-        for kod in [1, 2, 4, 96, 99, -1] {
+        // Y209 · S-D5.13: Windows'un kendi Block kuralı AYRI iletiyle ("kaldırın") söylenir — kural silinmez.
+        assert_eq!(ekleme_hata_anahtari(4), Some("rust.hata.guvenlikDuvariWindowsEngelKurali"), "Windows engel kuralı ayrı söylenmiyor");
+        for kod in [1, 2, 5, 96, 99, -1] {
             assert_eq!(
                 ekleme_hata_anahtari(kod),
                 Some("rust.hata.guvenlikDuvariKuralEklenemedi"),
                 "sıfır dışı çıkış {kod} 'tamam' ya da yanlış ileti sayıldı → arayüz uyarıyı kapatır, erişim YOK"
             );
         }
-        for anahtar in ["rust.hata.guvenlikDuvariKuralEklenemedi", "rust.hata.guvenlikDuvariBozukKuralSilinemedi"] {
+        for anahtar in [
+            "rust.hata.guvenlikDuvariKuralEklenemedi",
+            "rust.hata.guvenlikDuvariBozukKuralSilinemedi",
+            "rust.hata.guvenlikDuvariWindowsEngelKurali",
+        ] {
             for d in [Dil::Tr, Dil::En] {
                 let m = katalog(d).get(anahtar).unwrap_or_else(|| panic!("{anahtar} {d:?} katalogda yok"));
                 assert!(m.contains("{{kod}}"), "{anahtar} {d:?}: çıkış kodu iletide yok (destek ekibi ayıramaz): {m}");
@@ -893,6 +911,39 @@ mod tests {
                 assert_eq!(r[ad].kod, 0, "{ad}: kurallar kurulduğu / zaten doğru olduğu hâlde betik {} ile bitti (yanlış alarm)", r[ad].kod);
             }
             assert!(r["j_dogru_ariza_dugmesi"].olay.is_empty(), "doğru kural varken yeniden kurulmaya çalışıldı");
+        }
+
+        /// Y209 · S-D5.13 (sahip) · SON-A1.51: Windows'un KENDİ Block kuralı (kullanıcı ilk dinlemede "İptal" demiş) varken "İzin ver"
+        /// betiği 'tamam' (0) DEMEZ — Block, Allow'dan önce gelir; eskiden betik 0 dönüyor, uyarı kapanıyor, LAN'dan (mobil / web, ACİL
+        /// DURDUR dahil) erişim kapalı kalıyordu. Kural SİLİNMEZ (kullanıcının / Windows'un kararı) → kod 4 ("kaldırın" iletisi). Devre
+        /// dışı Block ve Windows'un Allow kuralı engel SAYILMAZ; hiçbirine dokunulmaz.
+        #[test]
+        fn KRITIK_Y209_windows_block_kurali_varken_izin_ver_TAMAM_demez_kural_SILINMEZ_kod_4() {
+            let wb_tcp = win("TCP", "Any", "Block");
+            let wb_udp = win("UDP", "Any", "Block");
+            let r = golge_kos(&[
+                ("w_block_iki", vec![wb_tcp.clone(), wb_udp.clone()], ekle_betik(COCUK), 1),
+                ("w_block_tcp", vec![wb_tcp.clone()], ekle_betik(COCUK), 1),
+                ("w_block_adli_dogru", vec![wb_tcp.clone(), wb_udp.clone(), api(COCUK), kesif()], ekle_betik(COCUK), 1),
+                // KARŞIT — engel değil
+                ("w_block_devre_disi", vec![Kural { etkin: "False", ..wb_tcp.clone() }], ekle_betik(COCUK), 1),
+                ("w_allow", vec![win("TCP", "Any", "Allow")], ekle_betik(COCUK), 1),
+            ]);
+            temiz(&r);
+            for ad in ["w_block_iki", "w_block_tcp", "w_block_adli_dogru"] {
+                let x = &r[ad];
+                assert_eq!(
+                    x.kod, KOD_WINDOWS_ENGEL_KURALI,
+                    "{ad}: Windows'un Block kuralı varken betik {} ile bitti — 0 ise arayüz uyarıyı KAPATIR ama LAN engeli sürer; tablo: {:?}",
+                    x.kod, x.tablo
+                );
+                assert!(!x.olay.iter().any(|o| o.starts_with("REMOVE")), "{ad}: Windows'un Block kuralı SİLİNDİ (sahip: silinmez): {:?}", x.olay);
+                assert!(x.tablo.iter().any(|t| t.contains("/Block/")), "{ad}: Block kuralı tablodan kalktı: {:?}", x.tablo);
+            }
+            for ad in ["w_block_devre_disi", "w_allow"] {
+                assert_eq!(r[ad].kod, KOD_TAMAM, "{ad}: engel olmayan Windows kuralında betik {} ile bitti (yanlış alarm)", r[ad].kod);
+                assert!(!r[ad].olay.iter().any(|o| o.starts_with("REMOVE")), "{ad}: Windows'un kuralına dokunuldu: {:?}", r[ad].olay);
+            }
         }
 
         /// D5 J-3 · ÜRETİM BİÇİMİ: aynı kollar betik KENDİ `powershell` sürecinde koşarken — çağıranın okuduğu şey sürecin çıkış kodudur.
