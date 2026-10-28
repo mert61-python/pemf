@@ -5,13 +5,18 @@ ile direkt uyumlu degil — bu modul yalnizca "primary prediction tensor"u
 donduren bir sarmalayici uygular ve EigenCAM'i C2f/CSP katmani uzerinde
 calistirir.
 
-Kullanim:
+Kullanim (urun yolu — retikulosit + bobrek BT, AI1.X2-X3):
     from ultralytics import YOLO
-    from xai_utils.yolo_cam import YoloEigenCAM
+    from ai_hub.xai_utils.pt_yolu import pt_coz
+    from ai_hub.xai_utils.yolo_cam import YoloDetCAM
 
-    yolo = YOLO("yolov8s.pt")
-    cam = YoloEigenCAM(yolo, layer_idx=-2)   # son C2f (Detect'ten onceki)
-    heatmap = cam.explain("image.jpg")       # (H, W) 0-1 heatmap (orijinal boyuta)
+    yolo = YOLO(pt_coz("ai_hub/<modul>/yolov8s.pt"))   # MUTLAK yol (ciplak ad = ultralytics indirme denemesi)
+    cam = YoloDetCAM(yolo, imgsz=640, conf=0.25, method="hirescam", device="cpu")
+    heatmap = cam.explain("image.jpg")       # (H0, W0) 0-1; letterbox dolgusu KIRPILIR, orijinale hizali
+
+YoloEigenCAM (asagida) URUNDE KULLANILMAZ, yalniz geriye uyum: scaleup=False on isleme, letterbox dolgusu
+kirpilmadan orijinale gerilen harita ve etiket-bagimsiz PCA bileseni — olculdu (D67 IG-5.62): kutu payi tesadufi
+duzeyde, retikulositte ham maksimum sol kenarda (x=0). "orijinal boyuta" = yalniz BOYUT, hizalama DEGIL.
 """
 from __future__ import annotations
 from pathlib import Path

@@ -52,7 +52,7 @@ build_report("out/report.html",
 | DenseNet | `model.features.denseblock4` |
 | EfficientNet (torchvision) | `model.features[-1]` |
 | EfficientNet / timm | `model.blocks[-1]` |
-| YOLOv8/11 (detect) | `EigenCAM` (`model.model.model[-2]`) |
+| YOLOv8/11 (detect) | `yolo_cam.YoloDetCAM` — tespit hedefli HiRes-CAM, Detect'in girdileri (`model.model.model[i]`, `i in model.model.model[-1].f` → P3/P4/P5). EigenCAM (`YoloEigenCAM`, `model.model[-2]`) önerilmez: ölçüldü (D67 İG-5.62) kutu payı tesadüf düzeyinde, retikülositte harita sol kenara kilitli |
 | Vision Transformer | `model.blocks[-1].norm1` + reshape_transform |
 
 ## Bağımlılıklar

@@ -16,7 +16,10 @@ Ilgili modul icin uygun target_layer secimi sart. Ornekler:
     ResNet/WideResNet : model.layer4[-1]
     DenseNet-201      : model.features.denseblock4
     EfficientNet      : model.blocks[-1] (timm)  |  model.features[-1] (torchvision)
-    YOLO Detect       : eigen_cam.YOLOEigenCAM (Grad-CAM YOLO'da zayif — EigenCAM tercih)
+    YOLO Detect       : yolo_cam.YoloDetCAM (tespit hedefli HiRes-CAM; Detect'in P3/P4/P5 girdileri) — urun yolu
+                        (retikulosit + bobrek BT, ade28e5f). EigenCAM ONERILMEZ: olculdu (D67 IG-5.62, gercek yolov8s.pt,
+                        dolgusuz 640 girdi) EigenCAM 1./2. bilesen kutu payi %0-9 (tesadufi ~%3-6), retikulositte ham
+                        maksimum sol kenarda (x=0); ayni girdide HiRes-CAM %87-99. YoloEigenCAM yalniz geriye uyum icin.
 """
 
 # PEMF sertlestirmesi (2026-08-26, CI kosusu dersi): grad_cam.py modul-seviyesinde torch
