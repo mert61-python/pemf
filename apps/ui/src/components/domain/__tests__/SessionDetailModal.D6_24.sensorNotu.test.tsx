@@ -93,3 +93,14 @@ it("KATALOG: TR birebir, EN dolu ve bayat iddia iki dilde de yok", () => {
     }
   }
 });
+
+// TUR 2 (çürütücü kolu): "Bu seansta sıcaklık ölçümü yok" kesin bir iddiadır — TEK bir gerçek sıcaklık örneği de ölçümdür. Eşiği 2 örneğe
+// çıkaran mutant (`cur624_n1`) üç kapıda da YAŞIYORDU (fikstürlerde örnek ya 0 ya ≥ 3).
+it("SINIR (tur 2): TEK sıcaklık örneği olan seans — 'sıcaklık ölçümü yok' notu ÇİZİLMEZ", async () => {
+  const tek = JSON.parse(JSON.stringify(CH3.eski));
+  tek.sensor_samples = tek.sensor_samples.filter((s: { temperature_c: unknown }) => s.temperature_c != null).slice(0, 1);
+  expect(tek.sensor_samples).toHaveLength(1); // ARA: GERÇEK satır şekli, tek sıcaklık örneği
+  const m = await ciz(tek);
+  expect(m).not.toContain(BOS_TR);
+  expect(m).toContain(NOT_TR);
+});
