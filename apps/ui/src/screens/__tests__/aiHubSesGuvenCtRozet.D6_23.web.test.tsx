@@ -186,3 +186,22 @@ test("KATALOG: yeni CT metni TR birebir, EN dolu; ses uyarısı VAR OLAN anahtar
   );
   expect(TR["ai.ses.guvenilirDegil"].startsWith(UYARI)).toBe(true);
 });
+
+// TUR 2 (çürütücü kolu): `guvenilir` alanı HİÇ yoksa (GPU `ai_service/app.py` olasılık dönmeyen yanıtta alanı koymaz) sunucu belirsizlik
+// İDDİA ETMEMİŞTİR → uyarı çizilmez (ev sahibi kartı ve tip yorumuyla aynı `=== false` sözleşmesi). Mutant `cur623_n1` (`!result.guvenilir`)
+// bu dosyada YAŞIYORDU: alansız her sonuç "güvenilir değil" diye işaretlenirdi.
+test("SINIR B-6.31: `guvenilir` alanı YOK — 'güvenilir değil' uyarısı ÇİZİLMEZ (yalnız sunucu açıkça false derse)", async () => {
+  const { guvenilir: _g, belirsizlik: _b, ...alansiz } = ses(true);
+  void _g;
+  void _b;
+  sesYaniti = alansiz;
+  await kurAiHub(s, { mod: "veterinarian", hastalar: HASTALAR, ozel: yanitlar });
+  await hastaSec(s, "Mia");
+  await s.metneTikla("Kedi Sesi");
+  aparat.dosyaSiradaki = new File([new Uint8Array([3, 3, 3])], "mia.wav", { type: "audio/wav" });
+  await s.metneTikla("Ses Yükle");
+  await s.metneTikla("Ses Analizini Başlat");
+  await s.bosalt(10);
+  expect(s.metin()).toContain("En olası 3 durum"); // ARA: hekim modülünün sonuç kutusu çizildi
+  expect(s.metin()).not.toContain("Bu sonuç güvenilir değil");
+});
