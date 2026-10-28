@@ -205,7 +205,7 @@
   },
   "ui": {
     "about": "About",
-    "aboutBody": "PEMF Vet launcher. It downloads your selected usage profiles, verifies the downloaded files, installs them and opens the app. It connects automatically to the PEMF device on your network.",
+    "aboutBody": "PEMF Vet launcher. It downloads your selected usage profiles, verifies the downloaded files, installs them and opens the app.",
     "aboutPlat": "Platform",
     "aboutTitle": "About PEMF Vet",
     "aboutVer": "Version",
@@ -260,7 +260,7 @@
     "kapanisYakmaBekleniyor": "The board firmware (STM32) is being updated right now. If it is interrupted the board may not start — please do not turn off the computer. The app will close by itself when the update finishes.",
     "keepOne": "Keep at least one profile",
     "kilavuz": {
-      "connect": "In veterinary mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
+      "connect": "In veterinary mode the PEMF device (coils 1-7) connects to the computer with a USB cable; the app finds the board automatically, no network setup needed. In a hybrid installation (ESP enabled), coil 8 also joins the computer's PEMF-Gateway Wi-Fi access point.",
       "connectTitle": "Connecting to the device (Vet)",
       "intro": "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This launcher downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
       "profTitle": "3 Profiles — which one is for you?",
@@ -277,7 +277,7 @@
           "who": "For pet (cat) owners"
         },
         "p02": {
-          "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, clinic statistics (‘Reports’) and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
+          "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, clinic statistics (‘Reports’) and simulator. The Pet Owner diagnostic models are in a separate profile; select it too if you need them.",
           "key": "vet",
           "use": {
             "u01": "Choose ‘Veterinarian’ and sign in.",

@@ -3,7 +3,7 @@
 window.PEMF_I18N_KATALOG = {
  "en": {
   "about": "About",
-  "aboutBody": "PEMF Vet launcher. It downloads your selected usage profiles, verifies the downloaded files, installs them and opens the app. It connects automatically to the PEMF device on your network.",
+  "aboutBody": "PEMF Vet launcher. It downloads your selected usage profiles, verifies the downloaded files, installs them and opens the app.",
   "aboutPlat": "Platform",
   "aboutTitle": "About PEMF Vet",
   "aboutVer": "Version",
@@ -58,7 +58,7 @@ window.PEMF_I18N_KATALOG = {
   "kapanisYakmaBekleniyor": "The board firmware (STM32) is being updated right now. If it is interrupted the board may not start — please do not turn off the computer. The app will close by itself when the update finishes.",
   "keepOne": "Keep at least one profile",
   "kilavuz": {
-   "connect": "In veterinary mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
+   "connect": "In veterinary mode the PEMF device (coils 1-7) connects to the computer with a USB cable; the app finds the board automatically, no network setup needed. In a hybrid installation (ESP enabled), coil 8 also joins the computer's PEMF-Gateway Wi-Fi access point.",
    "connectTitle": "Connecting to the device (Vet)",
    "intro": "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This launcher downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
    "profTitle": "3 Profiles — which one is for you?",
@@ -75,7 +75,7 @@ window.PEMF_I18N_KATALOG = {
      "who": "For pet (cat) owners"
     },
     "p02": {
-     "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, clinic statistics (‘Reports’) and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
+     "does": "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, clinic statistics (‘Reports’) and simulator. The Pet Owner diagnostic models are in a separate profile; select it too if you need them.",
      "key": "vet",
      "use": {
       "u01": "Choose ‘Veterinarian’ and sign in.",
@@ -242,7 +242,7 @@ window.PEMF_I18N_KATALOG = {
  },
  "tr": {
   "about": "Hakkında",
-  "aboutBody": "PEMF Vet başlatıcısı. Seçtiğiniz kullanım profillerini indirir, inen dosyaların bütünlüğünü doğrular, kurar ve uygulamayı açar. Aynı ağdaki PEMF cihazınıza otomatik bağlanır.",
+  "aboutBody": "PEMF Vet başlatıcısı. Seçtiğiniz kullanım profillerini indirir, inen dosyaların bütünlüğünü doğrular, kurar ve uygulamayı açar.",
   "aboutPlat": "Platform",
   "aboutTitle": "PEMF Vet hakkında",
   "aboutVer": "Sürüm",
@@ -297,7 +297,7 @@ window.PEMF_I18N_KATALOG = {
   "kapanisYakmaBekleniyor": "Kart yazılımı (STM32) şu anda güncelleniyor. Yarıda kesilirse kart açılmayabilir — lütfen bilgisayarı kapatmayın. Güncelleme bitince uygulama kendiliğinden kapanacak.",
   "keepOne": "En az bir profil seçili kalmalı",
   "kilavuz": {
-   "connect": "Veteriner modunda PEMF donanımı, bilgisayarınızla AYNI Wi-Fi ağında olmalıdır. Uygulama cihazı otomatik bulur. Bulamazsa uygulama içindeki Ayarlar’dan cihazın IP adresini elle girebilirsiniz.",
+   "connect": "Veteriner modunda PEMF cihazı (bobin 1-7) bilgisayara USB kablosuyla bağlanır; uygulama kartı otomatik bulur, ağ ayarı gerekmez. Karma kurulumda (ESP etkin) bobin 8 ayrıca bilgisayarın PEMF-Gateway Wi-Fi erişim noktasına bağlanır.",
    "connectTitle": "Cihaza bağlanma (Veteriner)",
    "intro": "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu başlatıcı, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
    "profTitle": "3 Profil — hangisi sizin için?",
@@ -314,7 +314,7 @@ window.PEMF_I18N_KATALOG = {
      "who": "Evcil hayvan (kedi) sahipleri için"
     },
     "p02": {
-     "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, klinik istatistikleri (‘Raporlar’) ve simülatör. Evcil Hayvan Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
+     "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, klinik istatistikleri (‘Raporlar’) ve simülatör. Evcil Hayvan Sahibi teşhis modelleri ayrı profildedir; gerekiyorsa o profili de seçin.",
      "key": "vet",
      "use": {
       "u01": "‘Veteriner Hekim’ profilini seçip girin.",

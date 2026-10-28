@@ -205,7 +205,7 @@
   },
   "ui": {
     "about": "Hakkında",
-    "aboutBody": "PEMF Vet başlatıcısı. Seçtiğiniz kullanım profillerini indirir, inen dosyaların bütünlüğünü doğrular, kurar ve uygulamayı açar. Aynı ağdaki PEMF cihazınıza otomatik bağlanır.",
+    "aboutBody": "PEMF Vet başlatıcısı. Seçtiğiniz kullanım profillerini indirir, inen dosyaların bütünlüğünü doğrular, kurar ve uygulamayı açar.",
     "aboutPlat": "Platform",
     "aboutTitle": "PEMF Vet hakkında",
     "aboutVer": "Sürüm",
@@ -260,7 +260,7 @@
     "kapanisYakmaBekleniyor": "Kart yazılımı (STM32) şu anda güncelleniyor. Yarıda kesilirse kart açılmayabilir — lütfen bilgisayarı kapatmayın. Güncelleme bitince uygulama kendiliğinden kapanacak.",
     "keepOne": "En az bir profil seçili kalmalı",
     "kilavuz": {
-      "connect": "Veteriner modunda PEMF donanımı, bilgisayarınızla AYNI Wi-Fi ağında olmalıdır. Uygulama cihazı otomatik bulur. Bulamazsa uygulama içindeki Ayarlar’dan cihazın IP adresini elle girebilirsiniz.",
+      "connect": "Veteriner modunda PEMF cihazı (bobin 1-7) bilgisayara USB kablosuyla bağlanır; uygulama kartı otomatik bulur, ağ ayarı gerekmez. Karma kurulumda (ESP etkin) bobin 8 ayrıca bilgisayarın PEMF-Gateway Wi-Fi erişim noktasına bağlanır.",
       "connectTitle": "Cihaza bağlanma (Veteriner)",
       "intro": "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu başlatıcı, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
       "profTitle": "3 Profil — hangisi sizin için?",
@@ -277,7 +277,7 @@
           "who": "Evcil hayvan (kedi) sahipleri için"
         },
         "p02": {
-          "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, klinik istatistikleri (‘Raporlar’) ve simülatör. Evcil Hayvan Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
+          "does": "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, klinik istatistikleri (‘Raporlar’) ve simülatör. Evcil Hayvan Sahibi teşhis modelleri ayrı profildedir; gerekiyorsa o profili de seçin.",
           "key": "vet",
           "use": {
             "u01": "‘Veteriner Hekim’ profilini seçip girin.",
