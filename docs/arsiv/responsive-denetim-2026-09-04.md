@@ -6,7 +6,7 @@
 
 ## 1. Karar
 
-**Hayır — henüz tam responsive değil.** Altyapı var ve çoğu yerde doğru kurulmuş (breakpoint tek kaynağı, `useResponsive`, `ResponsiveGrid`, safe-area kabukta, içerik geniş ekranda `maxWidth` ile ortalanıyor, hover'a bağımlı işlev yok, hareket-azalt desteği). Buna rağmen **5 yüksek, 55 orta, 61 düşük** şiddette, koda karşı doğrulanmış **121 bulgu** var; çoğu **dokuz sistemik kök nedene** iniyor. Telefon dikeyde çekirdek akış çalışıyor; **telefon yatay, tablet dikey, DPI'lı küçük PC penceresi ve sistem yazı ölçeği** senaryolarında düzen bozuluyor. Bulguların 31%'i 'kısmen' (doğru ama etkisi sınırlı/koşullu) olarak işaretlendi. {IKINCI_CUMLE}
+**Hayır — henüz tam responsive değil.** Altyapı var ve çoğu yerde doğru kurulmuş (breakpoint tek kaynağı, `useResponsive`, `ResponsiveGrid`, safe-area kabukta, içerik geniş ekranda `maxWidth` ile ortalanıyor, hover'a bağımlı işlev yok, hareket-azalt desteği). Buna rağmen **5 yüksek, 55 orta, 61 düşük** şiddette, koda karşı doğrulanmış **121 bulgu** var; çoğu **dokuz sistemik kök nedene** iniyor. Telefon dikeyde çekirdek akış çalışıyor; **telefon yatay, tablet dikey, DPI'lı küçük PC penceresi ve sistem yazı ölçeği** senaryolarında düzen bozuluyor. Bulguların 31%'i 'kısmen' (doğru ama etkisi sınırlı/koşullu) olarak işaretlendi. (Doldurulmamış şablon yer tutucusu kaldırıldı — D6.71.)
 
 | Şiddet | Sayı | Anlamı |
 |---|---|---|
@@ -178,7 +178,7 @@ Pencere 880x600 mantıksal, minHeight 540 — Windows DPI ölçeğinde mantıksa
 
 ## 7. Alan bazlı bulgu listesi
 
-Kök sütunu bulgunun bağlı olduğu sistemik kökü gösterir (S1-S7, L, W). Tam metinler `docs/responsive-denetim-2026-09-04.bulgular.json` dosyasında.
+Kök sütunu bulgunun bağlı olduğu sistemik kökü gösterir (S1-S7, L, W). Tam metinler `docs/arsiv/responsive-denetim-2026-09-04.bulgular.json` dosyasında.
 
 ### Uygulama kabuğu, tema, navigasyon (pf) — 0 yüksek / 7 orta / 3 düşük
 

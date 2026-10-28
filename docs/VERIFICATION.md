@@ -130,6 +130,9 @@ Get-Content "C:\ProgramData\PEMF_System\PEMF_GUI\logs\backend_service.log" | Sel
 
 ```powershell
 # Bütünlük: dağıtılan model SHA256'ları beklenenle eşleşiyor mu (bozulma/değişim yok):
+# ⚠️ D6.71 (s): launcher kurulumunda model kökü KURULUM dizinindeki `ai_models`'tır (`launcher/core/src/install.rs`,
+#    `PEMF_AI_MODELS_DIR`); `%PROGRAMDATA%\PEMF_GUI\ai_models` arama sırasındaki 2. köktür. Manifest `.json`/`.txt` da kapsar —
+#    bu süzgeç bütünlüğün tamamını göstermez; tam doğrulama: `scripts/model_butunluk.py --dogrula`.
 Get-ChildItem "C:\ProgramData\PEMF_GUI\ai_models\*" -Recurse -Include *.onnx,*.pt |
   ForEach-Object { "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash, $_.Name }
 ```

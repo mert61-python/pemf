@@ -227,7 +227,7 @@ def test_KRITIK_ai_paketi_URETIM_yolunda():
 
       1. Dosya 349 degil **376** satir (iddia yazildiginda bile bayatti).
       2. `ai/hybrid_recommender.py` URETIM kodundan cagriliyor:
-             apps/backend/servers/api_server.py:2451
+             apps/backend/servers/api_server.py (2026-09-19'da :2451 — satır kayar, sembolle arayın)
              `from ai.hybrid_recommender import get_literature_recommendation`
       3. `config.py` de YUKLENIYOR: `ai/__init__.py:23` -> `from . import config`.
          Yani "sifir import" degil; dogru ifade "sembolleri uretimde KULLANILMIYOR".

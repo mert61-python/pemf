@@ -4,7 +4,7 @@ CPN (Contour Proposal Network, `celldetection`, Apache-2.0) ResNeXt-101 UNet ile
 hücre instance segmentasyonu + TScratch-benzeri **wound-closure metrikleri**
 (closure %, ort/maks gap µm, gap alanı mm²) — PEMF çalışmasının primary endpoint'i.
 
-Plan ve sahip kararları: `guii/scratch-entegrasyon-plani.md` (v3, kararlar KESİN).
+Plan ve sahip kararları: `docs/scratch-entegrasyon-plani.md` (v3, kararlar KESİN; ~~`guii/scratch-entegrasyon-plani.md`~~).
 
 ## ✅ TESLİM TAMAMLANDI (2026-08-26 23:12 — cell.zip) + GERÇEK-MODEL DOĞRULAMASI
 

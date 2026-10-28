@@ -90,7 +90,7 @@ guii/
 | `build_tools/` `scripts/` `tools/` | ~~`tools/build` `tools/gates` `tools/ops`~~ ⛔ **İPTAL (F5 · Y27)** — üç dizin yerinde kalır | Bugün üçü karışık: derleme kapıları `scripts/`te, operasyon aracı `build_tools/`ta (bilinçli kabul — taşıma riski kazançtan büyük) |
 | `PEMF_BUILD/` `firmware_cikti/` `offline dağıtım/` | **ağaç dışı** → `../pemf-build/` | Derleme çıktısı kaynakla aynı yerde durmamalı |
 | `pemf-app-packages/` `release_assets/*.exe` | **ağaç dışı** → `../pemf-dist/` | Dağıtım artefaktı; GitHub Releases zaten arşiv |
-| `training_archive/` | **ayrı depo** ya da Git LFS | 297 MB, 434 takipli dosya; her klon indiriyor |
+| `training_archive/` | **ayrı depo** ya da Git LFS | 297 MiB (311 MB), 435 takipli dosya (`git ls-files training_archive \| wc -l`, 2026-10-28); her klon indiriyor |
 | `bin/` | ~~`tools/build/bin/`~~ (F5 İPTAL — Y27; `bin/` yerinde) + LFS | 60 MB üçüncü-parti ikili (cloudflared 52 MB) |
 
 > ## ⚠️ TAŞIMA DERSİ — dizin adı BEŞ biçime girer (2026-09-18 ölçüldü)

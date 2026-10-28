@@ -98,7 +98,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (14+ model; yeni: Yara Kapanma/Scratch CPN) + gömülü küçük ağırlıklar + `PEMF_AI_Test_Girdileri/` |
 | [`ai_service/`](ai_service/README.md) | Bağımsız **GPU (CUDA) inference mikroservisi** (:8100, onnxruntime-gpu + torch cu128 — scratch CPN; opsiyonel) |
 | `release_assets/` | **Model ağırlık deposu (~3,9 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` — git'te yalnız [`release_assets/ai_models/`](release_assets/ai_models/) altındaki küçük dosyalar izlenir; `README.md` ve büyük ağırlıklar yalnız yerelde |
-| [`training_archive/`](training_archive/) | **DONMUŞ eğitim arşivi** (doktora/TÜBİTAK; silinen `esp` dalından kurtarıldı, 434 dosya/296 MB). Lint/format **muaf** — değeri sadakati; elleme |
+| [`training_archive/`](training_archive/) | **DONMUŞ eğitim arşivi** (doktora/TÜBİTAK; silinen `esp` dalından kurtarıldı; 435 takipli dosya — `git ls-files training_archive | wc -l`, 2026-10-28). Lint/format **muaf** — değeri sadakati; elleme |
 
 ### Frontend / Web
 | Klasör | Ne işe yarar |
@@ -166,7 +166,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 - 🔒 **Backend Python-tarafı MAKS DUTY clamp'i YOK** (bilinçli, `STM32_DUTY_MAX_RATIO = None`; sıcaklık eşiği / termal kesme de YOK — A-47) — duty üst sınırı firmware'dedir ve TAŞIYICIDIR (kip tavanının üstü NACK: bipolar 0,5 · unipolar 1,0; ISR bipolar klempi `tpp/2 − DDS_BIPOLAR_GAP_TICKS` — shoot-through). **Frekans ise Python'da kırpılır:** STM 1-25000 Hz (`normalize_frequency_hz`), ESP 1-1000 Hz (`normalize_esp_frequency_hz`, 8266 firmware sınırı), AI Pro duty tavanı %50 (`AI_PRO_DUTY_MAX_RATIO`). Sınır sabitleri `apps/backend/utils/stm32_protocol_limits.py`.
 - 🔒 **PII maskeleme varsayılan KAPALI** (bilinçli sahip kararı) — `PEMF_MASK_HISTORY_PII=1` ile açılır.
 - 🌐 **AI offline** — `apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
-- ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/src` bayat kopyadır.
+- ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/` yalnız üretilen `dist` aynasıdır (takipli `frontend/src` YOK — `git ls-files frontend` boş).
 - 🚀 **Launcher AYRI yayınlanır** (base-app/APK republish onu güncellemez).
 - 🌍 **Çok dillilik (TR + EN):** kullanıcıya görünen her metin katalogdan gelir; yeni metin **iki dilde birlikte** eklenir, var olan Türkçe bayt bayt aynı kalır. İngilizce bayrağı kapalı (`i18n/bayrak.json`). Kısa kural: [`CLAUDE.md`](CLAUDE.md) · ayrıntı: [`i18n/KURALLAR.md`](i18n/KURALLAR.md) · göç durumu: `i18n/kapsam.json` · araçlar `scripts/i18n/`.
 

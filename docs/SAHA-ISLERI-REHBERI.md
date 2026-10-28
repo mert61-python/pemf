@@ -4,12 +4,13 @@
 > burada **sıra**, **komut**, **kabul ölçütü** ve **tuzak** var. Bir çelişki görürsen bağlantı
 > verilen belge doğrudur. (Depo dersi: belgeler sessizce bayatlıyor.)
 
-**Önerilen sıra:** B-1 → B-3 → B-4. Sebep: saha listesindeki (B-3) donanım senaryoları
-reflash'lı cihaz ister, yoksa eski firmware'i test edersin. B-4 fiziksel, ne zaman olsa olur.
+**Önerilen sıra:** ~~B-1 → B-3 → B-4~~ **B-3 → B-4.** ⚠️ ESP alt sistemi KAPALI (`PEMF_ESP_ENABLED` varsayılanı `"0"` —
+`apps/backend/servers/live_state.py`; ESP kodu SİLİNMEZ): B-1 (ESP32-S3 reflash) bugün ilk iş DEĞİLDİR, yalnız ESP yeniden
+açılırsa gerekir. B-3'ün donanım senaryoları güncel STM firmware'li cihaz ister. B-4 fiziksel, ne zaman olsa olur.
 
 ---
 
-## B-1 · ESP32-S3 reflash  ⏱️ ~20 dk
+## B-1 · ESP32-S3 reflash  ⏱️ ~20 dk — ⏸ YALNIZ ESP yeniden açılırsa (bugün KAPALI)
 
 **Neden:** crash-loop düzeltmesi ([FW-6]) kaynakta hazır, kartta değil.
 
@@ -57,8 +58,8 @@ hiç girilmez; girilirse el sıkışma **4 sn**'ye bağlı, her adımdan önce W
 - ✅ Bulut erişilemezken bile `Rebooting` **yok** — artık önce düz TCP ile erişilebilirlik
   yoklanıyor, TLS el sıkışma 4 sn'ye sınırlı ve denemeler arasında WDT besleniyor.
 - ⚠️ `[MagChk] ilk-bosta-pencere |B|=0.589 mT` satırını göreceksin. Bu **hata değil**: sensörün
-  yanında sabit bir DC alan var (demir/mıknatıs). B-2'deki kalibrasyonu neden tepeden-tepeye
-  yapman gerektiğinin sebebi tam olarak budur.
+  yanında sabit bir DC alan var (demir/mıknatıs). ~~B-2'deki kalibrasyonu neden tepeden-tepeye
+  yapman gerektiğinin sebebi tam olarak budur.~~ (B-2 doz kalibrasyonu KALDIRILDI — Ö.4-Y5.)
 
 ---
 

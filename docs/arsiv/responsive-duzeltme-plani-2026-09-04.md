@@ -1,6 +1,6 @@
 # PEMF Responsive Düzeltme Planı — 2026-09-04
 
-Kaynak: `docs/responsive-denetim-2026-09-04.md` (121 benzersiz bulgu, ikinci doğrulama). Bu plan her bulguyu dokuz kök paketinden birine bağlar; paketlerin kod düzeyi adımları 9 planlayıcı ajan tarafından üretilip iki çakışma/sıralama incelemesinden (S1-S6; S7/L/W) geçirildi, çerçeve, fazlar ve kabul kriterleri Claude tarafından yazıldı.
+Kaynak: `docs/arsiv/responsive-denetim-2026-09-04.md` (121 benzersiz bulgu, ikinci doğrulama). Bu plan her bulguyu dokuz kök paketinden birine bağlar; paketlerin kod düzeyi adımları 9 planlayıcı ajan tarafından üretilip iki çakışma/sıralama incelemesinden (S1-S6; S7/L/W) geçirildi, çerçeve, fazlar ve kabul kriterleri Claude tarafından yazıldı.
 
 ## 1. Hedef
 

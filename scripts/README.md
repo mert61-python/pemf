@@ -64,7 +64,7 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 | Script | Görev |
 |---|---|
 | `analyze_project.py` | AST-tabanlı proje/import analizi |
-| `soak_publish_5hz_8coil.py` | Test: sentetik 8-bobin MQTT sensör yükü (ayarlanır Hz, soak testi) |
+| `soak_publish_5hz_8coil.py` | ⛔ Test: sentetik 8-bobin MQTT sensör yükü — ESP kapalıyken (varsayılan) hiçbir canlı yolu ölçmez (`docs/VERIFICATION.md` §7); yerine `scripts/soak_http_ws.py` |
 | `soak_http_ws.py` | Soak — **HTTP + WebSocket** yolu (VERIFICATION §7'nin bugünkü mimariye uyarlaması) |
 | `saha_test_html_uret.py` | `docs/SAHA-TEST-LISTESI.md` → `docs/saha-test-listesi.html` içindeki `const VERI` bloğunu üretir (liste İKİ dosyada elle tutuluyordu, ayrışıyordu) |
 | `b_kaydi_topla.py` | `[BKAYIT]` **seri-port toplayıcı** — S3'ün B kaydını masaüstüne 2 kolonlu CSV yazar (alan + zaman); PWM başlayınca başlar, bitince durur (sahip isteği 2026-09-09) |

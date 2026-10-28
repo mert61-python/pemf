@@ -27,7 +27,7 @@ Klinik cihazının bobinlerini süren gömülü firmware'ler. 2026-08-19'dan ber
 > [`stm32_pemf/README.md`](stm32_pemf/README.md).
 
 Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
-`stm32_pemf/Core/Src/main.c` (**~1670 satır**, elle yazılmış; v2.3.0 SYM-BIPOLAR + derleme-kapılı NTC).
+`stm32_pemf/Core/Src/main.c` (**2643 satır** — `wc -l` 2026-10-28; ~~~1670~~; elle yazılmış; v2.3.0 SYM-BIPOLAR + derleme-kapılı NTC).
 ⚠️ Eski `firmware/main.c` kök kopyası 2026-08-19'da SİLİNDİ — iki kopya sessiz ayrışma üretiyordu
 (`tests/test_stm_main_saglik.py` geri gelmesini engeller). Derleme: CubeIDE'de `stm32_pemf/` aç → Build.
 
@@ -138,7 +138,8 @@ donarsa tam-köprü tek yönde DC olarak enerjili kalır (`PEMF_ForceAllCoilOutp
 çağrılırsa yardımcı olur). Doğru çözüm, BOR'u option byte'tan `BOR_LEVEL_3`'e almak ve PVD ISR'ında
 `PEMF_ForceAllCoilOutputsLow()` çağırmaktır.
 
-Burada kod eklenmedi çünkü bu depoda **gerçek CubeMX HAL başlıkları yok**. Derleme doğrulaması,
+Burada kod eklenmedi çünkü ~~bu depoda **gerçek CubeMX HAL başlıkları yok**~~ (O GÜN yoktu — BAYAT: bugün
+`firmware/stm32_pemf/Drivers` altında 90 takipli HAL/CMSIS dosyası var, `git ls-files firmware/stm32_pemf/Drivers | wc -l`). Derleme doğrulaması,
 denetim sırasında geçici olarak yazılan asgari bir **stub-HAL** ile yapıldı (`arm-none-eabi-gcc
 -mcpu=cortex-m4 -O2 -Wall -Wextra -Wsign-compare` → 0 uyarı). ⚠️ O stub depoda DEĞİLDİR ve
 bilerek öyle bırakıldı: sahte bir HAL'i depoya koymak, gerçek API yüzeyiyle karıştırılma riski

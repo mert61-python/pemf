@@ -8,7 +8,7 @@
 
 
 **Kaynak:** `firmware/stm32_pemf/Core/Src/main.c` (`coil_gpio[]`, `Coil_GpioInit`) +
-`PEMF_UNIPOLAR.ioc`. Elle yazılmadı, kaynaktan üretildi — 2026-09-10, faz 1 sonrası
+`PEMF.ioc` (`firmware/stm32_pemf/PEMF.ioc` — takipli tek `.ioc`; ~~`PEMF_UNIPOLAR.ioc`~~ ayna projesiyle 2026-09-11'de kalktı). Elle yazılmadı, kaynaktan üretildi — 2026-09-10, faz 1 sonrası
 (`NUM_COILS = 7`, paket 121 bayt).
 
 **Toplam:** LQFP144'te 114 GPIO (PA-PG tam 16, PH yalnız 0/1). **50'si kullanımda, 64'ü boş.**
@@ -38,7 +38,8 @@ Tutarlı: ESP'den taşınan iki bobin (6, 7) tam olarak duvar çifti; arka duvar
 Ders: ölçüm kaydına bobin numarasını SAHİP söylemeden yazma.
 
 ⚠️ **Maske 0x00 (sahip kararı 2026-09-10):** darbe DAİMA IN_A'dan çıkar. `PEMF_BOBIN_TERS_MASKESI`
-bitini set etmek darbeyi **kablosuz** IN_B pinine taşır → o bobin **sessizce sürülmez** (ACK'te
+bitini set etmek darbeyi IN_B pinine taşır → **bobin 6-7'de** (IN_B kablosuz) o bobin **sessizce sürülmez**; bobin 1-5'te
+IN_B BAĞLIDIR (aşağıdaki 2026-09-11 notu) — orada bit polariteyi tersler (`main.c` POLARİTE TERSLEME) (ACK'te
 duty görünür, arayüz "Aktif" der, alan sıfırdır). 2026-09-08'de maske 0x03'tü ve bobin 1-2 tam
 bu şekilde ölüydü. Yön yanlışsa çözüm **bobin uçlarını fiziksel çevirmek**.
 

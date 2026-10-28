@@ -377,10 +377,11 @@ class HedefSaglayici(Protocol):
   Kedi eşiği 0.3 DEĞİŞMEZ. Petri `reliability=conf×solidity` mevcut, aynı tavan uygulanır.
 - **E eşlemesi**: `e_field` = hedef sınıfının E'si (sınıf 1 → `result_E_cancer`, sınıf 0 → `result_E_healthy`);
   `e_cancer`/`e_healthy` specs'e yalnız-ek. `ood` = fantom eğitim aralığı dışı ∨ petri sınıf 1.
-- **Duty clip**: mevcut 0..0.50 kırpma (`AI_PRO_DUTY_MAX_RATIO`, `apps/backend/utils/stm32_protocol_limits.py:15`) kedi
+- **Duty clip**: mevcut 0..0.50 kırpma (`AI_PRO_DUTY_MAX_RATIO`, `apps/backend/utils/stm32_protocol_limits.py` — sembolle; ~~`:15`~~) kedi
   cpu/gpu fonksiyonlarından `_predict_and_drive` ZARFINA taşınır → tüm sağlayıcılar geçer, kedi davranışı
-  bit-bit aynı, onay modalında **gösterilen = sürülen**. Bu YENİ sınır değildir; backend freq/duty/48 °C
-  güvenlik sınırı değişmezine dokunulmaz.
+  bit-bit aynı, onay modalında **gösterilen = sürülen**. Bu YENİ sınır değildir. ~~backend freq/duty/48 °C
+  güvenlik sınırı değişmezine dokunulmaz.~~ Backend'de tedavi duty tavanı ve 48 °C sınırı YOKTUR (Y9 · A-47 — geri
+  EKLENMEZ); frekans protokol sınırı TAŞIYICIDIR ve değişmez.
 - **Bayrak**: `PEMF_ARASTIRMA_AIPRO` backend'de uygulanır: `propose` ve `start` (mühür) model ≠ kedi iken
   bayrak `'1'` değilse 409. Taşıyıcı: `deploy/device.env` satırı (karar #17); status/hazirlik yanıtına yalnız-ek
   `arastirmaAiProAcik: bool`, `arastirmaAiProNeden: str`. Backend `.env`'i otomatik yüklemez
@@ -710,7 +711,8 @@ kapalı (`PEMF_AI_SERVICE_URL` yalnız docker-compose.micro.yml) → ertelenebil
 ---
 
 ## 8. Kapsam Dışı
-Çoklu/sıralı hedef sürüşü; backend'de userMode kapısı; yeni HTTP rotası; backend freq/duty/48 °C sınırı ekleme/kaldırma
+Çoklu/sıralı hedef sürüşü; backend'de userMode kapısı; yeni HTTP rotası; ~~backend freq/duty/48 °C sınırı ekleme/kaldırma~~ backend'e tedavi duty / 48 °C sınırı EKLEME (yok — Y9 · A-47) ya da frekans
+protokol sınırını kaldırma (TAŞIYICI)
 (`_AI_PRO_FREQ_HZ=1.0`, `_AI_PRO_MAX_DURATION_MIN=120`, kedi `_MIN_RELIABILITY=0.3` değişmez); model yeniden eğitimi;
 AI Hub tek-foto modüllerinin otonom başlatması (yalnız yönlendirme); jeton/ücretlendirme şeması (FREE_MODE=true);
 `manual_select` cv2 penceresi; kedi kod yolu/yayın notlarının yeniden yazımı; bulut/Supabase, launcher, firmware.

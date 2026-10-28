@@ -15,7 +15,7 @@
 > **`docs/scratch-entegrasyon-plani.md`** (8 sahip kararı KESİN; `/api/ai/vision/scratch` + `/infer/scratch`
 > + "Yara Kapanma (Scratch)" UI + 27 backend + 5 jest testi; cell/ paketi ✅ teslim alındı
 > (2026-08-26) — `ai_hub/inference_paper_dilek_hoca/cell/`).
-> 🔴 **HÂLÂ AÇIK — LAUNCHER ÇOKLU-MODEL-ZIP (1.9.39):** launcher 1.9.38'de iş yok (ölçüldü);
+> ✅ ~~🔴 **HÂLÂ AÇIK**~~ **YAPILDI — LAUNCHER ÇOKLU-MODEL-ZIP (1.9.39)** (bkz. aşağıda "Sıradaki tek kırmızı ön-koşul — ✅ YAPILDI"; manifest `model_parts.research` → `research-2.zip`). Tarihçe: launcher 1.9.38'de iş yok (ölçüldü);
 > artık İKİ PT'nin (renal 859MB + scratch 872MB) saha ön-koşulu — scratch planında **Faz 4.5**.
 >
 > **DENETİMİN BULDUĞU GERÇEK EKSİKLER (kod-kanıtlı) — aşağıda §KALAN-2026-08-26:**

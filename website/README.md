@@ -5,7 +5,7 @@ Eski masaüstü-installer **indirme sayfası** (statik `index.html` + `version.j
 
 - **Yerine geçen:** [`../apps/web/`](../apps/web/README.md) — canlı pazarlama/indirme sitesi (Vite+React, Vercel, iyzico ödeme).
 - **Bugün nereye deploy ediliyor:** hiçbir yere. Tarihsel referans olarak duruyor — **silme, bırak** (runtime ile ilgisi yok).
-- Not: kökteki `frontend_version.json` (v1.4.1) BU sayfayla ilgisiz — o, `update_manager.py`'nin okuduğu frontend-OTA sürüm kaynağıdır.
+- Not: kökteki `frontend_version.json` (sürümü dosyanın kendisindedir — burada kopyalanmaz; ~~v1.4.1~~) BU sayfayla ilgisiz — o, `update_manager.py`'nin okuduğu frontend-OTA sürüm kaynağıdır.
 
 ---
 İlgili: [güncel site: apps/web/](../apps/web/README.md) · [proje geneli](../README.md)
