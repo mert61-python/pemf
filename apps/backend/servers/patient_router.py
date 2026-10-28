@@ -168,7 +168,13 @@ def remove_patient(patient_id: str, request: Request):
 
 @router.post("/api/patients/{patient_id}/delete")
 def remove_patient_compat(patient_id: str, request: Request):
-    """Backward-compatible delete route used by the current Expo app."""
+    """Backward-compatible delete route used by the current Expo app.
+
+    Y204 (S-D5.8): yalnız `application/json` isteği yürütülür (Sıfırla emsali) — operatörsüz klinikte kimliği bilen bir sayfa basit
+    (ön-uçuşsuz) çapraz kökenli POST'la hasta silemesin. Arayüz ve APK 2.3.34 `apiPost(…, {})` ile JSON gönderir; `DELETE` yöntemi
+    zaten ön-uçuş ister."""
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail=ceviri.t("hasta.hata.silmeJson"))
     return remove_patient(patient_id, request)
 
 

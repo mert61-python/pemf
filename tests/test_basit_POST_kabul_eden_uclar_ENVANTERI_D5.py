@@ -58,7 +58,11 @@ _KABUL_SINIFLARI = frozenset(
         "x_BILINMEYEN_ROTA",  # APIRoute olmayan POST rotası: sınıflanamaz → kabul sayılır (fail-closed)
     }
 )
-_RED_SINIFLARI = frozenset({"a_JSON_ZORUNLU", "d_HAM_ICERIK_TURU_KAPILI", "h_OZEL_BASLIK"})
+#: SON (Y204 · S-D5.8): gövdesiz uç da `if <content-type okuması>: raise` kapısıyla basit POST'u reddeder (`b_GOVDESIZ_ICERIK_TURU_KAPILI`) —
+#: eskiden kapı yalnız ham gövde OKUYAN uçta (d) sayılıyordu; gövdesiz + kapılı uç "kabul" görünürdü (sentetik `b_icerik_turu_kapili` ölçer).
+_RED_SINIFLARI = frozenset(
+    {"a_JSON_ZORUNLU", "b_GOVDESIZ_ICERIK_TURU_KAPILI", "d_HAM_ICERIK_TURU_KAPILI", "h_OZEL_BASLIK"}
+)
 #: CORS'ta "güvenli" (ön-uçuş istemeyen) istek başlıkları — bunların dışındaki ZORUNLU başlık ön-uçuş ister.
 _GUVENLI_BASLIKLAR = frozenset({"accept", "accept-language", "content-language", "content-type"})
 _HAM_OKUMALAR = frozenset({"json", "body", "form", "stream"})
@@ -181,7 +185,7 @@ def _rota_sinifi(route) -> str:
         return "d_HAM"  # kaynak okunamadı → içerik türü denetimi KANITLANAMAZ → kabul (fail-closed)
     if _ham_okuma(fdef):
         return "d_HAM_ICERIK_TURU_KAPILI" if _icerik_turu_kapisi(fdef) else "d_HAM"
-    return "b_GOVDESIZ"
+    return "b_GOVDESIZ_ICERIK_TURU_KAPILI" if _icerik_turu_kapisi(fdef) else "b_GOVDESIZ"
 
 
 def siniflandir(app) -> dict:
@@ -373,24 +377,8 @@ ENVANTER = {
         "Yalnız canlı durumda bağlantısız ESP'nin `running` bayrağını düşürür (görünüm); istemci çağırmıyor.",
     ),
     # ── veri / sistem ──
-    "POST /api/notifications/clear": _e(
-        "b_GOVDESIZ",
-        False,
-        "EVET",
-        "ORTA",
-        "Bellekteki bildirimleri siler — güvenlik bildirimleri (mandal yazılamadı, ACİL DURDUR uyarısı) operatörden gizlenebilir. "
-        "LAN jetonsuz. Eski APK `{}` JSON gönderir.",
-        sahibe=True,
-    ),
-    "POST /api/patients/{patient_id}/delete": _e(
-        "b_GOVDESIZ",
-        False,
-        "EVET",
-        "ORTA",
-        "Hasta siler (geri dönüşsüz). Kimlik uuid4 (çapraz köken listeyi okuyamaz); kayıtlı operatörlü klinikte `X-PEMF-Operator` "
-        "(özel başlık → ön-uçuş) şart; operatörsüz klinikte kimlik bilinirse silinir. Eski Expo/APK `{}` JSON POST atar.",
-        sahibe=True,
-    ),
+    # SON (Y204 · S-D5.8): `/api/notifications/clear` ve `/api/patients/{patient_id}/delete` artık `application/json` değilse 415
+    # (`b_GOVDESIZ_ICERIK_TURU_KAPILI`) → listeden ÇIKTI; davranış kapısı `test_bildirim_temizle_ve_hasta_sil_JSON_ZORUNLU_Y204.py`.
     "POST /api/client/error": _e(
         "d_HAM",
         False,
@@ -571,6 +559,18 @@ def _sentetik_uygulamalar():
     def b_varsayilanli(m: Optional[_Model] = None):
         return {"ok": True}
 
+    @app.post("/b_icerik_turu_kapili")
+    def b_icerik_turu_kapili(request: Request):
+        if "application/json" not in (request.headers.get("content-type") or "").lower():
+            raise HTTPException(status_code=415)
+        return {"ok": True}
+
+    @app.post("/b_yorumda_kalan")
+    def b_yorumda_kalan(request: Request):
+        """Belge dizesi: if "application/json" not in request.headers.get("content-type"): raise HTTPException(415)."""
+        # if "application/json" not in (request.headers.get("content-type") or "").lower(): raise HTTPException(415)
+        return {"ok": True}
+
     @app.post("/c_form")
     def c_form(x: str = Form(...)):
         return {"ok": True}
@@ -629,6 +629,8 @@ def _sentetik_uygulamalar():
         "POST /a_duz_metin": "a_DUZ_METIN",
         "POST /b_bos": "b_GOVDESIZ",
         "POST /b_varsayilanli": "b_GOVDESIZ_VARSAYILANLI",
+        "POST /b_icerik_turu_kapili": "b_GOVDESIZ_ICERIK_TURU_KAPILI",
+        "POST /b_yorumda_kalan": "b_GOVDESIZ",
         "POST /c_form": "c_FORM",
         "POST /c_dosya": "c_FORM",
         "POST /d_ham": "d_HAM",
@@ -785,7 +787,9 @@ def test_KRITIK_dinamik_b_ACIL_DURDUR_basit_POSTla_da_200_ve_porta_STOP(ortam, y
     _statik_tutarli("POST /api/hardware/emergency_stop", "b_GOVDESIZ")
 
 
-def test_KRITIK_dinamik_b_GOVDESIZ_uc_basit_POSTla_YURUTULUR_bildirimler_silinir(ortam):
+def test_KRITIK_dinamik_b_GOVDESIZ_ICERIK_TURU_KAPILI_uc_basit_POSTu_REDDEDER_bildirimler_DURUR(ortam):
+    """SON (Y204 · S-D5.8): eskiden bu kol "basit POST bildirimleri SİLER" ölçüyordu (envanter EVET / ORTA, [SAHİBE] S-D5.8); sahip
+    kararıyla uç `application/json` değilse 415 → aynı istek artık REDDEDİLİR ve bildirim DURUR (statik sınıf da red sınıfında)."""
     api = ortam.api
     with api._live_state_lock:
         eski = list(api._live_state["notifications"])
@@ -797,10 +801,10 @@ def test_KRITIK_dinamik_b_GOVDESIZ_uc_basit_POSTla_YURUTULUR_bildirimler_silinir
     finally:
         with api._live_state_lock:
             api._live_state["notifications"][:] = eski
-    assert r.status_code == 200 and not kalan, (
-        f"ölçüm: çapraz kökenli basit POST bildirimleri silmeliydi (envanter: EVET/ORTA) — {r.status_code}, kalan {kalan}"
+    assert r.status_code == 415 and len(kalan) == 1, (
+        f"çapraz kökenli basit POST güvenlik bildirimlerini SİLMEMELİ (Y204) — {r.status_code}, kalan {kalan}"
     )
-    _statik_tutarli("POST /api/notifications/clear", "b_GOVDESIZ")
+    _statik_tutarli("POST /api/notifications/clear", "b_GOVDESIZ_ICERIK_TURU_KAPILI")
 
 
 @pytest.mark.parametrize("yol", ["/api/ai/vision/thermal", "/api/ai/sound/cat"])

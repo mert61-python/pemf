@@ -147,8 +147,13 @@ async def get_dashboard_snapshot():
 
 
 @router.post("/api/notifications/clear")
-async def clear_notifications():
-    """Clear in-memory notifications shown in React clients."""
+async def clear_notifications(request: Request):
+    """Clear in-memory notifications shown in React clients.
+
+    Y204 (S-D5.8): yalnız `application/json` isteği yürütülür (Sıfırla emsali) — basit (ön-uçuşsuz) çapraz kökenli POST güvenlik
+    bildirimlerini (mandal yazılamadı, ACİL DURDUR uyarısı) silemesin. Arayüz ve APK 2.3.34 `apiPost(…, {})` ile JSON gönderir."""
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail=ceviri.t("sistem.hata.bildirimTemizleJson"))
     from servers import api_server as _api
 
     with _api._live_state_lock:
