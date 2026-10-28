@@ -17,6 +17,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { OperatorProvider } from "@/context/OperatorContext";
 import { EntitlementProvider } from "@/context/EntitlementContext";
 import { AuthScreen } from "@/screens/AuthScreen";
+import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 
 // audit B-6.1: code-splitting — ilk-boyama (Welcome/Dashboard) EAGER; ağır/nadir ekranlar LAZY →
 // açılış bundle'ı küçülür (özellikle web tek-bundle). Named export → default'a sar. Suspense fallback altta.
@@ -80,10 +81,14 @@ function MainRouter() {
 export function AuthGate() {
   const { session, loading, hesapEkleniyor, hesapEklemeVazgec } = useAuth();
   if (loading) {
-    // Saklı oturum kontrol edilirken kısa yükleme (splash)
+    // Saklı oturum kontrol edilirken kısa yükleme (splash; tavan `HYDRATE_SPLASH_CEILING_MS` = 6 sn).
+    // ⚠️ L1-7.11 (O-9.1 · A-58 deseni): uygulama bobinler çalışırken yeniden açılırsa splash süresince de ACİL DURDUR olmalı —
+    // Karşılama / Giriş ekranlarıyla AYNI `GlobalEmergencyStop` (görünürlük yalnız donanım durumuna bağlı; oturuma / yüklemeye /
+    // kataloğa BAĞLANMAZ, Ö.4-Y8). `LiveDataProvider` en dışta → anlık görüntü splash'te de canlı. Kapı: AuthGate.L1_7_11.splashAcilDurdur.test.tsx
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <GlobalEmergencyStop />
       </View>
     );
   }
