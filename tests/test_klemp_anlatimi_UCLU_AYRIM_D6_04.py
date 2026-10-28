@@ -131,3 +131,80 @@ def test_controllers_readme_firmware_klempini_TASIYICI_anlatir():
     s = _gecerli_satir(_oku(CTRL), "Tedavi güvenlik-sınırı (safety clamp) YOK")
     for b in ("STM32_DUTY_MAX_RATIO = None", "A-47", "TAŞIYICI", "DUTY_MAX_BIPOLAR", "DDS_BIPOLAR_GAP_TICKS"):
         assert b in s, f"controllers/README klemp satırı '{b}' içermeli"
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# D6.36 (B-11.3) — "backend'de freq/faz clamp'i yok, firmware satüre eder" anlatımı YOK; protokol sınırı backend'de TAŞIYICI
+# ÖLÇÜLEN (HEAD ebf1c3fe): `docs/VERIFICATION.md` §1 "Backend'de freq/duty/sıcaklık clamp'i bilinçli yok; güvenlik firmware'e
+# devredilmiş … fiziksel olarak satüre mi ediyor, aşırı-ısınmada kesiyor mu?" · `firmware/README.md` "Python tarafı bilinçli olarak
+# duty satüre etmez (firmware doyurur)". Gerçek: `hardware_controller.py` `normalize_frequency_hz` / `normalize_phase_deg`,
+# `api_server.py` `normalize_esp_frequency_hz` çağırır (TAŞIYICI — firmware aralık dışını NACK'ler, satüre ETMEZ); termal kesme YOK.
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+VERIF = KOK / "docs" / "VERIFICATION.md"
+FW_README = KOK / "firmware" / "README.md"
+HC = KOK / "apps" / "backend" / "controllers" / "hardware_controller.py"
+API = KOK / "apps" / "backend" / "servers" / "api_server.py"
+
+YASAK_D636 = YASAK + (
+    re.compile(r"freq/duty/sıcaklık \*\*clamp'i bilinçli yok", re.I),
+    re.compile(r"firmware(/timer)? doyurur", re.I),
+    re.compile(r"aşırı-ısınmada\s+kesiyor\s+mu\?", re.I),  # satır kırılımı da (mutant m4 yaşadı → kol eklendi)
+)
+
+
+def _cagri_sayisi(p: Path, ad: str) -> int:
+    agac = ast.parse(_oku(p))
+    return sum(
+        1
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Call)
+        and (
+            (isinstance(d.func, ast.Name) and d.func.id == ad)
+            or (isinstance(d.func, ast.Attribute) and d.func.attr == ad)
+        )
+    )
+
+
+def _verification_bolum1() -> str:
+    m = _oku(VERIF)
+    bas = m.index("## ⏳ 1 — ")
+    son = m.index("\n## ", bas + 5)
+    return m[bas:son]
+
+
+def test_D6_36_protokol_siniri_cagrilari_backendde_VAR():
+    assert _cagri_sayisi(HC, "normalize_frequency_hz") >= 1, (
+        "hardware_controller frekans protokol sınırı çağrısı YOK (TAŞIYICI — Y9)"
+    )
+    assert _cagri_sayisi(HC, "normalize_phase_deg") >= 1, (
+        "hardware_controller faz protokol sınırı çağrısı YOK (TAŞIYICI — Y9)"
+    )
+    assert _cagri_sayisi(API, "normalize_esp_frequency_hz") >= 1, (
+        "api_server ESP frekans sınırı çağrısı YOK (TAŞIYICI — 8266 NACK)"
+    )
+
+
+@pytest.mark.parametrize(
+    "ad,metin",
+    [("VERIFICATION §1", _verification_bolum1), ("firmware/README", lambda: _oku(FW_README))],
+    ids=["VERIFICATION-1", "firmware-README"],
+)
+def test_D6_36_belge_clamp_yok_firmware_satureder_DEMEZ(ad, metin):
+    m = re.sub(r"~~.*?~~", " ", metin(), flags=re.S)  # üstü çizili tarihçe hariç
+    bulunan = [r.pattern for r in YASAK_D636 if r.search(m)]
+    assert not bulunan, f"{ad}: bayat klemp anlatımı ({bulunan}) — protokol sınırı backend'de TAŞIYICI (D6.36)"
+
+
+def test_D6_36_VERIFICATION_bolum1_protokol_sinirini_ve_firmware_klempini_anar():
+    b = _verification_bolum1()
+    for parca in (
+        "TAŞIYICI",
+        "normalize_frequency_hz",
+        "normalize_esp_frequency_hz",
+        "NACK",
+        "DUTY_MAX_BIPOLAR",
+        "DDS_BIPOLAR_GAP_TICKS",
+        "A-47",
+    ):
+        assert parca in b, f"VERIFICATION §1 '{parca}' anmalı (D6.36)"

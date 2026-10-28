@@ -149,10 +149,19 @@ while ($true) {
 
 ## ⏳ 1 — Firmware güvenlik satürasyonu (DONANIM BENCH)
 
-Backend'de freq/duty/sıcaklık **clamp'i bilinçli yok** (B-1.5); güvenlik firmware'e devredilmiş. Bench:
+Backend'de tedavi **duty tavanı ve sıcaklık eşiği bilinçli yok** (B-1.5 · Y9 — geri EKLENMEZ); termal kesme hiçbir
+katmanda YOK (A-47). ⚠️ **Frekans ve faz protokol-geçerlilik sınırı ise backend'de VAR ve TAŞIYICIDIR**
+(`utils/stm32_protocol_limits`: STM 1–25000 Hz, faz 0–360°, ESP ≤1000 Hz — `hardware_controller.py`
+`normalize_frequency_hz` / `normalize_phase_deg`, `api_server.py` `normalize_esp_frequency_hz`): firmware aralık dışı
+freq/fazı satüre ETMEZ, NACK'ler (`main.c` `RANGE coil=… field=freq|phase`) → sınır kaldırılırsa bobin sessizce sürülmez.
+Duty üst sınırı FIRMWARE'dedir ve TAŞIYICIDIR: kip tavanının üstü NACK (`DUTY_MAX_BIPOLAR` 0,5 · `DUTY_MAX_UNIPOLAR` 1,0 —
+D1.101 · Y20), ISR bipolar darbeyi `tpp/2 − DDS_BIPOLAR_GAP_TICKS` ile kıstırır (shoot-through). Bench:
 
-- STM32 firmware'e **sınır-dışı** freq/duty gönder (ör. duty=%100, freq=çok yüksek) → bobin/sürücü
-  fiziksel olarak satüre mi ediyor, aşırı-ısınmada kesiyor mu? Osiloskop + termal kamera ile ölç.
+- STM32'ye kip tavanının **üstünde** duty gönder (ör. bipolar bobine duty=%60) → kart NACK'lemeli, bobin sürülmemeli;
+  tavana eşit duty (%50) → skopta iki faz ASLA aynı anda aktif olmamalı (shoot-through yok). Backend'i atlayan ham seri
+  paketle aralık dışı freq (ör. 30000 Hz) → `RANGE … field=freq` NACK. ~~fiziksel olarak satüre mi ediyor, aşırı-ısınmada
+  kesiyor mu? Osiloskop + termal kamera ile ölç.~~ (A-47: termal kesme YOK — ölçülecek bir kesme yoktur; sıcaklık yalnız
+  ölçülür ve gösterilir.)
 - **Tıbbi cihaz için:** bu, yazılı **güvenlik-dosyası (safety case)** ile kanıtlanmalı — kod okuması
   bu iddiayı test etmez. Bu, B-1.5 "yazılı risk-kabulü"nün donanım tarafı.
 
