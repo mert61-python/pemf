@@ -79,3 +79,6 @@ onnxruntime==1.19.2               # EM modulleri (em_kedi/fantom/petri) modul-se
                                    # XAI kalem-4 testleri gercek predict-zinciri sozlesmesini olcer
                                    # (CPU wheel ~50MB, GB-sinifi 'agir AI' degil; kosu 71c19a8 dersi)
 PyYAML==6.0.3                    # cabin_config kapısı (tests/test_kabin_config_65x50x50.py) — üretimde requirements.txt'te; CI'da yoktu → predictor DEFAULT'a düşüyordu
+PyMuPDF==1.28.0                  # Y205 · S-D5.18 (sahip): PDF kapıları (rapor metni / Türkçe karakter / gömülü font) — YALNIZ test bağımlılığı;
+                                 # sürüm yerelde kurulu olanla aynı (pip install YAPILMADI). Kurulu değilse testler
+                                 # `capraz.paket_yoksa_atla("fitz")` ile atlar, PEMF_CAPRAZ_KAYNAK_ZORUNLU=1'de DÜŞER.

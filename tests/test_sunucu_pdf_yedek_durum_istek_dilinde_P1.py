@@ -11,6 +11,7 @@ import re
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -108,7 +109,7 @@ def test_seans_durumu_etiketi_istek_dilinde_ham_deger_degismez(dil):
 
 # ── PDF (uçtan uca) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF metni çıkarılamaz")
+fitz = capraz.paket_yoksa_atla("fitz", sebep="PyMuPDF yok -> PDF metni çıkarılamaz")
 
 
 def _rapor(tmp_path, dil_kodu):

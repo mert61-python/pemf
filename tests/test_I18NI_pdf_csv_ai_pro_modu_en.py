@@ -11,6 +11,7 @@ import re
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -50,7 +51,7 @@ def test_mod_etiketi_TR_ham_EN_ingilizce(dil, mod):
 
 
 def test_EN_seans_PDF_AI_Pro_modu_ingilizce(tmp_path):
-    fitz = pytest.importorskip("fitz")
+    fitz = capraz.paket_yoksa_atla("fitz")
     from database.treatment_history_db import TreatmentHistoryDB
     from utils import ceviri
     from utils.pdf_report_generator import PDFReportGenerator

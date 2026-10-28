@@ -9,10 +9,11 @@ Sahip A-02'de tutarlılığı A-01 yönünde kurdu (liste kısıtlanmaz, PDF'in 
 
 from __future__ import annotations
 
+import capraz
 import pytest
 from fastapi.testclient import TestClient
 
-fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF uretimi yok")
+fitz = capraz.paket_yoksa_atla("fitz", sebep="PyMuPDF yok -> PDF uretimi yok")
 from test_ai_analiz_pdf import analiz  # noqa: E402,F401 — aparat (gerçek AI kaydı)
 
 TUNEL = {"cf-connecting-ip": "203.0.113.4", "cf-ray": "9b-IST"}

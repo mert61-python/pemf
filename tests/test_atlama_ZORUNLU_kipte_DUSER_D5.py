@@ -725,29 +725,13 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         "PAKET: albumentations requirements*.txt'te doğrudan bildirili DEĞİL (yalnız geçişli — yorum satırı); ultralytics ile aynı find_spec döngüsünde → ZORUNLU yapılmadı",
     ),
-    'tests/test_D3_04_ai_gecmisi_liste_ve_PDF_AYNI_erisim_sinifi_A02.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
-    ),
     'tests/test_D3_41_kurtarma_kilidi_SEVK_AGACIYLA_ayni.py': (
         1,
         "ORTAM: gömülü derleme Python'u kimliği (python3XX.zip) — CI / venv'de bilinçli atlar; statik + sentetik kollar her ortamda koşar (eser değil yorumlayıcı kimliği)",
     ),
-    'tests/test_I18NI_pdf_csv_ai_pro_modu_en.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
-    ),
     'tests/test_YH_D2_bagimlilik_sabitleri_kurulu_surumle_ayni.py': (
         1,
         "ORTAM: gömülü derleme Python'u kimliği — geçişli bağımlılık sürümleri yalnız yayın yorumlayıcısında anlamlı (CI / venv başka sürüm taşır)",
-    ),
-    'tests/test_ai_analiz_pdf.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
-    ),
-    'tests/test_ai_analiz_pdf_OKUNUR_TURKCE.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
     ),
     'tests/test_capraz_atla_ve_paket_ZORUNLU_kipte_DUSER_D5.py': (
         1,
@@ -784,26 +768,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
     'tests/test_manifest_consistency.py': (
         1,
         'TASARIM: manifestte `launcher` bloğu opsiyonel (şema); eser yokluğu değil — tarayıcı koşulu manifest okuyan yolu çözerken sayıyor',
-    ),
-    'tests/test_pdf_turkce_karakter_ATLAMA_D5_17.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); D5.17 kolu fitz KURULUYKEN `_fitz()`in atlamadığını ölçer, fitz yoksa ölçecek şey yok',
-    ),
-    'tests/test_pdf_TOPLAM_SEANS_bulunan_seanslarla_TUTARLI_D234.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
-    ),
-    'tests/test_pdf_secili_seans_SQL_suzgeci_D228.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
-    ),
-    'tests/test_seans_mod_hedef_etiketi_P1.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
-    ),
-    'tests/test_sunucu_pdf_yedek_durum_istek_dilinde_P1.py': (
-        1,
-        'PAKET: PyMuPDF (fitz) HİÇBİR requirements*.txt / build betiğinde yok (yalnız testte — K5-F ölçtü); yayın makinesi taşıdığını BEYAN etmiyor → K5_F gereği ZORUNLU yapılmadı',
     ),
     'tests/test_tedavi_db_YOL_YAZIMI_suren_seansi_MUHURLEMEZ_D157.py': (
         1,

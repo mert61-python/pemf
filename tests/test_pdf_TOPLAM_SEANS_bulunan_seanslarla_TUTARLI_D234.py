@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import re
 
+import capraz
 import pytest
 
-fitz = pytest.importorskip("fitz", reason="PyMuPDF yok")
+fitz = capraz.paket_yoksa_atla("fitz", sebep="PyMuPDF yok")
 
 
 @pytest.fixture

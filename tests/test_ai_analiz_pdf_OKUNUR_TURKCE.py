@@ -22,13 +22,14 @@ import re
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
-fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF metni cikarilamaz")
+fitz = capraz.paket_yoksa_atla("fitz", sebep="PyMuPDF yok -> PDF metni cikarilamaz")
 
 #: Ekrandaki rapordaki kaydın birebir sonuç ayrıntısı (Mia, Hastalık Analizi, 13.10.2026 19:45:42).
 HASTALIK_DETAYI = {

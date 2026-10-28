@@ -17,6 +17,7 @@ import re
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -153,7 +154,7 @@ def test_arayuz_ve_sunucu_tablolari_ANAHTAR_ANAHTAR_ve_TR_EN_etiketle_AYNI():
 
 # ── PDF (gerçek DB + gerçek üretici) ────────────────────────────────
 
-fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF metni çıkarılamaz")
+fitz = capraz.paket_yoksa_atla("fitz", sebep="PyMuPDF yok -> PDF metni çıkarılamaz")
 
 
 def _pdf_metni(tmp_path, dil_kodu):

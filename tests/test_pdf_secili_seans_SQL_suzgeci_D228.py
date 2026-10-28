@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import capraz
 import pytest
 
-fitz = pytest.importorskip("fitz", reason="PyMuPDF yok -> PDF metni cikarilamaz")
+fitz = capraz.paket_yoksa_atla("fitz", sebep="PyMuPDF yok -> PDF metni cikarilamaz")
 
 
 @pytest.fixture

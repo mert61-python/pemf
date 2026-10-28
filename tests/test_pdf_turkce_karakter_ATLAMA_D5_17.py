@@ -14,6 +14,7 @@ import ast
 import importlib.util
 from pathlib import Path
 
+import capraz
 import pytest
 
 _HEDEF = Path(__file__).resolve().parent / "test_pdf_turkce_karakter.py"
@@ -41,7 +42,7 @@ def test_KRITIK_D5_17_modul_duzeyinde_ATLAMA_yok():
 def test_KRITIK_D5_17_fitz_KURULUYSA_metin_kapilari_ATLANMAZ():
     """`_fitz()` yardımcısı fitz kuruluyken modülü DÖNDÜRÜR (koşulsuz atlama PDF metni kapılarını sessizce kapatırdı)."""
     if importlib.util.find_spec("fitz") is None:
-        pytest.skip("PyMuPDF yok — bu kol fitz kurulu ortamda olculur")
+        capraz.atla("PyMuPDF yok — bu kol fitz kurulu ortamda olculur")
     spec = importlib.util.spec_from_file_location("pdf_tr_d517", _HEDEF)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
