@@ -5,29 +5,31 @@
 STM32 Binary Protocol Simulator
 ================================
 
-Bu script, GUI'nin binary paket protokolünü (main.c ile identik 88-byte format)
-anlayan ve yanıt veren bir Python STM32 emülatörüdür.
+Bu script, backend'in binary paket protokolünü (main.c ile identik, PKT_SIZE = 121 bayt,
+7 bobin) anlayan ve yanıt veren bir Python STM32 emülatörüdür.
 
 KULLANıM:
   1. Bu scripti çalıştırın:
-       python apps/backend/utils/stm32_simulator.py
+       python tools/stm32_simulator.py
 
-  2. Not: GUI STM32 bağlantısı şimdilik COM10 @ 115200 baud'a kilitli.
-     socket:// simülatör bağlantısı, bu sabit port modu aktifken kullanılmaz.
+  2. Backend'i simülatöre bağlayın: ortamda PEMF_STM_PORT=socket://127.0.0.1:5100
+     (apps/backend/utils/stm32_transport.py socket:// portu serial_for_url ile açar;
+     PEMF_STM_PORT verilmezse backend sabit COM10'u dener).
 
   Örnek:
-       python apps/backend/utils/stm32_simulator.py
+       python tools/stm32_simulator.py --port 5100
 
-PAKET FORMATI (88 byte, main.c ile identik):
-  0xAA 0x55
-  float[5]   duty      (20 byte)
-  float[5]   phase     (20 byte)
-  float[5]   freq      (20 byte)
-  uint32[5]  duration  (20 byte)
-  uint16     ref_ms    ( 2 byte)
-  uint32     crc32     ( 4 byte)
+PAKET FORMATI (PKT_SIZE = 121 bayt, NUM_COILS = 7, main.c ile identik):
+  0xAA 0x55             ( 2 bayt)
+  float[7]   duty       (28 bayt)
+  float[7]   phase      (28 bayt)
+  float[7]   freq       (28 bayt)
+  uint32[7]  duration   (28 bayt)
+  uint16     ref_ms     ( 2 bayt)
+  uint8      kip        ( 1 bayt — unipolar maskesi)
+  uint32     crc32      ( 4 bayt)
   ─────────────────────────────
-  Toplam: 88 byte
+  Toplam: 121 bayt
 
 NOT (2026-08-19): Firmware v2.3'e gecti — dalga sozlesmesi SIMETRIK BIPOLAR
 (A=[0,duty), B=[yarim,yarim+duty), arada LOW; net DC=0; duty tavani ~%50) ve
@@ -64,13 +66,14 @@ log = logging.getLogger("STM32Sim")
 # ─── Sabitler ─────────────────────────────────────────────────────────────────
 SIM_HOST = "127.0.0.1"
 SIM_PORT = 5100
-READY_DELAY_S = 2.0  # USB CDC enumerate simülasyonu (2 s)
+READY_DELAY_S = 2.0  # kart açılış gecikmesi simülasyonu (2 s; gerçek kart ST-Link VCP → USART3)
 
-# Binary paket yapısı: <BB 5f 5f 5f 5I H I
+# Binary paket yapısı: <BB Nf Nf Nf NI H B I  (N = NUM_COILS)
 #   B  B         → header[2]         = 0xAA, 0x55
-#   Nf Nf Nf     → duty[N], phase[N], freq[N]  (N = NUM_COILS)
-#   5I           → duration[5]
+#   Nf Nf Nf     → duty[N], phase[N], freq[N]
+#   NI           → duration[N]
 #   H            → ref_ms
+#   B            → kip (unipolar maskesi)
 #   I            → crc32
 # ⚠️ SAYIYI ELLE YAZMA: bicim NUM_COILS'ten turer. 2026-09-10'da 5 -> 7 (bobin 6-7 ESP'den
 # STM'e tasindi) ve paket 88 -> 120 bayt oldu. Simulator, firmware ve backend UCU birden
@@ -491,7 +494,7 @@ class Stm32SimClient:
 
 
 def run_server(host: str = SIM_HOST, port: int = SIM_PORT):
-    """TCP sunucusu — sabit COM10 modu kapatılırsa test için kullanılabilir."""
+    """TCP sunucusu — backend `PEMF_STM_PORT=socket://<host>:<port>` ile bağlanır (stm32_transport → serial_for_url)."""
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
@@ -502,8 +505,8 @@ def run_server(host: str = SIM_HOST, port: int = SIM_PORT):
     srv.listen(1)
     log.info("=" * 60)
     log.info("  STM32 Binary Simulator — TCP %s:%d", host, port)
-    log.info("  Not: GUI sabit COM10 modundayken socket simulator kullanılmaz")
-    log.info("  Paket boyutu: %d byte (88-byte binary + CRC32)", PKT_SIZE)
+    log.info("  Backend bağlantısı: PEMF_STM_PORT=socket://%s:%d", host, port)
+    log.info("  Paket boyutu: %d bayt (%d bobin + kip baytı + CRC32)", PKT_SIZE, NUM_COILS)
     log.info("=" * 60)
     log.info("  Bağlantı bekleniyor...")
 
@@ -522,10 +525,12 @@ def run_server(host: str = SIM_HOST, port: int = SIM_PORT):
 
 def set_gui_port(host: str = SIM_HOST, port: int = SIM_PORT):
     """
-    Sabit COM10 modu aktifken GUI socket simulator portuna yönlendirilmez.
+    Backend'i simülatöre bağlamanın yolunu YAZAR; ayarı kendisi uygulamaz (backend ortamını bu süreç değiştiremez).
     """
-    print("GUI STM32 bağlantısı şimdilik COM10 @ 115200 baud'a kilitli.")
-    print(f"socket://{host}:{port} ayarı uygulanmadı.")
+    print(
+        f"Backend'i simülatöre bağlamak için ortamda PEMF_STM_PORT=socket://{host}:{port} verip backend'i yeniden başlatın."
+    )
+    print("(apps/backend/utils/stm32_transport.py socket:// portunu serial_for_url ile açar; bu araç ayarı UYGULAMAZ.)")
 
 
 def main():
@@ -535,7 +540,9 @@ def main():
     )
     parser.add_argument("--host", default=SIM_HOST, help=f"Sunucu adresi (varsayılan: {SIM_HOST})")
     parser.add_argument("--port", type=int, default=SIM_PORT, help=f"TCP port (varsayılan: {SIM_PORT})")
-    parser.add_argument("--set-port", action="store_true", help="Sabit COM10 modunda devre dışı; bilgi mesajı yazdırır")
+    parser.add_argument(
+        "--set-port", action="store_true", help="Backend'i simülatöre bağlama talimatını yazar (ayar uygulamaz)"
+    )
     args = parser.parse_args()
 
     if args.set_port:

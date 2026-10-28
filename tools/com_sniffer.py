@@ -6,13 +6,13 @@ import time
 import serial
 
 PORT = "COM10"
-BAUD = 115200  # USB CDC'de önemsiz ama gerekli
+BAUD = 115200  # kart ST-Link VCP → USART3 (PD8/PD9) @115200 konuşur (firmware huart3)
 LISTEN = 15  # saniye
 
 
 def main():
     print(f"\n{'=' * 55}")
-    print(f"  STM32 USB CDC Sniffer — {PORT} @ {BAUD} baud")
+    print(f"  STM32 seri sniffer (ST-Link VCP) — {PORT} @ {BAUD} baud")
     print(f"  {LISTEN} saniye dinleniyor...")
     print(f"{'=' * 55}\n")
 
@@ -48,8 +48,13 @@ def main():
     print(f"\n{'=' * 55}")
     print(f"  Toplam: {lines_seen} satır, {total_bytes} byte alındı")
     if total_bytes == 0:
-        print("  ⚠️  HİÇ VERİ GELMEDİ — firmware STM_READY göndermiyordur")
-        print("     veya USB CDC init (MX_USB_DEVICE_Init) çağrılmamış.")
+        print("  ⚠️  HİÇ VERİ GELMEDİ — olası nedenler:")
+        print("     · kart açılıştan sonra bir paket aldıysa STM_READY banner'ı bir daha basılmaz (ilk paketten sonra")
+        print(
+            "       2 sn'lik banner kesilir) ve çalışan bobin yoksa hat sessizdir → kartı RESET'leyip yeniden dinleyin;"
+        )
+        print("     · yanlış port: kart ST-Link VCP üzerinden USART3 ile konuşur — Aygıt Yöneticisi'ndeki")
+        print("       'STLink Virtual COM Port' numarasını PORT'a yazın.")
     print(f"{'=' * 55}\n")
 
 

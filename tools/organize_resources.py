@@ -3,6 +3,8 @@ import shutil
 from pathlib import Path
 
 # Define source and target directories
+# D6.55: base_dir = BU betiğin dizini (tools/) → hedef tools/pemf_gui/resources (kök pemf_gui/ DEĞİL). Eski Qt arayüzü
+# dönemi aracı; bugünkü arayüz (apps/ui) bu kaynakları kullanmaz.
 base_dir = Path(__file__).parent
 target_dir = base_dir / "pemf_gui" / "resources"
 
