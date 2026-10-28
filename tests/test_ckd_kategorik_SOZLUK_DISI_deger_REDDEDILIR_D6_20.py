@@ -164,3 +164,39 @@ def test_sozluk_EGITIM_kategorileriyle_AYNI():
     ohe = dict(kat.steps)["ohe"]
     egitim = {k: tuple(sorted(str(x) for x in c)) for k, c in zip(kolonlar, ohe.categories_)}
     assert {k: tuple(sorted(v)) for k, v in CKD_KATEGORIK.items()} == egitim
+
+
+# ── TUR 2 kolları (çürütücü, hat D) ─────────────────────────────────────────────────────────────────────────────────────
+def test_birden_cok_gecersiz_alan_HEPSI_bildirilir(istemci, sahte_tahmin):
+    """Tur 2 kolu (tek öğe ↔ hepsi): iki alan birden sözlük dışıysa ileti İKİSİNİ de söyler — ilkinde durmak operatörü
+    düzelt-gönder-yeniden-reddedil döngüsüne sokar."""
+    r = istemci.post("/api/ai/disease/kidney", json={**_TABAN, "htn": "evet", "dm": "var"})
+    assert r.status_code == 422, f"iki geçersiz alan → HTTP {r.status_code}: {r.text[:200]}"
+    d = r.json()["detail"]
+    assert "htn='evet'" in d and "dm='var'" in d, f"ileti geçersiz alanların HEPSİNİ söylemiyor: {d!r}"
+    assert not sahte_tahmin["cagri"]
+
+
+def test_uzun_deger_yansitmasi_40_karakterde_KIRPILIR(istemci, sahte_tahmin):
+    """Tur 2 kolu (eşik): gelen değer iletide en çok 40 karakter yansıtılır (rapor iddiası; sınırsız yansıtma yanıtı şişirir)."""
+    uzun = "x" * 200
+    r = istemci.post("/api/ai/disease/kidney", json={**_TABAN, "htn": uzun})
+    assert r.status_code == 422, r.text[:200]
+    d = r.json()["detail"]
+    assert "htn='" + "x" * 40 + "'" in d, f"kırpılmış değer iletide yok: {d[:160]!r}"
+    assert "x" * 41 not in d, f"değer 40 karakterden uzun yansıtıldı ({d.count('x')} 'x')"
+
+
+def test_eksik_kumesi_MODELIN_eksik_kumesiyle_AYNI():
+    """Tur 2 kolu (ikiz tanım): kapının "eksik / yer tutucu" kararı modelin `_eksik`iyle BİREBİR aynı olmalı. Kapı bir değeri
+    eksik sayıp geçirir ama model onu eksik saymazsa, değer bilinmeyen kategori olarak SESSİZCE ilk kategoriye döner
+    (kapının kapattığı klinik ters dönme yeniden açılır). Sonda kümesi testte sabit."""
+    capraz.paket_yoksa_atla("onnxruntime", sebep="CKD çıkarım modülü onnxruntime ister (CI)")
+    from utils import klinik_asgari as ka
+
+    from ai_hub.inference_human_kidney_disease import inference_human_kidney_disease as ihd
+
+    sondalar = [None, float("nan"), "", " ", "  ", "?", " ? ", "NA", "na", "N/A", "NaN", "nan", "NAN", "—", "-", "--"]
+    sondalar += ["yok", "none", "None", "null", "0", "no", "yes", "evet", "unknown", "bilinmiyor"]
+    farkli = [s for s in sondalar if bool(ka._bos_mu(s)) != bool(ihd._eksik(s))]
+    assert not farkli, f"kapı ↔ model eksik-değer kararı AYRIŞIYOR: {farkli!r}"
