@@ -29,7 +29,7 @@ src/
 │   ├── Header.tsx / Footer.tsx
 │   ├── AccountButton.tsx → hesap menüsü (giriş/çıkış, abonelik iptali, jeton bakiyesi)
 │   ├── DownloadButtons.tsx / DownloadGate.tsx → indirme butonları + oturum kapısı (indirmeden önce giriş)
-│   ├── DownloadStats.tsx → GitHub Releases indirme sayacı
+│   ├── DownloadStats.tsx → kullanım sayacı (Supabase usage_counts() RPC'si; eskiden indirme sayacıydı)
 │   ├── AppScreenshots.tsx → telefon çerçeveli uygulama ekran görüntüsü galerisi
 │   ├── ErrorBoundary.tsx → hata sınırı
 │   ├── LauncherMock.tsx → dashboard/launcher önizleme (saf CSS)
@@ -72,8 +72,9 @@ npm run preview    # dist/ önizleme
 ## Site güncelleme / Deploy
 
 **Git bağlı — TEK DEPO (2026-08-18'den beri):** bu klasör `mert61-python/pemf` deposunun
-**`apps/web/` alt dizinidir** (eski ayrı `pemf-vet-web` deposu silindi; tam aynası
-`../../pemf-vet-web-arsiv-2026-08-18.bundle`). Vercel projesi tek depoya bağlı:
+**`apps/web/` alt dizinidir** (eski ayrı `pemf-vet-web` deposu silindi; 38 commit'lik eski
+geçmişi bu depoda YOK — yalnız geliştirme makinesinde gitignore'lu `apps/web/.git.arsiv-20260818-1647/`
+dizininde durur; ayrı bir git bundle'ı henüz alınmadı, A-39 kararı onu ayrı arşive almayı öngörür). Vercel projesi tek depoya bağlı:
 **Root Directory = `apps/web`**, üretim dalı **`production-hardening`** → her push'ta
 otomatik production deploy (canlı: https://pemf-vet-web.vercel.app). Vercel Vite'ı otomatik
 algılar (Build: `npm run build`, Output: `dist`); `vercel.json` SPA yönlendirmesini halleder.
@@ -128,20 +129,17 @@ Teal marka (`oklch(66% 0.13 184)`), koyu navy zemin, **Inter**, radius `.625rem`
   `X-Frame-Options`'ın yerini tutar. `'unsafe-inline'` iyzico formunun gereğidir;
   kaldırılırsa ödeme adımı çalışmaz.
 
-## İndirme sayacı (2026-08-06)
+## Kullanım sayacı (2026-08-13; eskiden indirme sayacı)
 
-İndir (`/download`) sayfasındaki sayaç GitHub Releases API'sinden (`download_count`) beslenir (`DownloadStats.tsx`).
+İndir (`/download`) sayfasındaki sayaç (`DownloadStats.tsx`) Supabase `usage_counts()` RPC'sinden
+beslenir (`src/lib/usageStats.ts`; SQL: [`supabase_kullanim_sayaci.sql`](../backend/database/supabase_kullanim_sayaci.sql)).
+Gösterilen iki sayı: e-postası doğrulanmış hesap ("Kayıtlı kullanıcı") ve son 30 günde bağlanan cihaz
+("Aktif cihaz (30 gün)"). İkisi farklı şeyi ölçer, toplanmaz; kurulu cihaz TOPLAMI bilerek gösterilmez
+(yeniden kurulum yeni cihaz kimliği üretir, toplam şişer).
 
-⚠️ **"Kaç kişi" değil "kaç indirme".** İki bilinen şişme kaynağı var:
-1. **Oto-güncelleme** — client v1.9.3'ten beri kendini güncellerken `PEMFVetClient-Setup.exe`'yi
-   yeniden indirir; kurulu her cihaz her sürümde sayacı artırır (yeni kullanıcı olmadan).
-2. **Geliştirme/test indirmeleri** de sayılır.
-
-Bu yüzden arayüzde "kullanıcı" denmez ve dipnotta oto-güncellemenin dahil olduğu yazar.
-Gerçek benzersiz kullanıcı sayısı ancak Supabase `devices` kaydından çıkarılabilir.
-
-- Runtime paketleri (`base.zip`, model zip'leri, `manifest.json`) **sayılmaz** — client'ın
-  kendi çektiği bileşenlerdir, sayılsalardı sayaç anlamsızca şişerdi.
-- Veri çekilemezse (ağ / GitHub saatlik 60 istek sınırı) bölüm **kendini gizler**.
-- ⚠️ `vercel.json` → CSP `connect-src` **`https://api.github.com` içermek zorunda**; yoksa
-  tarayıcı isteği engeller ve sayaç sessizce hiç görünmez.
+- Eskiden kaynak GitHub Releases `download_count` idi; o sayı "kaç kişi" değil "kaç indirme"dir
+  (oto-güncelleme kurulum dosyasını her sürümde yeniden indirir) — bu yüzden bırakıldı.
+- Veri çekilemezse (RPC yok / ağ) bölüm **hiç gösterilmez**; uydurma ya da eski sayı gösterilmez.
+- Sayaç tarayıcıdan yalnız Supabase'e bağlanır; GitHub API'sine çağrı YOK. Bu yüzden CSP `connect-src`
+  `'self'` + Supabase + iyzico kökenleriyle sınırlıdır — kullanılmayan köken eklenmez
+  (kapı: `src/__tests__/csp-baglanti-kokenleri.D6_28.test.ts`).

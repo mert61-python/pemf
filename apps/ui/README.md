@@ -10,7 +10,8 @@ Uygulamanın **tek yetkili kaynağıdır**. Buradan **iki** çıktı üretilir:
 > ⚠️ **Burayı düzenle.** Depo kökündeki `../../frontend/` artık kaynak KOPYASI DEĞİL, yalnız `dist/` (yayınlanan web bundle) tutar; `npm run export:web` çıktısı oraya aynalanır ve backend `/` kökünden onu servis eder.
 >
 > **Tek depo (2026-08-18):** `apps/ui/` artık `mert61-python/pemf` içinde izleniyor (eski ayrı
-> `pemf-frontend` deposu silindi; tam aynası `../../pemf-frontend-arsiv-2026-08-18.bundle`).
+> `pemf-frontend` deposu silindi; 46 commit'lik eski geçmişi bu depoda YOK — yalnız geliştirme makinesinde
+> gitignore'lu `apps/ui/.git.arsiv-20260818-1647/` dizininde durur; ayrı bir git bundle'ı alınmadı).
 > CI: kök [`.github/workflows/frontend.yml`](../../.github/workflows/frontend.yml) (yol filtreli).
 
 ---
@@ -23,7 +24,7 @@ Uygulamanın **tek yetkili kaynağıdır**. Buradan **iki** çıktı üretilir:
 | `src/screens/` | 12 ekran: Auth, Welcome, Dashboard, Control, Patient, SensorMonitor, TreatmentHistory, KpiDashboard, Settings, AiHub, AiHistory, DemaSimulator |
 | `src/services/` | Backend/bulut istemcileri: `apiClient.ts`, `authApi.ts`, `supabaseAuth.ts`, `desktopSession.ts` (masaüstü client→app oturum devri; çift giriş yok), `wsClient.ts`, `discovery.ts` (mDNS), `deviceRegistry.ts`, `installedProfiles.ts`, `therapyLimits.ts`, `updates.ts`, `config.ts` |
 | `src/components/` | `ui/` · `domain/` · `visual/` + `UpgradeModal.tsx` |
-| `src/context/` | React context'leri: AppNav · Auth · Entitlement · LiveData · Operator · UserMode *(tekil `context/`, `contexts/` değil)* |
+| `src/context/` | React context'leri: AppNav · Auth · Entitlement · LiveData · Operator · ShellLayout · UserMode *(tekil `context/`, `contexts/` değil)* |
 | `src/hooks/`, `src/config/`, `src/theme/`, `src/types/`, `src/utils/` | Hook'lar, yapılandırma, tema (premium tasarım token'ları), tipler, yardımcılar |
 | `app/` | expo-router girişi (`_layout.tsx`, `index.tsx`) |
 | `android/` | **Tam native Android projesi** — APK build kökü (`build.gradle`, `gradlew`, `app/`) |
@@ -39,17 +40,17 @@ npm run android / ios       # cihaz/emülatör
 npm test / lint / typecheck # jest · eslint · tsc
 ```
 
-## Build & yayın (özet — tam reçete [`../BUILD.md`](../../BUILD.md))
+## Build & yayın (özet — tam reçete [`../../BUILD.md`](../../BUILD.md))
 
 | Çıktı | Nasıl | Sonuç |
 |---|---|---|
-| **APK** | `..\build_tools\build_apk.ps1` (guii kökünden) | `release_assets\PEMF_Vet_Mobil.apk` |
+| **APK** | `.\build_tools\build_apk.ps1` (guii kökünden; betik: [`../../build_tools/build_apk.ps1`](../../build_tools/build_apk.ps1)) | `release_assets\PEMF_Vet_Mobil.apk` |
 | **iOS IPA** | `npx eas build -p ios --profile production` (EAS bulut) | expo.dev → `.ipa` |
 | **Web UI** | `npm run export:web` → `apps\ui\dist` → `robocopy /MIR` ile `..\..\frontend\dist` + kurulu `_internal\frontend\dist` | Backend `/` kökünden servis eder |
 
 ## ⚠️ Dikkat
 
-- **Sürüm:** `apps/ui/app.json`'daki sürüm/`androidVersionCode` **elle değil** — kök [`../versions.json`](../../versions.json) tek-kaynağından `build_tools/sync_versions.ps1` yazar. `androidVersionCode` her yayında artmalı (Play Store şartı, geri alınamaz).
+- **Sürüm:** `apps/ui/app.json`'daki sürüm/`androidVersionCode` **elle değil** — kök [`../../versions.json`](../../versions.json) tek-kaynağından `build_tools/sync_versions.ps1` yazar. `androidVersionCode` her yayında artmalı (Play Store şartı, geri alınamaz).
 - **`gradlew clean` YAPMA** → `react-native-async-storage` codegen bozulur. `build_apk.ps1` zaten clean yapmaz.
 - **APK MAX_PATH:** guii derin bir yolda → ninja/CMake ANSI-260 sınırını aşar. `build_apk.ps1` kaynağı kısa köke (`C:\pb`) aynalayıp orada derleyerek çözer (`LongPathsEnabled` tek başına yetmez).
 - **Web değişikliği** yalnız burada export edilir; `frontend/dist`'e aynalanmadıkça backend eski UI'yi sunar.

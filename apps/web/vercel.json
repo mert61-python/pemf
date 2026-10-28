@@ -41,7 +41,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.iyzipay.com https://sandbox-static.iyzipay.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://api.iyzipay.com https://sandbox-api.iyzipay.com https://api.github.com; frame-src https://*.iyzipay.com; form-action 'self' https://*.iyzipay.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.iyzipay.com https://sandbox-static.iyzipay.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://api.iyzipay.com https://sandbox-api.iyzipay.com; frame-src https://*.iyzipay.com; form-action 'self' https://*.iyzipay.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
         }
       ]
     }
