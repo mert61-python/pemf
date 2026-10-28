@@ -498,6 +498,7 @@
       "bobinKimligi": "Invalid coil ID (1-8)",
       "cekirdekDonanimHazirDegil": "The headless core or the hardware controller is not ready.",
       "cekirdekHazirDegil": "The core is not ready.",
+      "gondericiCalismiyor": "Commands cannot be sent to the device board — the coil was not started. Check the USB cable and give the command again in a few seconds; if it persists, close and reopen the app.",
       "hazirDegil": "The hardware is not ready.",
       "komutBasarisiz": "Hardware command failed",
       "parametreGecersiz": "The drive parameter cannot be converted into a hardware packet ({{hata}}: not a number or overflows).",

@@ -936,6 +936,28 @@ def stm_red_mesaji(dil: str | None = None) -> str:
     return _stm32_kimlik.komut_red_metni(dil)
 
 
+def _donanim_baslatma_reddi(donanim) -> str:
+    """Donanım nesnesinin son START reddi sebebi (`HardwareController.son_baslatma_reddi`); bildirmeyen nesnede ""."""
+    oku = getattr(donanim, "son_baslatma_reddi", None)
+    return str(oku() or "") if callable(oku) else ""
+
+
+def _seans_red_nedeni(sebepler: list) -> str:
+    """D6.02 (S-1.7): HİÇBİR STM bobini kabul etmediğinde 503'ün NEDENİ.
+
+    ⚠️ Eskiden HER durumda `stm_red_mesaji()` ("kartın yazılımı uyumsuz … FW-PAKET") veriliyordu; en sık sebep ise kablonun
+    takılı olmamasıydı (kopuk STM) — veteriner sağlam kart için teknik destek arıyordu. Sıra: (1) donanımın KENDİ red sebebi
+    (kopuk → "USB (ST-Link) kablosunu takın", gönderici ölü, parametre, mandal); (2) sebep bildirmeyen donanım nesnesinde STM
+    kopuksa bağlantı eylemi; (3) yalnız o da yoksa eski kart-reddi metni. Firmware KESİN uyumsuz / kart komutları reddediyor
+    kolları bu noktadan ÖNCE kendi 409'unu verir (metinleri DEĞİŞMEDİ)."""
+    for sebep in sebepler or ():
+        if sebep:
+            return str(sebep)
+    if not live_state.stm_surus_hazir():
+        return ceviri.t("donanim.hata.stmBagliDegil")
+    return stm_red_mesaji()
+
+
 def _duty_seans_durdu_metni(ham: str, dil: str) -> str:
     sonuc = ceviri.t("bildirim.sonuc.seansDurduruldu", dil=dil)
     return live_state.stm_duty_reddi_metni(ham, sonuc, sifirla=True, dil=dil)
@@ -4459,8 +4481,14 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 # D1.99 (S-1.2): GİDEN (normalize) değer — update_coil aynı `surus_parametrelerini_hazirla`yı uygular.
                 _begin_coil_run(coil_id, _s_uyg["freq"], _s_uyg["duty_yuzde"], _s_uyg["faz"], payload.intensity, "stm")
             else:
-                logging.getLogger(__name__).error("Seans: bobin %s komutu REDDEDILDI (surulmedi).", coil_id)
+                # D6.02 (S-1.7): reddin GERÇEK sebebi (aynı işçi iş parçacığında, `update_coil`'den hemen sonra okunur).
+                _sebep = _donanim_baslatma_reddi(state.hardware)
+                if _sebep:
+                    _stm_red_sebepleri.append(_sebep)
+                logging.getLogger(__name__).error("Seans: bobin %s komutu REDDEDILDI (surulmedi): %s", coil_id, _sebep)
         return kabul
+
+    _stm_red_sebepleri: list = []
 
     _stm_kabul: list = []
     if stm_coils:
@@ -4511,7 +4539,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
             raise HTTPException(status_code=503, detail=sifir_hz_seans_mesaji())
         raise HTTPException(
             status_code=503,
-            detail=ceviri.t("seans.hata.komutKabulEdilmedi", neden=stm_red_mesaji()),
+            detail=ceviri.t("seans.hata.komutKabulEdilmedi", neden=_seans_red_nedeni(_stm_red_sebepleri)),
         )
 
     # ⚠️ 1-C inceleme i2-F3: STM sürüşü (to_thread) SIRASINDA durdurma gelmiş olabilir — bobin 1 kabul edildikten SONRA,

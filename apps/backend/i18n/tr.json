@@ -498,6 +498,7 @@
       "bobinKimligi": "Geçersiz bobin ID (1-8)",
       "cekirdekDonanimHazirDegil": "Headless Core veya HardwareController hazır değil.",
       "cekirdekHazirDegil": "Çekirdek hazır değil.",
+      "gondericiCalismiyor": "Cihaz kartına komut gönderilemiyor — bobin başlatılmadı. USB kablosunu denetleyip birkaç saniye sonra komutu yeniden verin; sürerse uygulamayı kapatıp yeniden açın.",
       "hazirDegil": "Donanım hazır değil.",
       "komutBasarisiz": "Donanım komutu başarısız",
       "parametreGecersiz": "Sürüş parametresi donanım paketine çevrilemiyor ({{hata}}: sayı değil ya da taşıyor).",

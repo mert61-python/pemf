@@ -136,18 +136,31 @@ def test_KRITIK_hicbir_bobin_kabul_etmezse_seans_BASLAMAZ(istemci, monkeypatch, 
     """MUTASYON: `if stm_coils and not _stm_kabul and not esp_coils:` kapısını sil → KIRMIZI
     (200 "started" döner; sahibin bildirdiği arızanın ta kendisi).
     """
-    from servers import api_server
+    from servers import api_server, live_state
 
     sahte = SahteDonanim(kabul=False)
     monkeypatch.setattr(api_server.state, "hardware", sahte)
 
-    y = _seans_baslat(istemci)
+    # D6.02 (S-1.7): ön koşul AÇIK — STM kopuk (canlı durum "warning"); sahte donanım red SEBEBİ bildirmez.
+    with live_state._live_state_lock:
+        eski_stm = live_state._live_state["stm"]
+        live_state._live_state["stm"] = "warning"
+    try:
+        y = _seans_baslat(istemci)
+    finally:
+        with live_state._live_state_lock:
+            live_state._live_state["stm"] = eski_stm
     assert y.status_code == 503, f"RED beklenirken {y.status_code}: {y.text[:300]}"
     assert sahte.cagrilar, "onkosul: update_coil hic cagrilmadi -> kapi yanlis yeri olcuyor"
     # ⚠️ Mesaj EYLEM söylemeli: "hata" demek operatöre ne yapacağını söylemez.
-    # TD1 · K1: sade metin ("kartın yazılımı … uyumsuz") + tek eylem + kod — "firmware" / CubeIDE jargonu YOK.
-    assert "yazılımı" in y.text and "FW-PAKET" in y.text and "Teknik desteği arayın" in y.text, (
-        f"mesaj EYLEM soylemiyor: {y.text[:300]}"
+    # D6.02 (S-1.7): kopuk kartta eylem KABLO / BAĞLANTIDIR — eski pin ("kartın yazılımı uyumsuz … FW-PAKET … Teknik desteği
+    # arayın") sağlam kart için teknik destek aratıyordu. Firmware KESİN uyumsuz kolu ayrı (409, FW-PAKET korunur):
+    # tests/test_stm_firmware_uyum_kapisi.py · tests/test_seans_reddi_GERCEK_neden_BAGLANTI_eylemi_D6_02.py.
+    assert "USB (ST-Link) kablosunu takın" in y.text and "BAŞLATILMADI" in y.text, (
+        f"mesaj BAĞLANTI eylemi söylemiyor: {y.text[:300]}"
+    )
+    assert "FW-PAKET" not in y.text and "yazılımı" not in y.text, (
+        f"kopuk kartta firmware uyumsuzluğu deniyor: {y.text[:300]}"
     )
 
 

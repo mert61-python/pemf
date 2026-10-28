@@ -164,6 +164,9 @@ class HardwareController:
         # gonderir → dusen STOP telafi edilir.
         self._force_send_left = 0
 
+        # D6.02 (S-1.7): son START reddinin operatör metni — İŞ PARÇACIĞI-YEREL (bkz. `son_baslatma_reddi`).
+        self._red_yerel = threading.local()
+
         # ── SÜRÜŞ KİPİ (sahip kararı 2026-09-11: arayüzde düğmeyle ayarlanır) ──────────
         # Bit i set → bobin i+1 UNIPOLAR sürülsün. Varsayılan 0 = "hepsi bipolar İSTE".
         # ⚠️ Bu bir İSTEKTİR. Firmware onu DONANIM YETENEĞİYLE OR'lar
@@ -331,6 +334,28 @@ class HardwareController:
         """Kuyruğa en son giren STOP paketinin sırası (0 = henüz yok). E-stop `stop_all_coils`'tan HEMEN sonra okur."""
         return int(getattr(self, "_son_stop_sirasi", 0) or 0)
 
+    def _red_yerel_al(self):
+        """`_red_yerel` (`__new__` ile kurulan test örneklerinde yoksa oluşturulur)."""
+        yerel = self.__dict__.get("_red_yerel")
+        if yerel is None:
+            yerel = self.__dict__.setdefault("_red_yerel", threading.local())
+        return yerel
+
+    def _baslatma_reddi(self, sebep: str) -> bool:
+        """START reddinin sebebini (operatör metni, istek dilinde) BU iş parçacığına yazar ve `False` döner."""
+        self._red_yerel_al().sebep = str(sebep or "")
+        return False
+
+    def son_baslatma_reddi(self) -> str:
+        """BU iş parçacığındaki son `update_coil` START reddinin operatör metni; "" = son çağrı reddedilmedi / sebep yok.
+
+        ⚠️ D6.02 (S-1.7): `update_coil` üç ayrı sebebe (STM kopuk / gönderici ölü / parametre) aynı çıplak `False`'u
+        dönüyordu; seans ucu da her reddi "kartın yazılımı uyumsuz (FW-PAKET)" diye anlatıyordu — kablosu takılı olmayan
+        sağlam kart için teknik destek aratıyordu. Dönüş tipi `bool` KALIR (çağıranlar `if update_coil(...)` okur); sebep
+        İŞ PARÇACIĞI-YEREL tutulur: `/api/session/start` bobinleri tek bir `to_thread` işçisinde sürer ve sebebi aynı işçide
+        hemen okur — eşzamanlı başka bir isteğin reddi bu sebebe KARIŞMAZ. Her `update_coil` çağrısı girişte sıfırlar."""
+        return str(getattr(self._red_yerel_al(), "sebep", "") or "")
+
     def _gonderici_baslatmaya_hazir(self) -> bool:
         """START kapısı: HWSender ŞU AN canlı mı? Ölüyse canlandırmayı DENER (sonraki STOP'lar yazılsın) ama bu START'ı
         REDDEDER (False).
@@ -397,7 +422,9 @@ class HardwareController:
         Belirli bir bobinin durumunu günceller ve STM32'ye yeni komut paketini fırlatır.
         duration birimi STM32 firmware ile uyumlu olarak dakikadır.
         `nesil`: START niyetinin sürüş nesli (D1.81); verilmezse `estop_mandali.surus_baglami` bağlamındaki değer.
+        START reddinin sebebi: `son_baslatma_reddi()` (D6.02 — dönüş `bool` kalır).
         """
+        self._red_yerel_al().sebep = ""  # D6.02: önceki çağrının sebebi bu çağrıya taşınmaz
         if coil_id < 1 or coil_id > STM_BOBIN_SAYISI:
             self.logger.warning(f"Geçersiz bobin ID: {coil_id}")
             return False
@@ -419,13 +446,13 @@ class HardwareController:
             _engel = self._stm_baslatma_engeli()
             if _engel:
                 self.logger.warning("Bobin %s BAŞLATILMADI: %s", coil_id, _engel)
-                return False
+                return self._baslatma_reddi(_engel)  # D6.02: kopuk STM → "USB kablosunu takın" çağırana gider
         # ⚠️ D1.55 (B-1.23): gönderici ÖLÜYKEN (ve yeniden başlatılamıyorken) BAŞLATMA da reddedilir — durum
         # yazılırsa "başarılı" denir ama komut porta gitmez (sahte başarılı seans), gönderici dönünce de
         # keep-alive bobini HABERSİZ enerjilerdi. Durdurma ASLA kapılanmaz (Ö.4-Y8).
         if start and not self._gonderici_baslatmaya_hazir():
             self.logger.warning("Bobin %s BAŞLATILMADI: donanım gönderici iş parçacığı çalışmıyor.", coil_id)
-            return False
+            return self._baslatma_reddi(ceviri.t("donanim.hata.gondericiCalismiyor"))  # D6.02
 
         # DENETIM P2 (kismi uygulama): normalize_* cagrilari ESKIDEN state'e YAZARKEN
         # calisiyordu. Biri istisna firlatirsa (ornegin duty_percent_to_ratio icindeki
@@ -439,7 +466,7 @@ class HardwareController:
         if start:
             try:
                 _p = surus_parametrelerini_hazirla(freq, duty, phase, duration, duration_seconds)
-            except ParametreGecersiz:
+            except ParametreGecersiz as _hata:
                 self.logger.exception(
                     "Coil %s parametre normalizasyonu basarisiz (freq=%.40r duty=%.40r phase=%.40r dur=%.40r "
                     "dur_s=%.40r) → bobin durumu DEGISTIRILMEDI.",
@@ -450,7 +477,7 @@ class HardwareController:
                     duration,
                     duration_seconds,
                 )
-                return False
+                return self._baslatma_reddi(str(_hata))  # D6.02: metin zaten operatör dilinde (`parametreGecersiz`)
 
         with self._state_lock:
             if start:
@@ -471,7 +498,7 @@ class HardwareController:
                 )
                 if _engel:
                     self.logger.warning("Bobin %s BAŞLATILMADI: %s", coil_id, _engel)
-                    return False
+                    return self._baslatma_reddi(_engel)  # D6.02
                 dur_min = _p["sure_dk"]
                 self.coils_state[coil_id]["is_running"] = True
                 self.coils_state[coil_id]["freq"] = _p["freq"]

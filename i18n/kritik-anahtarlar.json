@@ -3133,6 +3133,13 @@
   },
   {
    "yuzey": "sunucu",
+   "anahtar": "donanim.hata.gondericiCalismiyor",
+   "tur": "donanim",
+   "kaynak": "apps/backend/controllers/hardware_controller.py",
+   "aciklama": "D6.02: karta komut gönderilemiyor (gönderici ölü) — bobin başlatılmadı; USB / yeniden dene / uygulamayı yeniden aç"
+  },
+  {
+   "yuzey": "sunucu",
    "anahtar": "donanim.sonuc.bobinBaslatilmadi",
    "tur": "bobin",
    "kaynak": "apps/backend/controllers/hardware_controller.py",
