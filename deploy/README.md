@@ -139,7 +139,7 @@ Klinikler farklı WiFi'den bağlanacaksa tünel gerekir; binary repoda yok:
 
 - [ ] Sunucu public → `PEMF_REQUIRE_AUTH=1` **+** reverse-proxy/TLS **+** CORS daraltma (asla `*`).
 - [ ] `service_role` anahtarı hiçbir yere konmadı (yalnız anon/publishable gömülü).
-- [ ] Klinik tünel açıksa auth **otomatik zorunlu** (installer `-EnableTunnel` bunu yapar).
+- [ ] Klinik tünel açıksa auth **otomatik zorunlu**: backend tüneli açarken `PEMF_REQUIRE_AUTH=1`'i kendisi zorlar (`backend_service._force_auth_for_tunnel`); `deploy\device.env` ikisini birlikte açar. `-EnableTunnel` kurucunun (Inno → `setup_services.ps1`, tüneli profilden okur) değil, `install_backend_service.ps1`'in (A-11) parametresidir.
 - [ ] Klinik MQTT (A-04 · D1.104): broker tabanı **anonimdir** (`allow_anonymous true` — `bin\mosquitto\mosquitto.conf`,
   `setup_services.ps1`, `install_mosquitto_service.ps1`); ESP bugün kapalı. Tabana `allow_anonymous false` **yazmayın**: kimliksiz ESP
   firmware'i bağlanamaz, bobin 8'in STOP yolu kopar. Kimlik ESP dönüşünde tek adımla gelir — yönetici PowerShell'de
@@ -156,4 +156,4 @@ Klinikler farklı WiFi'den bağlanacaksa tünel gerekir; binary repoda yok:
 ## 7) Build notu
 
 `build_tools\PEMF_Backend_onedir.spec` artık `deploy/` (env profilleri) ve (varsa) `bin/cloudflared`'ı
-da bundle eder. Build: `scripts\build_backend_exe.ps1` → `C:\PEMF_BUILD\dist\PEMF_Backend\`.
+da bundle eder. Build: `scripts\build_backend_exe.ps1` → `<BuildRoot>\dist\PEMF_Backend\` (varsayılan `guii\PEMF_BUILD\dist\PEMF_Backend\`; derin hedefte MAX_PATH için `-BuildRoot C:\PEMF_BUILD`).
