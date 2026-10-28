@@ -185,8 +185,9 @@
 
 #define DEAD_TIME_TICKS    2
 
-/* YEREL TERMAL KORUMA (2026-08-19) — backend 48°C değişmeziyle birebir; ağ
- * koptuğunda bobini durduracak tek şey cihazın kendisi. Histerezisli. */
+/* YEREL TERMAL KORUMA (2026-08-19) — S3'ün KENDİ eşiği (48 °C, aşağıda); backend'de sıcaklık
+ * sınırı YOK (A-47 · Y9; bu satırın eski "backend ile aynı" anlatımı yanlıştı). Ağ koptuğunda
+ * bobini durduracak tek şey cihazın kendisi. Histerezisli. ESP bugün kapalı (kod silinmez). */
 /* HG-5/6 (2026-08-19, Plan A-1): SURESIZ-MOD (duration=0) MUTLAK TAVANI, saniye.
  * Backend'in STM _coil_deadline'i (120 dk) ile ayni. Sureli seanslari ETKILEMEZ;
  * yalniz duration=0 modda cihaz-yerel son-tarih saglar (STOP kaybi/failover sigortasi). */

@@ -324,7 +324,7 @@ void CoilController::process() {
 
 /* ---- YEREL TERMAL KORUMA (2026-08-19) ----------------------------------------
  * .ino Core-1 döngüsü her 200 ms'de readAll() yapıyor; aynı okumayı buraya geçirir
- * (çift I2C trafiği olmasın). Backend'in 48°C politikası sunucuda KALIR; bu,
+ * (çift I2C trafiği olmasın). Backend'de sıcaklık sınırı YOK (A-47 · Y9); bu,
  * ağ koptuğunda bobini durduracak tek şey olan cihaz-içi son savunma hattıdır.
  * Sensör arızalıysa kesme YAPILMAZ (sensörsüz kart çalışabilmeli). */
 void CoilController::enforceThermalLimit(const SensorReadings& r) {

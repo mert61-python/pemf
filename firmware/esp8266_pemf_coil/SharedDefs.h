@@ -102,9 +102,9 @@ const char PROGMEM_INFO_STR[] PROGMEM = "[INFO]";
  *   4. Emaye tel muhtemelen dayanır (Sınıf 130/155) ama yeşil bant, plastik/akrilik
  *      montaj parçaları dayanmaz (PVC 60-80 °C'de yumuşar).
  *
- * ⚠️ SADECE 8266 DEĞİŞTİ. S3 (`esps3_pemf_coil/SharedDefs.h`) ve STM32 48 °C'de KALDI;
- * STM eşiği `tests/test_stm_dalga_sozlesmesi.py` ile pinli. Yani kabinde artık ASİMETRİK
- * iki politika var — bilinçli.
+ * ⚠️ SADECE 8266 DEĞİŞTİ. S3 (`esps3_pemf_coil/SharedDefs.h`) kendi yerel eşiğinde (48 °C)
+ * kaldı. STM32'de termal kesme YOK (A-47): `main.c` NTC bloğunun 48 °C sabiti derleme-kapılıdır,
+ * bayrak 0 kalır (`tests/test_stm_dalga_sozlesmesi.py` yalnız o ölü sabiti pinler).
  */
 #define TERMAL_KESME_C   100.0f /**< MLX90614 nesne sıcaklığı bu değeri aşarsa PWM DURUR */
 /* Histerezis bandı 3 °C olarak KORUNDU (eski 48/45 ile aynı genişlik) → kesmeden sonra
