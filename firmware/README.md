@@ -39,10 +39,12 @@ Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
   `STM_OK`/`STM_NACK`/`STM_READY`. ⚠️ **ATOMİK SEVK:** 88 → 120 (2026-09-10, 7 bobin) → **121**
   (2026-09-11, kip alanı). Eski firmware yeni paketi CRC'den düşürür → `STM_NACK: CRC` seli ve
   HİÇBİR bobin çalışmaz. Backend güncellenince kart MUTLAKA yeniden flaşlanır. Backend tarafı: [`../utils/stm32_transport.py`](../apps/backend/utils/README.md) + [`../controllers/hardware_controller.py`](../apps/backend/controllers/README.md).
-- **ESP bobinler (6-8):** ESP32-S3 / ESP8266 **slave**, PB1'deki master sync-pulse ile senkron.
-  Firmware artık BURADA: [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) (6-7, tam-köprü, faz
-  senkron GPIO7'de) + [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) (8, tek faz — 8266'da
-  GPIO7 flash hattı olduğu için sync KULLANILMAZ).
+- **ESP bobini (8) — bugün KAPALI** (`PEMF_ESP_ENABLED`; ESP kodu SİLİNMEZ): ESP8266 **slave**
+  ([`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md), tek faz — 8266'da GPIO7 flash hattı olduğu için sync
+  KULLANILMAZ). Faz 4 (2026-09-10, 7 bobin): bobin 6-7 STM32'den sürülür (`apps/backend/servers/live_state.py`
+  `STM_COIL_IDS = set(range(1, 8))`, `ESP_COIL_IDS = {8}`). ~~**ESP bobinler (6-8):** ESP32-S3 / ESP8266 **slave**, PB1'deki
+  master sync-pulse ile senkron. … [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) (6-7, tam-köprü, faz senkron GPIO7'de)~~
+  — TARİHÇE; ESP32-S3 kodu korunur.
 
 ## Güvenlik mantığı (firmware içinde)
 - Aralık clamp'leri: `DUTY_MIN` / `FREQ_MIN..FREQ_MAX` / faz `0..360` / `DURATION_MAX_MINUTES 9999` + CRC + NACK.
@@ -149,15 +151,26 @@ düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırak�
 
   > ⚠️ **DÜZELTME 2026-08-09 (denetim, Tier 2).** Burada önceden *"termal koruma sensör/ESP
   > tarafındadır"* yazıyordu. **Bu ifade 1-5 numaralı bobinler için DOĞRU DEĞİLDİ** ve yanlış
-  > güvence veriyordu. Ölçülen durum:
+  > güvence veriyordu.
+  >
+  > **GÜNCEL TOPOLOJİ (Faz 4, 2026-10 — A-47):**
+  >
+  > | Bobin | Sürücü | Sıcaklık ölçümü | Termal kesme |
+  > |---|---|---|---|
+  > | 1-5 | STM32 (seri, binary paket) | **YOK** — bobin 1-5'te sıcaklık sensörü yok (yalnız ACS712 akım, `STM_TELE` `I=`) | **YOK** (A-47) |
+  > | 6-7 | STM32 (seri) | var — I2C MLX90614, `STM_TELE` satırının `T=` alanı (`Core/Inc/pemf_sensor.h`) | **YOK** (A-47; 48 °C üstü yalnız görsel uyarı) |
+  > | 8 | ESP8266 (MQTT — ESP bugün kapalı) | var (`pemf/coil/8/sensors` → `object_temp`) | ESP8266 firmware'inin kendi 100 °C kesmesi (Y40 — A-47 kapsamı dışında) |
+  >
+  > TARİHÇE — 2026-08-09 ölçülen durum (o günün 5 STM + 3 ESP topolojisi):
   >
   > | Bobin | Sürücü | Sıcaklık ölçümü | Termal kesme |
   > |---|---|---|---|
   > | 1-5 | STM32 (binary paket) | **YOK** — pakette sıcaklık alanı yok, STM sıcaklık yayınlamaz | **YOK** |
   > | 6-8 | ESP32 (MQTT) | var (`pemf/coil/<id>/sensors` → `object_temp`) | yalnız arayüz eşiği |
   >
-  > Tek kesme mantığı bir React bileşenindedir (`CoilParameterPanel.tsx`,
-  > `SAFE_TEMP_CUTOFF = 48 °C`) ve `objectTemp` üzerinden çalışır. 1-5 için bu değer **hiç
+  > ~~Tek kesme mantığı bir React bileşenindedir (`CoilParameterPanel.tsx`,
+  > `SAFE_TEMP_CUTOFF = 48 °C`) ve `objectTemp` üzerinden çalışır.~~ (A-47 ile o kesme de KALDIRILDI — bugün 48 °C
+  > üstü yalnız görsel uyarı, `SICAKLIK_UYARI_ESIGI_C`.) 1-5 için bu değer **hiç
   > gelmediğinden** (`live_state` varsayılanı `0.0`) koşul **hiçbir zaman** sağlanamaz — yani
   > 8 bobinin 5'i hastanın üzerinde **hiçbir sıcaklık koruması olmadan** enerjilenir.
   >

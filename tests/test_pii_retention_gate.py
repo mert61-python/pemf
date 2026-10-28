@@ -222,3 +222,76 @@ def test_STM_protokolunde_sicaklik_alani_YOK():
         Path(__file__).resolve().parent.parent / "apps" / "backend" / "controllers" / "hardware_controller.py"
     ).read_text(encoding="utf-8")
     assert "temperature" not in hc.lower(), "STM kontrolcusune sicaklik eklendi — README/UI sinir notlari GUNCELLENMELI"
+
+
+# ── D6.53 (B-11.x · Faz 4) — firmware/README topoloji ve termal tablosu BUGÜNKÜ bobin kümeleriyle aynı ──────────────────────
+# ÖLÇÜLEN (HEAD ebf1c3fe): `firmware/README.md:42` "ESP bobinler (6-8): ESP32-S3 / ESP8266" ve termal tablosu `:156-157`
+# "1-5 STM32 … | 6-8 ESP32 (MQTT)" ↔ `apps/backend/servers/live_state.py` `STM_COIL_IDS = set(range(1, 8))`, `ESP_COIL_IDS = {8}`
+# (Faz 4: bobin 6-7 STM'den sürülür, sıcaklıkları `STM_TELE` `T=` alanıyla — MLX90614). Kümeler AST'den okunur (ürün import EDİLMEZ).
+
+
+def _canli_bobin_kumeleri() -> tuple[set[int], set[int]]:
+    import ast
+    from pathlib import Path
+
+    kaynak = (Path(__file__).resolve().parent.parent / "apps" / "backend" / "servers" / "live_state.py").read_text(
+        encoding="utf-8"
+    )
+    kume = {}
+    for d in ast.walk(ast.parse(kaynak)):
+        if (
+            isinstance(d, ast.Assign)
+            and len(d.targets) == 1
+            and getattr(d.targets[0], "id", "") in ("STM_COIL_IDS", "ESP_COIL_IDS")
+        ):
+            ad = d.targets[0].id
+            if isinstance(d.value, ast.Call) and getattr(d.value.func, "id", "") == "set":
+                a = d.value.args[0]  # set(range(x, y))
+                kume[ad] = set(range(*[ast.literal_eval(x) for x in a.args]))
+            else:
+                kume[ad] = set(ast.literal_eval(d.value))
+    return kume["STM_COIL_IDS"], kume["ESP_COIL_IDS"]
+
+
+def _aralik(h: str) -> set[int]:
+    import re
+
+    m = re.fullmatch(r"\s*(\d+)\s*(?:-\s*(\d+))?\s*", h)
+    assert m, f"bobin hücresi ayrıştırılamadı: {h!r}"
+    a, b = int(m.group(1)), int(m.group(2) or m.group(1))
+    return set(range(a, b + 1))
+
+
+def test_KRITIK_D6_53_firmware_README_termal_tablosu_GUNCEL_topolojiyle_ayni():
+    import re
+    from pathlib import Path
+
+    stm, esp = _canli_bobin_kumeleri()
+    metin = (Path(__file__).resolve().parent.parent / "firmware" / "README.md").read_text(encoding="utf-8")
+    assert "GÜNCEL TOPOLOJİ (Faz 4" in metin, (
+        "firmware/README Faz 4 GÜNCEL termal / topoloji tablosu YOK (yalnız eski 1-5 STM · 6-8 ESP tablosu)"
+    )
+    bas = metin.index("GÜNCEL TOPOLOJİ (Faz 4")
+    satirlar = []
+    for s in metin[bas:].splitlines()[1:]:
+        s = s.lstrip("> ").rstrip()
+        if s.startswith("|"):
+            satirlar.append(s)
+        elif satirlar:
+            break
+    govde = [s for s in satirlar if re.match(r"\|\s*\d", s)]
+    assert govde, "GÜNCEL termal tablosu bulunamadı"
+    tablo_stm, tablo_esp = set(), set()
+    for s in govde:
+        h = [x.strip() for x in s.strip("|").split("|")]
+        (tablo_stm if "STM32" in h[1] else tablo_esp if "ESP" in h[1] else set()).update(_aralik(h[0]))
+    assert tablo_stm == stm, (
+        f"firmware/README GÜNCEL tablo STM bobinleri {sorted(tablo_stm)} ≠ live_state {sorted(stm)}"
+    )
+    assert tablo_esp == esp, (
+        f"firmware/README GÜNCEL tablo ESP bobinleri {sorted(tablo_esp)} ≠ live_state {sorted(esp)}"
+    )
+    cizgisiz = re.sub(r"~~.*?~~", " ", metin, flags=re.S)
+    assert not re.search(r"ESP bobinler \(6-8\)", cizgisiz), (
+        "firmware/README topoloji satırı bobin 6-8'i ESP sayıyor (Faz 4: yalnız 8)"
+    )
