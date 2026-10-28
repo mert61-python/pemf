@@ -801,9 +801,12 @@ def test_KRITIK_dinamik_b_GOVDESIZ_ICERIK_TURU_KAPILI_uc_basit_POSTu_REDDEDER_bi
     finally:
         with api._live_state_lock:
             api._live_state["notifications"][:] = eski
-    assert r.status_code == 415 and len(kalan) == 1, (
-        f"çapraz kökenli basit POST güvenlik bildirimlerini SİLMEMELİ (Y204) — {r.status_code}, kalan {kalan}"
-    )
+    # 22-SON kapanış: süitte önceki dosyaların bildirimleri listede durabilir → ölçüt "eski + sahte AYNEN kaldı" (sayı 1 değil).
+    assert (
+        r.status_code == 415
+        and kalan[: len(eski)] == eski
+        and [b.get("message") for b in kalan[len(eski) :]] == ["kapi-sahte-guvenlik-bildirimi"]
+    ), f"çapraz kökenli basit POST güvenlik bildirimlerini SİLMEMELİ (Y204) — {r.status_code}, kalan {kalan}"
     _statik_tutarli("POST /api/notifications/clear", "b_GOVDESIZ_ICERIK_TURU_KAPILI")
 
 
