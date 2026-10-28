@@ -31,6 +31,26 @@ def _yukle(ad):
     return yaml.safe_load((W / ad).read_text(encoding="utf-8"))
 
 
+def test_KRITIK_security_yml_torch_CVE_GORUNURLUK_iddiasi_GERCEK_D6_56():
+    """Tur 2 kolu (D67 çürütme, mutant e4): torch tekerlekleri PyPI'da YOK (`+cpu`, ek index) → pip-audit onları ATLAR; iş akışı
+    yorumu torch CVE'lerinin bu adımda GÖRÜNDÜĞÜNÜ söylemez, GÖRÜNMEDİĞİNİ söyler; "bloklayıcı yapma" tarifi `|| true`'yu da anar."""
+    req = (KOK / "requirements.txt").read_text(encoding="utf-8")
+    assert re.search(r"^torch==[\d.]+\+cpu", req, re.M) and "--extra-index-url" in req, (
+        "ölçüt değişti: torch artık PyPI'dan geliyor olabilir — security.yml torch CVE yorumu yeniden ölçülmeli"
+    )
+    sec = (W / "security.yml").read_text(encoding="utf-8")
+    yorum = " ".join(s.strip().lstrip("#").strip() for s in sec.splitlines() if s.strip().startswith("#"))
+    assert not re.search(r"(?i)\b(?:burada|adımda) GÖRÜNÜR", yorum), (
+        "security.yml torch CVE'lerinin pip-audit'te GÖRÜNDÜĞÜNÜ söylüyor"
+    )
+    assert re.search(r"torch CVE'leri[^.]*GÖRÜNMEZ", yorum), (
+        "security.yml torch CVE'lerinin bu adımda GÖRÜNMEDİĞİNİ söylemiyor"
+    )
+    assert "|| true" in sec and "continue-on-error'ı kaldırmakla OLMAZ" in yorum, (
+        "bloklayıcı yapma tarifi `|| true`'yu anmıyor"
+    )
+
+
 def test_KRITIK_D5_32_PyYAML_CI_test_bagimliliklarinda_PINLI():
     """D5.32 (B-10.206): bu dosyanın TÜM iş akışı kapıları `_yukle` → `importorskip("yaml")` ile PyYAML'a bağlı. Pin
     `requirements-test.txt`ten düşerse CI'da hepsi SESSİZCE atlanır (adı konmuş tek kırmızı yoktu; yalnız ilgisiz bir testin
