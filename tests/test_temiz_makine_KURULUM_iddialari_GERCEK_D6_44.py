@@ -49,3 +49,39 @@ def test_KRITIK_kurulum_IMZASIZ_iken_belge_imzali_yayimci_IDDIA_ETMEZ():
     assert not re.search(r"Yayımcı:\s*\*\*I[BİI]{1,2}A", a), "TEMIZ-MAKINE: 'Yayımcı: İBİA' iddiası (imzasız kurulum)"
     for parca in ("Bilinmeyen yayımcı", "Y28", "Get-FileHash", "SHA256", "launcher.sha256"):
         assert parca in a, f"TEMIZ-MAKINE Yol A '{parca}' anmalı (imzasız kurulumun doğrulama yolu — Y28)"
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# TEMIZ-MAKINE belge kolları (D6.42 · D6.70 · A-47) — kurulum dosyası boyutu MANİFESTTEN; "termal koruma cihazda gömülü" YOK.
+# ÖLÇÜLEN (HEAD ebf1c3fe): `:22` "Kurulum ~11 MB'lık launcher'ı yazar" ↔ `pemf-app-packages/manifest.json` `launcher.size` =
+# 265.032.239 B (1.9.51; `tauri.conf.json` `webviewInstallMode: offlineInstaller` — WebView2 çevrimdışı kurucusu pakette).
+# `:30-31` "Yerel acil-durdurma + termal koruma zaten cihazda gömülü" ↔ A-47: termal kesme / 48 °C engelleme HİÇBİR katmanda yok.
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+MANIFEST = KOK / "pemf-app-packages" / "manifest.json"
+#: Belgedeki MB değeri manifestten en çok bu oranda sapabilir (yuvarlama payı).
+BOYUT_TOLERANSI = 0.10
+
+
+def test_KRITIK_kurulum_dosyasi_boyutu_MANIFESTLE_ayni():
+    boyut = json.loads(MANIFEST.read_text(encoding="utf-8"))["launcher"]["size"]
+    mb = boyut / 1_000_000
+    a = _yol_a()
+    m = re.search(r"Kurulum dosyası ~(\d+)\s*MB", a)
+    assert m, "TEMIZ-MAKINE Yol A kurulum dosyası boyutunu ('Kurulum dosyası ~N MB') yazmalı"
+    yazan = int(m.group(1))
+    assert abs(yazan - mb) / mb <= BOYUT_TOLERANSI, (
+        f"TEMIZ-MAKINE ~{yazan} MB diyor, manifest launcher.size {mb:.0f} MB"
+    )
+    assert not re.search(r"~11 MB'lık", a), "eski '~11 MB'lık launcher' iddiası (manifest ~265 MB)"
+
+
+def test_KRITIK_termal_koruma_cihazda_gomulu_DEMEZ_A47():
+    a = _yol_a()
+    assert not re.search(r"termal koruma (zaten )?cihazda gömülü|\+\s*termal koruma", a, re.I), (
+        "TEMIZ-MAKINE 'termal koruma cihazda gömülü' diyor — A-47: termal kesme YOK"
+    )
+    assert not re.search(r"sıcaklık kesmesi önceliklidir", a, re.I)
+    assert "A-47" in a and re.search(r"[Tt]ermal koruma[^\n]{0,40}YOK", a), (
+        "TEMIZ-MAKINE Yol A 'termal koruma … YOK (A-47)' demeli"
+    )

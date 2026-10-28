@@ -19,7 +19,9 @@ Hiçbir toolchain, repo, sır, komut satırı **gerekmez**. Cihaz yazılımı ke
 
 1. Klinik bilgisayarında tarayıcıyı aç → **indirme sitesi:** https://pemf-vet-web.vercel.app
 2. **Windows İçin İndir** → `PEMFVetClient-Setup-*.exe` iner → çalıştır.
-   - Kurulum ~11 MB'lık launcher'ı yazar; **runtime + AI profilleri kurulum sırasında iner**
+   - Kurulum dosyası ~265 MB (manifest `launcher.size` = 265.032.239 B, launcher 1.9.51 — WebView2 çevrimdışı kurucusu
+     dahil: `launcher/app/tauri.conf.json` `webviewInstallMode: offlineInstaller`); ~~Kurulum ~11 MB'lık launcher'ı yazar;~~
+     launcher'ı yazar; **runtime + AI profilleri kurulum sırasında iner**
      (internet gerekir, ilk sefer birkaç GB — sabırlı olun, ilerleme çubuğu var).
    - ~~Yayımcı: **IBIA Teknoloji Ltd. Şti.** (UAC uyarısında bu görünmeli).~~ ⚠️ Kurulum dosyası **Authenticode ile
      İMZALI DEĞİLDİR** (sahip kararı Y28 — kod imzası şimdilik alınmıyor): UAC / SmartScreen **"Bilinmeyen yayımcı"**
@@ -32,8 +34,10 @@ Hiçbir toolchain, repo, sır, komut satırı **gerekmez**. Cihaz yazılımı ke
    asla kesilmez; kurulum kapat-aç anında olur). Klinik hiçbir şey yapmaz.
 
 **Bu yolda sır/E-stop-bulut vb. hiçbir elle iş YOKTUR** — bulut E-stop aynası kimliği yayın
-paketine gömülü gelir (sahip kararı). Yerel acil-durdurma + termal koruma zaten cihazda gömülü
-mosquitto ile çalışır; internet olmadan da güvenlidir.
+paketine gömülü gelir (sahip kararı). Yerel acil-durdurma internet olmadan da çalışır (bobin 1–7: STM seri hattı;
+bobin 8 / ESP yolu: cihazda gömülü mosquitto — ESP bugün kapalı). ~~Yerel acil-durdurma + termal koruma zaten cihazda
+gömülü mosquitto ile çalışır.~~ ⚠️ **Termal koruma / sıcaklık kesmesi YOK** (sahip kararı A-47): sıcaklık ölçülür ve
+gösterilir, 48 °C üstü yalnız görsel uyarıdır — seans otomatik durdurulmaz.
 
 > **Donanım (bobinler):** Bu yazılım-kurulumudur. STM32/ESP kartlarının firmware'i **ayrıca**
 > flash'lanır (bkz. `firmware/*/README.md`) — klinik dağıtımında bu fabrika/servis adımıdır,
