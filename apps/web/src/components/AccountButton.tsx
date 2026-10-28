@@ -35,8 +35,10 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
 
   // Dışarı tıklayınca / Esc ile kapan (menü açıkken sayfada gezinmeyi engellemesin).
   // Menü AÇILDIĞINDA bakiyeyi çek (her sayfa yüklemesinde değil — gereksiz istek olmasın).
+  // Y211 · S-D67.4: ücretsiz dönemde (FREE_MODE — cihazda jeton Y194 ile kapalı) bakiye okunmaz ve kutu çizilmez; ticari
+  // açılışta (FREE_MODE=false) ikisi de geri gelir.
   useEffect(() => {
-    if (!acik) return
+    if (!acik || FREE_MODE) return
     void jetonBakiyesiniOku().then(setJeton)
   }, [acik])
 
@@ -106,7 +108,7 @@ export default function AccountButton({ onNavigate, inline }: { onNavigate?: () 
               Okunamazsa HİÇ gösterilmez — yanlış sayı göstermektense boş bırakmak (DownloadStats
               ile aynı ilke). Aylık hak devretmez, satın alınan süresizdir; ikisi ayrı yazılır ki
               kullanıcı hangisinin ay sonunda sıfırlanacağını bilsin. */}
-          {jeton && (
+          {jeton && !FREE_MODE && (
             <div className="mt-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-xs text-muted">{t('hesap.kalanJeton')}</span>
