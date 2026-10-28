@@ -44,3 +44,10 @@ def test_KRITIK_hak_YALNIZ_PEMF_GUI_kok_gruba_ACILMAZ_ve_oturum_yenileme():
     assert re.search(r"kök[^.]*gruba AÇILMAZ", b), "§8 kökün (PEMF_System) gruba açılmadığını söylemiyor"
     assert "oturum" in b.lower() and "PAYLAŞILIR" in b, "§8 oturum yenileme / KVKK paylaşım uyarısı eksik"
     assert not re.search(r"PEMF_System`?[^.]*\(OI\)\(CI\)M", b), "§8 köke grup hakkı verildiğini söylüyor"
+    # Tur 2 kolu (D67 çürütme, mutant z2): belgenin iddiası KODLA — düğmenin betiği (T-g `paylasim::kurma_betigi`) grup hakkını
+    # yalnız `$gui` (= `<kök>\PEMF_GUI`) ağacına yazar; hedef köke dönerse §8 bayatlar.
+    paylasim = (KOK / "launcher" / "core" / "src" / "paylasim.rs").read_text(encoding="utf-8")
+    hak = re.findall(r"icacls\.exe \$(\w+) /grant", paylasim)
+    assert hak and set(hak) == {"gui"} and "$gui = Join-Path $kok 'PEMF_GUI';" in paylasim, (
+        f"§8 'hak YALNIZ PEMF_GUI' diyor ama paylasim.rs icacls hedefleri: {hak} — belge ya da kod yeniden ölçülmeli"
+    )
