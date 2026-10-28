@@ -111,3 +111,48 @@ def test_B_ai_router_ek_girdileri_TEK_KAYNAKTAN_baglar():
         assert getattr(air, yerel) is getattr(ai_pro_hedef, kaynak) or getattr(air, yerel) == getattr(
             ai_pro_hedef, kaynak
         )
+
+
+def _tum_atamalar(agac: ast.AST, ad: str) -> list:
+    """Modülün HER yerindeki (iç blok, işlev gövdesi dahil) `ad` atamaları — gölge / yerel kopya da sayılır."""
+    bulunan = []
+    for d in ast.walk(agac):
+        if isinstance(d, ast.Assign):
+            hedefler = d.targets
+        elif isinstance(d, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
+            hedefler = [d.target]
+        else:
+            continue
+        if any(isinstance(n, ast.Name) and n.id == ad for h in hedefler for n in ast.walk(h)):
+            bulunan.append(d)
+    return bulunan
+
+
+def test_B2_ai_router_HICBIR_YERDE_ikinci_atama_yok():
+    """Tur 2 kolu (çürütücü): modül düzeyindeki tek atamaya ek olarak iç blokta (`if …:`) ya da işlev gövdesinde yerel gölge
+    (`_AI_DUTY_SUM = 1.5`) ikinci literal kaynak açar; değer bugün eşitse davranış kolları (A / A2) yakalamaz."""
+    agac = ast.parse(_ROUTER.read_text(encoding="utf-8"))
+    for ad in ("_AI_ACHIEVED_B", "_AI_DUTY_SUM"):
+        hepsi = _tum_atamalar(agac, ad)
+        assert len(hepsi) == 1, (
+            f"{ad}: ai_router.py'de {len(hepsi)} atama (satır {[d.lineno for d in hepsi]}) — tek kaynak dışında gölge / "
+            "yerel kopya YASAK"
+        )
+
+
+def test_B3_KediSaglayici_ek_girdileri_de_TEK_KAYNAKTAN():
+    """Tur 2 kolu (çürütücü): XAI açıklaması ve onay metası `KediSaglayici.achieved_B / duty_sum`'ı okur → sınıf alanı da
+    `KEDI_*`'ye bağlı olmalı; sınıf gövdesinde ikinci literal (değer bugün eşit olsa bile) karşı tarafta ikinci kaynaktır."""
+    agac = ast.parse((KOK / "apps" / "backend" / "servers" / "ai_pro_hedef.py").read_text(encoding="utf-8"))
+    siniflar = [d for d in agac.body if isinstance(d, ast.ClassDef) and d.name == "KediSaglayici"]
+    assert len(siniflar) == 1, "ai_pro_hedef.KediSaglayici sınıfı bulunamadı"
+    for alan, kaynak in (("achieved_B", "KEDI_ACHIEVED_B"), ("duty_sum", "KEDI_DUTY_SUM")):
+        atamalar = _tum_atamalar(siniflar[0], alan)
+        assert len(atamalar) == 1, f"KediSaglayici.{alan}: {len(atamalar)} atama (tam 1 olmalı)"
+        deger = atamalar[0].value
+        assert isinstance(deger, ast.Name) and deger.id == kaynak, (
+            f"KediSaglayici.{alan} = {ast.unparse(deger)} — `{kaynak}` adına bağlanmalı (ikinci literal kopya YASAK)"
+        )
+    for kaynak in ("KEDI_ACHIEVED_B", "KEDI_DUTY_SUM"):
+        n = len(_tum_atamalar(agac, kaynak))
+        assert n == 1, f"ai_pro_hedef.{kaynak}: {n} atama — literal kaynak TEK olmalı"
