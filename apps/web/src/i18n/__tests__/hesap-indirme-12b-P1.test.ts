@@ -157,7 +157,7 @@ const ALTIN: Record<string, string> = {
   "hesap.tur.veteriner": "Veteriner Hekim / Klinik",
   "indirme.abonelikBasladi": "✓ Aboneliğiniz başladı. Aşağıdan PEMF Vet’i indirip aynı hesapla giriş yapın; planınız otomatik tanınır, ayrıca kod girmeniz gerekmez.",
   "indirme.appImage": ".AppImage (tüm dağıtımlar)",
-  "indirme.baslaticiAciklama": "İndirdiğiniz küçük başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.",
+  "indirme.baslaticiAciklama": "İndirdiğiniz başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.",
   "indirme.butunluk": " İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır",
   "indirme.gereksinim.baslik": "Sistem gereksinimleri",
   "indirme.gereksinim.disk": "• 4–12 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir", // D6.66: başlatıcının disk kuralı (2 × indirme + %10) — TR DEĞİŞTİ
@@ -289,7 +289,7 @@ const SAYFALAR: [ad: string, oturumlu: boolean, cizici: () => string, ciftler: (
     'Download (indirme sayfası)', false, () => ciz(DownloadPage),
     () => [
       [`İndir · v${CLIENT.version}`, `Download · v${CLIENT.version}`],
-      ['İndirdiğiniz küçük başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.', 'Install the small launcher you downloaded; it downloads and installs the main app, and the app opens with “Start”.'],
+      ['İndirdiğiniz başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.', 'Install the launcher you downloaded; it downloads and installs the main app, and the app opens with “Start”.'],
       ['PEMF Vet’i indirin', 'Download PEMF Vet'],
       [` Sürüm ${CLIENT.downloads.windows.version} · ${CLIENT.releaseDate}`.trim(), `Version ${CLIENT.downloads.windows.version} · ${CLIENT.releaseDate}`],
       [' İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır', ' The integrity of the downloaded files is verified automatically during installation'],
