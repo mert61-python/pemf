@@ -618,3 +618,11 @@ def check(img: np.ndarray, label: str) -> None:
         "ALAN UYUŞMAZLIĞI [%s]: beklenen=%s algılanan=%s ölçüm=%s", label, sorted(expected), detected, metrics
     )
     raise DomainMismatch(label, detected, expected, metrics)
+
+
+def denetlenir_mi(label: str) -> bool:
+    """`check` bu etiket için bir kural UYGULAR mı (kapı açık + termal / scratch makullik kapısı ya da `EXPECTED` kuralı).
+
+    İG-5.57 (D67): `ai_service._kapi` kapının çözücüsü (cv2) girdiyi OKUYAMADIĞINDA buna bakar — kuralı olan etikette analiz
+    REDDEDİLİR (A-24), kuralsız etikette uç kendi decode davranışını korur. Dallar `check` ile AYNI olmalı."""
+    return guard_enabled() and (label in ("thermal", "scratch") or bool(EXPECTED.get(label)))

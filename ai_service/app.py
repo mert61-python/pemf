@@ -56,6 +56,7 @@ from fastapi.responses import JSONResponse
 from utils.image_domain import DomainCheckError as _DomainCheckError
 from utils.image_domain import DomainMismatch as _DomainMismatch
 from utils.image_domain import check as _domain_check
+from utils.image_domain import denetlenir_mi as _domain_denetlenir_mi
 from utils.image_domain import termal_girdi_dogrulamasi as _termal_girdi_dogrulamasi
 
 # ⚠️ ASGARİ GİRDİ KAPILARI (denetim 2026-08-17) — router ile AYNI nesne, KOPYA DEĞİL.
@@ -163,17 +164,35 @@ def _kapi(data: bytes, label: str):
 
     `utils.image_domain.check` ile AYNI nesneyi çağırır — kapının ikinci bir kopyası YOK
     (bu bulgunun kök nedeni tam olarak iki transportun ayrışmasıydı).
-    ⚠️ Decode edilemeyen girdide kapı ZORLANMAZ: o yolun mevcut hata davranışı (uç kendi
-    `except`iyle 500 döner) korunur; kapı yeni bir başarısızlık modu getirmez.
+    ⚠️ İG-5.57 (D67): kapının çözücüsü (cv2) okuyamadığı girdi KURALI OLAN etikette REDDEDİLİR (422, A-24). Eskiden
+    "uç kendi `except`iyle 500 döner" varsayımıyla geçiriliyordu; ama modeller görüntüyü PIL ile açar — cv2'nin
+    okuyamadığı GIF / ICO / PCX / TGA'yı PIL okur. Ölçüldü: CT kesiti GIF'e çevrilince /infer/histopath → 200
+    "grade4 %99,99", kapı hiç çalışmadan ve tek satır günlük bile yazılmadan. Gömülü / mikroservis profili aynı girdiyi
+    zaten reddediyordu (backend `_decode_image` cv2 ile çözer, çözemezse modele gitmez). Kuralsız etikette eski yol.
     ⚠️ Ret 422 ile AYRI yoldan döner, `_err500`in jenerik mesajına karışmaz — istemci reddin
     SEBEBİNİ görür (router tarafındaki kalıbın aynısı)."""
     try:
-        _domain_check(_read_bgr(data), label)
+        img = _read_bgr(data)
+    except Exception as e:
+        if not _domain_denetlenir_mi(label):
+            return None
+        import logging as _lg
+
+        _lg.getLogger("ai_service").warning(
+            "MODALİTE DENETİMİ ÇALIŞTIRILAMADI [%s] — girdi kapının çözücüsüyle (cv2) okunamadı, analiz REDDEDİLDİ "
+            "(A-24 · İG-5.57): %s",
+            label,
+            e,
+        )
+        de = _DomainCheckError(label, f"{type(e).__name__}: {e}")
+        return JSONResponse({"error": de.user_message(), "domain_check_error": True}, status_code=422)
+    try:
+        _domain_check(img, label)
     except _DomainMismatch as dm:
         return JSONResponse({"error": dm.user_message(), "domain_mismatch": True}, status_code=422)
     except _DomainCheckError as de:
         # A-24 · D4.09: denetim İÇ HATAYLA çalışmadıysa analiz YAPILMAZ, neden söylenir (eskiden aşağıdaki genel
-        # `except` onu da yutup isteği modele geçiriyordu). Decode edilemeyen girdi yolu (aşağıda) DEĞİŞMEDİ.
+        # `except` onu da yutup isteği modele geçiriyordu). Decode edilemeyen girdi yukarıda (İG-5.57).
         return JSONResponse({"error": de.user_message(), "domain_check_error": True}, status_code=422)
     except Exception:
         return None
