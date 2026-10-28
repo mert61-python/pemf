@@ -124,7 +124,9 @@ eklenmeli; oranı kod öğrenmek zorunda değil — offset kalibrasyonundaki `k`
 bölücüyü ve 5 V rayının gerçek değerini kendiliğinden yakalar.
 
 ⚠️ **NTC bloğu ile ÇAKIŞIR.** `PEMF_NTC_TERMAL_ENABLED` 1 yapılırsa aynı beş kanalı iki
-modül kurar → `pemf_akim.c` bunu `#error` ile derleme zamanında keser.
+modül kurar → `pemf_akim.c` bunu `#error` ile derleme zamanında keser (D5.06'dan beri gerçekten:
+tek tanım iki çeviri biriminin ortak başlığında, `Core/Inc/pemf_akim.h`; önceden yalnız `main.c`'deydi ve
+korkuluk makroyu görmüyordu — B-8.14). Bayrak `0` kalır: NTC termal kesme YAPILMAYACAK (A-47).
 
 ---
 

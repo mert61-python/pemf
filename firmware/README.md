@@ -167,13 +167,18 @@ düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırak�
   > BİLİNEREK taşınmalı ve kullanıcı arayüzü de "ölçülmüyor" demelidir (bkz.
   > `CoilParameterPanel` sıcaklık rozeti).
   >
-  > ⚠️ **GÜNCELLEME 2026-08-19 (HG-1):** `main.c` içine **tam bir NTC termal kesme** eklendi ama
+  > ⚠️ **GÜNCELLEME 2026-08-19 (HG-1) — TARİHÇE:** `main.c` içine **tam bir NTC termal kesme** eklendi ama
   > **derleme-kapılı** (`PEMF_NTC_TERMAL_ENABLED 0` — NTC donanımı bağlı değilken kod derlenmez,
-  > davranış birebir eski). NTC'ler (bobin başına 10k NTC + 10k bölücü; ADC pinleri PA0/PA3/PA4/
+  > davranış birebir eski). ~~NTC'ler (bobin başına 10k NTC + 10k bölücü; ADC pinleri PA0/PA3/PA4/
   > PC0/PC3) fiziksel bağlandıktan sonra 1 yapın: 48/45 °C histerezisli kesme + kilitliyken
   > re-enerji reddi + `STM_EVT: TERMAL` seri satırı. Kablolamaya göre `g_ntc_kanal` tablosunu
-  > güncelleyin ve Beta/R25'i NTC veri sayfasıyla doğrulayın. **Yukarıdaki tablo, define 0
-  > olduğu sürece hâlâ geçerlidir.**
+  > güncelleyin ve Beta/R25'i NTC veri sayfasıyla doğrulayın.~~
+  >
+  > ⛔ **KAPANDI — A-47 (sahip kapalı kararı, 2026-09-29): NTC termal kesme YOK, bayrak `0` kalır; üstü çizili "1 yapın"
+  > önerisi UYGULANMAZ.** ADC1 kanalları (PA0/PA3/PA4/PC0/PC3) 2026-09-10'da ACS712 akım sensörlerine devredildi; bayrak 1
+  > yapılırsa `Core/Src/pemf_akim.c:35-36` `#error` ile derleme DURUR (D5.06'dan beri gerçekten — tek tanım ortak başlıkta
+  > `Core/Inc/pemf_akim.h:71-73`; önceden yalnız `main.c`'deydi ve korkuluk ölüydü, B-8.14). Kapılar:
+  > `tests/test_ntc_acs712_korkulugu_ONISLEMDE_D5_06.py` (önişlemci) · `tests/test_ntc_korkulugu_BELGESI_kaynakla_ayni_D6_35.py` (belge).
 - **DALGA SÖZLEŞMESİ DEĞİŞTİ (HG-2, 2026-08-19):** STM DDS artık **simetrik bipolar** —
   A darbesi `[0,duty)`, B darbesi `[yarım, yarım+duty)`, aralarda **ikisi de LOW** → her duty'de
   net DC = 0 (ESP S3/8266 ile aynı anlam; duty = yarım-periyot doluluk oranı, tavan ~%50).

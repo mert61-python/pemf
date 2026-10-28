@@ -22,8 +22,8 @@
 
 | # | İş | Durum | Doğrulama |
 |---|---|---|---|
-| B1 | **STM bobin 1-5 termal kesme YOK** — `PEMF_NTC_TERMAL_ENABLED 0` (derleme-kapılı) | ⚠️ **AÇIK P0.** Kodda bugün de `0` olduğunu ölçtüm (`main.c:852`) | koddan |
-| B2 | **Bobin 6-7 termal kesme YAPILMAYACAK** (sahip kararı) — cihaz-taraflı koruma yok, yalnız istemci interlock | Bilinçli karar; kapanmayacak | `stm32-7-bobin-gecisi-plani` |
+| ~~B1~~ | ~~**STM bobin 1-5 termal kesme YOK** — `PEMF_NTC_TERMAL_ENABLED 0` (derleme-kapılı)~~ | ⛔ **YAPILMAYACAK — A-47** (sahip kapalı kararı 2026-09-29: bobin 1–7'de hiçbir katmanda otomatik termal kesme / engelleme yok). Bayrak `0` kalır — tanım bugün `firmware/stm32_pemf/Core/Inc/pemf_akim.h:72`; 1 yapılırsa `pemf_akim.c` `#error` ile derlemeyi durdurur (D5.06). ~~⚠️ **AÇIK P0.** Kodda bugün de `0` olduğunu ölçtüm (`main.c:852`)~~ | koddan |
+| B2 | **Bobin 6-7 termal kesme YAPILMAYACAK** (sahip kararı) — cihaz-taraflı koruma yok; ~~yalnız istemci interlock~~ istemcideki 48 °C interlock da A-47 ile kaldırıldı (48 °C üstü yalnız görsel uyarı — `apps/ui/src/components/domain/CoilParameterPanel.tsx` `SICAKLIK_UYARI_ESIGI_C`) | Bilinçli karar; kapanmayacak | `stm32-7-bobin-gecisi-plani` |
 | ~~B3~~ | ~~STM REFLASH + doz kalibrasyonu~~ | ⛔ **KAPANDI** — doz kalibrasyonu KALDIRILDI (sahip 2026-09-21); reflash otomatik firmware güncellemesine devredildi | `stm32-uzaktan-guncelleme-plani.md` |
 | B4 | `VERIFICATION.md` ⏳ kalemleri: §2 SQLCipher cihazda · §4 Cloudflare **NAMED** tünel · §5 CVE yükseltme · §6 model SHA bütünlüğü · §7 yük/soak · §1 firmware satürasyon | Hiçbiri kapanmadı | belge |
 | B5 | §14 ikinci reflash deltası (S3 + 8266) | ⚠️ **ESP sökülü olduğu için şu an ANLAMSIZ** — ESP geri gelirse borç geri gelir | memory + plan |
@@ -83,7 +83,7 @@ Bu satırlar bugün koddan doğrulandı; belgeler **yanlış** durum bildiriyor:
 
 ## 7. Önerilen sıra (bana kalsa)
 
-1. **B1** (STM 1-5 termal) — tek sürekli, koşulsuz hasta riski. NTC bağlanır bağlanmaz bayrağı 1 yap + tezgâhta doğrula.
+1. ~~**B1** (STM 1-5 termal) — tek sürekli, koşulsuz hasta riski. NTC bağlanır bağlanmaz bayrağı 1 yap + tezgâhta doğrula.~~ ⛔ YAPILMAYACAK — A-47 (NTC termal kesme yok; bayrak `0` kalır).
 2. ~~**B3**~~ — ⛔ doz kalibrasyonu KALDIRILDI (sahip 2026-09-21); reflash otomatikleşiyor.
 3. **D1** (mobil saha testi) — en az bakılan katman, en ucuz kapatma. Liste hazır.
 4. **A1a** (avukata ağırlık lisansı sorusu) — cevabı gelmeden A1'e mühendislik harcamak boşa gidebilir.
