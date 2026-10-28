@@ -51,3 +51,17 @@ def test_bayat_48C_interlock_landmark_iddiasi_backendde_YOK():
 def test_dogru_iddia_YERINDE():
     eksik = [f"{d}: {s!r}" for d, s in _GEREKLI if s not in (_BACKEND / d).read_text(encoding="utf-8")]
     assert not eksik, "gerçeği söyleyen yorum yok:\n  " + "\n  ".join(eksik)
+
+
+def test_bayat_iddia_SATIR_KIRILIMINDA_ve_HARF_DEGISIMINDE_de_YOK():
+    """Tur 2 kolu (çürütücü — yorum / dize içine taşıma, önek genellemesi): aynı yasak iddia DOCSTRING içinde satıra bölünmüş
+    ("… Landmark her (satır sonu) istekte çağırır") ya da harfi değişmiş ("… safety-limit'lerine dokunmaz") hâlde de yakalanır —
+    yorum devamı birleştirildikten sonra TÜM boşluk tek boşluğa indirilir ve desenler harf-duyarsız aranır."""
+    bulunan = []
+    for yol in sorted(_BACKEND.rglob("*.py")):
+        metin = yol.read_text(encoding="utf-8", errors="replace")
+        duz = " ".join(re.sub(r"\n[ \t]*#[ \t]*", " ", metin).split())
+        for desen, neden in _YASAK:
+            for m in re.finditer(desen, duz, flags=re.IGNORECASE):
+                bulunan.append(f"{yol.relative_to(KOK).as_posix()}: {m.group(0)!r} — {neden}")
+    assert not bulunan, "bayat / yanlış iddia (satır kırılımı / harf değişimi):\n  " + "\n  ".join(bulunan)
