@@ -158,7 +158,7 @@ function Test-PemfApiPortDegeri([AllowNull()][string]$Ham) {
         $sonuc.Port = [int]$deger
     } else {
         $sonuc.Hata = "PEMF_API_PORT geçersiz: '$Ham' — 1-65535 arası tamsayı olmalı (backend bu değerde uyarıyla " +
-            "8000'e düşer, kurulumun sağlık sondası yanlış porta bakar). Profil dosyasında düzeltin ya da satırı silin (varsayılan 8000)."
+            "8000'e düşer; profildeki port sessizce yok sayılır). Profil dosyasında düzeltin ya da satırı silin (varsayılan 8000)."
     }
     $sonuc
 }
