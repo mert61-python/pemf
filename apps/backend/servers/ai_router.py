@@ -5064,10 +5064,13 @@ _AI_MODUL_ENVANTERI = [
         "ai_hub.inference_human_kidney_ct.inference_human_kidney_ct",
         "ai_hub/inference_human_kidney_ct/yolov8s.onnx",
     ),
+    # D6.18 (B-5.13): çıkarımın AÇTIĞI ağırlık ONNX'tir (`KidneyRnaPredictor` → `best_model_meta.json` `onnx_file`); `.pt` yalnız
+    # XAI (Integrated Gradients, araştırma profili) içindir. Eskiden `.pt` ölçülüyordu → ONNX eksikken hazırlık YEŞİL, ilk analiz
+    # FileNotFoundError. Kapı: tests/test_ai_hazirlik_kidney_rna_CIKARIMIN_ONNXini_olcer_D6_18.py
     (
         "kidney_rna",
         "ai_hub.inference_human_kidney_rna.inference_human_kidney_rna",
-        "ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt",
+        "ai_hub/inference_human_kidney_rna/mlp_medium_kirc.onnx",
     ),
     (
         "histopath",
