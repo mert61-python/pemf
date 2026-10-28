@@ -67,11 +67,11 @@ export function GlobalEmergencyStop({
   const active = snapshot.activeTreatment?.isActive === true;
 
   // ⚠️ HASTA GÜVENLİĞİ — [ekranB-2, 2026-09-04 responsive denetimi]
-  // STM seri bağlantısı koptuğunda `LiveDataContext.normalizeStmCoils` 1-5 numaralı bobinleri
-  // `running:false` yapar. Bu "bobin DURDU" değil, "durum BİLİNMİYOR" demektir — üstelik WiFi
-  // bobinleri (6-8) o sırada gerçekten sürülüyor olabilir. Eski kod belirsizliği "hiçbir şey
-  // çalışmıyor" sayıp acil durdurma düğmesini TAM DA operatörün en çok ihtiyaç duyduğu anda
-  // gizliyordu. KURAL: bir kez "çalışıyor" gördüysek, STM yeniden çevrimiçi olup "durdu" diyene
+  // STM seri bağlantısı koptuğunda `LiveDataContext.normalizeStmCoils` STM bobinlerini (`stmBobiniMi`: 1..`STM_BOBIN_SAYISI` = 7)
+  // `running:false` yapar. Bu "bobin DURDU" değil, "durum BİLİNMİYOR" demektir: USB kopukken yazılım STOP'u karta ulaşamaz,
+  // bobinler o sırada gerçekten sürülüyor olabilir (ESP yuvası bu normalleştirmeye girmez; ESP kapalı — Ö.4-Y7). Eski kod
+  // belirsizliği "hiçbir şey çalışmıyor" sayıp acil durdurma düğmesini TAM DA operatörün en çok ihtiyaç duyduğu anda
+  // gizliyordu. KURAL: bir kez "çalışıyor" gördüysek (bobin ya da aktif tedavi), STM yeniden çevrimiçi olup "durdu" diyene
   // kadar düğme EKRANDA KALIR. Hiç çalışmamışsa (donanımsız/demo makine) gürültü yapmaz.
   // D1.E03: kural TEK kaynakta (`useStmBelirsiz`) — kabuk söküm kapısı (`useTeardownGuard`) aynı ölçütü kullanır.
   const belirsiz = useStmBelirsiz(snapshot);

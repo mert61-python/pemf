@@ -11,11 +11,13 @@ durdurma yolu kalmıyordu.
 SÖZLEŞME:
   1. ControlScreen'de acil durdurma düğmesi SEKME ÇUBUĞUNDAN ÖNCE gelir (kaydırmasız erişim).
   2. GlobalEmergencyStop, STM durumu belirsizken (bir kez çalışır görülmüşse) kendini GİZLEMEZ.
+  3. (KI G4) Belirsizlik yorumundaki bobin aralığı kodun bugünkü tek kaynağıyla aynı (`STM_BOBIN_SAYISI` / `stmBobiniMi`).
 
 Davranışsal kanıt: apps/ui/src/components/ui/__tests__/GlobalEmergencyStop.belirsizlik.test.tsx
 """
 
 import pathlib
+import re
 
 import capraz
 import pytest
@@ -83,4 +85,30 @@ def test_belirsizlik_etiketi_nedenini_soyler():
         "apps/ui/src/components/ui/GlobalEmergencyStop.tsx",
         "guvenlik.acilDurdur.dugmeBaglantiYok",
         "🚨 ACİL DURDUR (bağlantı yok)",
+    )
+
+
+def test_KI_G4_belirsizlik_yorumu_bobin_araligi_kodla_ayni():
+    """KI G4 (22 A3a G4): GES belirsizlik yorumu "`normalizeStmCoils` 1-5 numaralı bobinleri `running:false` yapar … WiFi
+    bobinleri (6-8)" diyordu — D5.42'den beri STM aralığı TEK kaynaktan (`bobinGorunurlugu.STM_BOBIN_SAYISI`, `stmBobiniMi`) 1..7, ESP
+    yuvası kapalı (Ö.4-Y7). Yorumdaki aralık kodun bugünkü değeriyle AYNI olmalı: eski aralık YOK, tek kaynak adı ve DEĞERİ yorumda,
+    `normalizeStmCoils`'un yüklemi gerçekten `stmBobiniMi` (davranış değişmez — yalnız yorum)."""
+    src = _oku(_GES)
+    bas = src.find("HASTA GÜVENLİĞİ — [ekranB-2")
+    son = src.find("const belirsiz = useStmBelirsiz(snapshot);")
+    assert 0 <= bas < son, "GES belirsizlik yorumu / çağrısı bulunamadı (yapı değişti)"
+    yorum = src[bas:son]
+    for eski in (r"\b1\s*[-–]\s*5\b", r"\b6\s*[-–]\s*8\b", r"WiFi\s+bobin"):
+        assert not re.search(eski, yorum), f"bayat bobin aralığı yorumda duruyor ({eski}): {yorum[:300]!r}"
+    gorunurluk = _oku(_KOK / "apps" / "ui" / "src" / "services" / "bobinGorunurlugu.ts")
+    m = re.search(r"export const STM_BOBIN_SAYISI = (\d+);", gorunurluk)
+    assert m, "bobinGorunurlugu.STM_BOBIN_SAYISI bulunamadı"
+    y = re.search(r"STM_BOBIN_SAYISI`?\s*=\s*(\d+)", yorum)
+    assert y, "yorum STM aralığını tek kaynağın adı ve değeriyle söylemiyor (`STM_BOBIN_SAYISI` = N)"
+    assert y.group(1) == m.group(1), f"yorum STM_BOBIN_SAYISI = {y.group(1)} diyor, kod {m.group(1)}"
+    assert "stmBobiniMi" in yorum, "yorum STM yüklemini (`stmBobiniMi`) anmıyor"
+    ctx = _oku(_KOK / "apps" / "ui" / "src" / "context" / "LiveDataContext.tsx")
+    g = re.search(r"function isStmCoil\(coilId: number\): boolean \{(.*?)\n\}", ctx, re.S)
+    assert g and g.group(1).strip() == "return stmBobiniMi(coilId);", (
+        "normalizeStmCoils'un yüklemi artık `stmBobiniMi` değil — yorum kodla AYNI değil"
     )
