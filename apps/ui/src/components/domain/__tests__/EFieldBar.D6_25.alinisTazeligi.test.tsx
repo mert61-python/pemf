@@ -125,3 +125,22 @@ it("SINIR: 5 sn eşiği — 4 sn'de 'canlı', 7 sn'de 'duraklandı'", async () =
   await ilerlet(3_000);
   expect(u.queryByText(DURAKLADI)).not.toBeNull();
 });
+
+// TUR 2 (çürütücü kolu): damgasız eski backend (`ts` yok) — anahtar NESNENİN kendisi. Sabit anahtar (ör. 0) yeni hesapları TAZELEMEZ
+// → akan veri 5 sn sonra yanlışlıkla "duraklandı" olur (mutant `cur625_n1` bu dosyada YAŞIYORDU).
+it("SINIR (damgasız eski backend — `ts` YOK): yeni hesaplar 2 sn arayla gelirse 30 sn sonra hâlâ 'canlı'; yayın durunca 'duraklandı'", async () => {
+  const damgasiz = () => {
+    const { ts: _ts, ...geri } = eField(0);
+    void _ts;
+    return geri;
+  };
+  const u = await kur(damgasiz());
+  for (let i = 0; i < 15; i++) {
+    await ilerlet(2_000);
+    await gonder(damgasiz());
+  }
+  expect(u.queryByText(CANLI)).not.toBeNull();
+  expect(u.queryByText(DURAKLADI)).toBeNull();
+  await ilerlet(7_000);
+  expect(u.queryByText(DURAKLADI)).not.toBeNull();
+});
