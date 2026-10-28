@@ -22,9 +22,9 @@
  * gösterilmez; 0 °C 'serin' diye okunur."* Karar SONRA geldi ve bu ekrana taşınmadı
  * (`git log -S"avgTemp"` → tek commit, ilk içe alma).
  *
- * ⚠️ Gerçek termal koruma ETKİLENMİYOR: interlock bobin BAŞINA çalışır (`CoilParameterPanel`),
- * 50 °C'lik ESP bobini `>48` eşiğini geçer ve durdurma komutu gider. Bu bir **yanıltıcı klinik
- * gösterim** bulgusudur, hasta güvenliği değil.
+ * ⚠️ OTOMATİK TERMAL KORUMA YOK (sahip kararı A-47 + Y2; L1-7.2 / i2-F-9): `CoilParameterPanel` 48 °C üstünü YALNIZ
+ * görsel uyarıyla gösterir — 50 °C'lik bobin için durdurma komutu GİTMEZ, seans engellenmez. Bu bir **yanıltıcı klinik
+ * gösterim** bulgusudur; operatör sıcaklığı yalnız göstergelerden izler.
  */
 import { hesaplaOrtSicaklik } from "@/screens/KpiDashboardScreen";
 

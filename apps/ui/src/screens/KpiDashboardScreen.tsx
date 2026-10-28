@@ -469,8 +469,9 @@ const styles = StyleSheet.create({
  * POZİTİF değerdir. Negatif değer fiziksel olarak anlamsızdır (sensör arızası) ve ölçüm sayılmaz.
  * Bu ayrımı ortadan kaldırmak `0 °C`yi yeniden "serin" gibi göstermek olurdu.
  *
- * ⚠️ Gerçek termal koruma bu fonksiyondan BAĞIMSIZDIR (bobin başına interlock,
- * `CoilParameterPanel`); burada düzeltilen şey GÖSTERİMİN dürüstlüğüdür.
+ * ⚠️ OTOMATİK TERMAL KORUMA YOK (sahip kararı A-47 + Y2; L1-7.2 / i2-F-9): 48 °C üstü yalnız GÖRSEL uyarıdır
+ * (`CoilParameterPanel` `SICAKLIK_UYARI_ESIGI_C` — istek gönderilmez, seans engellenmez / durdurulmaz). Burada düzeltilen
+ * şey GÖSTERİMİN dürüstlüğüdür; operatör sıcaklığı bu göstergelerden izler.
  *
  * Kilit: `__tests__/kpiSicaklikDurustlugu.test.tsx`.
  */
