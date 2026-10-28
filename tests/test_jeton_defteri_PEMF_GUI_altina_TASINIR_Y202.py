@@ -169,6 +169,28 @@ def test_KARSIT_Y202b_PEMF_DATA_DIR_YOKKEN_defter_bugunku_gibi_hesaba_ozel_pemf_
     assert j._defter_yolu() == ev / ".pemf" / DEFTER
 
 
+def test_KRITIK_Y202b_hedefte_AYNI_BAYTLI_ayri_kopya_varken_eski_ad_silinir_uyari_YOK(ortam, caplog):
+    """Tur 2 kolu (D67 çürütme, mutant p4 `samefile or bayt` → `and`): hedefteki defter eskiyle AYNI İÇERİKLİ ama AYRI dosya
+    (bağ değil — ör. kopyalayarak yarım kalmış önceki taşıma / geri yükleme) ise eski ad silinir, yeni kullanılır, çakışma uyarısı YOK
+    (`_eski_defteri_tasi` belgesi: "aynı dosya / aynı içerikse … eski ad silinir")."""
+    j, veri, eski, yeni = ortam
+    eski.write_bytes(ICERIK)
+    yeni.parent.mkdir(parents=True, exist_ok=True)
+    yeni.write_bytes(ICERIK)
+    assert not os.path.samefile(eski, yeni), "aparat: iki ad aynı dosya olmamalı"
+    with caplog.at_level(logging.WARNING, logger="servers.jeton"):
+        yol = j._defter_yolu()
+    assert yol == yeni and yeni.read_bytes() == ICERIK, (
+        f"aynı içerikli hedef varken kullanılan yol / içerik yanlış: {yol}"
+    )
+    assert not eski.exists(), (
+        "hedefte AYNI içerikli defter varken eski ad silinmedi (iki kopya; gereksiz elle inceleme uyarısı)"
+    )
+    assert not _uyarilar(caplog, "EZİLMEDİ"), (
+        f"aynı içerikte çakışma uyarısı verildi: {[r.getMessage() for r in caplog.records]}"
+    )
+
+
 def test_KRITIK_Y202b_ikinci_acilista_islem_YOK_idempotens(ortam, monkeypatch):
     j, veri, eski, yeni = ortam
     eski.write_bytes(ICERIK)
