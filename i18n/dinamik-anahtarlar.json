@@ -364,6 +364,14 @@
    "onek": "rust.hata.",
    "degerler": ["guvenlikDuvariIzinYok", "guvenlikDuvariKuralEklenemedi", "guvenlikDuvariBozukKuralSilinemedi"],
    "gerekce": "D5 J-3: güvenlik duvarı \"İzin ver\" yükseltilmiş betiğinin çıkış kodu → ileti (`launcher/core/src/firewall.rs::ekleme_hata_anahtari` kapalı tablosu; değerler orada, kod `{{kod}}` yer tutucusu)"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/servers/ai_client.py",
+   "ifade": "ceviri.t(anahtar)",
+   "onek": "ai.",
+   "degerler": ["hata.xaiEnFazla25", "sonuc.aciklamaUretilemedi"],
+   "gerekce": "DEV-D5.GPU (22-SON): GPU servisinin bilinen iki `xai_error` metni `_XAI_HATA_METINLERI` (modül düzeyi kapalı tablo) ile istek dilindeki katalog ANAHTARINA eşlenir; tanınmayan metin aynen"
   }
  ]
 }
