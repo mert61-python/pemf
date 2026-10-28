@@ -11,7 +11,11 @@ yarim kalmis bir goc diskte `db` YOK + `db.plain.bak` VAR birakiyor, toparlanmaz
 sonraki acilis BOS bir veritabani yaratiyor ve klinik gecmisi BOS goruyordu. Bu yuzden:
   · `_migrate_to_encrypted_if_needed` KENDI govdesini TASIMAZ — `sqlcipher_util`e delege eder
     (A1 birlestirmesi). Buraya govde GERI YAZMAYIN; iki kopya sessizce ayrisir.
-  · `_run_startup_migrations_with_rollback` her goc adimini GERI ALINABILIR tutar.
+  · `_run_startup_migrations_with_rollback` YALNIZ sema surumu adimini (`_ensure_schema_version` — metadata)
+    rollback'le korur. ⚠️ D6.61 (B-3.80, OLCULDU): kurucu ONCE `_init_database` → `_semayi_kur` kosar; kolon
+    gocleri (`_safe_add_column` = ALTER TABLE ADD COLUMN) bu yedekten ONCE calisir ve geri alinmaz — eklemeli +
+    idempotent olduklari icin veri kaybettirmez. `pre_migration_*` yedegi ancak SONRA ve yalniz surum < TARGET
+    iken alinir, yani goc SONRASI semayi tasir. Kapi: tests/test_goc_yedegi_KOLON_gocunden_SONRA_belge_GERCEK_D6_61.py
 Kapilar (D2.02, 2026-10-06'da OLCULDU — eski satir "10 yarim-goc testi" diyordu; 10'un 4'u
 sqlcipher3 YOKSA ATLANIR, `test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR` tedavi delegasyonuna KORDU:
 delege `pass` / kurucudaki cagri yorumda / yanlis DB yolu — ucunde de YESIL):
