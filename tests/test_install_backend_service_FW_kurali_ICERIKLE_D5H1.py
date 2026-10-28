@@ -170,6 +170,12 @@ function _IzinDisi($Dugum, [string[]]$Komut, [string[]]$Uye) {
             $n.VariablePath.IsDriveQualified -and $n.VariablePath.DriveName -ne 'env' }, $true))) {
         return ("surucu nitelikli degisken: " + $v.Extent.Text)
     }
+    # SON-A1.56 (22 · A1b): tür dönüşümü yapıcıyı çağırır (`[System.IO.StreamWriter]'yol'` dosyayı oluşturur / boşaltır) — yalnız kurulum
+    # betiklerinin bugün kullandığı yan etkisiz dönüşümler (ayrıştırma envanteri: bool, int, long, ordered, pscustomobject, string, void).
+    foreach ($d in @($Dugum.FindAll({ param($n) $n -is [System.Management.Automation.Language.ConvertExpressionAst] }, $true))) {
+        if (@('bool', 'int', 'long', 'char', 'ordered', 'pscustomobject', 'string', 'void') -notcontains $d.Type.TypeName.FullName) {
+            return ("donusum: " + $d.Extent.Text) }
+    }
     $null
 }
 """
@@ -198,6 +204,14 @@ _DOSYA_YAZIMI = {
     "akis_yonlendirme": ("Get-Date 2> 'C:\\SAHTE\\yok.txt'", "yonlendirme"),
     "surucu_degiskeni_yaz": ("${C:\\SAHTE\\yok.txt} = 'x'", "surucu nitelikli"),
     "function_surucusu": ("${function:Log} = { 'x' }", "surucu nitelikli"),
+    # SON-A1.56 (22 · A1b, C134 TUR 3b çürütmesi): tür DÖNÜŞÜMÜ yapıcıyı çağırır — `[System.IO.StreamWriter]'yol'` komut / yöntem /
+    # yönlendirme / sürücü değişkeni OLMADAN dosyayı OLUŞTURUR ya da BOŞALTIR (ölçüldü: D5H1 aparatında işaret dosyası yazıldı).
+    "donusum_kurucusu_yazar": ("$null = [System.IO.StreamWriter]'C:\\SAHTE\\yok.txt'", "donusum"),
+    "donusum_kisa_ad": ("$null = [IO.StreamWriter]'C:\\SAHTE\\yok.txt'", "donusum"),
+    "KARSIT_guvenli_donusumler": (
+        "$a = [int]'5'; $b = [string]5; $c = [bool]1; $d = [long]2; $e = [ordered]@{}; $f = [pscustomobject]@{}; [void]0",
+        None,
+    ),
     "KARSIT_null_hedef": ("Select-Object -InputObject 'x' *>$null", None),
     "KARSIT_birlestirme": ("Get-Date 2>&1", None),
     "KARSIT_env_ve_kapsam": ("$x = $env:PEMF_API_PORT; $y = $script:z; $w = $variable:x", None),

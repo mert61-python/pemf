@@ -134,8 +134,15 @@ function Saf([string]$m) {
             -not ($n.Location -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.Location.VariablePath.UserPath -eq 'null') }, $true)) { return $false }
     if ($a.Find({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.IsDriveQualified -and
             $n.VariablePath.DriveName -ne 'env' }, $true)) { return $false }
+    # SON-A1.55 (22 · A1b): .NET yöntemi (`[IO.File]::WriteAllText(…)`) komutsuz GERÇEK yazımdı — ölçüldü, koştu. Yalnız betiğin bugün
+    # kullandığı ayrıştırma / okuma yöntemleri saf.
+    foreach ($y in $a.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true)) {
+        if ($izinliUye -notcontains "$($y.Member.Extent.Text)") { return $false }
+    }
     $true
 }
+$izinliUye = 'Trim', 'AddSeconds', 'GetNumericValue', 'GetEnvironmentVariable', 'NewGuid', 'ToString', 'Match', 'Contains', 'ToCharArray',
+    'Split', 'StartsWith'
 $t = $null; $e = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$t, [ref]$e)
 if ($e) { [Console]::Out.WriteLine("APARAT_HATASI parse"); exit 3 }

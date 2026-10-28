@@ -83,11 +83,51 @@ def _ps_lit(s: str | Path) -> str:
     return "'" + str(s).replace("'", "''") + "'"
 
 
+# SON-A1.55 (22 · A1b): çekilen işlev aparatlarda (DEV-C4 / bu dosya / D3_07 / D3_08 / D3_32 / D3_42 / D3I / D5H1 / D5G2) gölgeyle
+# KOŞTURULUR — eskiden izin listesi YOKTU: işlev gövdesine giren gölgelenmemiş cmdlet (Set-Content / Stop-Service / Remove-Item), .NET
+# yöntemi (`[IO.File]::…`), dosyaya yönlendirme ve sürücü nitelikli değişken (`${C:\…}`) GERÇEKTEN koşuyordu (ölçüldü: işaret dosyaları
+# yazıldı). Artık işlev ÇEKİLİRKEN bu deftere karşı denetlenir (D5 H-1 `_IzinDisi` sınıfı); defterde olmayan işlev çekilmez (fail-closed).
+# (komutlar, yöntem adları, betik bloğu değişkeniyle çağrı `& $ad` izinli değişken adları)
+_ISLEV_IZNI: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
+    "Ensure-PemfMosquittoFirewallRule": (
+        (
+            "Get-NetFirewallAddressFilter",
+            "Get-NetFirewallPortFilter",
+            "Get-NetFirewallRule",
+            "Get-Service",
+            "Log",
+            "New-NetFirewallRule",
+            "Out-Null",
+            "Remove-NetFirewallRule",
+            "Set-NetFirewallRule",
+            "Where-Object",
+        ),
+        (),
+        ("IcerikUygun",),
+    ),  # fmt: skip
+    "Test-PemfAtRestDurumu": (("Invoke-RestMethod", "Start-Sleep"), (), ()),
+    "Format-PemfEnvGunluk": (("ForEach-Object",), (), ()),
+    "Test-PemfEspEtkin": ((), ("Trim", "Contains"), ()),
+    "Test-PemfApiPortDegeri": ((), ("GetNumericValue", "Match", "ToCharArray"), ()),
+    # Yalnız `test_Log_…` koşturur ($LogDir tmp_path'e yönlendirilmiş); varsayılan ProgramData dalı orada çağrılmaz.
+    "Log": (("Add-Content", "Get-Date", "Join-Path", "New-Item", "Out-Null", "Write-Host"), (), ()),
+}
+
+
+def _ps_dizi(ogeler) -> str:
+    return "@(" + ", ".join(_ps_lit(o) for o in ogeler) + ")"
+
+
 def _extract_function(tmp_path: Path, func_name: str) -> str:
     """Fonksiyon metnini PowerShell'in kendi parser'ıyla (FunctionDefinitionAst.Extent.Text) çek.
 
     Regex DEĞİL: iç içe süslü parantez / here-string / yorumlar parser'a bırakılır.
+    SON-A1.55: çekmeden ÖNCE işlev `_ISLEV_IZNI` defterine karşı denetlenir (izin dışı → çıkış 5, metin dönmez).
     """
+    assert func_name in _ISLEV_IZNI, (
+        f"'{func_name}' işlev izin defterinde (_ISLEV_IZNI) yok — aparat onu gölgeyle KOŞTURUR; komut / yöntem listesini deftere yazın"
+    )
+    komut, uye, degisken = _ISLEV_IZNI[func_name]
     out = tmp_path / f"{func_name}.txt"
     body = f"""
 $tokens = $null; $errors = $null
@@ -95,10 +135,32 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile({_ps_lit(PS1)},
 if ($errors.Count) {{ Write-Output ("PARSE-ERROR: " + ($errors | ForEach-Object {{ $_.Message }}) -join ' | '); exit 3 }}
 $f = $ast.Find({{ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq {_ps_lit(func_name)} }}, $true)
 if (-not $f) {{ Write-Output "NOT-FOUND"; exit 4 }}
+$Komut = {_ps_dizi(komut)}; $Uye = {_ps_dizi(uye)}; $Degisken = {_ps_dizi(degisken)}
+foreach ($c in @($f.FindAll({{ param($n) $n -is [System.Management.Automation.Language.CommandAst] }}, $true))) {{
+    $ad = $c.GetCommandName()
+    if ($ad) {{ if ($Komut -notcontains $ad) {{ Write-Output ("IZIN-DISI komut: " + $c.Extent.Text); exit 5 }}; continue }}
+    $ilk = $c.CommandElements[0]
+    if (-not ($ilk -is [System.Management.Automation.Language.VariableExpressionAst] -and $Degisken -contains $ilk.VariablePath.UserPath)) {{
+        Write-Output ("IZIN-DISI degiskenle cagri: " + $c.Extent.Text); exit 5 }}
+}}
+foreach ($y in @($f.FindAll({{ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }}, $true))) {{
+    if ($Uye -notcontains "$($y.Member.Extent.Text)") {{ Write-Output ("IZIN-DISI yontem: " + $y.Extent.Text); exit 5 }}
+}}
+foreach ($r in @($f.FindAll({{ param($n) $n -is [System.Management.Automation.Language.FileRedirectionAst] }}, $true))) {{
+    if (-not ($r.Location -is [System.Management.Automation.Language.VariableExpressionAst] -and $r.Location.VariablePath.UserPath -eq 'null')) {{
+        Write-Output ("IZIN-DISI yonlendirme: " + $r.Extent.Text); exit 5 }}
+}}
+foreach ($v in @($f.FindAll({{ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.IsDriveQualified -and
+        $n.VariablePath.DriveName -ne 'env' }}, $true))) {{ Write-Output ("IZIN-DISI surucu nitelikli degisken: " + $v.Extent.Text); exit 5 }}
 [System.IO.File]::WriteAllText({_ps_lit(out)}, $f.Extent.Text, [System.Text.UTF8Encoding]::new($false))
 Write-Output "OK"
 """
     r = _pwsh_file(tmp_path, f"extract_{func_name}.ps1", body)
+    izin_disi = [s for s in r.stdout.splitlines() if s.startswith("IZIN-DISI")]
+    assert not izin_disi, (
+        f"setup_services.ps1 '{func_name}' izin defteri DIŞINDA {izin_disi[0][len('IZIN-DISI ') :]} — aparat onu GERÇEKTEN koşardı; "
+        f"KOŞTURULMADI. Ürün değişikliğini gözden geçirin ya da gölgeleyip _ISLEV_IZNI'ye ekleyin."
+    )
     assert r.returncode == 0 and "OK" in r.stdout, (
         f"setup_services.ps1 icinde '{func_name}' fonksiyonu PARSER ile bulunamadi (rc={r.returncode}).\n"
         f"stdout={r.stdout}\nstderr={r.stderr}\n"

@@ -79,11 +79,23 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$t
 if ($e) { [Console]::Out.WriteLine("APARAT_HATASI parse"); exit 3 }
 $izinli = 'Log','Join-Path','Split-Path','Test-Path','Where-Object','Select-Object','Get-Content',
           'Test-PemfApiPortDegeri','Get-PemfProfilEnvDosyasi','Read-PemfProfilEnv'
+$izinliUye = 'Match','ToCharArray','GetNumericValue','Trim','StartsWith','Contains','Split'
 function Denetle($agac) {
     foreach ($c in $agac.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)) {
         $ad = $c.GetCommandName()
         if (-not $ad -or $izinli -notcontains $ad) { [Console]::Out.WriteLine("APARAT_HATASI izin disi komut: " + $c.Extent.Text); exit 3 }
     }
+    # SON-A1.55 (22 · A1b; D5 §5 AÇIK — D5 H-1 `_IzinDisi` sınıfı): komutsuz yazım da izin dışı — .NET yöntemi (yalnız ayrıştırma
+    # yöntemleri), dosyaya yönlendirme ($null dışı) ve sürücü nitelikli değişken (env: dışı). Eskiden üçü de GERÇEKTEN koşuyordu (ölçüldü).
+    foreach ($y in $agac.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true)) {
+        if ($izinliUye -notcontains "$($y.Member.Extent.Text)") { [Console]::Out.WriteLine("APARAT_HATASI izin disi yontem: " + $y.Extent.Text); exit 3 }
+    }
+    foreach ($r in $agac.FindAll({ param($n) $n -is [System.Management.Automation.Language.FileRedirectionAst] }, $true)) {
+        if (-not ($r.Location -is [System.Management.Automation.Language.VariableExpressionAst] -and $r.Location.VariablePath.UserPath -eq 'null')) {
+            [Console]::Out.WriteLine("APARAT_HATASI izin disi yonlendirme: " + $r.Extent.Text); exit 3 }
+    }
+    foreach ($v in $agac.FindAll({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.IsDriveQualified -and
+            $n.VariablePath.DriveName -ne 'env' }, $true)) { [Console]::Out.WriteLine("APARAT_HATASI izin disi surucu degiskeni: " + $v.Extent.Text); exit 3 }
 }
 function Yukle([string[]]$Adlar, [switch]$Varsa) {
     foreach ($ad in $Adlar) {
