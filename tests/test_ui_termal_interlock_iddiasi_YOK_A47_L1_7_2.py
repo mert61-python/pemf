@@ -73,3 +73,40 @@ def test_dogru_iddia_VAR_A47_otomatik_termal_koruma_YOK():
     assert re.search(r"const\s+SICAKLIK_UYARI_ESIGI_C\s*=\s*48\s*;", PANEL.read_text(encoding="utf-8")), (
         "CoilParameterPanel görsel uyarı eşiği (48 °C) bulunamadı — yorumların andığı sabit değişmiş"
     )
+
+
+# TUR 2 (çürütücü kolu): aynı yanlış güvence "interlock" / "durdurma komutu gider" sözcükleri OLMADAN da yazılabilir — "48 °C üstünde bobin otomatik
+# olarak durdurulur" KPI yorumunda YAŞIYORDU (mutant `cur172_n1`). Olumlu kip (durdurulur / kesilir / durur / keser; automatically stops / shuts
+# down / cuts off) + ±1 satırda termal bağlam → iddia. Olumsuz kip ("durdurulmaz", "otomatik durdurma YOK / KALDIRILDI") desene girmez.
+_OTOMATIK_KESME = re.compile(
+    r"(?:otomatik|kendiliğinden)\s+(?:olarak\s+)?(?:durdurul(?:ur|uyor)|kesil(?:ir|iyor)|dur(?:ur|uyor)\b|keser\b|kesiyor)"
+    r"|durdurma\s+komutu\s+(?:gider|gönderilir)"
+    r"|(?:automatically|auto-?)\s*(?:stops?|shuts?\s+(?:down|off)|cuts?\s+off)",
+    re.IGNORECASE,
+)
+
+
+def test_KRITIK_ui_kaynaginda_OTOMATIK_termal_DURDURMA_iddiasi_YOK_es_anlamlilar():
+    taranan, ihlal = 0, []
+    for p in _ui_dosyalari():
+        satirlar = p.read_text(encoding="utf-8").splitlines()
+        taranan += 1
+        for i, s in enumerate(satirlar):
+            if not _OTOMATIK_KESME.search(s):
+                continue
+            pencere = " ".join(satirlar[max(0, i - 1) : i + 2])
+            if _TERMAL.search(pencere):
+                ihlal.append(f"{p.relative_to(KOK).as_posix()}:{i + 1}: {s.strip()[:120]}")
+    assert taranan > 100, f"aparat: yalnız {taranan} TS/TSX dosyası tarandı (vakum)"
+    assert not ihlal, (
+        "arayüz kaynağı 48 °C'de OTOMATİK durdurma anlatıyor (A-47 + Y2: YOK, yalnız görsel uyarı):\n"
+        + "\n".join(ihlal)
+    )
+
+
+def test_KARSIT_KANIT_otomatik_kesme_deseni_OLUMSUZU_yakalamaz():
+    assert _OTOMATIK_KESME.search("48 °C üstünde bobin otomatik olarak durdurulur")
+    assert _OTOMATIK_KESME.search("the coil automatically stops above 48 °C")
+    assert not _OTOMATIK_KESME.search("48 °C'de otomatik durdurma/engelleme KALDIRILDI")
+    assert not _OTOMATIK_KESME.search("istek gönderilmez, seans engellenmez / durdurulmaz")
+    assert not _OTOMATIK_KESME.search("Otomatik durdurma YOK (sahip kararı)")
