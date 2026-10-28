@@ -27,7 +27,8 @@
 //       WiFi'ı bozan biri kimlik doğrulamasız yapılandırma yüzeyini uzaktan açtırabiliyordu.)
 //   2. LattePanda GUI (bleak ile) bağlanıp SSID/Pass gönderir.
 //   3. ESP bunu NVS'e yazar, BLE'yi kapatır, WiFi'a bağlanır.
-//   4. 120sn timeout: süre dolarsa BLE otomatik kapanır.
+//   4. SÜRE SINIRI YOK (D6.21): yayın, yapılandırma alınana ya da stop() çağrılana dek açık kalır
+//      (BLEProvisioning.cpp process() "Sınırsız Süre"; SharedDefs.h BLE_ADV_TIMEOUT_SEC KULLANILMIYOR).
 // ============================================================================
 
 class BLEProvisioning {
@@ -43,7 +44,7 @@ public:
     // BLE yayınını durdur ve kaynakları serbest bırak
     void stopAdvertising();
 
-    // Ana döngüden çağrılır (timeout kontrolü, config alma kontrolü)
+    // Ana döngüden çağrılır (yalnız durum logu — süre sınırı uygulanmaz; config alma NetworkManager'da)
     void process();
 
     // Durum sorguları
@@ -79,7 +80,7 @@ private:
     String _receivedMqttHost;
     int    _receivedMqttPort = 0;
 
-    // Timeout yönetimi
+    // Yayın başlangıç zamanı (yalnız kayıt — süre sınırı uygulanmaz, D6.21)
     unsigned long _advertisingStartTime = 0;
 
     // İstemci bağlı mı?

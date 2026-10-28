@@ -1063,7 +1063,7 @@ void PemfNetworkManager::_checkBLEProvisioning() {
     return;
   }
 
-  // --- BLE timeout ile kapandı mı? ---
+  // --- BLE kapandı mı? (SÜRE SINIRI YOK — yayın yalnız yapılandırma alınınca / stop() ile kapanır; D6.21) ---
   if (!_bleProvisioning->isActive()) {
     LOG_PRINTLN(
         "[BLE] Timeout doldu veya BLE kapandı. WiFi ile devam ediliyor...");

@@ -50,7 +50,8 @@
  * ============================================================================ */
 #define PIN_SYNC_IN     7   /**< STM32 PB1'den gelen sync sinyali (GPIO7, RISING EXTI) */
 
-// BLE Provisioning Timeout
+// BLE Provisioning Timeout — ⚠️ KULLANILMIYOR (D6.21): BLE yayını SÜRESİZ (BLEProvisioning.cpp process()).
+// Sabit silinmez (Ö.4-Y7, ESP kodu silinmez); süre sınırı geri gelirse burada tüketilmeli.
 #define BLE_ADV_TIMEOUT_SEC   120
 #define WIFI_CONNECT_TIMEOUT_SEC 10
 
