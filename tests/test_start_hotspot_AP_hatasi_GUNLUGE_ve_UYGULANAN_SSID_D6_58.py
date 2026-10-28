@@ -32,6 +32,8 @@ pytestmark = pytest.mark.skipif(
 ISTENEN_SSID = "PEMF-Gateway"
 ESKI_SSID = "EskiKlinikAgi"
 HATA_IMZASI = "E_ACCESSDENIED (D6.58 aparat)"
+OKUMA_IMZASI = "AP_OKUMA_HATASI (D6.58 tur2)"
+BANT_IMZASI = "BANT_OKUMA_HATASI (D6.58 tur2)"
 
 
 def _pwsh_file(tmp_path: Path, name: str, body: str) -> subprocess.CompletedProcess:
@@ -82,8 +84,9 @@ Write-Output "OK"
     return fonk.read_text(encoding="utf-8"), metin
 
 
-def _kos(tmp_path: Path, *, isletim: str, yapilandirma_hatasi: bool) -> list[str]:
-    """Sahte yönetici: Windows'taki AP = (ESKI_SSID, 5 GHz). Yapılandırma ya HATA fırlatır ya uygular. → günlük satırları."""
+def _kos(tmp_path: Path, *, isletim: str, yapilandirma_hatasi: bool, okuma: str = "") -> list[str]:
+    """Sahte yönetici: Windows'taki AP = (ESKI_SSID, 5 GHz). Yapılandırma ya HATA fırlatır ya uygular. → günlük satırları.
+    `okuma` (tur 2): "" uygulanan yapılandırma okunur · "hepsi" okuma fırlatır · "bant" yalnız `Band` özelliği fırlatır."""
     fonk, parca = _betik_parcalari(tmp_path)
     log = tmp_path / "hotspot.log"
     log.write_text("", encoding="utf-8")
@@ -92,6 +95,11 @@ def _kos(tmp_path: Path, *, isletim: str, yapilandirma_hatasi: bool) -> list[str
         if yapilandirma_hatasi
         else "$global:D658Ap = [pscustomobject]@{ Ssid = $c.Ssid; Passphrase = $c.Passphrase; Band = $c.Band }; 'gorev'"
     )
+    oku = {
+        "": "[pscustomobject]@{ Ssid = $global:D658Ap.Ssid; Passphrase = $global:D658Ap.Passphrase; Band = $global:D658Ap.Band }",
+        "hepsi": f"throw {_ps_lit(OKUMA_IMZASI)}",
+        "bant": "[Windows.Networking.NetworkOperators.D658BantHatali]::new()",
+    }[okuma]
     body = f"""
 Import-Module Microsoft.PowerShell.Management, Microsoft.PowerShell.Utility
 $PSModuleAutoLoadingPreference = 'None'
@@ -101,6 +109,11 @@ Add-Type -TypeDefinition @'
 namespace Windows.Networking.NetworkOperators {{
     public enum TetheringWiFiBand {{ Auto = 0, TwoPointFourGigahertz = 1, FiveGigahertz = 2 }}
     public sealed class NetworkOperatorTetheringOperationResult {{ }}
+    // tur 2 (bant kipi): .NET özellik okuyucusu fırlatır — WinRT projeksiyonundaki gibi (ScriptProperty istisnasını PS YUTAR).
+    public sealed class D658BantHatali {{
+        public string Ssid = "{ESKI_SSID}"; public string Passphrase = "eski-parola";
+        public object Band {{ get {{ throw new System.InvalidOperationException("{BANT_IMZASI}"); }} }}
+    }}
 }}
 '@
 function netsh {{ throw 'D6.58 aparat: netsh CAGRILMAMALI' }}
@@ -112,8 +125,7 @@ function AwaitAction($t) {{ }}
 function AwaitResult($t, $rt) {{ [pscustomobject]@{{ Status = 'Success'; AdditionalErrorMessage = '' }} }}
 $global:D658Ap = [pscustomobject]@{{ Ssid = {_ps_lit(ESKI_SSID)}; Passphrase = 'eski-parola'; Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::FiveGigahertz }}
 $mgr = [pscustomobject]@{{ TetheringOperationalState = {_ps_lit(isletim)} }}
-$mgr | Add-Member -MemberType ScriptMethod -Name GetCurrentAccessPointConfiguration -Value {{
-    [pscustomobject]@{{ Ssid = $global:D658Ap.Ssid; Passphrase = $global:D658Ap.Passphrase; Band = $global:D658Ap.Band }} }}
+$mgr | Add-Member -MemberType ScriptMethod -Name GetCurrentAccessPointConfiguration -Value {{ {oku} }}
 $mgr | Add-Member -MemberType ScriptMethod -Name ConfigureAccessPointAsync -Value {{ param($c) {yapilandir} }}
 $mgr | Add-Member -MemberType ScriptMethod -Name StartTetheringAsync -Value {{ 'gorev' }}
 # ── betikten PARSER ile çekilen GERÇEK parçalar ──
@@ -173,3 +185,23 @@ def test_KARSIT_yapilandirma_BASARILI_ise_UYARI_yok_ve_uygulanan_istenenle_AYNI_
     assert re.search(rf"SSID={re.escape(ISTENEN_SSID)}\b", aktif) and "TwoPointFourGigahertz" in aktif, (
         f"yapılandırma uygulandığı hâlde başarı günlüğü uygulanan SSID / bandı (PEMF-Gateway, 2.4 GHz) yazmıyor: {aktif!r}"
     )
+
+
+@pytest.mark.parametrize("okuma", ["hepsi", "bant"])
+def test_KRITIK_uygulanan_AP_OKUNAMAZSA_basari_gunlugu_ISTENENI_uygulanmis_gibi_YAZMAZ_D6_58(tmp_path, okuma):
+    """Tur 2 kolu (D67 çürütme, mutantlar s2 / s1): Windows'un uygulanan yapılandırması (ya da yalnız bandı) OKUNAMAZSA başarı
+    günlüğü İSTENEN SSID / 2.4 GHz'i uygulanmış gibi yazmaz — okunamadığını ve hatayı söyler."""
+    satirlar = _kos(tmp_path, isletim="Off", yapilandirma_hatasi=True, okuma=okuma)
+    aktif = _satir(satirlar, "Hotspot AKTİF")
+    assert "TwoPointFourGigahertz" not in aktif and "2.4" not in aktif, (
+        f"uygulanan bant OKUNAMADIĞI hâlde başarı günlüğü 2.4 GHz'i uygulanmış gibi yazıyor ({okuma}): {aktif!r}"
+    )
+    if okuma == "hepsi":
+        assert ISTENEN_SSID not in aktif and "OKUNAMADI" in aktif and OKUMA_IMZASI in aktif, (
+            f"uygulanan yapılandırma okunamadı ama günlük bunu (ve hatayı) söylemiyor / İSTENEN SSID'i yazıyor: {aktif!r}"
+        )
+    else:
+        # PowerShell .NET özellik okuyucusunun istisnasını YUTAR ($null döner — ölçüldü): bant "bilinmiyor" (varsayılan) yazılmalı.
+        assert ESKI_SSID in aktif and aktif.endswith("bant=bilinmiyor"), (
+            f"bant okunamadı ama günlük 'bant=bilinmiyor' demiyor: {aktif!r}"
+        )
