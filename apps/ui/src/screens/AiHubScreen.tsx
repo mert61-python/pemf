@@ -241,7 +241,6 @@ interface AiResult {
   fgs_total?: number | null; detected?: boolean; raw_fgs?: FgsRaw;
   nokta_gorunurlugu_dogrulanmadi?: boolean; // D1.E09: model nokta görünürlüğünü bildirmiyor
   prediction?: ThermalPrediction; cat_count?: number; counts?: Record<string, number>;
-  hw_status?: string; hw_params?: { freq?: number; duty?: number };
   // em_fantom (tümör) / em_petri (kuyucuk)
   n_tumor?: number; mm_per_px?: number; tumor_regions?: AiTumorRegion[];
   n_cancer?: number; n_wells?: number; n_healthy?: number; wells?: AiWell[];
@@ -1515,7 +1514,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
   //
   // ⚠️ Onay akışı (propose → approve → start) YALNIZ Kontrol → AI Pro panelinde var; kullanıcı
   // oraya YÖNLENDİRİLİR. Toggle açık BIRAKILMAZ ve mesaj DOĞRU sebebi söyler.
-  // ⚠️ `autoAdjustRef` KALDI: manuel-analiz sürüş yolu onu ayrıca okuyor.
+  // ⚠️ `autoAdjustRef` KALDI: manuel-analiz yolu onu YÖNLENDİRME için okuyor (anahtarı kapatıp toast; sürüş yolu YOK, D1.88).
   useEffect(() => {
     if (!(isLive && autoAdjust)) return;
     // ⚠️ Effect gövdesinde setState KASITLI: toggle'ın AÇIK kalmaması gereken tek yer burası.
@@ -1759,12 +1758,11 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           formData.append("file", { uri: uriToAnalyze, name: "upload.jpg", type: "image/jpeg" } as any);
         }
       }
-      // HASTA GÜVENLİĞİ: `auto_adjust=true` backend'de _drive_landmark_auto()'yu tetikler →
-      // start_ai_session(..., 30dk, bobin 1-8) + ESP 6/7/8'e duration=1800 publish. Yani TEK KARE
-      // analizinden 30 DAKİKALIK 8 BOBİNLİ otonom tedavi başlar. Eskiden bu, "Otonom Biofeedback"
-      // rozeti açıkken galeriden seçilen bir fotoğrafta da (canlı kamera hiç açılmadan) SESSİZCE
-      // oluyordu: onay yok, hasta kontrolü yok, süre girişi yok, geri sayım yok — üstelik sonuç
-      // kartı `!autoAdjust` ile gizlendiğinden EKRANDA HİÇBİR geri bildirim de çıkmıyordu.
+      // HASTA GÜVENLİĞİ (TARİHÇE — i3-F-9): D1.88'den ÖNCE `auto_adjust=true` backend'de _drive_landmark_auto()'yu
+      // tetikliyordu → start_ai_session(..., 30dk, bobin 1-8) + ESP 6/7/8'e duration=1800 publish; yani TEK KARE
+      // analizinden 30 DAKİKALIK 8 BOBİNLİ otonom seans başlıyordu. Bu, "Otonom Biofeedback" rozeti açıkken galeriden
+      // seçilen bir fotoğrafta da (canlı kamera hiç açılmadan) SESSİZCE oluyordu: onay yok, hasta kontrolü yok, süre
+      // girişi yok, geri sayım yok. O sürüş yolu backend'den KALDIRILDI (ai_router `analyze_landmark`: `auto_adjust` → 428).
       // ⚠️ D1.88 (B-6.30 · A-19, sahip kararı): Otonom Biofeedback AI Pro MÜHRÜNE bağlı — bu ekran cihazı SÜRMEZ.
       // Bir ara "AÇIK ONAY" (platformConfirm) eklenmişti; ama onay penceresi hekim onayı → mühür akışı DEĞİLDİR ve
       // aynı durumda AI Pro 428 veriyordu (onay asimetrisi). Otonom açıksa kullanıcı onay akışına yönlendirilir;
@@ -2122,41 +2120,10 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
         </View>
       )}
 
-      {/* DONANIM SONUCU — sonuç kartından AYRI ve `autoAdjust`'tan BAĞIMSIZ.
-          Eskiden bu blok `result && !autoAdjust` kapısının içindeydi: donanımı sürebilen TEK durum
-          (autoAdjust açık) tam da bu kapının kapalı olduğu durumdu → kullanıcı bobinlerin sürülüp
-          sürülmediğini HİÇ göremiyordu. Ayrıca yalnız "updated" gösteriliyordu; backend'in
-          "skipped_*" yanıtları (aktif farklı-mod seansı, kimliksiz uzak istek, döngü zaten açık)
-          sessizce yutuluyordu → kullanıcı seansın başladığını sanabiliyordu. */}
-      {/* ⚠️ "idle" GÖSTERİLMEZ (sahip bildirimi 2026-09-13: "cihaz sürülemedi kısmını kaldır,
-          burası ai modu"). `hw_status` varsayılanı `"idle"`dır (ai_router.py:500) ve otonom mod
-          KAPALIYKEN — yani düz analizde — hep o kalır. Orada "⚠️ Cihaz SÜRÜLMEDİ" yazmak, hiç
-          istenmemiş bir şeyin olmadığını duyurmaktır: gerçek uyarıların yanında gürültü yapar ve
-          uyarı körlüğü üretir.
-          ⚠️ BLOK KALDIRILMADI, yalnız `idle` elendi: `skipped_session_active` /
-          `skipped_unauthenticated` / `skipped_no_detection` durumlarında kullanıcı otonom sürüş
-          İSTEMİŞTİR ve olmadığını GÖRMEK ZORUNDADIR — aksi halde seansın başladığını sanar
-          (bu blok tam olarak o boşluk için eklenmişti, üstteki nota bakın). */}
-      {result?.hw_status && result.hw_status !== "idle" ? (
-        result.hw_status === "updated" ? (
-          <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
-            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>{t("ai.otonom.suruluyor")}</Text>
-            <Text style={styles.resultText}>{t("ai.otonom.frekansSiddet", { frekans: Number(result.hw_params?.freq ?? 0).toFixed(1), duty: Number(result.hw_params?.duty ?? 0).toFixed(1) })}</Text>
-            <Text style={styles.resultText}>{t("ai.otonom.durdurmakIcin")}</Text>
-          </View>
-        ) : (
-          <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.warning + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.warning }}>
-            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>{t("ai.otonom.surulmedi")}</Text>
-            <Text style={styles.resultText}>
-              {result.hw_status === "skipped_session_active"
-                ? t("ai.otonom.baskaSeans")
-                : result.hw_status === "skipped_unauthenticated"
-                  ? t("ai.otonom.kimliksiz")
-                  : t("ai.otonom.atlandi", { durum: String(result.hw_status) })}
-            </Text>
-          </View>
-        )
-      ) : null}
+      {/* L1-7.3 · L1-7.16 · i3-F-9: "DONANIM SONUCU" bloğu ("⚡ Cihaz otonom olarak sürülüyor" / "⚠️ Cihaz SÜRÜLMEDİ" + skipped_*
+          nedenleri) KALDIRILDI — ÖLÜ idi. D1.88'den (A-19) beri bu ekranın İKİ analiz yolu da `auto_adjust` alanını SABİT "false"
+          gönderir; backend landmark ucu sürüş istemez, `hw_status`u her yanıtta "idle" yazar (eski backend de non-idle değeri YALNIZ
+          `auto_adjust=true`da üretirdi). Otonom sürüş YALNIZ Kontrol → AI Pro onay akışıyla başlar. Kapı: tests/test_ai_donanim_rozeti_gurultusu.py */}
 
       {isLive && autoAdjust && aiVisionData && (
         <View style={styles.resultBox}>

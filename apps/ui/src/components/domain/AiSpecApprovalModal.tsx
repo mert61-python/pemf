@@ -130,10 +130,12 @@ export function AiSpecApprovalModal({
 
   if (!specs) return null;
 
+  // L1-7.16: `?? 0` geri dönüşleri KALDIRILDI (ölüydü): mühür `coil_ids` ile `D` / `P`yi HEP 7'şer, `e_field`i HEP sayı yazar
+  // (ai_router `/ai/pro/propose` → `ai_approval.create`; tip `D` / `P` / `e_field` zorunlu). Eksik değer 0 diye UYDURULMAZ (Y6).
   const rows = (specs.coil_ids || []).map((cid, i) => ({
     cid,
-    duty: Number(specs.D?.[i] ?? 0),
-    phase: Number(specs.P?.[i] ?? 0),
+    duty: Number(specs.D[i]),
+    phase: Number(specs.P[i]),
   }));
   const surulen = rows.filter((r) => r.duty > 0).length;
   // ── ARAŞTIRMA SUNUMU: model MÜHÜRDEN okunur (istemcinin o anki seçimi DEĞİL) — onay ekranı
@@ -143,7 +145,7 @@ export function AiSpecApprovalModal({
   const modelAdi = arastirma ? modelProfili(model).baslik : "";
   const hedefEtiketi = arastirma ? modelProfili(model).hedefEtiketi : t("ai.pro.profil.kedi.hedefEtiketi");
   const hedefAdi = specs.target_label || organName || `#${specs.organ_id}`;
-  const eHedef = Number(specs.e_cancer ?? specs.e_field ?? 0);
+  const eHedef = Number(specs.e_cancer ?? specs.e_field);
   const eCevre = Number(specs.e_healthy ?? 0);
   const konumVar =
     typeof meta?.x_mm === "number" && typeof meta?.y_mm === "number" && typeof meta?.z_mm === "number";
@@ -272,7 +274,7 @@ export function AiSpecApprovalModal({
             <Meta label={hedefEtiketi} value={hedefAdi} />
             <Meta label={t("kontrol.sinir.sure")} value={t("ai.pro.onay.sureDk", { duration_minutes: specs.duration_minutes })} />
             <Meta label={t("ai.pro.onay.surulenBobin")} value={`${surulen}/${rows.length}`} />
-            {arastirma ? null : <Meta label={t("ai.pro.onay.eOngoru")} value={Number(specs.e_field ?? 0).toFixed(4)} />}
+            {arastirma ? null : <Meta label={t("ai.pro.onay.eOngoru")} value={Number(specs.e_field).toFixed(4)} />}
           </View>
 
           {/* KONUM: araştırmada dozu belirleyen tek girdi 3B konumdur → onaylayan kişi SAYIYI görmeli

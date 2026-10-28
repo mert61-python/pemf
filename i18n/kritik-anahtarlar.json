@@ -1369,55 +1369,6 @@
   },
   {
    "yuzey": "arayuz",
-   "anahtar": "ai.otonom.suruluyor",
-   "tur": "bobin",
-   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
-   "aciklama": "cihaz otonom olarak sürülüyor"
-  },
-  {
-   "yuzey": "arayuz",
-   "anahtar": "ai.otonom.frekansSiddet",
-   "tur": "bobin",
-   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
-   "aciklama": "otonom sürüş değerleri (frekans / şiddet)"
-  },
-  {
-   "yuzey": "arayuz",
-   "anahtar": "ai.otonom.durdurmakIcin",
-   "tur": "estop",
-   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
-   "aciklama": "durdurmak için Kontrol ekranındaki ACİL DURDUR yönlendirmesi"
-  },
-  {
-   "yuzey": "arayuz",
-   "anahtar": "ai.otonom.surulmedi",
-   "tur": "bobin",
-   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
-   "aciklama": "cihaz SÜRÜLMEDİ uyarısı"
-  },
-  {
-   "yuzey": "arayuz",
-   "anahtar": "ai.otonom.baskaSeans",
-   "tur": "seans",
-   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
-   "aciklama": "başka seans aktif — otonom sürüş atlandı"
-  },
-  {
-   "yuzey": "arayuz",
-   "anahtar": "ai.otonom.kimliksiz",
-   "tur": "seans",
-   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
-   "aciklama": "uzaktan kimliksiz istekte otonom sürüş yapılmaz (güvenlik)"
-  },
-  {
-   "yuzey": "arayuz",
-   "anahtar": "ai.otonom.atlandi",
-   "tur": "seans",
-   "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",
-   "aciklama": "otonom sürüş atlandı ({{durum}})"
-  },
-  {
-   "yuzey": "arayuz",
    "anahtar": "ai.otonom.onizleme",
    "tur": "bobin",
    "kaynak": "apps/ui/src/screens/AiHubScreen.tsx",

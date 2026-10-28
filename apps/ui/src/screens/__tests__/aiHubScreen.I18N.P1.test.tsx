@@ -400,15 +400,17 @@ describe("bölüm 4 — görsel modüller (FGS / termal / segmentasyon / retikü
     expect(u.getByText("Queued · instant with Pro+")).toBeTruthy();
   });
 
-  it("FGS sonucu + cihaz sürülüyor durumu iki dilde; AI geçmişine giden kayıt TR ile BAYT BAYT AYNI", async () => {
+  // L1-7.3 · L1-7.16 · i3-F-9: "DONANIM SONUCU" bloğu ÖLÜ idi (bu ekran `auto_adjust` hep "false" gönderir, backend `hw_status` hep
+  // "idle") ve KALDIRILDI. Yanıt (eski / sahte) `hw_status` taşısa bile ekran "cihaz sürülüyor / SÜRÜLMEDİ" İDDİASI ÇİZMEZ.
+  const SURUS_IDDIASI = /sürülüyor|SÜRÜLMEDİ|otonom sürüş atlandı|otonom sürüş yapılmaz|driven autonomously|NOT DRIVEN|autonomous drive (is not performed|skipped)/i;
+  it("FGS sonucu iki dilde; yanıt `hw_status: updated` taşısa da 'cihaz sürülüyor' iddiası ÇİZİLMEZ; AI geçmişine giden kayıt TR ile BAYT BAYT AYNI", async () => {
     const tr = render(<AiHubScreen />);
     await gorselAnaliz(tr, "Yüz Ağrısı (FGS)", "Galeriden Seç", "AI Analizini Başlat", FGS);
     expect(tr.getByText(/Orta derece ağrı — FGS 4\/10$/)).toBeTruthy();
     expect(tr.getByText("• Kulak Pozisyonu: 1")).toBeTruthy();
     expect(tr.getByText("• Göz Kısma: 0.5")).toBeTruthy();
-    expect(tr.getByText("⚡ Cihaz otonom olarak sürülüyor")).toBeTruthy();
-    expect(tr.getByText("Frekans: 15.0 Hz · Şiddet: 40.0 %")).toBeTruthy();
-    expect(tr.getByText("Durdurmak için Kontrol ekranındaki ACİL DURDUR'u kullanın.")).toBeTruthy();
+    expect(tr.queryAllByText(SURUS_IDDIASI)).toHaveLength(0);
+    expect(tr.queryAllByText(/15\.0 Hz/)).toHaveLength(0);
     const trKayit = logKayitlari();
     expect(trKayit).toHaveLength(1);
     expect(trKayit[0].module).toBe("Yüz Ağrısı Skoru (FGS)");
@@ -421,34 +423,29 @@ describe("bölüm 4 — görsel modüller (FGS / termal / segmentasyon / retikü
     expect(en.getByText(/Moderate pain — FGS 4\/10$/)).toBeTruthy();
     expect(en.getByText("• Ear Position: 1")).toBeTruthy();
     expect(en.getByText("• Orbital Tightening: 0.5")).toBeTruthy();
-    expect(en.getByText("⚡ The device is being driven autonomously")).toBeTruthy();
-    expect(en.getByText("Frequency: 15.0 Hz · Intensity: 40.0 %")).toBeTruthy();
-    expect(en.getByText("To stop, use EMERGENCY STOP on the Control screen.")).toBeTruthy();
+    expect(en.queryAllByText(SURUS_IDDIASI)).toHaveLength(0);
+    expect(en.queryAllByText(/15\.0 Hz/)).toHaveLength(0);
     const enKayit = logKayitlari();
     expect(enKayit).toHaveLength(1);
     expect(enKayit[0].module).toBe(trKayit[0].module);
     expect(enKayit[0].summary).toBe(trKayit[0].summary);
   });
 
-  it("cihaz SÜRÜLMEDİ nedenleri iki dilde (atlanan durumlar)", async () => {
-    const durumlar: Array<[string, string, string]> = [
-      ["skipped_session_active", "Başka bir seans zaten aktif — otonom sürüş atlandı.", "Another session is already active — autonomous drive skipped."],
-      ["skipped_unauthenticated", "Uzaktan kimliksiz istekte otonom sürüş yapılmaz (güvenlik).", "Autonomous drive is not performed on a remote request without identity (security)."],
-      ["skipped_no_detection", "Otonom sürüş atlandı (skipped_no_detection).", "Autonomous drive skipped (skipped_no_detection)."],
-    ];
-    for (const [hw, tr, en] of durumlar) {
+  it("yanıttaki eski `skipped_*` durumları da 'cihaz SÜRÜLMEDİ' bloğu ÇİZMEZ (iki dilde; sonuç kartı yine görünür)", async () => {
+    for (const hw of ["skipped_session_active", "skipped_unauthenticated", "skipped_no_detection"]) {
       mockHastaNo += 1;
       const u = render(<AiHubScreen />);
       await gorselAnaliz(u, "Yüz Ağrısı (FGS)", "Galeriden Seç", "AI Analizini Başlat", { ...FGS, hw_status: hw });
-      expect(u.getByText("⚠️ Cihaz SÜRÜLMEDİ")).toBeTruthy();
-      expect(u.getByText(tr)).toBeTruthy();
+      expect(u.getByText(/Orta derece ağrı — FGS 4\/10$/)).toBeTruthy();
+      expect(u.queryAllByText(SURUS_IDDIASI)).toHaveLength(0);
+      expect(u.queryAllByText(new RegExp(hw))).toHaveLength(0);
       u.unmount();
       mockHastaNo += 1;
       await enYap();
       const v = render(<AiHubScreen />);
       await gorselAnaliz(v, "Facial Pain (FGS)", "Choose from Gallery", "Start AI Analysis", { ...FGS, hw_status: hw });
-      expect(v.getByText("⚠️ Device NOT DRIVEN")).toBeTruthy();
-      expect(v.getByText(en)).toBeTruthy();
+      expect(v.getByText(/Moderate pain — FGS 4\/10$/)).toBeTruthy();
+      expect(v.queryAllByText(SURUS_IDDIASI)).toHaveLength(0);
       v.unmount();
       await act(async () => {
         await dilSec("tr", depo);
