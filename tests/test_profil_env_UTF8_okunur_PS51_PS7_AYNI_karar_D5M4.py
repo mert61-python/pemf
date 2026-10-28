@@ -36,6 +36,7 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 SETUP = KOK / "scripts" / "setup_services.ps1"
 BETIK = KOK / "scripts" / "install_backend_service.ps1"
+MOSQ = KOK / "scripts" / "install_mosquitto_service.ps1"  # Y205 · S-D5.16: üçüncü okuyucu
 PWSH = shutil.which("pwsh")
 PS51 = shutil.which("powershell")
 
@@ -216,4 +217,17 @@ def test_KRITIK_ESLIK_Read_PemfProfilEnv_iki_betikte_BIREBIR(tmp_path):
     assert kurulum == servis, (
         "Read-PemfProfilEnv iki kurulum yolunda AYRIŞTI — birini düzelttiyseniz (ör. kodlama) ötekini de düzeltin:\n"
         f"setup:\n{kurulum}\ninstall:\n{servis}"
+    )
+
+
+def test_KRITIK_ESLIK_Read_PemfProfilEnv_mosquitto_servis_betiginde_de_BIREBIR_Y205(tmp_path):
+    """Y205 · S-D5.16: `install_mosquitto_service.ps1` ESP kipini aynı profilden okur — ayrıştırıcısı backend servisininkiyle BİREBİR."""
+    izin = ("Get-Content",)
+    uye = ("Trim", "StartsWith", "Contains", "Split")
+    (tmp_path / "i").mkdir()
+    (tmp_path / "m").mkdir()
+    servis = betik_fonksiyonu(tmp_path / "i", "Read-PemfProfilEnv", BETIK, izin, uye)
+    mosq = betik_fonksiyonu(tmp_path / "m", "Read-PemfProfilEnv", MOSQ, izin, uye)
+    assert mosq == servis, (
+        f"Read-PemfProfilEnv mosquitto servis betiğinde AYRIŞTI:\ninstall:\n{servis}\nmosquitto:\n{mosq}"
     )

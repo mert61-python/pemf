@@ -6,11 +6,15 @@
 # bin\mosquitto\ ikilisini kullanır — internet GEREKMEZ (sahada offline kurulum).
 #
 # Kullanım (Yönetici PowerShell):
-#   .\install_mosquitto_service.ps1
+#   .\install_mosquitto_service.ps1                 (profil deploy\device.env)
+#   .\install_mosquitto_service.ps1 -Mode server
 #   .\install_mosquitto_service.ps1 -Uninstall
 # =============================================================================
 param(
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    # Y205 · S-D5.16: dağıtım profili deploy\<Mode>.env — install_backend_service.ps1 ile AYNI (ESP kipi profilden okunur).
+    [ValidateSet("device", "server")]
+    [string]$Mode = "device"
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,10 +25,23 @@ function Write-Status($msg, $color = "White") {
 }
 
 # ESP alt sistemi (MQTT + ESP bobinleri) ETKİN mi — backend `live_state.esp_etkin()` ile AYNI anlam ("1" = açık, varsayılan KAPALI).
-# setup_services.ps1'deki Test-PemfEspEtkin ile BİREBİR (eşlik kapıda ölçülür). Bu betik profil okumaz (bkz. adım 5).
+# setup_services.ps1'deki Test-PemfEspEtkin ile BİREBİR (eşlik kapıda ölçülür). Profil değeri makine ortamına üstündür (bkz. adım 5).
 function Test-PemfEspEtkin($Profil, [AllowNull()][string]$MakineDegeri) {
     $v = if ($Profil -and $Profil.Contains('PEMF_ESP_ENABLED')) { [string]$Profil['PEMF_ESP_ENABLED'] } else { $MakineDegeri }
     return ("$v".Trim() -eq '1')
+}
+
+# Y205 · S-D5.16: dağıtım profili (deploy\<Mode>.env) — setup_services.ps1 / install_backend_service.ps1 ile BİREBİR ayrıştırıcı
+# (UTF-8; eşlik kapısı: tests/test_profil_env_UTF8_okunur_PS51_PS7_AYNI_karar_D5M4.py).
+function Read-PemfProfilEnv([string]$Dosya) {
+    $d = [ordered]@{}
+    foreach ($ln in (Get-Content $Dosya -Encoding UTF8)) {
+        $t = $ln.Trim()
+        if ($t -and -not $t.StartsWith("#") -and $t.Contains("=")) {
+            $k, $v = $t.Split("=", 2); $d[$k.Trim()] = $v.Trim()
+        }
+    }
+    $d
 }
 
 # D5 G-2 (DEV-C4 sınıfı): 'PEMF Mosquitto MQTT' kuralı eskiden YALNIZ ADIYLA aranıyordu — aynı adlı devre dışı / Block / giden / UDP / başka
@@ -216,9 +233,12 @@ Set-Content -Path $ConfPath -Value $conf -Encoding ASCII
 Write-Status "Sertleştirilmiş mosquitto.conf yazıldı: $ConfPath" "Green"
 
 # --- 5. Firewall (TCP 1883) — adla değil İÇERİKLE (D5 G-2; bkz. Ensure-PemfMosquittoServisFirewallRule) ---
-# ESP kipi backend'in göreceği değerden: bu betik profil okumaz — A-11 yolunda backend servisi (install_backend_service.ps1) makine ortamını
-# devralır, deploy\<Mode>.env PEMF_ESP_ENABLED taşımaz (taşırsa setup_services.ps1 gibi profil de okunmalı).
-$MosqFirewallOk = Ensure-PemfMosquittoServisFirewallRule -EspEtkin (Test-PemfEspEtkin $null ([Environment]::GetEnvironmentVariable('PEMF_ESP_ENABLED', 'Machine')))
+# ESP kipi backend'in göreceği değerden (Y205 · S-D5.16): A-11 yolunda backend servisi (install_backend_service.ps1) deploy\<Mode>.env
+# profilini makine ortamının ÜSTÜNE koyar → aynı profil aynı ayrıştırıcıyla okunur; profilde PEMF_ESP_ENABLED yoksa makine ortamı.
+$ProfilDosyasi = @((Join-Path $GuiRoot "_internal\deploy\$Mode.env"), (Join-Path $GuiRoot "deploy\$Mode.env")) |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+$Profil = if ($ProfilDosyasi) { Read-PemfProfilEnv $ProfilDosyasi } else { $null }
+$MosqFirewallOk = Ensure-PemfMosquittoServisFirewallRule -EspEtkin (Test-PemfEspEtkin $Profil ([Environment]::GetEnvironmentVariable('PEMF_ESP_ENABLED', 'Machine')))
 
 # --- 6. Servisi (yeniden) kaydet ---
 if ($svc) {
