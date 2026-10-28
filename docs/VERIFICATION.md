@@ -68,7 +68,7 @@ curl http://127.0.0.1:8000/api/health | ConvertFrom-Json | Select-Object atRestE
 - `True` → whole-DB SQLCipher aktif (PII at-rest şifreli). ✅
 - `False` → `sqlcipher3` wheel eksik VEYA `PEMF_ENCRYPT_AT_REST` set değil. **Üretimde OLMAMALI.**
   - Kontrol: `<AppDir>\_internal\deploy\device.env` → `PEMF_ENCRYPT_AT_REST=1` var mı? (Dosya veri dizininde **DEĞİL**, kurulum ağacındadır; değeri NSSM servis ortamına yazılır — `nssm get PemfBackend AppEnvironmentExtra` ile servis tarafını da doğrulayın.)
-  - Kontrol (cihazda): `/api/health` → `atRestEncrypted`. Wheel'in **pakete girip girmediği** build makinesinde `myenv\Scripts\python -c "import sqlcipher3"` ile ya da sevk ağacında `_internal` altında `sqlcipher3` aranarak bakılır — klinik cihazda Python KURULU DEĞİLDİR (donmuş EXE).
+  - Kontrol (cihazda): `/api/health` → `atRestEncrypted`. Wheel'in **pakete girip girmediği** iki yoldan ölçülür: build makinesinde depo kökünden (`guii/`) gömülü build Python'ıyla `..\python.exe -c "import sqlcipher3"` (kök `README.md`: "Build Python'ı = gömülü" — `myenv` ve sistem Python'ı kaldırıldı) ve **sevk ağacının kendisinde** `Get-ChildItem "<AppDir>\_internal" -Recurse -Filter "sqlcipher3*" | Select-Object -First 5 FullName` (build makinesinde `<AppDir>` = `PEMF_BUILD\dist\PEMF_Backend`) — boş çıktı = wheel pakete GİRMEMİŞ. Klinik cihazda Python KURULU DEĞİLDİR (donmuş EXE); orada yalnız ikinci komut ve `/api/health` geçerlidir.
   - Not: PatientDB + TreatmentDB **fail-closed** (bayrak=1 + wheel-yok → RuntimeError, düz-metin YAZMAZ).
 
 ## ⏳ 4 — Cloudflare NAMED tünel (CİHAZDA)
@@ -96,8 +96,8 @@ Get-Content "C:\ProgramData\PEMF_System\logs\backend_service.log" | Select-Strin
 # ⛔ onnx 1.15→1.16+ / torch 2.1.2→2.6+ YAPILMAYACAK (SAHİP KARARI 2026-09-21). Risk profili
 #    zaten DÜŞÜK ölçülmüştü (model klasörü yerel, ağdan girdi almıyor). Bu satır tarihsel kayıttır,
 #    iş listesi DEĞİLDİR — yeniden önermeyin.
-pip install -U cryptography python-multipart zeroconf
-py -3.10 -m pytest guii/tests   # yeşil olmalı (bu ortamda doğrulandı)
+..\python.exe -m pip install -U cryptography python-multipart zeroconf   # depo kökünden (guii/); gömülü build Python'ı
+..\python.exe -m pytest tests -q   # yeşil olmalı (bu ortamda doğrulandı) — kök README "Build Python'ı = gömülü"
 ```
 
 ## ✅ 6 — AI model **bütünlüğü** (DOĞRULANDI) · ⛔ 6b **lisans** envanteri (YAPILMAYACAK)
