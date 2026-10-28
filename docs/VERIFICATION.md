@@ -1,6 +1,7 @@
 # Üretim Doğrulama Checklist'i (Operasyonel)
 
-Bu belge `PRODUCTION_READINESS_REPORT.md` §5 "Doğrulayamadıklarım" maddelerini **çalıştırılabilir
+Bu belge üretim-hazırlık denetiminin "Doğrulayamadıklarım" maddelerini (kaynak ~~`PRODUCTION_READINESS_REPORT.md` §5~~ —
+dosya `b3462b5`'te silindi; maddeler artık YALNIZ bu belgede yaşar) **çalıştırılabilir
 doğrulama adımlarına** çevirir. Bazıları bu ortamda zaten doğrulandı (✅); geri kalanlar çalışan
 cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** çalıştırın.
 
@@ -15,7 +16,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 6 | AI model bütünlüğü | ✅ **DOĞRULANDI (2026-09-13)** · **otomatik kapı (D3.45, 2026-10-25)** | `scripts/model_butunluk.py` — gömülü paket **56/56 bayt-birebir**. Manifest `release_assets/ai_models_sha256.json` artık SÜRÜMLÜ (Y33); git'te izlenen 10 ağırlık HER test koşusunda ürünün doğrulayıcısıyla denetlenir (`tests/test_D3_45_AI_agirliklari_SURUMLU_SHA_manifesti_KAPISI.py`); takipsiz 46'sı ortamda varsa aynı çağrıda |
 | 6b | AI model **lisansı** | ⛔ YAPILMAYACAK | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Envanter işi kapatıldı; AGPL kalemi `docs/AGPL-KARARI.md`'de duruyor |
 | 7 | Yük/soak | ⚠️ **kısa koşu: RSS/DB temiz · HTTP kaydı yok · WS ÖLÇÜLMEDİ** / ⏳ uzun koşu | 25 dk: RSS +%0,9 (sızıntı YOK), DB sabit. ⚠️ **O koşu WS AÇMIYORDU** (B-9.26; `/ws` istemcisi 2026-09-30'da eklendi): WS kararlılığı o koşuda ÖLÇÜLMEDİ — yeniden koşulmalı. ⚠️ eski betik **MQTT** üzerinden → ESP kapalıyken hiçbir canlı yolu zorlamıyor; yerine `scripts/soak_http_ws.py`. 72 saatlik klinik koşusu sahipte |
-| 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
+| 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 6/6 (ölçüm 2026-10-28; ilk yazımda 3/3) + `.plain.bak` ACL fix |
 | 9 | firmware `[FIX-1c]` duty geçişi | ⏳ donanım | Bench testi (aşağıda) — **YAYIN ÖNCESİ ZORUNLU** |
 | 16 | ~~STM reflash + doz kalibrasyonu~~ | ⛔ KALDIRILDI | doz kalibrasyonu silindi (sahip 2026-09-21); reflash → otomatik firmware güncellemesi |
 | 17 | **Donmuş EXE ürün senaryoları** | ✅ **DOĞRULANDI (son: 2026-09-20)** | `scripts/urun_senaryolari.py` — **48/48**. Sevk edilen ikiliyi çalıştırır; suit'in göremediği açılış sırasını ölçer (§17) |
@@ -27,6 +28,10 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 `scratchpad/verify_supabase_rls.py` (⚠️ betik depoda YOK, aşağıdaki nota bakın) gömülü anon (publishable, tasarımı gereği public) anahtarla
 kullanıcının kendi projesini **salt-okunur** probladı. Sonuç **5/5 geçti**:
 
+> ⚠️ **Tarih (D6.72):** bu gövde ilk koşunun kaydıdır (`git log -S"5/5 geçti"` → `cd0d8c8a`, 2026-07-06) ve aşağıda 4
+> madde listeler; özet tablodaki "6 tablonun altısı 401/42501" 2026-09-13 yeniden ölçümüdür — iki koşu AYRIDIR ve ikisinin
+> betiği de depoda yoktur.
+
 - `devices` doğrudan SELECT → `200 []` (RLS satır sızdırmıyor)
 - `patients` doğrudan SELECT → `401 permission denied for table patients`
 - `resolve_device(p_device_id|p_code)` RPC → `200` (SECURITY DEFINER + anon GRANT deploy edilmiş)
@@ -37,7 +42,7 @@ kullanıcının kendi projesini **salt-okunur** probladı. Sonuç **5/5 geçti**
 
 ## ✅ 8 — KVKK anonimleştirme (bu ortamda DOĞRULANDI + gap kapatıldı)
 
-`tests/test_kvkk_anonymization.py` (3 test, hepsi geçti): 5-yıl-inaktif hasta → PII `[ANONIM]` +
+`tests/test_kvkk_anonymization.py` (bugün 6 test — 2026-10-28 ölçümü 6 passed; ilk yazımda 3): 5-yıl-inaktif hasta → PII `[ANONIM]` +
 `anonymized=1` + arama-indeksi temizlenir (eski adla bulunamaz); aktif hasta korunur; idempotent.
 
 **YENİ BULGU + FIX:** migration `.plain.bak` (tüm eski düz-metin DB) diskte **ACL'siz** kalıyordu →
@@ -67,17 +72,26 @@ curl http://127.0.0.1:8000/api/health | ConvertFrom-Json | Select-Object atRestE
 
 - `True` → whole-DB SQLCipher aktif (PII at-rest şifreli). ✅
 - `False` → `sqlcipher3` wheel eksik VEYA `PEMF_ENCRYPT_AT_REST` set değil. **Üretimde OLMAMALI.**
-  - Kontrol: `<AppDir>\_internal\deploy\device.env` → `PEMF_ENCRYPT_AT_REST=1` var mı? (Dosya veri dizininde **DEĞİL**, kurulum ağacındadır; değeri NSSM servis ortamına yazılır — `nssm get PemfBackend AppEnvironmentExtra` ile servis tarafını da doğrulayın.)
+  - Kontrol — **launcher kipi (saha modeli):** `device.env` OKUNMAZ; launcher `PEMF_ENCRYPT_AT_REST=1`'i kendi sabitinden geçirir
+    (`launcher/core/src/install.rs` `ENV_ENCRYPT_AT_REST`) → `False` görülürse sebep wheel / anahtar tarafındadır, `device.env` DEĞİL.
+  - Kontrol — **NSSM servis kipi:** `<AppDir>\_internal\deploy\device.env` → `PEMF_ENCRYPT_AT_REST=1` var mı? (Dosya veri dizininde **DEĞİL**, kurulum ağacındadır; değeri NSSM servis ortamına yazılır — `nssm get PemfBackend AppEnvironmentExtra` ile servis tarafını da doğrulayın.)
   - Kontrol (cihazda): `/api/health` → `atRestEncrypted`. Wheel'in **pakete girip girmediği** iki yoldan ölçülür: build makinesinde depo kökünden (`guii/`) gömülü build Python'ıyla `..\python.exe -c "import sqlcipher3"` (kök `README.md`: "Build Python'ı = gömülü" — `myenv` ve sistem Python'ı kaldırıldı) ve **sevk ağacının kendisinde** `Get-ChildItem "<AppDir>\_internal" -Recurse -Filter "sqlcipher3*" | Select-Object -First 5 FullName` (build makinesinde `<AppDir>` = `PEMF_BUILD\dist\PEMF_Backend`) — boş çıktı = wheel pakete GİRMEMİŞ. Klinik cihazda Python KURULU DEĞİLDİR (donmuş EXE); orada yalnız ikinci komut ve `/api/health` geçerlidir.
   - Not: PatientDB + TreatmentDB **fail-closed** (bayrak=1 + wheel-yok → RuntimeError, düz-metin YAZMAZ).
 
 ## ⏳ 4 — Cloudflare NAMED tünel (CİHAZDA)
 
+> ⚠️ **İki kip (D6.72):** **launcher kipinde** (saha modeli) `device.env` OKUNMAZ — tünel bayrağını launcher geçirir
+> (`launcher/core/src/install.rs` `ENV_ENABLE_TUNNEL`, varsayılan `1`; launcher sürecinin ortamıyla geçersiz kılınır) ve log
+> `PEMF_LOG_DIR` verilmezse veri kökündedir (`backend_service.py` `<app_data>/logs`). Aşağıdaki `device.env` / `PEMF_System\logs`
+> satırları **NSSM servis kipi** içindir.
+
 ```powershell
-# Aktif tünel türü:
+# NSSM servis kipi — aktif tünel türü:
 Get-Content "<AppDir>\_internal\deploy\device.env" | Select-String "PEMF_TUNNEL|CLOUDFLARE|TUNNEL_TOKEN"
-# Servis logunda tünel URL'i sabit mi (NAMED) yoksa her restart trycloudflare.com değişiyor mu (QUICK):
+# NSSM servis kipi — servis logunda tünel URL'i sabit mi (NAMED) yoksa her restart trycloudflare.com değişiyor mu (QUICK):
 Get-Content "C:\ProgramData\PEMF_System\logs\backend_service.log" | Select-String "tunnel|trycloudflare|cloudflared" | Select-Object -Last 10
+# Launcher kipi — log veri kökünde:
+Get-Content "C:\ProgramData\PEMF_System\PEMF_GUI\logs\backend_service.log" | Select-String "tunnel|trycloudflare|cloudflared" | Select-Object -Last 10
 ```
 
 - **QUICK** (`*.trycloudflare.com`, her restart değişir, SLA yok) = P1, üretime uygun değil.
@@ -436,8 +450,10 @@ Kuyu — plan: `docs/arastirma-ai-pro-fantom-petri-plani.md`). Sürüş bilinçl
 4. Fantom için: fantomu modelin eğitim aralığına (kabin ortasına) yükseltmek mi, kamerayı üst
    köşeye taşımak mı — karar ölçüme göre verilir. Kamera taşınırsa **kedi akışı yeniden
    doğrulanmalıdır** (aynı kamera onu da besliyor).
-5. Ölçüm kabul edilirse `PEMF_ARASTIRMA_AIPRO=1` yapılır (kurulum bunu NSSM servis ortamına yazar;
-   backend `.env`i KENDİ okumaz). Doğrulama: `GET /api/ai/hazirlik?derin=1` yanıtında
+5. Ölçüm kabul edilirse `PEMF_ARASTIRMA_AIPRO=1` yapılır (sahip kararı Y145: bugün KAPALI — açma kararı sahibin).
+   **NSSM servis kipinde** kurulum bunu servis ortamına yazar; **launcher kipinde** `device.env`'e yazmak ETKİSİZDİR — launcher
+   bayrağı kendi ortamından geçirir (`launcher/core/src/install.rs` `ENV_ARASTIRMA_AIPRO`, varsayılan `0`); backend `.env`i
+   KENDİ okumaz. Doğrulama: `GET /api/ai/hazirlik?derin=1` yanıtında
    `arastirmaAiPro.acik == true`.
 
 **Kabul kriterleri (bayrak açıldıktan sonra, bobinler BAĞLI):**
@@ -476,7 +492,13 @@ devredildi — bkz. [`docs/stm32-uzaktan-guncelleme-plani.md`](stm32-uzaktan-gun
 ---
 
 
-## ✅ 17 — Donmuş EXE ürün senaryoları (BU ORTAMDA DOĞRULANDI · 2026-09-17)
+## ✅ 17 — Donmuş EXE ürün senaryoları (BU ORTAMDA DOĞRULANDI · son: 2026-09-20)
+
+> ⚠️ **Tarih ve kapsam (D6.72 · B-10.189):** son koşu 2026-09-20 (`4d7a1e7`: "48/48 bugün iki yeni artefaktta koşuldu");
+> aşağıdaki ayrıntılı sonuç 2026-09-17 koşusudur. **Faz 3 açılış firmware denetimi / yakma yolu ÜRÜN DÜZEYİNDE ÖLÇÜLMEZ:**
+> senaryolar EXE'yi `PEMF_SIMULATE=1`, `PEMF_FW_AUTO_UPDATE=0` ve `--no-headless-services` ile başlatır
+> (`scripts/urun_senaryolari.py`) — bilinçli (Y2: klon / tezgâh backend'i karta yakmaz). Faz 3 commit'leri (2026-09-22)
+> son koşudan SONRADIR.
 
 **Betik:** `scripts/urun_senaryolari.py` · **Kapısı:** `tests/test_urun_senaryolari_kapisi.py`
 
@@ -548,7 +570,7 @@ suçlanmadan önce ölçüm aracı kanıtlanır.
 
 ### Takımın kendi kapısı
 
-`tests/test_urun_senaryolari_kapisi.py` (8 test, hepsi mutasyonla kırmızı görüldü) betiği
+`tests/test_urun_senaryolari_kapisi.py` (bugün 14 test — 2026-10-28 ölçümü; ilk 8'i mutasyonla kırmızı görüldü) betiği
 **koşturmaz** — CI'da EXE yoktur. Koruduğu şey takımın güvenilirliği: senaryo sayısının sessizce
 küçülmemesi, **karşıt-kanıt** senaryolarının (A0 · B9b · C0 · C9) durması, bayat-ikili nöbetinin
 `main`'den çağrılması ve bayatlıkta gerçekten **durması**, senaryo kodlarının benzersizliği,

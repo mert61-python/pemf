@@ -120,10 +120,10 @@ def _tarih_celiskileri(metin: str) -> list[str]:
     return out
 
 
-#: ⚠️ SAYAÇLI, BİLİNEN çelişki — D5.35 kapısı ilk koşuda §17'yi buldu (B-10.189: tablo "son: 2026-09-20", başlık "2026-09-17").
-#: Belgeyi düzeltmek D6.72'nin işidir (hangi tarafın doğru olduğunu ölçüm söyler, bu kapı değil). Muafiyet TAM metniyle pinlidir:
-#: yeni bir çelişki eklenirse ya da bu çözülünce (muafiyet bayatlar) kapı KIRMIZI — D6.72 bu girdiyi SİLER.
-BILINEN_TARIH_CELISKILERI = {"§17: tablo son tarih 2026-09-20 ≠ baslik son tarih 2026-09-17": "D6.72 · B-10.189"}
+#: ⚠️ SAYAÇLI muafiyet listesi — BOŞ OLMALI. D5.35 kapısı ilk koşuda §17'yi bulmuş ve sayaçlı muafiyet konmuştu (B-10.189: tablo
+#: "son: 2026-09-20", başlık "2026-09-17"). D6.72 ÖLÇTÜ: tablo doğruydu (`4d7a1e7` 2026-09-20 "48/48 bugün iki yeni artefaktta
+#: koşuldu"), başlık düzeltildi → muafiyet SİLİNDİ. Yeni çelişki belgede düzeltilir, buraya YAZILMAZ (sayaç 0 — aşağıda).
+BILINEN_TARIH_CELISKILERI: dict[str, str] = {}
 
 
 def test_KRITIK_D5_35_ozet_tablosu_ile_bolum_basligi_TARIHTE_celismiyor():
@@ -132,8 +132,8 @@ def test_KRITIK_D5_35_ozet_tablosu_ile_bolum_basligi_TARIHTE_celismiyor():
     assert not yeni, "VERIFICATION.md tarihte KENDI KENDISIYLE CELISIYOR:\n  " + "\n  ".join(yeni)
     bayat = sorted(set(BILINEN_TARIH_CELISKILERI) - set(celiski))
     assert not bayat, f"bilinen tarih celiskisi COZULMUS — muafiyeti SILIN (kapi sessizce genislemesin): {bayat}"
-    assert len(BILINEN_TARIH_CELISKILERI) <= 1, (
-        "bilinen celiski listesi sismis — yeni celiski belgede duzeltilir, buraya yazilmaz"
+    assert len(BILINEN_TARIH_CELISKILERI) == 0, (
+        "bilinen celiski listesi BOS olmali (D6.72 muafiyeti kaldirdi) — yeni celiski belgede duzeltilir, buraya yazilmaz"
     )
 
 
@@ -319,3 +319,37 @@ def test_D6_48_bolum9_HER_bipolar_klemp_ifadesi_FIRMWARE_ile_ayni():
     assert ifadeler, "aparat: §9'da bipolar klemp ifadesi (`… g_tpp[i] / 2U …`) bulunamadı"
     farkli = [i for i in ifadeler if bipolar not in _bosluksuz(i)]
     assert not farkli, f"§9'daki bipolar klemp ifadesi firmware [FIX-1c] ile farklı: {farkli} (firmware: {bipolar})"
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# D6.72 (B-10.187 · B-10.189 · B-10.190) — VERIFICATION sayı / kaynak / kip iddiaları ölçülebilir hâlde DOĞRU.
+# ÖLÇÜLEN (HEAD ebf1c3fe): `:18` KVKK "3/3", `:40` "(3 test", §17 "`tests/test_urun_senaryolari_kapisi.py` (8 test" ↔ dosyalarda
+# 6 ve 14 `def test_`; `:3` silinmiş `PRODUCTION_READINESS_REPORT.md`'ye (b3462b5) dayanıyor; §2 / §4 / §15 yalnız NSSM servis
+# kipini anlatıyor (launcher kipinde `device.env` OKUNMAZ — `launcher/core/src/install.rs` bayrakları kendi geçirir).
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+_TEST_SAYISI_IDDIASI = re.compile(r"`(tests/[\w/]+\.py)`[^|`\n]{0,15}?(?:—\s*(\d+)/\d+|\((?:bugün\s+)?(\d+) test)")
+
+
+def test_KRITIK_D6_72_test_sayisi_iddialari_DOSYAYLA_ayni():
+    metin = _cizgisiz(BELGE.read_text(encoding="utf-8"))
+    iddialar = [(m.group(1), int(m.group(2) or m.group(3))) for m in _TEST_SAYISI_IDDIASI.finditer(metin)]
+    assert len(iddialar) >= 3, f"aparat: test sayısı iddiası bulunamadı ({iddialar})"
+    ayrisan = []
+    for yol, n in iddialar:
+        gercek = len(re.findall(r"(?m)^\s*(?:async\s+)?def test_", (KOK / yol).read_text(encoding="utf-8")))
+        if gercek != n:
+            ayrisan.append(f"{yol}: belge {n}, dosya {gercek}")
+    assert not ayrisan, "VERIFICATION test sayısı iddiası dosyayla ayrışıyor:\n  " + "\n  ".join(ayrisan)
+
+
+def test_KRITIK_D6_72_kaynak_VAR_ve_kip_dallari_IKI_kipi_anlatir():
+    metin = _cizgisiz(BELGE.read_text(encoding="utf-8"))
+    assert "PRODUCTION_READINESS_REPORT.md` §5" not in metin, (
+        "VERIFICATION silinmiş PRODUCTION_READINESS_REPORT.md'ye dayanıyor (b3462b5)"
+    )
+    for bolum in ("## ✅ 2 — ", "## ⏳ 4 — ", "## ⏳ 15 — "):
+        b = _bolum(metin, bolum)
+        assert re.search(r"[Ll]auncher kipi", b) and "install.rs" in b, (
+            f"VERIFICATION {bolum.strip()} launcher kipi dalını anlatmalı"
+        )
