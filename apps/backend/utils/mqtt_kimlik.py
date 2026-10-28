@@ -10,8 +10,11 @@ MODEL:
     makine anahtarı; veri kökünden BAĞIMSIZ → veri kökü yenilense de ESP'ye yakılan parola geçerli kalır) backend ve ESP
     için iki rastgele parola yazar (YOKSA üretir, VARSA KORUR) ve broker dizinine `pemf_passwd` ($7$ PBKDF2-SHA512,
     mosquitto 2.x biçimi) + `pemf_acl` + `conf.d/pemf_kimlik.conf` (`allow_anonymous false`) üretir; `--firmware DİZİN`
-    verilirse ESP için `MqttKimlikYerel.h` (gitignore) yazar. Taban broker yapılandırmaları (kurulum betiği, paketli
-    yedek, Linux) `conf.d`'yi SONDA içerir → kimlik parçası anonimi ezer (mosquitto 2.0.18'de ölçüldü).
+    verilirse ESP için `MqttKimlikYerel.h` (gitignore) yazar. Servis kipi yapılandırmaları (kurulum betikleri) `conf.d`'yi
+    SONDA içerir → kimlik parçası anonimi ezer (mosquitto 2.0.18'de ölçüldü); o `conf.d` yalnız SYSTEM + Yöneticilere yazılabilir
+    (Y203). Launcher çocuğu backend'in broker'ı (paketli yedek, Linux) paylaşılan `conf.d`'yi İÇERMEZ: hesaba özel çalışma
+    kopyası aynı yönergeleri SATIR İÇİ taşır (`calisma_kopyasi_yonergeleri`; Y203 · S-D3I.3 — ProgramData mirasıyla her yerel
+    hesap paylaşılan `conf.d`'ye `plugin` / `listener` / `allow_anonymous true` bırakabiliyordu).
   · Hazırlanmamış sistem BUGÜNKÜ gibidir: broker anonim, backend kimlik göndermez → hiçbir STOP yolu değişmez.
   · Yetki (ACL): backend YALNIZ `pemf/coil/+/control` + eski `pemf/esp32_<n>/command` YAZAR, `pemf/#` OKUR — ack
     YAZAMAZ; ESP yalnız `pemf/coil/+/{status,sensors,events,ack,alarm,system/#}` YAZAR ve control OKUR — control YAZAMAZ;
@@ -197,15 +200,28 @@ def passwd_metni(kimlikler: dict[str, str]) -> str:
     return "".join(f"{k}:{ozet7(p)}\n" for k, p in sorted(kimlikler.items()))
 
 
-def conf_metni(broker_dizini: Path) -> str:
+def _kimlik_yonergeleri(broker_dizini: Path) -> str:
     bd = Path(broker_dizini).as_posix()
+    return f"allow_anonymous false\npassword_file {bd}/{PASSWD_ADI}\nacl_file {bd}/{ACL_ADI}\n"
+
+
+def conf_metni(broker_dizini: Path) -> str:
     return (
         "# PEMF yerel broker KIMLIGI (A-04 / D1.104) - utils.mqtt_kimlik uretir. Taban yapilandirma bu dizini SONDA\n"
         "# icerir; buradaki allow_anonymous false tabandaki true'yu EZER.\n"
-        "allow_anonymous false\n"
-        f"password_file {bd}/{PASSWD_ADI}\n"
-        f"acl_file {bd}/{ACL_ADI}\n"
-    )
+    ) + _kimlik_yonergeleri(broker_dizini)
+
+
+def calisma_kopyasi_yonergeleri(broker_dizini: Path | None = None) -> str | None:
+    """Y203 (S-D3I.3): launcher çocuğu backend'in hesaba özel broker çalışma kopyasına SATIR İÇİ eklenecek kimlik yönergeleri —
+    paylaşılan `conf.d` (her yerel hesabın yeni dosya yaratabildiği dizin) `include_dir` ile İÇERİLMEZ, parça dosyası OKUNMAZ
+    (metin koddan, `conf_metni` ile aynı üreticiden). Tetik kimlik deposu + broker parola / yetki dosyaları: paylaşılan `conf.d`
+    parçası yoksa ya da Y71 onarımı oraya yazamıyorsa da broker kimlikli açılır; depo yokken (hazırlanmamış — bugünkü saha)
+    oraya bırakılmış sahte parça broker'ı kimlikli kipe SOKMAZ (eksik parola dosyasında broker açılmazdı). Hazır değilse None."""
+    bd = Path(broker_dizini) if broker_dizini else varsayilan_broker_dizini()
+    if not (_depo_yolu().is_file() and (bd / PASSWD_ADI).is_file() and (bd / ACL_ADI).is_file()):
+        return None
+    return _kimlik_yonergeleri(bd)
 
 
 def firmware_basligi(kullanici: str, parola: str) -> str:

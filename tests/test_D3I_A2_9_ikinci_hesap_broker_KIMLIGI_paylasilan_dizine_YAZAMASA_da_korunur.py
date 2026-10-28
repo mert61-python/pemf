@@ -49,7 +49,12 @@ def test_KRITIK_ilk_hesabin_calisma_kopyasi_DEGISTIRILEMESE_de_ikinci_hesabin_br
         calisma = MosquittoSupervisor.__new__(MosquittoSupervisor)._kimlik_dahil_conf(taban)
         assert calisma != taban, "ikinci hesabın broker'ı ANONİM tabana düştü — A-04 kimliği kayboldu"
         satirlar = calisma.read_text(encoding="utf-8").strip().splitlines()
-        assert satirlar[-1] == f"include_dir {(bd / mk.CONF_DIZINI).as_posix()}", satirlar[-3:]
+        # Y203 (S-D3I.3): kimlik yönergeleri SATIR İÇİ (paylaşılan conf.d İÇERİLMEZ); parola / yetki dosyası paylaşılan dizinden OKUNUR.
+        assert satirlar[-3:] == [
+            "allow_anonymous false",
+            f"password_file {bd.as_posix()}/{mk.PASSWD_ADI}",
+            f"acl_file {bd.as_posix()}/{mk.ACL_ADI}",
+        ], satirlar[-4:]
         kullanici_koku = (Path(os.environ["LOCALAPPDATA"]) / "PEMF_System").resolve()
         assert kullanici_koku in calisma.resolve().parents, (
             f"çalışma kopyası hesaba özel (temizlenen) kökte değil: {calisma}"

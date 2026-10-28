@@ -119,6 +119,16 @@ def _conf_metni(args: list[str]) -> str:
     return Path(args[args.index("-c") + 1]).read_text(encoding="utf-8")
 
 
+def _kimlikli(metin: str, bd: Path) -> bool:
+    """Y203 (S-D3I.3): kimlik yönergeleri çalışma kopyasında SATIR İÇİ ve SONDA; paylaşılan conf.d İÇERİLMEZ."""
+    yon = [s.strip() for s in metin.splitlines() if s.strip() and not s.lstrip().startswith("#")]
+    return yon[-3:] == [
+        "allow_anonymous false",
+        f"password_file {bd.as_posix()}/pemf_passwd",
+        f"acl_file {bd.as_posix()}/pemf_acl",
+    ] and not any(s.split(None, 1)[0] == "include_dir" for s in yon)
+
+
 def _parolalar_dogrulanir(mk, bd: Path, kimlikler: dict) -> bool:
     satirlar = dict(s.split(":", 1) for s in (bd / "pemf_passwd").read_text(encoding="utf-8").splitlines() if s)
     return all(mk.ozet7_dogrula(p, satirlar[k]) for k, p in kimlikler.items())
@@ -141,9 +151,7 @@ def test_KRITIK_kaldir_kur_sonrasi_parca_AYNI_parolalarla_yazilir_broker_ILK_aci
         "broker parola dosyası depodaki AYNI parolalarla doğrulanmıyor — ESP'ye yakılmış kimlik geçersiz kalır (A-18)"
     )
     ilk = ortam["durum"]["popen"][0]
-    assert f"include_dir {(bd / 'conf.d').as_posix()}" in _conf_metni(ilk), (
-        f"broker İLK açılışta kimlik parçasını içermiyor (anonim pencere): {ilk}"
-    )
+    assert _kimlikli(_conf_metni(ilk), bd), f"broker İLK açılışta kimlik parçasını içermiyor (anonim pencere): {ilk}"
 
 
 def test_KRITIK_calisan_KENDI_broker_yeniden_baslatilir_YABANCI_surece_dokunulmaz(ortam):
@@ -159,7 +167,7 @@ def test_KRITIK_calisan_KENDI_broker_yeniden_baslatilir_YABANCI_surece_dokunulma
         f"sonlandırılan süreçler {d['sonlandir']} — yalnız backend'in KENDİ broker'ı (4242) yeniden başlatılmalı; "
         "çalışan anonim broker kimliği devreye SOKMAZ"
     )
-    assert d["popen"] and f"include_dir {(bd / 'conf.d').as_posix()}" in _conf_metni(d["popen"][0]), (
+    assert d["popen"] and _kimlikli(_conf_metni(d["popen"][0]), bd), (
         f"broker kimlikli yapılandırmayla yeniden BAŞLATILMADI: {d['popen']}"
     )
 
@@ -186,7 +194,10 @@ def test_KARSIT_depo_YOKSA_hicbir_sey_yazilmaz_anonim_kip_AYNEN(ortam):
     _kos(ortam)
 
     assert not (bd / "conf.d").exists() and not (bd / "pemf_passwd").exists(), "hazırlanmamış sistemde kimlik UYDURULDU"
-    assert d["popen"] and "include_dir" not in _conf_metni(d["popen"][0]), "hazırlanmamış broker anonim kalmalı (A)"
+    metin = _conf_metni(d["popen"][0]) if d["popen"] else ""
+    assert d["popen"] and not any(k in metin for k in ("include_dir", "allow_anonymous false", "password_file")), (
+        "hazırlanmamış broker anonim kalmalı (A)"
+    )
 
 
 def test_KARSIT_okunamayan_depo_EZILMEZ_parca_yazilmaz(ortam):
@@ -257,7 +268,7 @@ def test_KRITIK_H71_SAHA_eski_mosquitto_SERVISI_kayitliyken_KENDI_broker_yeniden
         f"sonlandırılan {d['sonlandir']} — sahada 1883'ü tutan backend'in KENDİ broker'ı (2828) yeniden başlatılmalı; eski "
         "servisin süreci (3888) DOKUNULMAZ"
     )
-    assert d["popen"] and f"include_dir {(bd / 'conf.d').as_posix()}" in _conf_metni(d["popen"][0]), (
+    assert d["popen"] and _kimlikli(_conf_metni(d["popen"][0]), bd), (
         f"broker kimlikli yapılandırmayla yeniden BAŞLATILMADI: {d['popen']}"
     )
 

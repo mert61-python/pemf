@@ -488,17 +488,21 @@ class MosquittoSupervisor:
 
     def _kimlik_dahil_conf(self, taban: Path) -> Path:
         """A-04 · D1.104: yerel broker kimliği HAZIRLANMIŞSA (`utils.mqtt_kimlik hazirla`) seçilen taban yapılandırmanın
-        SONUNA kimlik parçasının dizinini (`include_dir`) ekleyen çalışma kopyasını döndür — parça `allow_anonymous false`
-        ile tabandaki anonim izni ezer (kurulum betiğinin NSSM yapılandırması bunu kendisi içerir; bu, paketli/Linux
-        yedek yolu). Hazırlanmamışsa taban AYNEN (bugünkü davranış). Taban zaten kendi `password_file`/`acl_file`'ını ya
-        da aynı `include_dir`'i taşıyorsa da taban AYNEN: mosquitto yinelenen `password_file`'da AÇILMAZ — broker'ı
-        düşürmek tüm ESP STOP yolunu keserdi (Ö.4-Y8)."""
+        SONUNA kimlik yönergelerini (`allow_anonymous false` + `password_file` + `acl_file`) SATIR İÇİ ekleyen hesaba özel
+        çalışma kopyasını döndür — tabandaki anonim izni ezer (kurulum betiğinin NSSM yapılandırması korunmuş `conf.d`'yi
+        kendisi içerir; bu, launcher çocuğu / paketli / Linux yolu). Y203 (S-D3I.3): paylaşılan `conf.d` (ProgramData
+        mirasıyla her yerel hesap oraya yeni `.conf` bırakabilir — `plugin` / `listener` / `allow_anonymous true`) artık
+        `include_dir` ile İÇERİLMEZ; yönergeler `mqtt_kimlik.calisma_kopyasi_yonergeleri`nden (koddan) gelir, tetik paylaşılan
+        parça değil kimlik deposu + parola / yetki dosyalarıdır. Hazırlanmamışsa taban AYNEN (bugünkü davranış). Taban zaten
+        kendi `password_file`/`acl_file`'ını ya da paylaşılan `include_dir`'i taşıyorsa da taban AYNEN: mosquitto yinelenen
+        `password_file`'da AÇILMAZ — broker'ı düşürmek tüm ESP STOP yolunu keserdi (Ö.4-Y8)."""
         try:
             from utils import mqtt_kimlik
 
             bd = mqtt_kimlik.varsayilan_broker_dizini()
             parca_dizini = bd / mqtt_kimlik.CONF_DIZINI
-            if not (parca_dizini / mqtt_kimlik.CONF_ADI).is_file():
+            kimlik = mqtt_kimlik.calisma_kopyasi_yonergeleri(bd)
+            if kimlik is None:
                 return taban
             metin = taban.read_text(encoding="utf-8", errors="replace")
             yonergeler = [s.split(None, 1) for s in metin.splitlines() if s.strip() and not s.lstrip().startswith("#")]
@@ -515,8 +519,8 @@ class MosquittoSupervisor:
             hedef.parent.mkdir(parents=True, exist_ok=True)
             hedef.write_text(
                 metin.rstrip("\n")
-                + "\n# A-04 / D1.104 - yerel broker kimlik parcasi (SONDA: anonim izni ezer)\n"
-                + f"include_dir {parca_dizini.as_posix()}\n",
+                + "\n# A-04 / D1.104 / Y203 - yerel broker kimligi SATIR ICI (SONDA: anonim izni ezer; paylasilan conf.d ICERILMEZ)\n"
+                + kimlik,
                 encoding="utf-8",
             )
             return hedef

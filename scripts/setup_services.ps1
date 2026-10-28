@@ -517,6 +517,10 @@ include_dir $($MosqDataRoot -replace '\\','/')/conf.d
     if (-not (Test-Path $TabanParca)) {
         Set-Content -Path $TabanParca -Value "# PEMF: include_dir bos kalmasin (mosquitto Windows'ta bos dizinde ACILMAZ). Kimlik parcasi: pemf_kimlik.conf" -Encoding ASCII
     }
+    # Y203 (S-D3I.3): bu broker (NSSM, LocalSystem) conf.d'yi İÇERİR; ProgramData mirasıyla her yerel hesap oraya YENİ .conf
+    # (plugin / listener / allow_anonymous true) bırakabiliyordu. Yer tutucudan SONRA, servis başlamadan ÖNCE: yalnız SYSTEM +
+    # Yöneticiler yazar, Users salt okur. Kimlik parçasını yönetici 'hazirla' ya da LocalSystem backend (Y71 onarımı) yazar.
+    Protect-PemfDir "$MosqDataRoot\conf.d"
     # BOŞLUKSUZ yola yaz (C:\ProgramData\...): NSSM AppParameters '-c <yol>' boşlukta bölünür;
     # "C:\Program Files\..." mosquitto'ya "C:\Program" olarak geçip "Unable to open config" verirdi.
     Set-Content -Path "$MosqDataRoot\mosquitto.conf" -Value $conf -Encoding ASCII

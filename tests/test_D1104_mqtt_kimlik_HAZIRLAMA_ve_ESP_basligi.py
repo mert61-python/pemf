@@ -6,7 +6,8 @@ Gerçek-broker davranışı `test_D1104_broker_KIMLIKLI_sahte_ack_TEYIT_SAYILMAZ
     EZİLMEZ; depoda ve CLI çıktısında parola DEĞERİ YOK (değer düzeyinde ölçülür — json metninde değil).
   · Yetki metni: backend ack YAZAMAZ, ESP control YAZAMAZ; ESP'nin yayınladığı / backend'in yayınladığı HER konu yetkide
     (firmware ve backend kaynağından çıkarılır — yeni bir konu yetkisiz kalırsa kimlikli broker onu SESSİZCE düşürür).
-  · `_mqtt_credentials` önceliği; ESP açık + hazırlanmamış → uyarı; paketli/Linux yedek yapılandırmasına `include_dir`.
+  · `_mqtt_credentials` önceliği; ESP açık + hazırlanmamış → uyarı; paketli/Linux yedek yapılandırmasına kimlik
+    yönergeleri SATIR İÇİ (Y203: paylaşılan `conf.d` İÇERİLMEZ — `test_Y203_broker_PAYLASILAN_conf_d_YABANCI_parcayi_YUKLEMEZ.py`).
   · Kurulum betiği: `include_dir` SONDA, `conf.d` + yer tutucu parça (boş include_dir'de mosquitto Windows'ta AÇILMAZ).
   · ESP: `MqttKimlik.h` iki sketch'te aynı, `MqttKimlikYerel.h` gitignore'da; başlık ana makinede derlenir (yoksa boş
     kimlik, varsa depodaki ESP kimliği); iki firmware'in yerel bağlantısı kimliği kullanır.
@@ -302,8 +303,16 @@ def test_KRITIK_paketli_yedek_yapilandirmaya_kimlik_SONDA_eklenir(mk, tmp_path):
     mk.hazirla()
     calisma = s._kimlik_dahil_conf(taban)
     metin = calisma.read_text(encoding="utf-8").strip().splitlines()
-    parca = (mk.varsayilan_broker_dizini() / mk.CONF_DIZINI).as_posix()
-    assert metin[-1] == f"include_dir {parca}", f"kimlik parçası SONDA değil: {metin[-3:]}"
+    bd = mk.varsayilan_broker_dizini().as_posix()
+    # Y203 (S-D3I.3): kimlik yönergeleri SATIR İÇİ ve SONDA; paylaşılan conf.d (her yerel hesap yeni dosya yaratabilir) İÇERİLMEZ.
+    assert metin[-3:] == [
+        "allow_anonymous false",
+        f"password_file {bd}/{mk.PASSWD_ADI}",
+        f"acl_file {bd}/{mk.ACL_ADI}",
+    ], f"kimlik yönergeleri SONDA değil: {metin[-4:]}"
+    assert not any(s.split(None, 1)[0] == "include_dir" for s in metin if s.strip()), (
+        "paylaşılan conf.d İÇERİLDİ (Y203)"
+    )
     kendi = tmp_path / "kendi.conf"
     kendi.write_text("listener 1883\nallow_anonymous false\npassword_file /x/y\n", encoding="utf-8")
     assert s._kimlik_dahil_conf(kendi) == kendi, (

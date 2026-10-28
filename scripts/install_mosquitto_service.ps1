@@ -162,6 +162,11 @@ $TabanParca = Join-Path $ConfDir "00_pemf_taban.conf"
 if (-not (Test-Path $TabanParca)) {
     Set-Content -Path $TabanParca -Value "# PEMF: include_dir bos kalmasin (mosquitto Windows'ta bos dizinde ACILMAZ). Kimlik parcasi: pemf_kimlik.conf" -Encoding ASCII
 }
+# Y203 (S-D3I.3): servis (LocalSystem) conf.d'yi İÇERİR; ProgramData mirasıyla her yerel hesap oraya YENİ .conf (plugin / listener /
+# allow_anonymous true) bırakabiliyordu → yalnız SYSTEM + Yöneticiler yazar, Users salt okur (setup_services.ps1 Protect-PemfDir ile
+# aynı hak kümesi; SID — Türkçe Windows'ta grup adları farklı).
+& icacls $ConfDir /inheritance:r /grant '*S-1-5-18:(OI)(CI)F' /grant '*S-1-5-32-544:(OI)(CI)F' /grant '*S-1-5-32-545:(OI)(CI)RX' *>$null
+if ($LASTEXITCODE -ne 0) { Write-Status "UYARI: conf.d sertleştirilemedi ($ConfDir) — icacls kodu $LASTEXITCODE" "Yellow" }
 Write-Status "Dizinler hazır (Program Files + ProgramData)." "Green"
 
 # --- 3. Bundled ikilileri Install dizinine kopyala (varolan servisi durdurarak) ---

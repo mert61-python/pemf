@@ -6290,8 +6290,22 @@
      ]
     },
     {
-     "metin": "# PEMF yerel broker KIMLIGI (A-04 / D1.104) - utils.mqtt_kimlik uretir. Taban yapilandirma bu dizini SONDA # icerir; buradaki allow_anonymous false tabandaki true'yu EZER. allow_anonymous false password_file {{bd}}/{{PASSWD_ADI}} acl_file {{bd3}}/{{ACL_ADI}}",
+     "metin": "# PEMF yerel broker KIMLIGI (A-04 / D1.104) - utils.mqtt_kimlik uretir. Taban yapilandirma bu dizini SONDA # icerir; buradaki allow_anonymous false tabandaki true'yu EZER.",
      "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir",
+     "turler": [
+      "donus"
+     ]
+    },
+    {
+     "metin": "allow_anonymous false password_file {{bd}}/{{PASSWD_ADI}} acl_file {{bd3}}/{{ACL_ADI}}",
+     "gerekce": "MQTT broker kimliği / yapılandırma dosyası içeriği ve CLI iletisi (servis çıktısı) — geliştirici / kurulum içindir",
+     "turler": [
+      "donus"
+     ]
+    },
+    {
+     "metin": "# PEMF yerel broker KIMLIGI (A-04 / D1.104) - utils.mqtt_kimlik uretir. Taban yapilandirma bu dizini SONDA # icerir; buradaki allow_anonymous false tabandaki true'yu EZER. allow_anonymous false password_file {{bd}}/{{PASSWD_ADI}} acl_file {{bd3}}/{{ACL_ADI}}",
+     "gerekce": "D67 Y203: conf_metni dönüşü ikiye bölündü (yukarıdaki iki girdi); TR taban (göç öncesi kaynak metin) bu birleşik hâli tutar — aynı gerekçe: broker yapılandırma dosyası içeriği, kullanıcıya gitmez",
      "turler": [
       "donus"
      ]
