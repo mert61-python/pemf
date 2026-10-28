@@ -3064,6 +3064,13 @@ mod tests {
         let ct = isleyici.find("catch").expect("'İzin ver' işleyicisinde catch YOK — komut hatası kullanıcıya gösterilmez");
         let tr = isleyici[..ct].find("try").expect("'İzin ver' işleyicisinde try yok");
         let dene = &isleyici[tr..ct];
+        // SON-A1.52 (22 · A1b, yaşayan j3_m3b): `await invoke("firewall_kurali_ekle").then(null, () => null); clearNotice();` (Rust Err'i
+        // YUTAR, uyarı kapanır — engel sürerken kullanıcı "tamam" sanır) metin aramasından GEÇİYORDU. try gövdesi İZİN LİSTESİYLE.
+        let dene_yalin: String = dene.split_whitespace().collect();
+        assert_eq!(
+            dene_yalin, "try{awaitinvoke(\"firewall_kurali_ekle\");clearNotice();}",
+            "'İzin ver' try gövdesi komutun hatasını yutabilecek biçimde değişti (.then / .catch / ek deyim / sıra): {dene}"
+        );
         let i_inv = dene.find("await invoke(\"firewall_kurali_ekle\")").expect("komut try içinde beklenmiyor (yalnız yorumda?)");
         let i_kapa = dene.find("clearNotice()").expect("başarıda uyarı kapanmıyor");
         assert!(i_inv < i_kapa, "uyarı komutun SONUCUNDAN önce kapanıyor (hata da 'tamam' görünür)");
