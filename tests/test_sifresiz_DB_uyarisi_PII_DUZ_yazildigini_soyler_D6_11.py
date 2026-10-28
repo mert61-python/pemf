@@ -16,6 +16,7 @@ kalır, kataloğa girmez). ⚠️ Maske varsayılan-açık YAPILMAZ (sahip karar
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from pathlib import Path
 
@@ -112,4 +113,19 @@ TARANAN = (
 def test_yorumlar_maskeyi_VARSAYILANDA_acik_diye_anlatmaz(yol):
     metin = yol.read_text(encoding="utf-8")
     bulunan = [i for i in YASAK_IFADELER if i in metin]
+    # Tur 2 (çürütücü): birebir liste yeni yazılmış eş anlamlı iddiayı ("şifresiz modda PII maskelenir, gerçek ad yazılmaz")
+    # kaçırıyordu → aynı satırda "şifresiz … maskelenir" ya da "gerçek PII / ad / kişi … yazılmaz / sızmaz" de yasak.
+    # (KVKK saklama maskelemesi / opt-in anlatımı "şifresiz" ile birlikte "maskelenir" DEMEZ — bugün eşleşme yok.)
+    bulunan += [
+        f"{no}: {s.strip()[:120]}"
+        for no, s in enumerate(metin.splitlines(), 1)
+        if YASAK_DESEN.search(s) and not any(i in s for i in YASAK_IFADELER)
+    ]
     assert not bulunan, f"{yol.name} maskeyi varsayılanda açık diye anlatıyor (sahip kararı: KAPALI): {bulunan}"
+
+
+YASAK_DESEN = re.compile(
+    r"(?:şifresiz|sifresiz)[^.\n]{0,40}maskelen(?:ir|iyor)\b"
+    r"|(?:gerçek|gercek)\s+(?:PII|ad|adı|adlar|kişi|kisi)\w*[^.\n]{0,30}(?:yazılmaz|yazilmaz|sızmaz|sizmaz)",
+    re.IGNORECASE,
+)
