@@ -149,3 +149,21 @@ def test_bilesik_anahtar_yamasi_ESKI_id_anahtarli_projelerde_ZORUNLU_yazilir():
     assert ikinci and "(device_id, id)" in ikinci[0][2], (
         "README 2. dosyanın seans anahtarını (device_id, id) diye anmıyor"
     )
+
+
+def test_bilesik_anahtar_yamasi_YENI_kurulumda_da_GUVENLI_PK_kisit_adi_AYNI_D6_12():
+    """Tur 2 (çürütücü): kanonik tablo PK'sini yamanın DÜŞÜRDÜĞÜ adla kurmalı — yama (yanlışlıkla) YENİ kurulumda da koşulursa
+    `drop constraint if exists <ad>` eşleşmez ve `add constraint … primary key` "multiple primary keys" ile DÜŞER. Eskiden kısıt
+    adı hiçbir kapıda ölçülmüyordu (ad değişse SQL kapılarının hepsi yeşil kalıyordu)."""
+    m = TABLO.search(_yorumsuz((DB / "supabase_patients.sql").read_text(encoding="utf-8")))
+    assert m, "aparat: supabase_patients.sql'de treatment_sessions tablosu yok"
+    ad = re.search(r"constraint\s+(\w+)\s+primary\s+key", m.group(1))
+    yama_yolu = (DB / "../../../supabase" / YAMA_ADI).resolve()
+    assert yama_yolu.is_file(), f"aparat: README'deki yama dosyası yok: {yama_yolu}"
+    yama = _yorumsuz(yama_yolu.read_text(encoding="utf-8"))
+    dusen = re.findall(r"drop\s+constraint\s+(?:if\s+exists\s+)?(\w+)", yama)
+    eklenen = re.findall(r"add\s+constraint\s+(\w+)\s+primary\s+key", yama)
+    assert ad and ad.group(1) in dusen and ad.group(1) in eklenen, (
+        f"kanonik PK kısıt adı {ad.group(1) if ad else None!r} yamanın düşürüp kurduğu adla aynı değil "
+        f"(düşen {dusen}, kurulan {eklenen}) → yama yeni kurulumda 'multiple primary keys' ile düşer"
+    )
