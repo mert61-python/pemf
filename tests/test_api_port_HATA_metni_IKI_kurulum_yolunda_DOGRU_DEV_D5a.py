@@ -65,7 +65,11 @@ def test_KRITIK_HATA_metni_kurulum_yolunda_OLMAYAN_adimi_anlatmaz_DEV_D5a():
     )
 
 
-def test_KARSIT_DEV_D5a_olcut_GERCEK_install_yolunda_saglik_sondasi_YOK():
-    """Aparat kendi kendine yeşil olmasın: setup sondası VAR, install sondası YOK (S-D5.22) — değişirse metin yeniden ölçülmeli."""
-    assert "/api/health" in BETIKLER["setup"].read_text(encoding="utf-8-sig")
-    assert "/api/health" not in BETIKLER["install"].read_text(encoding="utf-8-sig")
+def test_KARSIT_DEV_D5a_olcut_GERCEK_iki_kurulum_yolunda_da_saglik_sondasi_VAR_Y205():
+    """Aparat kendi kendine yeşil olmasın. Eskiden install yolunda sonda YOKTU (S-D5.22 [SAHİBE]); Y205 (22-SON, `e3108da0`) servis
+    sonrası yerel sağlık sondasını install yoluna da ekledi → iki yolda da sonda VAR, ortak HATA metnindeki "sağlık sondası" anlatımı
+    iki yolda da DOĞRU. Bir betik sondayı kaybederse yukarıdaki KRİTİK kol o betiğin iletilerini yeniden ölçer."""
+    for kip in ("setup", "install"):
+        assert "/api/health" in BETIKLER[kip].read_text(encoding="utf-8-sig"), (
+            f"{kip}: servis sonrası sağlık sondası YOK"
+        )
