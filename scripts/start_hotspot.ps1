@@ -45,6 +45,18 @@ function Log([string]$m) {
     } catch {}
 }
 
+# D6.58 (B-10.204): basari gunlugu ISTENEN degeri ($Ssid) degil, Windows'un UYGULADIGI SSID ve bandi yazar. Eskiden AP yapilandirmasi
+# hata verse de (bos catch) "Hotspot AKTIF: PEMF-Gateway (2.4GHz)" yaziliyordu; hotspot eski SSID / 5 GHz ile acilip ESP bobini
+# baglanamiyordu ve gunluk bunu GIZLIYORDU. Kapi: tests/test_start_hotspot_AP_hatasi_GUNLUGE_ve_UYGULANAN_SSID_D6_58.py
+function Get-PemfUygulananAp($Yonetici) {
+    try {
+        $c = $Yonetici.GetCurrentAccessPointConfiguration()
+        $bant = 'bilinmiyor'
+        try { if ($null -ne $c.Band) { $bant = "$($c.Band)" } } catch { $bant = "bilinmiyor ($_)" }
+        return "SSID=$($c.Ssid), bant=$bant"
+    } catch { return "uygulanan SSID/bant OKUNAMADI ($_)" }
+}
+
 # ── SSID/parola çözümle (bkz. başlıktaki DENETİM notu) ──────────────────────
 if (-not $Ssid -and $env:PEMF_HOTSPOT_SSID) { $Ssid = $env:PEMF_HOTSPOT_SSID }
 if (-not $Pass -and $env:PEMF_HOTSPOT_PASS) { $Pass = $env:PEMF_HOTSPOT_PASS }
@@ -137,7 +149,10 @@ try {
                 AwaitAction ($mgr.ConfigureAccessPointAsync($cfg))
                 Log "AP yapilandirmasi guncellendi (SSID=$Ssid, band-duzeltme=$bandYanlis)."
             } else { Log "AP yapilandirmasi zaten dogru — dokunulmadi." }
-        } catch {}
+        } catch {
+            # D6.58: eskiden BOS catch — hata kayboluyor, hotspot Windows'taki eski SSID / bantla aciliyordu.
+            Log "UYARI: AP yapilandirmasi okunamadi / uygulanamadi ($_) — hotspot Windows'taki MEVCUT SSID / bantla acilacak; ESP bobini baglanamayabilir. Elle: Ayarlar > Ag ve Internet > Mobil erisim noktasi (SSID=$Ssid, bant 2.4 GHz)."
+        }
         if ($mgr.TetheringOperationalState -ne 'On') {
             # LattePanda 3 = Intel AX201 → WinRT TEK yol (hosted-network YOK). Radyo init / internet-profili
             # gecikmesinde StartTetheringAsync ilk denemede non-Success dönebilir (özellikle offline klinikte
@@ -145,12 +160,12 @@ try {
             $ok = $false
             for ($try = 1; $try -le 4 -and -not $ok; $try++) {
                 $r = AwaitResult ($mgr.StartTetheringAsync()) ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
-                if ($r.Status -eq 'Success') { Log "Hotspot AKTİF: $Ssid (2.4GHz)"; $ok = $true }
+                if ($r.Status -eq 'Success') { Log "Hotspot AKTİF: $(Get-PemfUygulananAp $mgr)"; $ok = $true }
                 else { Log "Deneme $try/4 — durum: $($r.Status) $($r.AdditionalErrorMessage)"; Start-Sleep 3 }
             }
             if (-not $ok) { Log "WinRT 4 denemede başlatamadı → netsh fallback (AX201'de desteklenmez)"; $useNetsh = $true }
         }
-        else { Log "Hotspot zaten On: $Ssid" }
+        else { Log "Hotspot zaten On: $(Get-PemfUygulananAp $mgr)" }
     }
 }
 catch { Log "Mobile Hotspot API hatası: $_ → netsh denenecek."; $useNetsh = $true }
