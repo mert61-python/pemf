@@ -65,7 +65,9 @@ alter table public.devices add column if not exists pairing_code text;
 -- erişim bilgisini (tunnel_url/local_ip) yalnız aşağıdaki resolve_device() RPC'si
 -- üzerinden, TAM pairing_code veya TAM device_id ile TEK satır olarak verir.
 -- Böylece anon publishable anahtara sahip biri tüm cihazların tünel URL'lerini
--- listeleyip cross-tenant sızdıramaz.
+-- listeleyip cross-tenant sızdıramaz. ⚠️ device_id dalı SIRSIZDIR (D6.14): device_id'yi
+-- bilen, kod olmadan o TEK cihazın adresini okur — bilerek (eşleşmiş istemcinin yeniden
+-- bağlanması); gerekçe: supabase_secure_v2.sql resolve_device NOT'u.
 alter table public.devices enable row level security;
 
 -- Cross-tenant SELECT sızıntısını kapatır: anon doğrudan tabloyu okuyamaz.

@@ -83,8 +83,14 @@ end; $$;
 revoke all on function public.upsert_device(text,text,text,text,integer,text,text) from public;
 grant execute on function public.upsert_device(text,text,text,text,integer,text,text) to anon;
 
--- NOT: resolve_device DEĞİŞMEDİ — mobil app cihazı PAIRING-KODU (operatörün paylaştığı sır) ile
--- çözer; cihaz-sırrına ihtiyacı yok. Tünel-URL okuması pairing-kodu-gate'li kalır (v1 doğruydu).
+-- NOT: resolve_device DEĞİŞMEDİ ve cihaz-sırrı (p_secret) İSTEMEZ. İKİ dalı var (`supabase_devices.sql`, canlıda
+-- `supabase/resolve_device_bayat_gorunur.sql`): TAM 6 haneli PAIRING-KODU (operatörün paylaştığı) YA DA TAM device_id.
+-- ⚠️ D6.14 (B-3.61): device_id dalı SIRSIZDIR — device_id'yi bilen herkes (yukarıda: device_id GİZLİ DEĞİL) kod OLMADAN
+-- son 30 günde görülmüş TEK cihazın tunnel_url / local_ip'sini okur; tünel-URL okuması pairing koduyla KAPILI DEĞİLDİR.
+-- Dal BİLEREK korunur: eşleşmiş mobil uygulama kayıtlı kimlikle yeniden bağlanır (`apps/ui/src/services/deviceRegistry.ts`
+-- `uzakCihaziKimlikleCoz` → `getRemoteUrlForDevice`). Tünel adresi tek başına yetki VERMEZ: tünel açıkken cihaz API'sinde
+-- kimlik doğrulama ZORUNLU (`backend_service._force_auth_for_tunnel`). Liste dökme YOK (tam eşleşme, tek satır).
+-- Kapı: tests/test_resolve_device_SIRSIZ_dal_belgede_DOGRU_D6_14.py
 -- (Rate-limit: SQL'de değil; Supabase → Auth/Edge Functions rate-limit veya API-gateway ile; not düşüldü.)
 
 -- ── patients/sessions RPC'leri v2: p_secret doğrulaması ─────────────────────
