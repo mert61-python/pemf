@@ -77,6 +77,16 @@ def test_KRITIK_simulator_docstring_ve_bilgi_iletisi_KAYNAKLA_ayni_D6_55(capsys)
     sim.set_gui_port("127.0.0.1", 5100)
     cikti = capsys.readouterr().out
     assert "PEMF_STM_PORT=socket://127.0.0.1:5100" in cikti and "kilitli" not in cikti, cikti
+    # Tur 2 kolu (D67 çürütme, mutant g7 — ikiz çağrı yeri): komut satırı YARDIM metinleri de (ekrana basılan öbür dize) socket
+    # yolunun kullanılamadığını / COM10'a kilitli olduğunu söylemez.
+    yardim = [
+        k.value.value
+        for n in ast.walk(ast.parse(Path(sim.__file__).read_text(encoding="utf-8")))
+        if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "add_argument"
+        for k in n.keywords
+        if k.arg == "help" and isinstance(k.value, ast.Constant)
+    ]
+    assert yardim and not [y for y in yardim if re.search(r"COM10|kilitli|kullanılmaz", y)], f"yardım metni: {yardim}"
 
 
 def test_KRITIK_tools_README_iddialari_kodla_ayni_D6_55():
@@ -87,6 +97,11 @@ def test_KRITIK_tools_README_iddialari_kodla_ayni_D6_55():
     assert not re.search(r"COM10'a kilitli|set_gui_port. no-op", rd), "tools/README hâlâ 'COM10'a kilitli' diyor"
     assert "PEMF_STM_PORT" in rd and "socket://127.0.0.1:5100" in rd, (
         "tools/README simülatöre bağlanma yolunu söylemiyor"
+    )
+    # Tur 2 kolu (D67 çürütme, mutant g2 — tanım değeri): README / docstring'deki port simülatörün GERÇEK varsayılanı (`SIM_PORT`).
+    portlar = {int(p) for p in re.findall(r"127\.0\.0\.1:(\d+)", rd + (sim.__doc__ or ""))}
+    assert portlar == {sim.SIM_PORT}, (
+        f"README / docstring simülatör portu ({portlar}) varsayılanla ({sim.SIM_PORT}) aynı değil"
     )
     # organize_resources hedefi betiğin dizinine göre (tools/pemf_gui/resources)
     hedef = org.target_dir.resolve().relative_to(KOK.resolve()).as_posix()
