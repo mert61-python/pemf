@@ -126,8 +126,8 @@ Eski pakete geri döndürmek için manifest'i eski paketin sha'sına yazmak gere
 monotonluğu olmadığı için bu **bilinçli** bir işlemdir ve yayın kaydına yazılmalıdır.
 
 ## Anahtar / veri kurtarma (KRİTİK)
-- **SQLCipher anahtarı** `<data>\.sqlcipher_key` (+ keyring). **KAYBI = şifreli hasta verisi KALICI OKUNAMAZ.** ACL: yalnız SYSTEM+Administrators.
-- Sırlar tek dosyada: `<data>\pemf_secrets.json` (kripto anahtarları DPAPI'li).
+- **SQLCipher anahtarı** `<data>\pemf_secrets.json` → `auto.sqlcipher_key` — DPAPI `CRYPTPROTECT_LOCAL_MACHINE` ile **bu makineye bağlı** şifreli (dosya ACL: SYSTEM + Administrators + backend'i çalıştıran hesap; Users DIŞARIDA). Eski `<data>\.sqlcipher_key` dosyası ve kimlik kasası yalnız ESKİ kurulumlardan bir kez okunup buraya taşınır — anahtarı orada aramayın. **KAYBI = şifreli hasta verisi bu makinede KALICI OKUNAMAZ.** Yedekler de aynı (ana) anahtarla şifrelidir (A-13): makine dışında / yeni makinede açmanın TEK yolu kurtarma kodu + `kurtarma-zarfi.enc` (aşağıda **Kurtarma kodu**). `pemf_secrets.json`u başka makineye kopyalamak işe yaramaz (DPAPI orada çözmez).
+- Sırlar tek dosyada: `<data>\pemf_secrets.json` (kripto anahtarları DPAPI'li). `config.json`un şifreli alanları için ayrı anahtar YOK (`patient_fernet_key` kullanılır); 1.9.50'nin `<data>\.pemf_key`i düz dosyadır, yalnız ACL ile korunur ve yalnız eski değerleri çözmek için okunur.
 - **Aynı makinede yedekten dönüş**: backend'i durdur (sahada: ACİL DURDUR `curl.exe -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` — port `backend.port`, "Hızlı komutlar" — + launcher'ı kapat; servis kurulumunda: servisi durdur) → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → backend'i başlat (launcher'ı aç / servisi başlat).
 
 ### Kurtarma kodu — donanım arızası / makine değişimi

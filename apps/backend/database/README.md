@@ -19,7 +19,7 @@ bulut (Supabase) yalnız cihaz-registry + opsiyonel şifreli PII içindir (bkz. 
 | `patient_database.py` | **`PatientDatabase`** — hasta CRUD; **alan-başı Fernet şifreleme**, HMAC tokenize arama indeksi, pasif hastaların anonimleştirilmesi, yedek |
 | `session_manager.py` | **`SessionManager`** — canlı seans kaydedici: seans başlat/bitir, batch parametre + sensör yazımı, notlar, bayatlamış-seansı zorla-bitir |
 | `auth_db.py` | **`AuthDB`** — yerel kullanıcı kimlik deposu (kayıt/doğrula/sıfırla), tuzlanmış parola hash'i |
-| `sqlcipher_util.py` | Paylaşımlı SQLCipher yardımcıları — binding import, at-rest anahtarı keyring'den türet (`PEMF_GUI`/`sqlcipher_key`), şifreli bağlantı aç, `PEMF_ENCRYPT_AT_REST=1` iken düz-metin→şifreli migrasyon |
+| `sqlcipher_util.py` | Paylaşımlı SQLCipher yardımcıları — binding import, at-rest anahtarını SecretsManager'dan al (`<veri kökü>\pemf_secrets.json` → `auto.sqlcipher_key`, DPAPI ile makineye bağlı; keyring / `.sqlcipher_key` yalnız eski kaynak olarak bir kez taşınır), şifreli bağlantı aç, `PEMF_ENCRYPT_AT_REST=1` iken düz-metin→şifreli migrasyon |
 
 ## Supabase şeması — ⚠️ ÇALIŞTIRMA SIRASI ÖNEMLİ
 
@@ -89,7 +89,7 @@ hazırlığında, sahiple** uygulanır. ⚠️ Ön koşul (dosyanın başındaki
 | `supabase_profil_geri_al.sql` | Geri alma: iki fonksiyonu önceki gövdelerine döndürür; kolonları SİLMEZ (veri kaybı yok) | Yalnız geri dönüş gerekirse |
 
 ## Şifreleme modeli (iki katman)
-1. **Tüm-DB SQLCipher** — `PEMF_ENCRYPT_AT_REST=1` ile; anahtar OS keyring'de (`sqlcipher_util.py`).
+1. **Tüm-DB SQLCipher** — `PEMF_ENCRYPT_AT_REST=1` ile; anahtar `<veri kökü>\pemf_secrets.json` → `auto.sqlcipher_key` (DPAPI `CRYPTPROTECT_LOCAL_MACHINE` — bu makineye bağlı; `sqlcipher_util.get_sqlcipher_key` → `utils/secrets_manager`). Yedekler aynı anahtarla şifrelidir (A-13); makine dışında açmak için kurtarma kodu + `kurtarma-zarfi.enc` gerekir (`utils/backup_recovery.py`, [RUNBOOK](../../../docs/RUNBOOK.md) "Kurtarma kodu").
 2. **Alan-başı Fernet** — hasta PII'si (`patient_database.py`), DB şifreli olsa da ekstra.
 
 ## ⚠️ Dikkat

@@ -175,3 +175,49 @@ def test_RUNBOOK_atRestEncrypted_satiri_GERCEK_yeri_soyler_D6_09(olculen_yer):
     satirlar = [s for s in RUNBOOK.read_text(encoding="utf-8").splitlines() if "atRestEncrypted=false" in s]
     assert len(satirlar) == 1, f"aparat: RUNBOOK'ta tek `atRestEncrypted=false` satırı bekleniyordu: {len(satirlar)}"
     _yer_dogru(satirlar[0], olculen_yer, "RUNBOOK `atRestEncrypted=false` satırı")
+
+
+# ── D6.37 (B-11.6 · A-13) — RUNBOOK / database README: BİRİNCİL yer + makine dışı yedek için kurtarma zarfı ──────────
+README_DB = KOK / "apps" / "backend" / "database" / "README.md"
+#: Eski kaynaklar — satırda geçebilir ama YALNIZ "eski" diye anılan cümlede ve ölçülen yerden SONRA.
+_ESKI_KAYNAK = re.compile(r"keyring|kimlik kasas|(?<![A-Za-z_.])\.sqlcipher_key\b", re.IGNORECASE)
+
+
+def _birincil_yer_dogru(metin: str, yer: tuple[str, str, str], nerede: str) -> None:
+    dosya, bolum, ad = yer
+    assert dosya in metin and f"{bolum}.{ad}" in metin, (
+        f"{nerede} anahtarın BİRİNCİL yerini ({dosya} → {bolum}.{ad}) söylemiyor: {metin!r}"
+    )
+    for m in _ESKI_KAYNAK.finditer(metin):
+        assert metin.index(dosya) < m.start(), f"{nerede} eski kaynağı ({m.group(0)!r}) BİRİNCİL yerden önce anıyor"
+        cumle = re.split(r"(?<=[.;—])\s", metin[: m.start()])[-1] + metin[m.start() : m.end() + 60]
+        assert "eski" in cumle.casefold() or "eskİ" in cumle, (
+            f"{nerede} eski kaynağı ({m.group(0)!r}) 'eski' demeden anıyor: …{cumle}…"
+        )
+
+
+def _makine_disi_zarf(metin: str, nerede: str) -> None:
+    from utils.backup_recovery import ENVELOPE_NAME
+
+    assert ENVELOPE_NAME in metin and "kurtarma kodu" in metin.casefold(), (
+        f"{nerede} makine dışı yedeğin açılış yolunu (kurtarma kodu + {ENVELOPE_NAME}) göstermiyor"
+    )
+    assert "makineye bağlı" in metin, f"{nerede} anahtarın bu makineye bağlı (DPAPI) olduğunu söylemiyor"
+
+
+def test_KRITIK_RUNBOOK_SQLCipher_anahtari_BIRINCIL_yer_ve_ZARF_D6_37(olculen_yer):
+    satirlar = [s for s in RUNBOOK.read_text(encoding="utf-8").splitlines() if "**SQLCipher anahtarı**" in s]
+    assert len(satirlar) == 1, f"aparat: RUNBOOK'ta tek '**SQLCipher anahtarı**' satırı bekleniyordu: {len(satirlar)}"
+    _birincil_yer_dogru(satirlar[0], olculen_yer, "RUNBOOK 'SQLCipher anahtarı' satırı")
+    _makine_disi_zarf(satirlar[0], "RUNBOOK 'SQLCipher anahtarı' satırı")
+
+
+@pytest.mark.parametrize(
+    "isaret", ["| `sqlcipher_util.py` |", "**Tüm-DB SQLCipher**"], ids=["sqlcipher_util_satiri", "sifreleme_modeli"]
+)
+def test_KRITIK_database_README_anahtar_satirlari_BIRINCIL_yeri_soyler_D6_37(olculen_yer, isaret):
+    satirlar = [s for s in README_DB.read_text(encoding="utf-8").splitlines() if isaret in s]
+    assert len(satirlar) == 1, f"aparat: database/README'de tek {isaret!r} satırı bekleniyordu: {len(satirlar)}"
+    _birincil_yer_dogru(satirlar[0], olculen_yer, f"database/README {isaret!r} satırı")
+    if "Tüm-DB" in isaret:
+        _makine_disi_zarf(satirlar[0], "database/README şifreleme modeli satırı")
