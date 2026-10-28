@@ -1262,6 +1262,20 @@ def _mqtt_kimlik_mi(argv: list[str] | None) -> list[str] | None:
     return av
 
 
+def _destek_paketi_mi(argv: list[str] | None) -> list[str] | None:
+    """`--destek-paketi` verilmişse KALAN argümanları döndür, yoksa None (D6.47 · B-10.60 · sahip kararı Y32).
+
+    Sahada Python YOK: backend ÇÖKMÜŞKEN destek paketi (PII maskeli zip — `utils.support_bundle`) kurtarma gibi
+    PEMF_Backend.exe'nin alt komutuyla alınır: `PEMF_Backend.exe --destek-paketi [--cikti X.zip] [--veri-dizini DİZİN]`.
+    Eskiden RUNBOOK "backend çökmüşse: python tools\\destek_paketi.py" diyordu — sahada çalışmayan bir yol. Kendi bayrakları
+    ana ayrıştırıcıya sızmasın diye argparse'tan ÖNCE ayrılır. Kapı: tests/test_destek_paketi_EXE_bayragi_SAHADA_D6_47.py"""
+    av = list(sys.argv[1:] if argv is None else argv)
+    if "--destek-paketi" not in av:
+        return None
+    av.remove("--destek-paketi")
+    return av
+
+
 def main(argv: list[str] | None = None) -> int:
     kurtarma_argv = _kurtarma_mi(argv)
     if kurtarma_argv is not None:
@@ -1277,6 +1291,14 @@ def main(argv: list[str] | None = None) -> int:
         from utils.mqtt_kimlik import main as _mqtt_kimlik_main
 
         return _mqtt_kimlik_main(mqtt_kimlik_argv)
+
+    destek_argv = _destek_paketi_mi(argv)
+    if destek_argv is not None:
+        # Sunucuyu BAŞLATMADAN destek paketini üret (backend çökmüşken de): port / donanım / MQTT açılmaz;
+        # sır dosyaları, veritabanları ve kurtarma zarfı pakete GİRMEZ (`utils.support_bundle`).
+        from tools.destek_paketi import main as _destek_paketi_main
+
+        return _destek_paketi_main(destek_argv)
 
     args = build_arg_parser().parse_args(argv)
     _port_uyarisi = None

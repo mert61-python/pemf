@@ -16,7 +16,8 @@ S-4B.2 [ÖNERİLEN UYGULANDI] (4-A inc. S-4A.3): depo KÖKÜNDEKİ, backend sür
 backend başlangıç köklerinden (`check_headless_imports.DEFAULT_ROOTS`) TÜM birinci-taraf import kenarlarıyla (eager / lazy, açık /
 korunan) ERİŞİLEN ve `apps/backend` DIŞINDA çözülen modüllerden TÜRETİLİR: kök paketi olduğu gibi girer (bugün `ai`, `pemf_gui`);
 iki bilinçli istisna `KOK_PAKET_ISTISNA`'da gerekçesiyle (ai_hub = mevcut ağır/ayrı politikası; tools = geliştirici araç paketi —
-içinden ERİŞİLEN modüller TEK TEK girer: bugün `tools.kurtarma`, `PEMF_Backend.exe --kurtarma`).
+içinden ERİŞİLEN modüller TEK TEK girer: bugün `tools.kurtarma` — `PEMF_Backend.exe --kurtarma` — ve
+`tools.destek_paketi` — `PEMF_Backend.exe --destek-paketi`, D6.47).
 """
 
 from __future__ import annotations

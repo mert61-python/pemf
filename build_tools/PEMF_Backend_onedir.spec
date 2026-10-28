@@ -500,9 +500,10 @@ hidden += [
     'event_bus', 'headless_core', 'backend_service',
     # ⚠️ FELAKET KURTARMA (2026-08-09 denetimi, ENGEL): `PEMF_Backend.exe --kurtarma ...`
     # bunu çağırır. Pakete girmezse, makinesi ölmüş bir veteriner elinde yedek + kurtarma kodu
-    # olmasına rağmen zarfı AÇAMAZ (sahada Python yok). Yalnız `tools.kurtarma` bundle edilir;
-    # tools/ altındaki diğer araçlar geliştirme içindir.
-    'tools', 'tools.kurtarma',
+    # olmasına rağmen zarfı AÇAMAZ (sahada Python yok). Yalnız `tools.kurtarma` ve `tools.destek_paketi`
+    # (D6.47 · Y32: `PEMF_Backend.exe --destek-paketi` — backend çökmüşken destek paketi) bundle edilir;
+    # tools/ altındaki diğer araçlar geliştirme içindir. Kapı: tests/test_destek_paketi_EXE_bayragi_SAHADA_D6_47.py
+    'tools', 'tools.kurtarma', 'tools.destek_paketi',
     # web
     'fastapi', 'uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
     'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',

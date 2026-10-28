@@ -50,8 +50,12 @@ Klinikten log istemek yerine **PII maskelenmiş tek bir zip** üretin:
 # Backend ayaktaysa (tercih edilen — hasta adları GERÇEKTEN maskelenir):
 curl.exe -X POST http://127.0.0.1:8000/api/support/bundle   # base64 zip + OZET.json (port: backend.port, yukarıya bakın)
 
-# Backend çökmüşse:
-python tools\destek_paketi.py            # Masaüstüne yazar
+# Backend çökmüşse — sahada Python YOK: launcher'ın kurduğu EXE'nin alt komutu (D6.47 · Y32; sunucu / port / donanım AÇILMAZ).
+# Masaüstüne yazar; hedef için --cikti C:\yol\paket.zip, veri kökü için --veri-dizini <data>. Launcher'ı başlatan
+# KULLANICININ oturumunda çalıştırın (hasta adlarının maskelenmesi için şifreli DB'yi açabilmeli). Servis (Inno) kurulumunda
+# aynı bayrağı kurulum dizinindeki EXE ile verin ("C:\Program Files\PEMF Backend\PEMF_Backend.exe").
+# Geliştirme ağacında aynı bayraklarla: python tools\destek_paketi.py
+& "$env:LOCALAPPDATA\PEMF Vet Client\runtime\PEMF_Backend\PEMF_Backend.exe" --destek-paketi
 ```
 
 İçinde: sağlık/sürüm özeti (`buildId` dâhil), log kuyrukları, denetim izi **sayım** özeti.
