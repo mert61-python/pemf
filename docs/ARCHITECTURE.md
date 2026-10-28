@@ -59,14 +59,14 @@ Bileşen etkileşimi, veri akışı ve güven sınırları. Kod referansları `g
 |---|---|---|
 | Canlı telemetri | ESP→MQTT *(UYKUDA)* / STM→seri → api_server `_live_state` → **WebSocket** → mobil | LAN-muaf / uzak-token |
 | Bobin komutu | mobil → `/api/coil` → STM (`hardware_controller`) veya ESP (`_mqtt_publish` — *UYKUDA*) | süre-watchdog auto-stop |
-| Hasta/seans | mobil → `/api/patients` `/api/session` → **SQLCipher** DB (local) | at-rest şifreli + PII maskeleme |
+| Hasta/seans | mobil → `/api/patients` `/api/session` → **SQLCipher** DB (local) | at-rest şifreli (launcher `PEMF_ENCRYPT_AT_REST=1` geçirir) · PII maskeleme VARSAYILAN KAPALI (`PEMF_MASK_HISTORY_PII=1` ile opt-in; süreye bağlı saklama maskelemesi yalnız operatör onayıyla — A-09) |
 | Uzaktan erişim | mobil ↔ Cloudflare tünel ↔ backend; adres Supabase `devices`'ta | token + RLS + RPC-only |
 | AI teşhis | mobil (foto/ses/CSV) → `/api/ai/*` → gömülü ONNX modelleri (offline) + torch CPN (scratch; opsiyonel GPU mikroservis :8100) | — |
 | OTA/rollback | backend → `pemf-update/latest.json` → indir+SHA256+Authenticode → sessiz kur | fail-closed (aktif tedavi) |
 
 ## Güven sınırları
 
-1. **LAN (güvenli)** — aynı WiFi; auth-muaf, cleartext http kabul (kapalı klinik ağı).
+1. **LAN (güvenilir sayılır — A-01)** — aynı WiFi; sıradan uçlar auth-muaf, cleartext http kabul. ⚠️ Risk kaydı: klinik Wi-Fi'ına giren her cihaz `/api/auth/token` ile cihaz token'ı alabilir. İSTİSNA — ayrıcalıklı sınıf (`servers/auth.is_privileged_request`: dışa/içe aktarma, AI log silme, destek paketi, saklama ayarı, denetim izi …) LAN'da da loopback YA DA geçerli token ister; kliniğin tamamını silme (`/api/patients/delete_all`) YALNIZ cihazın kendisinden (loopback; token da yetmez — A-03). Hasta CRUD'un `PEMF_REQUIRE_PATIENT_AUTH` kapısı varsayılan KAPALI.
 2. **Tünel/uzak (güvensiz)** — internet; **token ZORUNLU** (fail-closed), https/wss, rate-limit.
 3. **Bulut (Supabase)** — yalnız cihaz-registry + (opsiyonel) şifreli PII; **anon tablo erişimi YOK** (RLS + SECURITY DEFINER RPC).
 4. **At-rest** — hasta/tedavi DB SQLCipher; sır dosyaları DPAPI + NTFS ACL.

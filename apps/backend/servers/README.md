@@ -45,7 +45,7 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 ### REST router'ları
 | Dosya | Görev |
 |---|---|
-| `patient_router.py` | Hasta CRUD (`/api/…`) — listele/ekle/sil/hepsini-sil (hasta-auth guard) |
+| `patient_router.py` | Hasta CRUD (`/api/…`) — listele/ekle/sil/hepsini-sil. Hasta-auth kapısı (`_enforce_patient_auth`) yalnız `PEMF_REQUIRE_PATIENT_AUTH=1` iken operatör jetonu ister — VARSAYILAN KAPALI: LAN'daki istemci hasta uçlarına token'sız erişir (A-01, LAN güvenilir sayılır). İstisna: hepsini-sil YALNIZ cihazın kendisinden (loopback; token da yetmez — A-03, `auth.cihazin_kendisinden_mi`) |
 | `session_router.py` | Aktif seans — mevcut seansı al, seans notu kaydet |
 | `history_router.py` | Tedavi geçmişi (`/api/history`) — seans liste/detay, sil, not, coil-run CSV export, PDF rapor |
 | `settings_router.py` | Uygulama ayarları — yükle/kaydet/güncelle |
