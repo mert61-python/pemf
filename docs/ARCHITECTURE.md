@@ -77,7 +77,8 @@ Bileşen etkileşimi, veri akışı ve güven sınırları. Kod referansları `g
 - **STM disconnect / ESP alarm** → `_emergency_stop_all` (tüm transport'lar).
 - **Açılış mutabakatı** (`backend_service`) — çökme sonrası tüm bobinlere STOP.
 - **Tünel → auth zorla** (`_force_auth_for_tunnel`) — internete kimliksiz erişim engeli.
-- **Backend tedavi safety-clamp'i YOK** (bilinçli, B-1.5; geri eklenmez) — duty'nin üst sınırı yoktur, firmware/timer doyurur. ⚠️ **Protokol-geçerlilik sınırı AYRI ve TAŞIYICIDIR** (`utils/stm32_protocol_limits`: freq 1–25000 Hz, faz 0–360°, ESP freq ≤1000 Hz): firmware aralık dışını NACK'ler; kaldırılırsa bobin sessizce sürülmez (kapı `tests/test_hc_protokol_siniri_TASIYICI.py`).
+- **Backend tedavi safety-clamp'i YOK** (bilinçli, B-1.5 · Y9; geri eklenmez) — backend'de STM duty tavanı (`STM32_DUTY_MAX_RATIO = None`) ve sıcaklık eşiği yok; termal kesme hiçbir katmanda yok (A-47). ⚠️ **Protokol-geçerlilik sınırı AYRI ve TAŞIYICIDIR** (`utils/stm32_protocol_limits`: STM freq 1–25000 Hz, faz 0–360°, ESP freq ≤1000 Hz, AI Pro duty ≤0,50): firmware aralık dışı freq/fazı NACK'ler; kaldırılırsa bobin sessizce sürülmez (kapı `tests/test_hc_protokol_siniri_TASIYICI.py`).
+- **Firmware duty sınırı VAR ve TAŞIYICIDIR** (shoot-through koruması — "gereksiz" sanılıp kaldırılmaz): kart kip tavanının üstünü NACK'ler (`main.c` `DUTY_MAX_BIPOLAR` 0,5 · `DUTY_MAX_UNIPOLAR` 1,0 — D1.101 · Y20) ve ISR bipolar darbeyi `tpp/2 − DDS_BIPOLAR_GAP_TICKS` tick ile kıstırır (unipolar `tpp − 1`). Kapı `tests/test_klemp_anlatimi_UCLU_AYRIM_D6_04.py`.
 
 ## Tek giriş noktası
 

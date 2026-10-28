@@ -163,7 +163,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 ## Önemli Kurallar (yeni geliştirici — bunları bozma)
 
 - 🔒 **Cihaz güvenliği:** bobinler her kill/kaldırmadan **önce** E-stop'lanır (launcher + teardown). Süre-watchdog + keep-alive + firmware "Ölü Adam Devresi" katmanlı korumadır.
-- 🔒 **Backend Python-tarafı MAKS DUTY clamp'i YOK** (bilinçli, `STM32_DUTY_MAX_RATIO = None`) — firmware sınırda doyurur. **Frekans ise Python'da kırpılır:** STM 1-25000 Hz (`normalize_frequency_hz`), ESP 1-1000 Hz (`normalize_esp_frequency_hz`, 8266 firmware sınırı), AI Pro duty tavanı %50 (`AI_PRO_DUTY_MAX_RATIO`). Sınır sabitleri `apps/backend/utils/stm32_protocol_limits.py`.
+- 🔒 **Backend Python-tarafı MAKS DUTY clamp'i YOK** (bilinçli, `STM32_DUTY_MAX_RATIO = None`; sıcaklık eşiği / termal kesme de YOK — A-47) — duty üst sınırı firmware'dedir ve TAŞIYICIDIR (kip tavanının üstü NACK: bipolar 0,5 · unipolar 1,0; ISR bipolar klempi `tpp/2 − DDS_BIPOLAR_GAP_TICKS` — shoot-through). **Frekans ise Python'da kırpılır:** STM 1-25000 Hz (`normalize_frequency_hz`), ESP 1-1000 Hz (`normalize_esp_frequency_hz`, 8266 firmware sınırı), AI Pro duty tavanı %50 (`AI_PRO_DUTY_MAX_RATIO`). Sınır sabitleri `apps/backend/utils/stm32_protocol_limits.py`.
 - 🔒 **PII maskeleme varsayılan KAPALI** (bilinçli sahip kararı) — `PEMF_MASK_HISTORY_PII=1` ile açılır.
 - 🌐 **AI offline** — `apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
 - ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/src` bayat kopyadır.

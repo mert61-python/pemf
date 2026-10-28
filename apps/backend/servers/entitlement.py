@@ -16,8 +16,10 @@ TIER KAYNAĞI (öncelik sırası):
 
 TIBBİ-CİHAZ GÜVENLİĞİ: entitlement bir COMPUTE-ÖNCELİĞİ (kuyruk) + ticari kapıdır, GÜVENLİK/
 emniyet kontrolü DEĞİL. Bu yüzden her belirsizlikte FAIL-OPEN (tedaviyi asla bloklama):
-Supabase erişilemezse / token bayatsa → DEFAULT_TIER. Backend safety-limit'leri (freq/duty/48°C)
-bundan tamamen bağımsızdır ve buradan etkilenmez.
+Supabase erişilemezse / token bayatsa → DEFAULT_TIER. Backend'in PROTOKOL-GEÇERLİLİK sınırı
+(`utils/stm32_protocol_limits`: STM freq 1–25000 Hz, faz 0–360°, ESP freq ≤1000 Hz, AI Pro duty ≤0,50 —
+TAŞIYICI, Y9) bundan tamamen bağımsızdır ve buradan etkilenmez. Backend'de tedavi safety-clamp'i YOK:
+STM duty tavanı ve sıcaklık eşiği yoktur, termal kesme hiçbir katmanda yoktur (Y9 · A-47).
 """
 
 from __future__ import annotations

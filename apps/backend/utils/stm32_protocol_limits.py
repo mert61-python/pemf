@@ -16,8 +16,11 @@ STM32_NUM_COILS = 7  # bobin 1-7 (seri/DDS)
 ESP_NUM_COILS = 1  # yalnız slot 8 (MQTT) — ⚠️ ADET, en büyük kimlik DEĞİL
 
 STM32_DUTY_MIN_RATIO = 0.0
-# No Python-side max duty clamp. Firmware/timer output saturates physically at
-# one tick below the period; AI Pro applies its own 50% model policy upstream.
+# Backend'de STM duty tavanı YOK (Y9 — geri EKLENMEZ). Duty üst sınırı FIRMWARE'dedir ve
+# TAŞIYICIDIR: kart kip tavanının üstünü NACK'ler (main.c DUTY_MAX_BIPOLAR 0,5 /
+# DUTY_MAX_UNIPOLAR 1,0 — D1.101 · Y20) ve ISR bipolar darbeyi tpp/2 − DDS_BIPOLAR_GAP_TICKS
+# ile kıstırır (shoot-through; unipolar tpp − 1). AI Pro kendi %50 model politikasını
+# yukarıda uygular (AI_PRO_DUTY_MAX_RATIO).
 STM32_DUTY_MAX_RATIO = None
 AI_PRO_DUTY_MAX_RATIO = 0.50
 ESP_LIVE_DUTY_MAX_RATIO = 1.0
@@ -30,12 +33,12 @@ DDS_ISR_HZ = 50000.0
 DDS_MIN_TICKS_PER_PERIOD = 2.0
 FREQ_MAX_HZ = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD
 
-# ⚠️ ESP (bobin 6-8) FREKANS TAVANI = EN KISITLI ESP olan 8266'ya göre (donanım-uyum denetimi
+# ⚠️ ESP (bugün yalnız slot 8 — `live_state.ESP_COIL_IDS = {8}`) FREKANS TAVANI = EN KISITLI ESP olan 8266'ya göre (donanım-uyum denetimi
 # D-3, 2026-08-19; sahip talebi: "8266'ya göre ayarla"). Doğrulandı — İKİ ESP de 1000 Hz sınırlı:
 #   · 8266: `constrain(freq,1,1000)` (CoilController.cpp:215/278/353) VE dogrulama `f > 1000.0f`
 #     komutu TAMAMEN REDDEDER (esp8266_pemf_coil.ino:512,615 → NACK, bobin BAŞLAMAZ). En katı uç.
 #   · S3  : `constrain(cmd.frequency,1,1000)` (CoilController.cpp:279) — sessizce 1000'e KIRPAR.
-# STM (1-5) tavanı çok daha yüksek (FREQ_MAX_HZ=25000). Backend ESP yoluna 1000 tavanını ÖNDEN
+# STM (1-7) tavanı çok daha yüksek (FREQ_MAX_HZ=25000). Backend ESP yoluna 1000 tavanını ÖNDEN
 # uygularsa: hem 8266'nın reddini (bobin hiç çalışmaz) hem S3'ün sessiz kırpmasını (komut≠telemetri)
 # önler → tüm ESP dizisi tutarlı davranır. Değer 8266 firmware sınırıyla birebir; değişirse
 # firmware constrain'leri de güncellenmeli (test_stm32_source_parity mantığı).

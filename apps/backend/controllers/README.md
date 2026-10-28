@@ -19,7 +19,7 @@ servers/api_server.py  →  HardwareController  →  HeadlessCore HW kuyruğu  �
 
 ## ⚠️ Dikkat
 - **Süre-deadline ve keep-alive hasta güvenliğidir** — bu davranışları zayıflatma. `emergency_stop` / süre-watchdog ile birlikte katmanlı korumadır.
-- **Tedavi güvenlik-sınırı (safety clamp) YOK** (bilinçli, B-1.5; Ö.4-Y9 — geri EKLENMEZ): duty'nin üst sınırı yoktur, firmware/timer doyurur.
+- **Tedavi güvenlik-sınırı (safety clamp) YOK** (bilinçli, B-1.5; Ö.4-Y9 — geri EKLENMEZ): backend'de STM duty tavanı (`STM32_DUTY_MAX_RATIO = None`) ve sıcaklık eşiği yok, termal kesme hiçbir katmanda yok (A-47). Duty üst sınırı FIRMWARE'dedir ve TAŞIYICIDIR (shoot-through): kart kip tavanının üstünü NACK'ler (`main.c` `DUTY_MAX_BIPOLAR` 0,5 · `DUTY_MAX_UNIPOLAR` 1,0 — D1.101 · Y20), ISR bipolar darbeyi `tpp/2 − DDS_BIPOLAR_GAP_TICKS` ile kıstırır.
 - ⚠️ **Protokol-geçerlilik sınırı AYRIDIR ve TAŞIYICIDIR — kaldırmayın:** `update_coil` / `start_all_coils` çağrı yerinde `normalize_frequency_hz` (1–25000 Hz), `normalize_phase_deg` (0–360°) ve `duty_percent_to_ratio` (alt sınır 0) uygulanır (`utils/stm32_protocol_limits.py`). Firmware aralık dışı freq/fazı ve negatif duty'yi NACK'ler (`main.c` `RANGE coil=… field=freq|phase`, `duty < DUTY_MIN`) → sınır kaldırılırsa paket reddedilir ve bobin SESSİZCE sürülmez. ESP yolu (slot 8) ayrıca `normalize_esp_frequency_hz` (≤1000 Hz) kullanır. Kapı: `tests/test_hc_protokol_siniri_TASIYICI.py` (D1.01) — `update_coil`: frekansın İKİ ucu (0,5 Hz → 1 Hz; 99999 → 25000), fazın iki ucu, duty'nin alt ucu; `start_all_coils`: frekansın iki ucu ve fazın üst ucu. 0 Hz bilerek ölçülmez (A-05 → D1.53).
 
 ---
