@@ -30,6 +30,7 @@ BUYUK = {"tr": r"(?i)daha büyük", "en": r"(?i)\blarger\b|\bbigger\b"}
 WIFI = r"(?i)wi-?fi|aynı ağ|ağdaki|same network|on your network"
 BOBIN = {"tr": "bobin", "en": "coil"}
 ESP_KOSUL = {"tr": r"ESP etkin", "en": r"(?i)ESP enabled"}
+CIHAZ = {"tr": r"(?i)cihaz|donanım|bobin|\bkart", "en": r"(?i)device|hardware|\bcoils?\b|\bboard"}  # tur 2 kolu (v1)
 
 
 def _cumleler(metin: str) -> list[str]:
@@ -48,6 +49,15 @@ def _aralik(ids) -> str:
     if len(s) == 1:
         return str(s[0])
     return f"{s[0]}-{s[-1]}" if s == list(range(s[0], s[-1] + 1)) else ", ".join(map(str, s))
+
+
+def _duz(d: dict, onek: str = ""):
+    """Katalog ağacını (`anahtar.yolu`, metin) çiftlerine düzler."""
+    for k, v in d.items():
+        if isinstance(v, dict):
+            yield from _duz(v, f"{onek}{k}.")
+        elif isinstance(v, str):
+            yield f"{onek}{k}", v
 
 
 def _esp_varsayilan_acik() -> bool:
@@ -105,9 +115,15 @@ def test_KRITIK_cihaz_baglantisi_metni_KIPE_gore_dogru_USB_ve_ESP_notu_D6_68():
                 kotu.append(f"[{dil}] Wi-Fi cümlesi ESP bobinini ({b} {esp}) ve ESP'yi anmıyor: {c!r}")
             if not esp_acik and not re.search(ESP_KOSUL[dil], c):
                 kotu.append(f"[{dil}] ESP varsayılanı KAPALI ama Wi-Fi şartı koşulsuz: {c!r}")
-        for anahtar in ("aboutBody", "aboutTitle"):
-            for c in _cumleler(u.get(anahtar, "")):
-                if re.search(WIFI, c) and not (esp_acik or re.search(ESP_KOSUL[dil], c)):
+        # Tur 2 kolu (D67 çürütme, mutant v1): yalnız aboutBody / aboutTitle değil, ekrandaki HER başlatıcı metni (kılavuz adımları,
+        # sorun giderme …) — Wi-Fi / aynı ağ şartı başka bir anahtara taşınırsa da yakalanır (`kilavuz.connect` yukarıda ayrıca ölçülür).
+        # aboutBody / aboutTitle dışında yalnız CİHAZI anan cümle (internet hatası iletisi `errDns` "Wi-Fi/ağ" der — cihaz değil).
+        for anahtar, deger in _duz(u):
+            if anahtar == "kilavuz.connect":
+                continue
+            for c in _cumleler(deger):
+                cihaz = anahtar in ("aboutBody", "aboutTitle") or re.search(CIHAZ[dil], c)
+                if re.search(WIFI, c) and cihaz and not (esp_acik or re.search(ESP_KOSUL[dil], c)):
                     kotu.append(f"[{dil}] {anahtar} cihaza AĞ üzerinden bağlandığını koşulsuz söylüyor: {c!r}")
     assert not kotu, "cihaz bağlantı metni kodla çelişiyor:\n" + "\n".join(kotu)
 
