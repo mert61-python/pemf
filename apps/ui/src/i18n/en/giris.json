@@ -31,7 +31,7 @@
     "kayitBasarisiz": "Sign-up failed.",
     "kayitTamamlanamadi": "Registration could not be completed. If you already use this address, try signing in or resetting your password.",
     "klinikBilgisiEksik": "Please fill in the first name, last name, clinic name, city and district fields.",
-    "sifreEnAz6": "The password must be at least 6 characters.",
+    "sifreEnAz6": "The password must be at least 8 characters.",
     "sifreGir": "Enter your password.",
     "sifreKurallari": "The password does not meet the rules.",
     "sifrelerEslesmiyor": "The passwords do not match.",

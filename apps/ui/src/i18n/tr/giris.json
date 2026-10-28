@@ -31,7 +31,7 @@
     "kayitBasarisiz": "Kayıt başarısız.",
     "kayitTamamlanamadi": "Kayıt tamamlanamadı. Bu adresi zaten kullanıyorsanız giriş yapmayı ya da şifrenizi sıfırlamayı deneyin.",
     "klinikBilgisiEksik": "Lütfen ad, soyad, klinik adı, şehir ve ilçe alanlarını doldurun.",
-    "sifreEnAz6": "Şifre en az 6 karakter olmalı.",
+    "sifreEnAz6": "Şifre en az 8 karakter olmalı.",
     "sifreGir": "Şifreni gir.",
     "sifreKurallari": "Şifre kurallarını karşılamıyor.",
     "sifrelerEslesmiyor": "Şifreler eşleşmiyor.",

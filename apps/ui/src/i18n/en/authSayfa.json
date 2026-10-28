@@ -14,7 +14,7 @@
       "baglanti": "Connection error. Check your internet connection.",
       "basarisiz": "The operation failed. Please try again.",
       "cokDeneme": "Too many attempts. Wait a bit and try again.",
-      "en6": "The password must be at least 6 characters.",
+      "en6": "The password must be at least 8 characters.",
       "eslesmiyor": "Passwords do not match.",
       "kurallar": "The password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a digit.",
       "sureDolmus": "The link has expired. Click the reset link in your email again.",
@@ -22,7 +22,7 @@
     },
     "sayfaBasligi": "PEMF Vet — Set a New Password",
     "sifreTekrarYer": "New password (repeat)",
-    "sifreYer": "New password (at least 6 characters)"
+    "sifreYer": "New password (at least 8 characters)"
   },
   "verified": {
     "aciklama": "Your account has been verified. You can now go back to the <b>PEMF Vet</b> app and sign in with your email and password.",

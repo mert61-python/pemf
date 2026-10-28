@@ -14,7 +14,7 @@
       "baglanti": "Bağlantı hatası. İnternetini kontrol et.",
       "basarisiz": "İşlem başarısız. Lütfen tekrar dene.",
       "cokDeneme": "Çok fazla deneme. Biraz bekleyip tekrar dene.",
-      "en6": "Şifre en az 6 karakter olmalı.",
+      "en6": "Şifre en az 8 karakter olmalı.",
       "eslesmiyor": "Şifreler eşleşmiyor.",
       "kurallar": "Şifre en az 8 karakter olmalı; büyük harf, küçük harf ve rakam içermeli.",
       "sureDolmus": "Bağlantı süresi dolmuş. E-postandaki sıfırlama linkine tekrar tıkla.",
@@ -22,7 +22,7 @@
     },
     "sayfaBasligi": "PEMF Vet — Yeni Şifre Belirle",
     "sifreTekrarYer": "Yeni şifre (tekrar)",
-    "sifreYer": "Yeni şifre (en az 6 karakter)"
+    "sifreYer": "Yeni şifre (en az 8 karakter)"
   },
   "verified": {
     "aciklama": "Hesabın başarıyla doğrulandı. Artık <b>PEMF Vet</b> uygulamasına geri dönüp e-posta ve şifrenle giriş yapabilirsin.",

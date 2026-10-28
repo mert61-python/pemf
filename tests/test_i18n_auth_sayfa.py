@@ -39,7 +39,8 @@ TR_BIREBIR = {
     "authSayfa.reset.sayfaBasligi": "PEMF Vet — Yeni Şifre Belirle",
     "authSayfa.reset.baslik": "Yeni Şifre Belirle",
     "authSayfa.reset.aciklama": "Hesabın için yeni bir şifre gir.",
-    "authSayfa.reset.sifreYer": "Yeni şifre (en az 6 karakter)",
+    # D6.27 (B-6.33): sayfa ≥ 8 uygular (reset.html doğrulayıcısı) — yer tutucu gerçeği söyler (TR DEĞİŞTİ, RAPOR_C1).
+    "authSayfa.reset.sifreYer": "Yeni şifre (en az 8 karakter)",
     "authSayfa.reset.sifreTekrarYer": "Yeni şifre (tekrar)",
     "authSayfa.reset.guncelle": "Şifreyi Güncelle",
     "authSayfa.reset.hata.kurallar": "Şifre en az 8 karakter olmalı; büyük harf, küçük harf ve rakam içermeli.",
@@ -174,7 +175,7 @@ def test_bayrak_kapaliyken_sayfa_her_zaman_turkce():
         assert r["dil"] == "tr" and r["lang"] == "tr", (tarayici, sorgu, r)
         assert r["baslik"] == "Yeni Şifre Belirle"
         assert r["aciklama"] == TR_BIREBIR["authSayfa.verified.aciklama"]
-        assert r["ph"] == "Yeni şifre (en az 6 karakter)"
+        assert r["ph"] == "Yeni şifre (en az 8 karakter)"
         assert r["yok"] == "authSayfa.yok.anahtar"  # eksik anahtar çökmez, anahtarı gösterir
 
 
@@ -186,5 +187,5 @@ def test_bayrak_acikken_dil_secimi():
     assert _kos("true", "en-US", "?dil=tr")["baslik"] == "Yeni Şifre Belirle"
     assert _kos("true", "tr-TR", "?dil=en")["lang"] == "en"
     r = _kos("true", "en-US")
-    assert r["ph"] == "New password (at least 6 characters)"
+    assert r["ph"] == "New password (at least 8 characters)"
     assert r["aciklama"].endswith("sign in with your email and password.") and "<b>PEMF Vet</b>" in r["aciklama"]
