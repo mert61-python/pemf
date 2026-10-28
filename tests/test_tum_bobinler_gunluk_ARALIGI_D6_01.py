@@ -79,3 +79,27 @@ def test_stop_all_gunlugu_DURDURULAN_bobin_araligini_yazar_STOP_davranisi_ayni(c
         # temizlik: yamalanmış kolda kalan bobini de durdur (sızıntı olmasın)
         monkeypatch.setattr(hcm, "STM_BOBIN_SAYISI", 7)
         hc.stop_all_coils()
+
+
+def test_STOP_portta_DOGRULANAMAZSA_gunluk_durduruldu_DEMEZ_ACIL_der(caplog):
+    """Tur 2 kolu (çürütücü — STOP yolu): gönderici ölüyken STOP paketi kuyruğa girer ama porta yazılmaz → `stop_all_coils`
+    False döner; günlük "Tüm bobinler (1-N) durduruldu" DEMEZ (ACİL hata satırı yazılır). Aralık metni yalnız başarı dalında
+    olmalı — her iki dalda "durduruldu" yazan bir günlük, STOP'un düştüğü durumu sahada başarılı gösterir."""
+    from kayitci_donanim import gercek_hc, paket_coz
+
+    with gercek_hc() as hc:
+        assert hc.start_all_coils(50.0, 25.0, 0.0, 10) is True
+        hc.core.hw_gonderici_canli = lambda: False
+        hc.core.hw_gondericiyi_canlandir = lambda: False
+        n_once = len(hc.core._hw_send_queue.paketler)
+        with caplog.at_level(logging.INFO, logger=_LOGGER):
+            assert hc.stop_all_coils() is False, "gönderici ölüyken STOP 'verildi' sayıldı"
+        yeni = hc.core._hw_send_queue.paketler[n_once:]
+        assert len(yeni) == 1, f"STOP paketi kuyruğa {len(yeni)} kez girdi (1 bekleniyordu — Y8: gönderim azaltılmaz)"
+        assert all(d == 0 for d in list(paket_coz(yeni[0])[0])[:7]), "STOP paketinde duty>0 kaldı"
+        assert _iletiler(caplog, "durduruldu") == [], (
+            f"STOP porta doğrulanamadığı hâlde günlük 'durduruldu' diyor: {_iletiler(caplog, 'durduruldu')}"
+        )
+        assert _iletiler(caplog, "STOP paketi STM kuyruğuna VERİLEMEDİ"), "STOP düştüğünde ACİL günlük satırı yok"
+        hc.core.hw_gonderici_canli = lambda: True
+        hc.stop_all_coils()
