@@ -32,7 +32,8 @@ def test_patient_db_plaintext_ok_when_encryption_off(temp_app_data, monkeypatch)
     assert db.add_patient({"name": "X", "species": "Kedi"})
 
 
-# ── B-1.3: TreatmentHistoryDB PII maskeleme (şifresiz DB'de gerçek PII yazılmaz) ──────
+# ── B-1.3: TreatmentHistoryDB PII maskesi — şifresiz DB'de VARSAYILANDA gerçek PII yazılır (sahip kararı 2026-07-28);
+#    maske yalnız PEMF_MASK_HISTORY_PII=1 (opt-in) ──────
 def _read_session(db, sid):
     with db._get_connection() as conn:
         return (

@@ -337,11 +337,15 @@ class TreatmentHistoryDB(
                 )
             if not getattr(self, "_encryption_warned", False):
                 self._encryption_warned = True
+                # ⚠️ D6.11 (B-3.72): bu uyarı eskiden PII'nin "MASKELENIR" olduğunu söylüyordu; SAHİP KARARI (2026-07-28)
+                # maske VARSAYILAN KAPALI (`thdb_pii._redact_pii`) → adlar düz yazılıyor. Metin her iki durumu doğru anlatır.
+                # Kapı: tests/test_sifresiz_DB_uyarisi_PII_DUZ_yazildigini_soyler_D6_11.py
                 self.logger.warning(
                     "AT-REST SIFRELEME KAPALI: tedavi gecmisi DUZ-METIN SQLite olarak yaziliyor. "
-                    "B-1.3 KORUMASI: kisi-tanimlayici PII (hasta/sahip/operator adi, e-posta, notlar) "
-                    "'%s' ile MASKELENIR (sifresiz DB'ye gercek PII yazilmaz). Uretimde pysqlcipher3 "
-                    "kurun + PEMF_ENCRYPT_AT_REST=1 → gercek degerler yazilir. (health: at_rest_encrypted=false)",
+                    "Maske VARSAYILAN KAPALI (sahip karari 2026-07-28): kisi-tanimlayici PII (hasta/sahip/operator adi, "
+                    "e-posta, notlar) GERCEK degerleriyle DUZ yaziliyor; yalniz PEMF_MASK_HISTORY_PII=1 iken '%s' yazilir. "
+                    "Uretimde sqlcipher3 + PEMF_ENCRYPT_AT_REST=1 ayarlayin (anahtar: pemf_secrets.json → "
+                    "auto.sqlcipher_key) → degerler SIFRELI saklanir. (health: at_rest_encrypted=false)",
                     self._PII_REDACTION,
                 )
             conn = self._connect_plain_sqlite()
@@ -668,11 +672,13 @@ class TreatmentHistoryDB(
     #: Operatörün seçtiği saklama süresi (gün). Yoksa ortam değişkeni/varsayılan geçerli.
     PII_SURE_ANAHTARI = "pii_retention_days"
 
-    # ── B-1.3 (audit) — at-rest şifreleme YOKken PII düz-metin yazma koruması ──────────
+    # ── B-1.3 (audit) — at-rest şifreleme YOKken PII maskesi: YALNIZ OPT-IN ──────────
     # Tedavi-DB PII kolonları SQL'de display için okunur (whole-DB SQLCipher üretimde ZORUNLU +
-    # fail-closed → şifreli). Ama at_rest_encrypted=False iken (yalnız dev/yanlış-yapılandırma)
-    # gerçek PII'yi DÜZ-METİN yazmak yerine maskele: "kazara düz-metni kes" (kullanıcı kararı).
-    # session_parameters içindeki PII olan parametre ADLARI (değeri maskelenir; ad PII değil):
+    # fail-closed → şifreli). at_rest_encrypted=False iken (yalnız dev/yanlış-yapılandırma) gerçek PII
+    # VARSAYILANDA DÜZ yazılır — SAHİP KARARI 2026-07-28: maske varsayılan KAPALI (`thdb_pii._redact_pii`);
+    # yalnız PEMF_MASK_HISTORY_PII=1 iken `_PII_REDACTION` yazılır. ⚠️ Varsayılan-açık maske GERİ EKLENMEZ (D6.11).
+    # session_parameters içindeki PII olan parametre ADLARI (opt-in maskede ve KVKK saklama maskelemesinde
+    # değeri maskelenir; ad PII değil):
     _PII_PARAM_NAMES = frozenset(
         {
             "patient_name",

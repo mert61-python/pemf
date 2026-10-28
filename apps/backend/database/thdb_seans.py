@@ -836,7 +836,7 @@ class SeansKarisimi:
                     WHERE id = ?
                 ''',
                     (self._redact_pii(notes), session_id),
-                )  # Audit P3: end_session ile tutarlı PII maskesi (şifresiz modda da uygula)
+                )  # Audit P3: end_session ile AYNI `_redact_pii` kuralı (maske yalnız PEMF_MASK_HISTORY_PII=1 + şifresiz DB)
 
                 conn.commit()
                 self.logger.info(f"Seans notları güncellendi: ID {session_id}")
@@ -1011,8 +1011,9 @@ class SeansKarisimi:
             owner_name = patient.get('owner_name')
             now_iso = datetime.now().isoformat(sep=' ', timespec='seconds')
 
-            # B-1.3: at-rest şifreleme YOKken kişi-tanımlayıcı PII'yi maskele (dedup öncesi de →
-            # maskeli name/owner tutarlı eşleşir). Üretimde (SQLCipher) değerler AYNEN geçer.
+            # B-1.3: `_redact_pii` kuralı — maske YALNIZ PEMF_MASK_HISTORY_PII=1 + şifresiz DB (sahip kararı: varsayılan
+            # KAPALI, değerler AYNEN geçer). Dedup ÖNCESİ uygulanır → opt-in maskede maskeli name/owner tutarlı eşleşir.
+            # Üretimde (SQLCipher) değerler AYNEN geçer.
             name = self._redact_pii(name)
             owner_name = self._redact_pii(owner_name)
             _owner_email = self._redact_pii(patient.get('owner_email') or None)
@@ -1171,7 +1172,7 @@ class SeansKarisimi:
                 return False
             _pv = str(parameter_value)
             if parameter_name in self._PII_PARAM_NAMES:
-                _pv = self._redact_pii(_pv)  # B-1.3: şifresiz DB'ye gerçek PII yazma
+                _pv = self._redact_pii(_pv)  # B-1.3: maske yalnız opt-in (PEMF_MASK_HISTORY_PII=1)
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(

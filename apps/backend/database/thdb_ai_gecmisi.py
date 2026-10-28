@@ -51,8 +51,9 @@ class AiGecmisiKarisimi:
         ⚠️ Yeni parametreler SONDA → pozisyonel çağrılar bozulmaz."""
         try:
             self._ensure_write_guardrail()
-            # B-1.3 deseni (start_session ile tutarlı): at-rest şifreleme KAPALIYSA gerçek isim yerine
-            # [SIFRELENMEMIS-DB] yazılır → şifresiz DB'de düz-metin PII sızmaz. Şifreliyse isim korunur.
+            # B-1.3 deseni (start_session ile AYNI `_redact_pii` kuralı): şifreliyse isim AYNEN (şifreli saklanır); şifresizken
+            # de VARSAYILANDA AYNEN — düz yazılır (sahip kararı 2026-07-28: maske varsayılan KAPALI). Yalnız
+            # PEMF_MASK_HISTORY_PII=1 + şifresiz DB iken [SIFRELENMEMIS-DB] yazılır (D6.11).
             patient_name = self._redact_pii(patient_name)
             # operator_email = hekimin KENDİ login e-postası (hasta PII'si değil); filtre için ham saklanır
             # (üretimde DB zaten SQLCipher-şifreli). _redact_pii uygulanırsa "Benim" filtresi maskede bozulurdu.
