@@ -130,3 +130,39 @@ describe('D6.29 · AccountButton kutusu yalnız okunmuş bakiyeyle çizilir', ()
     }
   })
 })
+
+// TUR 2 (çürütücü kolu): menü HER açılışta bakiyeyi yeniden okur — okunamayan (null) sonuç da `setJeton`'a gitmeli; yoksa ilk açılıştaki
+// sayı, sonraki açılışta Supabase kesintisinde EKRANDA KALIR (okunamayan bakiye bayat sayı olarak gösterilir). Mutant `cur629_n3`
+// (`.then((b) => { if (b) setJeton(b) })`) bu dosyada ve site kümesinde YAŞIYORDU (site vitest'inde DOM / jsdom yok → kaynak AST'si).
+describe('D6.29 · tur 2 — her okuma sonucu (null dahil) bakiyeyi DEĞİŞTİRİR', () => {
+  it('jetonBakiyesiniOku() sonucu KOŞULSUZ setJeton\'a gider (okunamayan yeniden okuma önceki sayıyı bırakmaz)', () => {
+    const sf = ts.createSourceFile('AccountButton.tsx', ACCOUNT_SRC, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+    const okumalar: ts.CallExpression[] = []
+    const gez = (n: ts.Node): void => {
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'jetonBakiyesiniOku') okumalar.push(n)
+      ts.forEachChild(n, gez)
+    }
+    gez(sf)
+    expect(okumalar.length, 'jetonBakiyesiniOku() çağrısı bulunamadı — kapı bayat').toBeGreaterThan(0)
+    for (const c of okumalar) {
+      const p = c.parent
+      // Kabul: `.then(setJeton)` ya da `.then((b) => setJeton(b))` (eşdeğer yeniden yazım kapıyı bozmasın).
+      const dogrudanAyar = (a: ts.Expression | undefined): boolean =>
+        !!a &&
+        ((ts.isIdentifier(a) && a.text === 'setJeton') ||
+          (ts.isArrowFunction(a) && a.parameters.length === 1 && ts.isCallExpression(a.body) &&
+            ts.isIdentifier(a.body.expression) && a.body.expression.text === 'setJeton' && a.body.arguments.length === 1 &&
+            a.body.arguments[0].getText(sf) === a.parameters[0].name.getText(sf)))
+      const thenIle =
+        ts.isPropertyAccessExpression(p) && p.name.text === 'then' && ts.isCallExpression(p.parent) &&
+        p.parent.arguments.length === 1 && dogrudanAyar(p.parent.arguments[0])
+      const awaitIle =
+        ts.isAwaitExpression(p) && ts.isCallExpression(p.parent) && ts.isIdentifier(p.parent.expression) &&
+        p.parent.expression.text === 'setJeton'
+      expect(
+        thenIle || awaitIle,
+        `okuma sonucu setJeton'a KOŞULSUZ gitmiyor (${p.parent.getText(sf).slice(0, 80)}) — null (okunamadı) önceki bakiyeyi silmez, bayat sayı görünür`,
+      ).toBe(true)
+    }
+  })
+})
