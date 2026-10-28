@@ -29,7 +29,7 @@ dizinde ama README'de hiç listelenmiyordu (denetim 2026-08-04, P2 — sıra hi�
 | # | Dosya | Ne yapar | Zorunlu mu |
 |---|---|---|---|
 | 1 | `supabase_devices.sql` | `devices` tablosu + RLS + **v1** RPC'ler (`upsert_device`/`resolve_device`) | Evet |
-| 2 | `supabase_patients.sql` | `patients` + `treatment_sessions` + RLS + **v1** RPC'ler | Evet |
+| 2 | `supabase_patients.sql` | `patients` + `treatment_sessions` (birincil anahtar **`(device_id, id)`** — canlıyla aynı; D6.12) + RLS + **v1** RPC'ler | Evet |
 | 3 | `supabase_secure_v2.sql` | v1 imzalarını **düşürür**, yerine `p_secret` (bcrypt capability-token) isteyen **v2** sürümleri kurar | Evet |
 | 4 | `supabase_kullanim_sayaci.sql` | `usage_counts()` RPC — sitedeki sayaç "indirme" değil BENZERSİZ KULLANIM göstersin (yalnız üç tamsayı döner, satır/kimlik dökmez) | Hayır |
 
@@ -57,7 +57,7 @@ DEĞİL, **depo kökündeki** `supabase/` dizinindedir (buradan `../../../supaba
 |---|---|---|
 | `../../../supabase/resolve_device_bayat_gorunur.sql` | `resolve_device` tazelik penceresini 5 dk → **30 gün** yapar. Pencere istemcinin `STALE_MS`i ile eşit olduğu için bayat satır istemciye hiç ulaşmıyor, "cihaz kapalı" teşhisi ölü kod kalıyordu; kullanıcı doğru kodda bile **"Kodu kontrol edin"** görüyordu (denetim 2026-08-17) | **Evet** — uygulanmazsa saha teşhisi yanlış yöne bakmaya devam eder. APK/web yayını gerekmez. |
 | `../../../supabase/upsert_device_envanter.sql` | `upsert_device`e envanter alanları ekler (bcrypt modeli korunur) | Envanter alanları kullanılacaksa |
-| `../../../supabase/seans_kimligi_bilesik_anahtar.sql` | `treatment_sessions` birincil anahtarını `(id)` → **`(device_id, id)`** bileşiğine çevirir. `id` kliniğin YEREL SQLite `AUTOINCREMENT`'inden geldiği için her klinik 1, 2, 3… diye başlıyordu → çoklu klinikte sessiz veri kaybı (denetim 2026-08-30) | Çoklu klinik kullanılacaksa **Evet** |
+| `../../../supabase/seans_kimligi_bilesik_anahtar.sql` | `treatment_sessions` birincil anahtarını `(id)` → **`(device_id, id)`** bileşiğine çevirir. `id` kliniğin YEREL SQLite `AUTOINCREMENT`'inden geldiği için her klinik 1, 2, 3… diye başlıyordu → çoklu klinikte sessiz veri kaybı (denetim 2026-08-30). Bugün `supabase_patients.sql` tabloyu zaten `(device_id, id)` ile kurar (D6.12); bu yama `(id)` anahtarıyla kurulmuş ESKİ projeler içindir | **Evet** — birincil anahtarı `(id)` olan HER projede (tek klinik de): `supabase_secure_v2.sql`in `upsert_session`ı `on conflict (device_id, id)` ister, o tekil kısıt yoksa her seans yazımı hata verir. Canlı proje uygulanmış (2026-10-21 ölçüldü). |
 
 ### Abonelik tablosu — ÜÇÜNCÜ konum (`apps/ui/supabase/`)
 
@@ -82,7 +82,8 @@ uygulanır (betik kökte, SQL bu dizinde — F4 taşımasından beri; D6.60).
 Seans ve hasta / denek kaydının **arayüz profili** (veterinarian / researcher / pet_owner) bulut kopyasına da yazılır. Yalnız
 **eklemelidir** (kolon ekler, RPC imzaları AYNI kalır) ve cihaz kodu bu dosya uygulanmadan da çalışır — canlıya **yayın
 hazırlığında, sahiple** uygulanır. ⚠️ Ön koşul (dosyanın başındaki kapı denetler, eksikse hiçbir şey yapmadan durur):
-`supabase_secure_v2.sql` ve `../../../supabase/seans_kimligi_bilesik_anahtar.sql` uygulanmış olmalı.
+`supabase_secure_v2.sql` uygulanmış ve `treatment_sessions` birincil anahtarı `(device_id, id)` olmalı (yeni kurulumda
+`supabase_patients.sql` böyle kurar; `(id)` ile kurulmuş eski projede `../../../supabase/seans_kimligi_bilesik_anahtar.sql`).
 
 | Dosya | Ne yapar | Zorunlu mu |
 |---|---|---|

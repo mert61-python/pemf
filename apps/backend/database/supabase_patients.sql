@@ -62,8 +62,13 @@ create table if not exists public.patients (
 );
 create index if not exists idx_patients_device on public.patients(device_id);
 
+-- ⚠️ D6.12 (B-3.59): seans anahtarı CİHAZ-KAPSAMLI `(device_id, id)` — canlı projeyle AYNI (2026-10-21 ölçüldü). `id` kliniğin
+-- YEREL SQLite AUTOINCREMENT'inden gelir (her klinik 1, 2, 3 …); `supabase_secure_v2.sql` `upsert_session`ı
+-- `on conflict (device_id, id)` ile kurar. Eskiden burada `id text primary key` vardı → README sırasıyla kurulan YENİ bir
+-- projede `(device_id, id)` üzerinde tekil kısıt olmadığı için HER seans yazımı hata veriyordu. `(id)` ile kurulmuş ESKİ bir
+-- proje: `supabase/seans_kimligi_bilesik_anahtar.sql` (README). Kapı: tests/test_supabase_kanonik_kurulum_seans_anahtari_D6_12.py
 create table if not exists public.treatment_sessions (
-  id               text primary key,
+  id               text not null,
   device_id        text not null,
   session_date     text,
   start_time       text,
@@ -78,7 +83,8 @@ create table if not exists public.treatment_sessions (
   patient_name     text,     -- bulutta NULL
   patient_notes    text,     -- bulutta NULL
   session_status   text,
-  created_at       text
+  created_at       text,
+  constraint treatment_sessions_pkey primary key (device_id, id)
 );
 create index if not exists idx_sessions_device on public.treatment_sessions(device_id);
 
@@ -117,7 +123,7 @@ begin
     (p_session->>'pulse_duration_ms')::int, p_session->>'operator_name', p_session->>'patient_name',
     p_session->>'patient_notes', p_session->>'session_status', p_session->>'created_at'
   )
-  on conflict (id) do update set
+  on conflict (device_id, id) do update set  -- D6.12: tablonun anahtarıyla AYNI (cihaz-kapsamlı)
     end_time=excluded.end_time, duration_minutes=excluded.duration_minutes, session_status=excluded.session_status
   where public.treatment_sessions.device_id = p_device_id;
 end; $$;
