@@ -13,6 +13,7 @@ KAPI: README'deki her `-Parametre`, aynı madde / satırda adı geçen betiğin 
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -76,6 +77,24 @@ def test_KRITIK_kurucu_EnableTunnel_DEGIL_tunel_profilden_auth_backendde():
     )
     satir = [s for s in _gorunur().splitlines() if "Klinik tünel" in s]
     assert len(satir) == 1 and "_force_auth_for_tunnel" in satir[0] and "device.env" in satir[0], satir
+
+
+def test_KRITIK_backend_tunelde_auth_DAVRANIS_olarak_zorlar_D6_62(monkeypatch):
+    """Tur 2 kolu (D67 çürütme, mutant y1): README §6 "backend tüneli açarken `PEMF_REQUIRE_AUTH=1`'i kendisi zorlar" iddiası yalnız
+    çağrının VARLIĞIYLA değil DAVRANIŞLA ölçülür — operatör kapalı bıraksa da işlevden sonra auth AÇIK (süreç içi; ağ / tünel YOK)."""
+    import logging
+
+    import backend_service as bs
+    from servers import auth
+
+    monkeypatch.setenv("PEMF_REQUIRE_AUTH", "0")
+    monkeypatch.setattr(
+        auth, "_require", getattr(auth, "_require", None), raising=False
+    )  # küresel durum test sonunda geri
+    bs._force_auth_for_tunnel(logging.getLogger("D6_62_tur2"))
+    assert os.environ.get("PEMF_REQUIRE_AUTH") == "1" and auth._require is True, (
+        f"backend tünelde auth'u ZORLAMIYOR (PEMF_REQUIRE_AUTH={os.environ.get('PEMF_REQUIRE_AUTH')!r}) — README §6 iddiası yanlış"
+    )
 
 
 def test_KRITIK_build_cikti_yolu_betigin_VARSAYILANI():
