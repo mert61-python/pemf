@@ -117,6 +117,37 @@ karıştırılmıyor.
 **Not:** Kip yalnız sürüş sırasında cihaza gider. Hiçbir bobin çalışmıyorken cihazla
 konuşulmadığı için seçim "kaydedildi" olarak saklanır ve bir sonraki başlatmada uygulanır.
 
+### 🛑 ACİL DURDUR, ölçüm kayıtları ve veri klasörü (sahip kararları)
+
+**ACİL DURDUR artık mandallı.** ACİL DURDUR'a basıldıktan sonra — ya da kartla bağlantı
+kaybı, kartın komutları reddetmesi, kart zaman aşımı (watchdog) ya da seans sürerken
+uygulamanın kapanması gibi bir güvenlik durdurmasından sonra — yeni başlatma kapalıdır;
+ekranda "ACİL DURDURMA MANDALLI — yeni başlatma kapalı" ve nedeni yazar. Yeniden başlatmak
+için önce **"Sıfırla"** gerekir; sıfırlama bobinleri başlatmaz. Mandal, uygulama kapatılıp
+açılsa da korunur ("önceki oturumda ACİL DURDUR — sıfırlanmadı"). ACİL DURDUR ve Durdur
+düğmeleri her durumda çalışır.
+
+**Eski seansların ölçülen manyetik alan değerleri düzeltildi (÷5).** Kontrolcü
+yazılımının eski sürümü manyetik sensörün kazanç ayarını doğrulamadan yazıyordu; ölçülen
+alan tezgâhta yaklaşık 4–5 kat yüksek çıktı. Güncellemeden sonraki ilk açılışta, bu
+sürümden önce kaydedilmiş ölçülen alan değerleri **bir kez** 5'e bölünür; orijinal değer
+saklanır. Düzeltilen değerin yanında Seans Detayı'nda ve dışa aktarılan CSV'de
+"düzeltildi (÷5, yaklaşık — tezgâhta 4–5× ölçüldü)" notu görünür. Reçetedeki yoğunluk (mT)
+değerleri değişmez; düzeltme sürüşü etkilemez.
+
+**Bobin akımı artık gösterilmiyor ve kaydedilmiyor (sahip kararı).** 1.9.48 ile gelen bobin
+1–5 akım değeri kontrol panelinden, Sensörler ekranından ve KPI tablosundan kalktı; akım
+hiçbir kayda yazılmıyor. Eski kayıtlardaki akım silinmedi, ancak Seans Detayı'nda ve dışa
+aktarımda boş gösterilir.
+
+**Eski veri klasöründen taşıma tamamlanamazsa cihaz boş hasta listesiyle açılmaz.** Eski
+kullanıcı klasöründeki (`%APPDATA%\PEMF_GUI`) kayıtlar makine klasörüne taşınırken bir
+veritabanı taşınamazsa (dosya kilitli, disk dolu ya da hedefte anahtarı farklı bir
+veritabanı varsa) o veritabanı (ör. hasta kayıtları) açılmaz ve yerine boş bir veritabanı
+kurulmaz: uygulama kısıtlı kipte açılır, ekranda nedeni ve ne yapılacağı yazar; taşıma arka
+planda ve her açılışta yeniden denenir. Eski dosya değiştirilmez — **SİLMEYİN**. ACİL DURDUR
+ve Durdur bu kipte de çalışır. Taşıma bir kez eksiksiz bitince eski klasör bir daha okunmaz.
+
 ### 🔬 Yapay zekâ görselleri: artık analizin HER adımı görülebiliyor
 
 **Yüklediğiniz fotoğraf artık kaybolmuyor.** Analiz bitince kendi fotoğrafınız ekrandan
@@ -153,6 +184,30 @@ tünel/uzaktan erişimde fark edilir hızlanma.
 kurulumlarda bazı ölçüm alanları yanıta hiç eklenmiyordu; sonuç ekranında oran bilgisi
 kaybolduğu için işaretler kayabiliyor, bir değer "undefined" görünebiliyordu. İki kurulum
 artık birebir aynı bilgiyi döndürüyor.
+
+### 🧫 Petri / fantom analizi (sahip kararları)
+
+**Petri analizi yalnız 24 kuyucuklu plaka ile çalışır.** "Tekil petri kapları" kipi
+arayüzden kaldırıldı (ona özgü ayarlarla birlikte: petri çapı, tespit güveni, IoU, "petri
+değil" eşikleri); deneyde yalnız 24 kuyucuklu plaka kullanılıyor. Plaka bulunamazsa ekran
+artık tekil kipe yönlendirmez, plakanın nasıl çekileceğini söyler.
+
+**Plaka ızgarasında kuyu skoru eşiği (varsayılan 0,6).** Izgara hücresindeki besiyeri /
+boya kaplama skoru eşiğin altında kalan hücre artık kuyu sayılmaz (ör. ızgara plakadan
+taşınca kâğıda düşen hücreler); eşik Gelişmiş ayarlardan değiştirilebilir, 0 kapatır. Bu
+yüzden aynı fotoğraf eski sürümden daha az kuyu verebilir.
+
+**"Koşullu | Koşulsuz" seçimi.** Varsayılan **Koşullu** (önerilen): plaka, makullik ve
+görüntü kalitesi engelleri analizi ve bobin sürüşünü durdurur — davranış öncekiyle aynı.
+**Koşulsuz** seçilirse bu engeller analizi kesmez, uyarı olarak gösterilir ve sonuç
+"KOŞULSUZ — doğrulanmamış" diye işaretlenir. AI Pro'da (araştırma bayrağı açık
+kurulumlarda) koşulsuz öneri hekim onaylarsa bobin sürebilir; kabinde konum yoksa yine
+sürülmez.
+
+**"Fotoğraf Çek" bilgisayar uygulamasında kabin kamerasını kullanır.** Petri ve fantom
+panellerinde fotoğraf artık bilgisayarın varsayılan (ör. dizüstü) kamerası yerine kabin
+kamerasından çekilir; kullanılacak kamera panelde seçilir. **Canlı Kamera** ile seçilen
+aralıkta (1 kare/sn · 2 sn · 5 sn) anlık analiz yapılır.
 
 ## app 1.9.50 — 2026-09-11 (🔌 kablo çıkarsa anlar, geri takınca kendine gelir)
 
