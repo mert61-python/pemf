@@ -74,3 +74,32 @@ def test_KARSIT_KANIT_gemini_olcucusu_kaynagi_GORUR(tmp_path):
     assert kaynak_gemini_kullanir(tmp_path) is False
     (tmp_path / "src" / "b.ts").write_text("import { GoogleGenAI } from '@google/genai'\n", encoding="utf-8")
     assert kaynak_gemini_kullanir(tmp_path) is True
+
+
+# TUR 2 (çürütücü kolu): anahtar KURULUM adımı yalnız İngilizce şablon cümlesiyle ("Set the `GEMINI_API_KEY` …") aranıyordu; aynı adımın Türkçesi
+# ("`.env.local` dosyasına Gemini API anahtarınızı yazın") YAŞIYORDU (mutant `cur177_n1`). Emir kipi + anahtar / .env.local birlikteyse adımdır.
+_ANAHTAR_KURULUM = re.compile(
+    r"(?:GEMINI_API_KEY|Gemini\s+API\s+(?:anahtar\w*|key)|\.env\.local)[^.\n]{0,80}?\b(?:yazın|girin|ekleyin|ayarlayın|tanımlayın|koyun|set|add|put)\b"
+    r"|\b(?:Set|Add|Put)\b[^.\n]{0,40}(?:GEMINI_API_KEY|Gemini\s+API\s+key)",
+    re.I,
+)
+
+
+def anahtar_kurulum_adimlari(metin: str) -> list[str]:
+    return [m.group(0) for m in _ANAHTAR_KURULUM.finditer(metin)]
+
+
+def test_KRITIK_README_anahtar_KURULUM_adimi_hicbir_dilde_YOK():
+    bulgular = anahtar_kurulum_adimlari(README.read_text(encoding="utf-8"))
+    assert kaynak_gemini_kullanir() or not bulgular, (
+        f"kaynak Gemini'yi çağırmıyor ama README anahtar kurulum adımı veriyor (dil fark etmez): {bulgular}"
+    )
+
+
+def test_KARSIT_KANIT_anahtar_adimi_deseni_AYIRIYOR():
+    assert anahtar_kurulum_adimlari("2. `.env.local` dosyasına Gemini API anahtarınızı yazın.")
+    assert anahtar_kurulum_adimlari("Set the `GEMINI_API_KEY` in .env.local to your Gemini API key")
+    assert not anahtar_kurulum_adimlari(
+        "`vite.config.ts`deki `GEMINI_API_KEY` tanımı şablondan kalmadır — çalıştırmak için anahtar GEREKMEZ."
+    )
+    assert not anahtar_kurulum_adimlari("(yerelde çalıştırma + Gemini API anahtarı\ntalimatı)")
