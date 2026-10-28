@@ -73,7 +73,8 @@ Aynı şeyi her sayfada aynı sözcükle anlat:
 - **Sayı verirken neyin sayısı olduğunu söyle.** İndirme kartında kurulum dosyası boyutu,
   disk gereksiniminde "profil sayısına göre değişir" notu.
 - **Klinik riski olan özellik açıklanır.** AI Pro maddesi, seansı hekimin başlatıp durdurduğunu
-  ve güvenlik kesmelerinin önceliğini açıkça yazar.
+  ve acil durdurma ile süre sınırının her koşulda öncelikli olduğunu açıkça yazar. Sıcaklığa bağlı
+  otomatik durdurma iddia EDİLMEZ — cihaz bunu yapmaz (A-47; kapı `tests/test_site_guvenlik_iddiasi_URUNLE_ayni_D6_32.py`).
 
 ## 6. Diyalog ve veri dürüstlüğü
 

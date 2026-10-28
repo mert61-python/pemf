@@ -199,3 +199,42 @@ def test_KARSIT_KANIT_bolge_deseni_AYIRIYOR(dil, metin, beklenen):
 def test_KARSIT_KANIT_termal_deseni_AYIRIYOR(dil, metin, beklenen):
     r = TERMAL_TR if dil == "tr" else TERMAL_EN
     assert bool(r.search(metin)) is beklenen
+
+
+# ── D6.70 (B-11.8): metin kılavuzu ve DEMA simülatörü ─────────────────────────────────────────────────────────────────────────────
+#: Kılavuz kuralı (METIN-KILAVUZU "Klinik riski olan özellik açıklanır") yazarı SSS'te NEYİ yazmaya yönlendirir: belirsiz "güvenlik kesmeleri"
+#: (termal kesme olarak okunuyordu — B-11.8) yerine ürünün GERÇEK iki kesmesi (acil durdurma, süre sınırı).
+DEMA_KAYNAK = "dema-terapi-simülatörü/src"
+
+
+def test_KRITIK_D6_70_kilavuz_AI_Pro_kurali_GERCEK_kesmeleri_anar():
+    metin = (KOK / "apps" / "web" / "METIN-KILAVUZU.md").read_text(encoding="utf-8")
+    m = re.search(r"\*\*Klinik riski olan özellik açıklanır\.\*\*(.*?)(?:\n- \*\*|\n## )", metin, re.S)
+    assert m, "METIN-KILAVUZU'nda 'Klinik riski olan özellik açıklanır' kuralı bulunamadı — kapı bayat"
+    kural = m.group(1)
+    assert "güvenlik kesmeleri" not in kural, (
+        f"kural belirsiz 'güvenlik kesmeleri' diyor (termal kesme gibi okunur; A-47): {kural!r}"
+    )
+    assert re.search(r"acil durdurma", kural, re.I) and re.search(r"süre sınırı", kural, re.I), (
+        f"kural ürünün gerçek kesmelerini anmıyor: {kural!r}"
+    )
+
+
+def test_KRITIK_D6_70_DEMA_kaynagi_ISO_13485_ve_termal_iddia_TASIMAZ():
+    """DEMA simülatörü kaynağı (App + katalog + index / metadata) dayanaksız ISO 13485 ve termal kesme iddiası taşımaz (A-37 · A-47).
+    Sevk edilen `dist` ayrıca `build_tools.dema_iddia_denetimi` + `test_D191_…` ile derlemede durdurulur."""
+    kok = KOK / DEMA_KAYNAK
+    dosyalar = [
+        *kok.rglob("*.tsx"),
+        *kok.rglob("*.ts"),
+        *kok.rglob("*.json"),
+        KOK / "dema-terapi-simülatörü" / "index.html",
+        KOK / "dema-terapi-simülatörü" / "metadata.json",
+    ]
+    assert len(dosyalar) >= 5, "DEMA kaynağı taranamadı — kapı bayat"
+    sorun = []
+    for d in dosyalar:
+        t = d.read_text(encoding="utf-8")
+        sorun += [f"{d.relative_to(KOK)}: {m.group(0)!r}" for m in re.finditer(r"ISO\s*13485", t, re.I)]
+        sorun += [f"{d.relative_to(KOK)}: {m.group(0)!r}" for r in (TERMAL_TR, TERMAL_EN) for m in r.finditer(t)]
+    assert not sorun, "DEMA simülatöründe dayanaksız uyumluluk / termal kesme iddiası:\n  " + "\n  ".join(sorun)
