@@ -158,6 +158,7 @@
     "kutuEtiketi": "Coil {{id}}, {{tip}}",
     "kutuKilitli": ", driver is unipolar only — cannot be changed",
     "kutuUyguladi": ", the board applied {{tip}}",
+    "kutuYetenekBildirilmedi": ", drive capability not reported — bipolar locked",
     "sonuc": "{{kisim}} — takes effect on the next start.",
     "stmBagliDegil": "STM32 not connected — the mode cannot be changed.",
     "tekYonluBaslik": "Switch to one-way drive?",

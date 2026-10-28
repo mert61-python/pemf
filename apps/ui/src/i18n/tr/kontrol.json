@@ -158,6 +158,7 @@
     "kutuEtiketi": "Bobin {{id}}, {{tip}}",
     "kutuKilitli": ", sürücüsü yalnız unipolar — değiştirilemez",
     "kutuUyguladi": ", kartın uyguladığı {{tip}}",
+    "kutuYetenekBildirilmedi": ", sürücü yeteneği bildirilmedi — bipolar kilitli",
     "sonuc": "{{kisim}} sürüşe alındı — bir sonraki başlatmada uygulanır.",
     "stmBagliDegil": "STM32 bağlı değil — kip değiştirilemez.",
     "tekYonluBaslik": "Tek yönlü sürüşe geçilsin mi?",

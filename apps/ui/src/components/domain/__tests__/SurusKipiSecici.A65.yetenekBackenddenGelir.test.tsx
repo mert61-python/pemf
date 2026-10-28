@@ -26,11 +26,20 @@ beforeEach(() => mockApiPost.mockClear());
 test("KRİTİK: backend `bipolarYetenek` BİLDİRMEDİYSE hiçbir bobin bipolar sayılmaz (numaradan yetenek çıkarılmaz)", () => {
   const u = render(<SurusKipiSecici coils={[1, 2, 3, 4, 5, 6, 7].map((id) => bobin(id))} stmConnected />);
   for (const id of [1, 2, 3, 4, 5, 6, 7]) {
-    const kutu = u.getByLabelText(new RegExp(`^Bobin ${id}, unipolar, sürücüsü yalnız unipolar`));
+    // D67 (D5 devri): bildirilmeyen yetenek "yalnız unipolar" diye KESİN donanım bilgisi gibi söylenmez — ayrı metin.
+    const kutu = u.getByLabelText(new RegExp(`^Bobin ${id}, unipolar, sürücü yeteneği bildirilmedi — bipolar kilitli`));
     expect(kutu.props.accessibilityState?.disabled).toBe(true);
+    expect(kutu.props.accessibilityLabel).not.toMatch(/yalnız unipolar/);
   }
   fireEvent.press(u.getByLabelText(/^Bobin 1, unipolar/));
   expect(mockApiPost).not.toHaveBeenCalled();
+});
+
+test("A-65: yalnız `bipolarYetenek:false` BİLDİRİLMİŞ bobin 'yalnız unipolar' der; aynı ızgarada bildirilmeyen 'bildirilmedi' der", () => {
+  const coils = [1, 2, 3, 4, 5, 6, 7].map((id) => bobin(id, id === 2 ? { bipolarYetenek: false } : {}));
+  const u = render(<SurusKipiSecici coils={coils} stmConnected />);
+  expect(u.getByLabelText(/^Bobin 2, unipolar, sürücüsü yalnız unipolar — değiştirilemez/).props.accessibilityState?.disabled).toBe(true);
+  expect(u.getByLabelText(/^Bobin 3, unipolar, sürücü yeteneği bildirilmedi — bipolar kilitli/).props.accessibilityState?.disabled).toBe(true);
 });
 
 test("KRİTİK: yetenek NUMARAYA değil ALANA bağlı — bobin 6 için `bipolarYetenek:true` bildirilirse kutusu açılır, bobin 1 `false` ise kilitli", () => {

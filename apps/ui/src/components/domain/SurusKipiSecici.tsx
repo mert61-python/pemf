@@ -212,7 +212,8 @@ export function SurusKipiSecici({
               accessibilityRole="button"
               accessibilityLabel={
                 t("kontrol.surus.kutuEtiketi", { id: c.id, tip: uni ? t("kontrol.surus.tipUnipolar") : t("kontrol.surus.tipBipolar") }) +
-                (yetenekli ? "" : t("kontrol.surus.kutuKilitli")) +
+                // A-65: "yalnız unipolar" yalnız backend `bipolarYetenek:false` BİLDİRDİYSE; alan yoksa yetenek bilinmiyor (yine kilitli).
+                (yetenekli ? "" : c.bipolarYetenek === false ? t("kontrol.surus.kutuKilitli") : t("kontrol.surus.kutuYetenekBildirilmedi")) +
                 (etkin === null ? t("kontrol.surus.kutuBildirmedi") : t("kontrol.surus.kutuUyguladi", { tip: etkin ? t("kontrol.surus.tipUnipolar") : t("kontrol.surus.tipBipolar") }))
               }
             >
