@@ -176,8 +176,11 @@ def main() -> int:
             print(f"     Uygulama {STM_PAKET_BOYU} bayt gonderiyor -> CRC uyusmuyor -> STM_NACK ->")
             print(f"     {sebep}")
             print("     HICBIR BOBIN BASLAMAZ (1-5 dahil), ama uygulama STM'i BAGLI GORUR.")
+            # D6.57 (B-10.191): sabit tarihli masaustu klasoru DEGIL — guncel yol: yakma CLI + kaynaktan temiz workspace.
+            print("     COZUM: karti bu surumun firmware'i ile yakin: scripts/stm_yak.py (kullanim: scripts/README.md;")
+            print("     dogrulama: el sikismada STM_OK). Kaynaktan derlemek icin once scripts/stm_workspace_kopyala.py")
             print(
-                "     COZUM: karti bu surumun firmware'i ile yakin (scripts/stm_yak.py; dogrulama el sikismada STM_OK)."
+                "     ile temiz CubeIDE workspace'i cikarin (firmware/stm32_pemf/README.md 'CubeIDE'de acma / derleme')."
             )
         else:
             print(f"  ❓ DOĞRULANAMADI — {sebep or 'kart kimligi ve paket yaniti alinamadi'}")

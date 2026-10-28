@@ -98,7 +98,8 @@ def test_KRITIK_B120_her_firmware_revizyonunun_KARARI_paket_boyuyla_ESLESIR(rev,
     )
     if uyumlu is False:
         assert str(boy) in sebep or str(kimlik.kanal) in sebep, f"sebep çatışan sayıyı söylemiyor: {sebep!r}"
-        assert "SAHA-ISLERI-REHBERI" in sebep, f"sebep eylem söylemiyor: {sebep!r}"
+        # D6.57: eylem = güncel yakma aracı (eski başvuru SAHA-ISLERI-REHBERI B-2 KALDIRILMIŞ bölümü gösteriyordu)
+        assert "Yapilacak" in sebep and "scripts/stm_yak.py" in sebep, f"sebep eylem söylemiyor: {sebep!r}"
 
 
 def test_KRITIK_Y7_SAHA_banner_i_TEK_BASINA_KARAR_DEGIL():

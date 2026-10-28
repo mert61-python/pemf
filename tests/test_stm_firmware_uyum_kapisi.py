@@ -112,7 +112,91 @@ def test_KRITIK_uyumsuzluk_mesaji_EYLEM_soyluyor():
 
     _, sebep = uyum_denetle(banner_ayristir(ESKI_BANNER), 7)
     assert "5" in sebep and "7" in sebep, f"mesaj hangi sayilarin catistigini soylemiyor: {sebep!r}"
-    assert "SAHA-ISLERI-REHBERI" in sebep, "mesaj operatore YAPILACAK ISI gostermiyor"
+    # D6.57 (B-10.191): eskiden yalniz "SAHA-ISLERI-REHBERI" ALT-DIZESINE bakiliyordu — hedef bolum (B-2) KALDIRILMISTI.
+    assert "Yapilacak" in sebep and "scripts/stm_yak.py" in sebep, (
+        "mesaj operatore YAPILACAK ISI (yakma araci) gostermiyor"
+    )
+    _rehber_basvurulari_GECERLI(sebep)
+
+
+#: Belge bolum basvurusu: `<yol>.md B-2` / `<yol>.md §9` / `<yol>.md 'Baslik'`
+_BOLUM_RE = r"([\w./-]+\.md)\s+(B-\d+|§\s?\d+|'[^']+')"
+
+
+def _rehber_basvurulari_GECERLI(sebep: str) -> None:
+    """Destek metnindeki her dosya yolu depoda VAR; bolum basvurusu varsa o baslik VAR ve ⛔ / KALDIRILDI DEGIL (D6.57)."""
+    import re
+
+    for yol in re.findall(r"(?<![\w/])((?:docs|scripts|firmware|apps|tools)/[\w./-]+\.(?:md|py))", sebep):
+        assert (KOK / yol).exists(), f"mesaj olmayan dosyaya yonlendiriyor: {yol} — {sebep!r}"
+    for yol, bolum in re.findall(_BOLUM_RE, sebep):
+        bolum = bolum.strip("'").replace("§", "").strip()
+        basliklar = [s for s in (KOK / yol).read_text(encoding="utf-8").splitlines() if s.startswith("#")]
+        hedef = [b for b in basliklar if re.search(rf"(?<![\w-]){re.escape(bolum)}(?![\w])", b)]
+        assert hedef, f"mesajin gosterdigi bolum {yol} '{bolum}' YOK — {sebep!r}"
+        assert not any("⛔" in b or "KALDIRILDI" in b for b in hedef), (
+            f"mesaj operatoru KALDIRILMIS bir bolume yonlendiriyor: {hedef} — {sebep!r}"
+        )
+
+
+@pytest.mark.parametrize(
+    "banner",
+    [
+        ESKI_BANNER,  # kanal uyusmazligi
+        "-> STM_READY: DDS v2.5 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=2 pkt=120 Waiting for commands...",  # pkt beyani
+        "-> STM_READY: DDS v2.3 (7-ch SYM-BIPOLAR + HW_SYNC@PB1) Waiting for commands...",  # uni= yok → 120 B eski imaj
+    ],
+    ids=["kanal", "pkt_beyani", "uni_yok_eski"],
+)
+def test_KRITIK_KESIN_uyumsuzluk_mesajlari_GECERLI_rehbere_yonlendirir_D6_57(banner):
+    from utils.stm32_kimlik import banner_ayristir, uyum_denetle
+
+    uyumlu, sebep = uyum_denetle(banner_ayristir(banner), 7)
+    assert uyumlu is False, f"{banner!r} KESIN uyumsuz olmali: {uyumlu} {sebep!r}"
+    assert "Yapilacak" in sebep and "scripts/stm_yak.py" in sebep, sebep
+    assert "SAHA-ISLERI-REHBERI.md B-2" not in sebep, sebep
+    _rehber_basvurulari_GECERLI(sebep)
+
+
+def test_KRITIK_RED_kaniti_mesaji_GECERLI_rehbere_yonlendirir_D6_57():
+    from utils.stm32_kimlik import KANIT_RED, uyum_karari
+
+    uyumlu, sebep, _kod = uyum_karari(None, KANIT_RED, crc=5)
+    assert uyumlu is False and "scripts/stm_yak.py" in sebep, sebep
+    _rehber_basvurulari_GECERLI(sebep)
+
+
+def test_KARSIT_D6_57_bolum_denetimi_KALDIRILMIS_bolumu_YAKALAR():
+    """Aparat kendi kendine yesil olmasin: eski metnin gosterdigi bolum gercekten ⛔ KALDIRILDI basligi."""
+    with pytest.raises(AssertionError, match="KALDIRILMIS"):
+        _rehber_basvurulari_GECERLI("Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin.")
+
+
+def test_KRITIK_servis_betigi_ESKI_firmware_cozumu_GUNCEL_yolu_onerir_D6_57(monkeypatch, capsys):
+    """scripts/stm_firmware_kimligi.py eski-firmware dalinda sabit tarihli masaustu klasoru DEGIL, yakma araci + temiz workspace."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_stm_firmware_kimligi_d657", KOK / "scripts" / "stm_firmware_kimligi.py"
+    )
+    betik = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(betik)
+    eski = "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR uni=0x00 + HW_SYNC@PB1) Waiting for commands..."
+    monkeypatch.setattr(betik, "_portlari_bul", lambda _p: ["COM_D657"])
+    monkeypatch.setattr(betik, "_kart_dogrula", lambda port, sure: ([eski], {"crc_nack": 0}))
+    monkeypatch.setattr("sys.argv", ["stm_firmware_kimligi.py", "--port", "COM_D657"])
+    rc = betik.main()
+    out = capsys.readouterr().out
+    assert rc == 1 and "ESKI FIRMWARE" in out, out
+    assert "PEMF_STM32_workspace_20" not in out, f"sabit tarihli masaustu klasoru oneriliyor:\n{out}"
+    assert "scripts/stm_yak.py" in out and "scripts/stm_workspace_kopyala.py" in out, out
+    for yol in (
+        "scripts/stm_yak.py",
+        "scripts/stm_workspace_kopyala.py",
+        "scripts/README.md",
+        "firmware/stm32_pemf/README.md",
+    ):
+        assert yol in out and (KOK / yol).exists(), f"{yol} onerilmiyor ya da yok:\n{out}"
 
 
 def _headless_agac():

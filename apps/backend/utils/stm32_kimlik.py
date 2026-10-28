@@ -282,7 +282,7 @@ def uyum_karari(
             f"STM_NACK: CRC)"
             + (f"; kartin kimligi: {kimlik.ham}" if kimlik is not None else "")
             + ". Karttaki firmware farkli paket boyu bekliyor (or. 120 baytlik eski saha imaji). HICBIR bobin calismaz. "
-            "Yapilacak: kart bu surumun firmware'i ile yakilmali (docs/SAHA-ISLERI-REHBERI.md B-2; scripts/stm_yak.py — "
+            "Yapilacak: kart bu surumun firmware'i ile yakilmali (scripts/stm_yak.py, kullanim: scripts/README.md — "
             "dogrulama: el sikismada STM_OK, CRC NACK yok).",
             UYUM_KODU_PAKET,
         )
@@ -404,7 +404,7 @@ def uyum_denetle(
             f"Kart {kimlik.kanal} kanalli firmware kosuyor ({kimlik.surum}), uygulama "
             f"{paket_kanal} kanalli paket gonderiyor. Paket genisligi birebir olmak ZORUNDA — "
             f"aksi halde firmware her paketi NACK'ler ve HICBIR bobin calismaz. "
-            f"Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+            f"Yapilacak: STM'i bu surumun firmware'i ile yeniden yakin (scripts/stm_yak.py, kullanim: scripts/README.md)."
         )
     if kimlik.paket_boyu is not None:
         # Y68 (TD1): kart paket boyunu BEYAN ETTI (banner `pkt=` ya da kimlik sorgusu) → kesin karar.
@@ -413,14 +413,14 @@ def uyum_denetle(
         return False, (
             f"Kart {fw_boyu} baytlik paket bekledigini bildiriyor ({kimlik.surum}, proto={kimlik.protokol}), uygulama "
             f"{paket_boyu} baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi "
-            f"NACK'ler ve HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+            f"NACK'ler ve HICBIR bobin calismaz. Yapilacak: STM'i bu surumun firmware'i ile yeniden yakin (scripts/stm_yak.py, kullanim: scripts/README.md)."
         )
     if fw_boyu != paket_boyu:
         return False, (
             f"Kart {kimlik.kanal} kanalli ama {fw_boyu} baytlik paket bekleyen ESKI bir firmware kosuyor "
             f"({kimlik.surum}; banner'da surus kipi alani 'uni=' YOK — 2026-09-10/11 surumu), uygulama {paket_boyu} "
             f"baytlik paket gonderiyor. Paket boyu birebir olmak ZORUNDA — aksi halde firmware her paketi NACK'ler ve "
-            f"HICBIR bobin calismaz. Yapilacak: docs/SAHA-ISLERI-REHBERI.md B-2 ile STM'i yeniden yakin."
+            f"HICBIR bobin calismaz. Yapilacak: STM'i bu surumun firmware'i ile yeniden yakin (scripts/stm_yak.py, kullanim: scripts/README.md)."
         )
     if kimlik.maske is not None:
         # ⚠️ TD1 (tezgâh 2026-10-14 ÖLÇTÜ, A1): `uni=` basan ama `pkt=` basmayan banner 120 baytlik (e2b63a5…a280fa4,
