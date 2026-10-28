@@ -46,7 +46,23 @@ def test_KRITIK_HATA_metni_kurulum_yolunda_OLMAYAN_adimi_anlatmaz_DEV_D5a():
             assert not re.search(r"(?i)sağlık sonda", metin), (
                 f"{p.name} sağlık sondası KOŞMUYOR ama HATA metni 'sağlık sondası yanlış porta bakar' diyor: {metin}"
             )
+            # Tur 2 kolu (D67 çürütme, mutant b1 — ikiz çağrı yeri): aynı betiğin ÖBÜR operatör iletileri (ör. güvenlik duvarı
+            # portu UYARI'sı) de olmayan sondayı anlatmaz — yorum satırları hariç, betiğin tüm kodu.
+            kod = "\n".join(s for s in src.splitlines() if not s.lstrip().startswith("#"))
+            assert not re.search(r"(?i)sağlık sonda", kod), (
+                f"{p.name} sağlık sondası KOŞMUYOR ama bir iletisi sondayı anlatıyor: "
+                f"{[s.strip() for s in kod.splitlines() if re.search(r'(?i)sağlık sonda', s)]}"
+            )
         assert "PEMF_API_PORT geçersiz:" in metin and "düzeltin" in metin and "8000'e düşer" in metin, metin
+    # Tur 2 kolu (mutant b5 — tanım değeri): metnin "8000'e düşer" / "(varsayılan 8000)" iddiası backend'in GERÇEK yedek portuyla
+    # (`backend_service._VARSAYILAN_PORT`, `ortam_portu` bozuk değerde bunu döner) aynı.
+    bs = (KOK / "apps" / "backend" / "backend_service.py").read_text(encoding="utf-8")
+    m = re.search(r"^_VARSAYILAN_PORT = (\d+)$", bs, re.M)
+    assert m, "aparat: backend_service._VARSAYILAN_PORT bulunamadı"
+    metin = _hata_metni(BETIKLER["install"])
+    assert f"{m.group(1)}'e düşer" in metin and f"(varsayılan {m.group(1)})" in metin, (
+        f"HATA metni backend'in yedek portunu ({m.group(1)}) söylemiyor: {metin}"
+    )
 
 
 def test_KARSIT_DEV_D5a_olcut_GERCEK_install_yolunda_saglik_sondasi_YOK():
