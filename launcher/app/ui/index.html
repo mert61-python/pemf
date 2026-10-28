@@ -344,6 +344,8 @@
       .modal h3 .logo { width: 34px; height: 34px; }
       .modal h3 .logo svg { width: 19px; height: 19px; }
       .modal p { color: var(--muted); font-size: 13px; margin: 8px 0; }
+      /* D6.69: onay metinleri paragraf (\n\n) taşır — tarayıcının yerel onay kutusu (window.confirm) gibi satır sonları korunur. */
+      #confirm-body { white-space: pre-line; }
       .modal .row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 7px 0;
         border-top: 1px solid var(--line); color: var(--muted); }
       .modal .row b { color: var(--fg); font-weight: 600; }
@@ -1023,13 +1025,16 @@
           }
           bgButonlariYaz();
         };
-        btnIptal.onclick = async () => {
+        btnIptal.onclick = () => {
           // İPTAL: `.part` SİLİNİR. Kullanıcıya bunu açıkça söyle — "duraklat" sanıp
           // ilerlemeyi koruduğunu düşünmesin (1,4 GB yeniden inecek).
-          if (!confirm(t().bgCancelConfirm)) return;
-          prefetchIptalEdildi = true; prefetchDuraklatildi = false;
-          try { await invoke("cancel_install"); } catch (_) {}
-          bgButonlariYaz();
+          // D6.69 (B-7.27): tarayıcının yerel onay kutusu (window.confirm) DEĞİL, uygulamanın kendi onay modalı — dil / görsel kimlik ve
+          // odak GÜVENLİ varsayılanda ("İndirmeye devam et"; Enter yanlışlıkla silmez). METIN-KILAVUZU §6.
+          askConfirm(t().bgCancelTitle, t().bgCancelConfirm, async () => {
+            prefetchIptalEdildi = true; prefetchDuraklatildi = false;
+            try { await invoke("cancel_install"); } catch (_) {}
+            bgButonlariYaz();
+          }, { danger: true, yesLabel: t().bgCancelYes, noLabel: t().bgCancelNo });
         };
         bgButonlariYaz();
       }

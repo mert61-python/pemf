@@ -134,7 +134,12 @@ def test_KRITIK_iptal_ONAY_soruyor_ve_KAYBI_soyluyor():
     i_iptal = m.find("btnIptal.onclick")
     assert i_iptal != -1, "İptal düğmesinin tıklama işleyicisi bulunamadı"
     handler = m[i_iptal : i_iptal + 900]
-    assert "confirm(" in handler, "iptal ONAY SORMUYOR — tek tıkla 1,4 GB çöpe gider"
+    # D6.69 (B-7.27): onay uygulamanın KENDİ modalıyla (askConfirm) — tarayıcının yerel confirm() kutusu değil
+    assert "askConfirm(t().bgCancelTitle, t().bgCancelConfirm" in handler, (
+        "iptal ONAY SORMUYOR — tek tıkla 1,4 GB çöpe gider"
+    )
+    assert "danger: true" in handler, "silen onayın düğmesi tehlike biçiminde değil"
+    assert not re.search(r"(?<![\w.$])confirm\s*\(", handler), "iptal tarayıcının yerel confirm() kutusunu kullanıyor"
     assert "bgCancelConfirm" in handler, "onay metni yerelleştirilmiş anahtardan gelmiyor"
     metin = ui("tr")["bgCancelConfirm"]  # I18N-P1 · 11a: sözlük kataloğa taşındı
     assert "SİLİNİR" in metin or "BAŞTAN" in metin, f"onay metni kaybı açıkça söylemiyor: {metin[:160]}"
@@ -166,7 +171,18 @@ def test_KRITIK_periyodik_tur_KULLANICI_kararini_EZMIYOR():
 
 
 @pytest.mark.parametrize(
-    "anahtar", ["bgPause", "bgResume", "bgCancel", "bgCancelConfirm", "rtBgPaused", "rtBgCancelled"]
+    "anahtar",
+    [
+        "bgPause",
+        "bgResume",
+        "bgCancel",
+        "bgCancelConfirm",
+        "bgCancelTitle",
+        "bgCancelYes",
+        "bgCancelNo",
+        "rtBgPaused",
+        "rtBgCancelled",
+    ],
 )
 def test_metinler_IKI_DILDE_de_var(anahtar):
     """Launcher iki dilli; eksik anahtar `undefined` düğme etiketi demektir."""
