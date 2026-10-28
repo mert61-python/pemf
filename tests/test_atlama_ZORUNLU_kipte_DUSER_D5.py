@@ -638,6 +638,31 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
                     k.append(x.test)
         return k
 
+    # SON-A1.57 (22 · A1b): KOŞULSUZ atlayan yerel sarmalayıcı (`def _atla(n): pytest.skip(n)` / `_atla = lambda n: pytest.skip(n)`) —
+    # çağrısı atlamadır (koşulu çağrı yerinde). Kendi içinde ZORUNLU'ya bağlı olan (önceki kardeş `if <zorunlu>: fail`) sarmalayıcı DEĞİL.
+    sarmalayicilar = set()
+    for st in m.agac.body:
+        if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef)) and not st.name.startswith("test_"):
+            s_ad, s_govde = st.name, st.body
+        elif (
+            isinstance(st, ast.Assign) and len(st.targets) == 1 and isinstance(st.targets[0], ast.Name)
+            and isinstance(st.value, ast.Lambda)
+        ):  # fmt: skip
+            s_ad, s_govde = st.targets[0].id, [ast.Expr(st.value.body)]
+        else:
+            continue
+        for i, x in enumerate(s_govde):
+            if (
+                isinstance(x, ast.Expr)
+                and isinstance(x.value, ast.Call)
+                and _atlama_adi_mi(_cozumlu_ad(x.value.func, m))
+            ):
+                if not any(
+                    isinstance(o, ast.If) and _zorunluda_dogru(o.test, m) and _dusurur(o.body, m) for o in s_govde[:i]
+                ):
+                    sarmalayicilar.add(s_ad)
+                break
+
     sonuc = []
     for n in ast.walk(m.agac):
         if isinstance(n, ast.Call):
@@ -646,6 +671,17 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
                 m.ebeveyn.get(n), ast.Raise
             ):
                 continue  # istisna nesnesi kuruldu ama yükseltilmedi — atlama değil (yükselten `raise` aşağıda)
+            # SON-A1.57: `functools.partial(pytest.mark.skipif, <koşul>)` — işaret partial'ın İLK argümanı, koşullar kalanlar.
+            if ad.rsplit(".", 1)[-1] == "partial" and argl:
+                ic = _cozumlu_ad(argl[0], m)
+                if (
+                    ic.rsplit(".", 1)[-1] in ("skipif", "skipIf", "skipUnless")
+                    or _atlama_adi_mi(ic)
+                    or ic.endswith("mark.xfail")
+                ):
+                    ad, argl = ic, argl[1:]
+            elif isinstance(n.func, ast.Name) and n.func.id in sarmalayicilar:
+                ad = "pytest.skip"
         elif isinstance(n, ast.Raise) and n.exc is not None and not isinstance(n.exc, ast.Call):
             # TUR 3: çağrısız `raise unittest.SkipTest` ya da atlama istisnasına bağlanmış ad (`raise hata`)
             if not _atlama_istisnasi_mi(n.exc, m):
@@ -665,6 +701,16 @@ def tara(kaynak: str, dosya: str) -> list[Atlama]:
             # yalnız ilki (ikincisi neden). Koşulsuz işaret (`skipif(reason=…)`, `mark.xfail(reason=…)`) koşulsuz atlama gibi.
             unittest_bicimi = son in ("skipIf", "skipUnless")
             kosullar = list(argl[:1] if unittest_bicimi else argl) + [k.value for k in anahtar if k.arg == "condition"]
+            # SON-A1.57: `skipif(**{"condition": …})` — sözlük açılımı koşul taşıyabilir (değerleri taranır).
+            kosullar += [
+                k.value
+                for k in anahtar
+                if k.arg is None
+                and not (
+                    isinstance(k.value, ast.Dict)
+                    and not any(isinstance(a, ast.Constant) and a.value == "condition" for a in k.value.keys)
+                )
+            ]
             if not unittest_bicimi:  # TUR 3b (m3a): pytest dize koşulunu modül globals'ıyla DEĞERLENDİRİR
                 kosullar = [_dize_kosulu(k) for k in kosullar]
             if unittest_bicimi and neden_d is None and len(argl) > 1:
