@@ -585,7 +585,23 @@ mod tests {
                 govde.contains("letroot=install::default_install_root(&home_dir());") && govde.contains("letexe=install::backend_path(&root);"),
                 "{islev}: exe ve port AYNI kurulum kökünden okunmuyor"
             );
+            // SON-A1.54 (22 · A1b, yaşayan c94_m2): çağrı metninin VARLIĞI yetmez — ikinci (sabit portlu) bir çağrı sonucu ezerse kapı
+            // yeşil kalıyordu. Çağrı gövdede TEK olmalı.
+            let ad = cagri.split('(').next().unwrap_or_default();
+            assert_eq!(
+                govde.matches(&format!("{ad}(")).count(),
+                1,
+                "{islev}: `{ad}(` gövdede birden çok kez — sonucu kullanılan çağrı çocuğun portundan gelmeyebilir"
+            );
         }
+        // SON-A1.54: arayüze dönen durum, ÇOCUĞUN portuyla ölçülen `d`den (sonuç atılıp başka değerle ezilmez).
+        let i = yalin.find("fn firewall_durumu_blocking()").expect("durum işlevi");
+        let j = yalin[i..].find("\n\u{7d}\n").map(|j| i + j).expect("gövde sonu");
+        let govde: String = yalin[i..j].split_whitespace().collect();
+        assert!(
+            govde.contains("letd=durum_icin(Some(&exe),api_portu(&root));") && govde.contains("\"engelli\":d==Durum::Engelli"),
+            "firewall_durumu_blocking: arayüze dönen durum çocuğun portuyla ölçülen sonuçtan gelmiyor"
+        );
     }
 
     /// D5 J-3 · çıkış kodu → arayüz iletisi: başarı YALNIZ 0; UAC reddi (1223) MEVCUT metni korur; kurulamayan kural ve silinemeyen
@@ -1203,6 +1219,11 @@ mod tests {
                 ("d_block", vec![Kural { eylem: "Block", ..api(COCUK) }, kesif()], e, COCUK, "ENGEL"),
                 ("d_win_any", vec![win("TCP", "Any", "Allow")], e, COCUK, "VAR"),
                 ("d_win_aralik", vec![win("TCP", "8000-8049", "Allow")], e, COCUK, "VAR"),
+                // SON-A1.54 (yaşayan c94_m3 — aralık sınırı ±1): sınırlar DAHİL, bir dışı HARİÇ.
+                ("d_win_aralik_ust_sinir", vec![win("TCP", "7990-8001", "Allow")], e, COCUK, "VAR"),
+                ("d_win_aralik_alt_sinir", vec![win("TCP", "8001-8049", "Allow")], e, COCUK, "VAR"),
+                ("d_win_aralik_ust_bir_eksik", vec![win("TCP", "7990-8000", "Allow")], e, COCUK, "YOKSA"),
+                ("d_win_aralik_alt_bir_fazla", vec![win("TCP", "8002-8049", "Allow")], e, COCUK, "YOKSA"),
                 ("d_win_block", vec![win("TCP", "Any", "Block"), api(COCUK), kesif()], e, COCUK, "ENGEL"),
                 ("dn_dogru", vec![api(COCUK), kesif()], None, COCUK, "VAR"),
                 ("dn_program_bilinmiyor", vec![servis(api(COCUK)), servis(kesif())], None, COCUK, "VAR"),
