@@ -175,9 +175,9 @@ if os.path.exists(config_dir):
         # GÜVENLİK (P0 audit 2026-06-28): config/credentials/ GERÇEK MQTT/HiveMQ/ESP
         # şifrelerini içerir (hivemq_users.json, mosquitto_passwords.txt, secrets_coil_*.h,
         # credentials.json). EXE'ye GÖMME → EXE/disk sızıntısı = tüm broker kimlikleri ele
-        # geçer = bobin topic'lerine publish = donanım kontrolü. Runtime'da credential_manager
-        # ÜRETİR; cloud-cred fill (production_config_manager) dosya yoksa cred_path.exists()
-        # ile ZARİFÇE atlar (yalnız cloud-mode; local broker anon).
+        # geçer = bobin topic'lerine publish = donanım kontrolü. Çalışma anında da paketten OKUNMAZ: bundled
+        # hivemq_users.json ile cloud-cred doldurma 2026-06-28'de KALDIRILDI (production_config_manager.py),
+        # services/credential_manager hiçbir yerden içe aktarılmıyor (D6.51 · B-10.186).
         if 'credentials' in dirs:
             dirs.remove('credentials')
         for f in files:
@@ -288,14 +288,14 @@ for dir_name in ('web_static', 'templates'):
         datas.append((d_path, dir_name))
 
 # AI HUB (inference KODU + küçük .pkl/.json). Büyük ONNX'ler aşağıda ai_models ağacıyla gömülür.
-# KAYNAK ŞİFRELEME PAROLASI (2026-08-06) — `build_tools/_static_password.py` varsa EXE'ye
-# `pemf_source_key` adıyla gömülür; `apps/backend/utils/source_crypto.read_password()` onu arar.
+# KAYNAK ŞİFRELEME PAROLASI (2026-08-06) — `build_tools/_static_password.py` varsa EXE'ye kök seviyede
+# `_internal/_static_password.py` olarak gömülür; `apps/backend/utils/source_crypto.read_password()` onu İLK arar.
 # YOKSA sessizce atlanır → şifresiz build normal çalışır (geliştirme akışı bozulmaz).
 # ⚠️ Parola üründe gider: kopyalamayı zorlaştırır, tersine mühendisliği ENGELLEMEZ.
 _pw_src = os.path.join(project_path, 'build_tools', '_static_password.py')
 if os.path.exists(_pw_src):
     datas.append((_pw_src, '.'))
-    print('[OK] kaynak sifreleme parolasi EXE ye gomuldu (pemf_source_key)')
+    print('[OK] kaynak sifreleme parolasi EXE ye gomuldu (_internal/_static_password.py)')
 else:
     print('[..] _static_password.py yok -> kaynak sifreleme KAPALI (duz .py kalir)')
 
@@ -672,5 +672,6 @@ coll = COLLECT(
 
 print("\n" + "=" * 80)
 print(f"HEADLESS BACKEND build hazır: {len(binaries)} binary, {len(datas)} data, {len(hidden)} hidden import")
-print("Çıktı: dist/PEMF_Backend/PEMF_Backend.exe")
+# D6.51: çıktı kökü PyInstaller --distpath'idir (build_backend_exe.ps1 → PEMF_BUILD/dist); sabit 'dist/' yanlış yer gösterirdi.
+print("Çıktı: " + os.path.join(globals().get("DISTPATH", "dist"), "PEMF_Backend", "PEMF_Backend.exe"))
 print("=" * 80)

@@ -6,12 +6,11 @@
 ;
 ; KULLANIM:
 ;   1. Headless EXE build et:  cd guii  &&  .\scripts\build_backend_exe.ps1
-;      Build ciktisi C:\PEMF_BUILD\dist\PEMF_Backend olusur. Bu installer
-;      "..\dist\PEMF_Backend" (yani guii\dist\PEMF_Backend) bekler:
-;        -> Ya BuildOutput define'ini kendi cikti yolunuza gore degistirin,
-;        -> Ya da C:\PEMF_BUILD\dist\PEMF_Backend'i guii\dist\PEMF_Backend'e kopyalayin.
+;      Build ciktisi guii\PEMF_BUILD\dist\PEMF_Backend olusur (KORUMALI agac; -BuildRoot ile degisir).
+;      Bu installer varsayilan olarak "..\PEMF_BUILD\dist\PEMF_Backend" bekler (asagidaki BuildOutput):
+;        -> Baska bir cikti yolu icin ISCC "/DBuildOutput=<yol>" verin (build_installer.ps1 bunu yapar).
 ;   2. iscc.exe PEMF_Backend_Setup.iss     (veya Inno Setup IDE: Build > Compile)
-; CIKTI: build_tools\Output\PEMFBackendSetup_v{VERSION}.exe
+; CIKTI: build_tools\Output\PEMFBackendSetup_{ModeName}_v{VERSION}.exe (+ DiskSpanning .bin dilimleri)
 ;
 ; ⚠️ SURUM ETIKETI — CIPLAK ISCC KORIDORU ([BLD-6], denetim 2026-08-24)
 ; Yukaridaki adim 2 (ciplak iscc.exe / Inno Setup IDE) build_installer.ps1'i ATLAR. O betikteki

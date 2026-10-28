@@ -56,7 +56,7 @@ def read_password() -> str:
     """Parolayı çöz. SIRA: ortam değişkeni → gömülü parola modülü.
 
     Sahip parolayı `build_tools/_static_password.py` içine statik yazar; PyInstaller spec'i
-    onu `pemf_source_key` adıyla frozen EXE'ye gömer (bkz. PEMF_Backend_onedir.spec).
+    onu frozen EXE'ye `_internal/_static_password.py` olarak gömer (bkz. PEMF_Backend_onedir.spec).
     Parola yoksa boş döner → şifreleme uygulanmamış build demektir, yükleyici devre dışı kalır.
     """
     env = os.getenv("PEMF_SOURCE_KEY", "").strip()

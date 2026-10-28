@@ -382,7 +382,7 @@ Write-OK "DEMA Terapi Simulatoru build edildi ve dogrulandi."
 # --- Adim 5: KORUMALI Backend Build (delege) ---
 # === PEMF-BACKEND-BUILD-BASI ===
 # ⚠️ DENETIM 2026-08-17: burada eskiden BU BETIK KENDI PyInstaller'ini kosuyor ve
-# `build_backend_exe.ps1:193-216`'daki KOD KORUMA adimini (compile_pyd.py / encrypt_sources.py)
+# `build_backend_exe.ps1`'deki KOD KORUMA adimini (compile_pyd.py / encrypt_sources.py)
 # HIC calistirmiyordu. Olculdu, ikisi de VERSION=1.9.15:
 #     dist/PEMF_Backend/_internal/ai_hub        -> 62 .py / 0 .pyd   <- Inno bunu paketliyordu
 #     PEMF_BUILD/dist/PEMF_Backend/.../ai_hub   -> 49 .pyd / 13 .py  <- base.zip kaynagi
@@ -532,7 +532,7 @@ if (-not $SkipInnoSetup) {
     # === PEMF-KORUMA-KAPISI-BASI ===
     # ⚠️ 4. KORUMA KAPISI (DENETIM 2026-08-17). Olcut `make_base_zip.py`nin kapisiyla AYNI:
     # `__init__.py` DISINDA duz .py kalmissa DUR. Kapi ZORUNLU cunku
-    # `build_backend_exe.ps1:198-200` MSVC yoksa yalnizca UYARIR ve korumasiz agac birakir;
+    # `build_backend_exe.ps1` MSVC (vcvarsall.bat) yoksa yalnizca UYARIR ve korumasiz agac birakir;
     # Inno yolunda `make_base_zip` gibi bir downstream kapi YOKTUR.
     # ⚠️ `.pyenc` (sifreleme yedek katmani) MESRUDUR -> olcut ".pyd VAR mi" DEGIL, "duz .py YOK mu".
     $AiHubDir = Join-Path $OutputDir "_internal\ai_hub"
@@ -588,7 +588,8 @@ Write-Host "============================================================" -Foreg
 Write-Host "                  BUILD TAMAMLANDI" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  PyInstaller Ciktisi : dist\PEMF_Backend\" -ForegroundColor White
+# D6.51 (B-10.186): gercek cikti $OutputDir (= PEMF_BUILD\dist\PEMF_Backend, korumali agac); eskiden sabit "dist\PEMF_Backend\" yaziyordu.
+Write-Host "  PyInstaller Ciktisi : $OutputDir" -ForegroundColor White
 if (-not $SkipInnoSetup) {
     Write-Host "  Kurulum Dosyasi    : build_tools\Output\PEMFBackendSetup_${Mode}_v$BuildVersion.exe" -ForegroundColor White
     Write-Host ""
