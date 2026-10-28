@@ -244,3 +244,21 @@ test("KARŞIT: Petri (n_wells) eskisi gibi çizilir; değişim yoksa nötr ■ 0
   expect(f.textContent).toBe("■ 0");
   expect(renk(f)).toBe(rgb(colors.textMuted));
 });
+
+// TUR 2 (çürütücü kolu): B-6.10'un KARŞITI — null ölçüm DEĞİLDİR ama GERÇEK 0 bir ölçümdür. Fantom tümör sayısının 0'a inmesi (ya da %0
+// güven) seriden DÜŞERSE grafik tam da en önemli sonucu gizler (mutant `cur622_n1` `return ham || NaN` bu dosyada YAŞIYORDU).
+test("KARŞIT B-6.10: GERÇEK 0 ölçümü seriye 0 olarak GİRER — Fantom tümör sayısı 5 → 0 (nötr ▼ 5) · güven %0 çubuğu", async () => {
+  await kur([
+    kayit(82, "20", "em_fantom", "Fantom Tümör Analizi", fantom(0)),
+    kayit(81, "19", "em_fantom", "Fantom Tümör Analizi", fantom(5)),
+  ]);
+  expect(cubukDegerleri()).toEqual(["5", "0"]);
+  const f = farkEl();
+  expect(f.textContent).toBe("▼ 5");
+  expect(renk(f)).toBe(rgb(colors.textMuted));
+  const guven = takipSerisiKur([
+    kayit(91, "21", "disease", "Hastalık Analizi", {}, 0),
+    kayit(92, "22", "disease", "Hastalık Analizi", {}, 0.4),
+  ] as never);
+  expect(guven?.noktalar.map((n) => n.deger)).toEqual([0, 40]);
+});
