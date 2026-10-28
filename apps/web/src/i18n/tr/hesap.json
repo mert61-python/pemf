@@ -73,8 +73,13 @@
   "kayitOlun": "Kayıt olun",
   "odeme": {
     "abonelikYok": "Hesabınızda aktif bir abonelik görünmüyor. Sorun sürerse {{email}} adresine yazın.",
+    "adresUzun": "Adres veya şehir alanı çok uzun.",
+    "alanEksik": "Lütfen \"{{alan}}\" alanını doldurun.",
     "bankaDogrulamadi": "Bankanız işlemi doğrulayamadı. Kart bilgilerinizi kontrol edip tekrar deneyin.",
-    "tahsilEdilemedi": "Ödeme kartınızdan tahsil edilemedi (limit/bakiye). Farklı bir kartla tekrar deneyebilirsiniz."
+    "tahsilEdilemedi": "Ödeme kartınızdan tahsil edilemedi (limit/bakiye). Farklı bir kartla tekrar deneyebilirsiniz.",
+    "tcBicim": "TC Kimlik No 11 haneli olmalıdır.",
+    "telefonBicim": "Telefon numarası geçersiz (ör. +905xxxxxxxxx).",
+    "zatenAbone": "Hesabınızda zaten aktif bir abonelik var. Plan değiştirmek için önce Hesabım menüsünden mevcut aboneliğinizi iptal edin."
   },
   "pencere": {
     "abonelikAciklama": "Aboneliğiniz bu hesaba tanımlanır (mobil ve masaüstü ile aynı).",

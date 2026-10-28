@@ -25,10 +25,14 @@ async function accessToken(): Promise<string | null> {
   return data.session?.access_token ?? null
 }
 
+/** Sunucunun makine-okur hata alanları (D6.30): `kod` = yanıtın `error`ı (ör. 'already_subscribed', 'customer'),
+ *  `alan` = yanlış kutu (CheckoutCustomer anahtarı), `sebep` = 'eksik' | 'bicim' | 'uzun'. Ekran metni bunlardan kurulur. */
+export type CheckoutHataAyrintisi = { kod?: string; alan?: string; sebep?: string }
+
 /** Aboneliği başlat → iyzico checkoutFormContent (gömülecek HTML/script) döner. */
 export async function initCheckout(
   p: CheckoutPayload,
-): Promise<{ content?: string; error?: string; needAuth?: boolean }> {
+): Promise<{ content?: string; error?: string; needAuth?: boolean } & CheckoutHataAyrintisi> {
   const token = await accessToken()
   if (!token) return { needAuth: true }
   // Timeout YOKTU: yarı-açık bağlantıda istek ne çözülüyor ne reddediliyordu → "Hazırlanıyor…"
@@ -42,8 +46,8 @@ export async function initCheckout(
       body: JSON.stringify({ ...p, token, origin: window.location.origin }),
       signal: ctrl.signal,
     })
-    const j = (await r.json().catch(() => ({}))) as { content?: string; message?: string; error?: string }
-    if (!r.ok || !j.content) return { error: j.message || j.error || 'Ödeme başlatılamadı.' }
+    const j = (await r.json().catch(() => ({}))) as { content?: string; message?: string; error?: string; alan?: string; sebep?: string }
+    if (!r.ok || !j.content) return { error: j.message || j.error || 'Ödeme başlatılamadı.', kod: j.error, alan: j.alan, sebep: j.sebep }
     return { content: j.content }
   } catch (e) {
     if ((e as { name?: string })?.name === 'AbortError') {

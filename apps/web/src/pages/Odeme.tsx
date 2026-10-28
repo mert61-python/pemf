@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { PLANS, RESEARCH_ADDON, FREE_MODE } from '../config'
-import { odemeHatasiTurkce } from '../lib/authHatalari'
+import { odemeBaslatmaHatasi } from '../lib/authHatalari'
 import { useAuth } from '../context/AuthContext'
 import { useAuthModal } from '../context/AuthModal'
 import { initCheckout, type CheckoutCustomer } from '../lib/checkout'
@@ -53,7 +53,9 @@ export default function Odeme() {
   // sunuluyordu → yıllık Pro'da ekranda ₺825 yazarken karttan ₺9.900 çekiliyordu (12 kat fark).
   // Gerçek dönem tutarı sayfanın hiçbir yerinde görünmüyordu; bu bir ön bilgilendirme ihlalidir.
   const monthly = yearly ? Math.round((plan?.yearly ?? 0) / 12) : plan?.monthly ?? 0
-  const total = monthly + (research ? RESEARCH_ADDON.monthly : 0)
+  // D6.30 (B-7.6): yıllıkta eklentinin aylık eşdeğeri de YILLIK tarifeden (2 ay bedava) gelir — eskiden aylık tarife
+  // (`RESEARCH_ADDON.monthly`) ekleniyordu: Pro yıllık + Araştırma'da "Aylık eşdeğeri ₺1.215" × 12 = ₺14.580 ≠ tahsil ₺13.800.
+  const total = monthly + (research ? (yearly ? Math.round(RESEARCH_ADDON.yearly / 12) : RESEARCH_ADDON.monthly) : 0)
   /** Bu siparişte HEMEN tahsil edilecek tutar (dönem bedeli).
    *
    *  ⚠️ EKLENTİYE DE "2 AY BEDAVA" UYGULANIR (denetim 2026-08-18): burada `monthly * 12` vardı ve
@@ -73,12 +75,13 @@ export default function Odeme() {
     if (!consent) return setErr(t('odeme.onayGerekli'))
     setErr(null)
     setBusy(true)
-    const { content, error, needAuth } = await initCheckout({ tier, yearly, research, customer: form })
+    const { content, error, needAuth, kod, alan, sebep } = await initCheckout({ tier, yearly, research, customer: form })
     setBusy(false)
     if (needAuth) return requireAuth()
     // Ham iyzico metni ekrana basılmaz (auth tarafındaki kuralın aynısı) — sağlayıcı mesajı
-    // günlüğe gider, kullanıcıya Türkçe ve eylem söyleyen karşılık döner.
-    if (error) return setErr(odemeHatasiTurkce(error))
+    // günlüğe gider, kullanıcıya Türkçe ve eylem söyleyen karşılık döner. D6.30: sunucunun makine-okur
+    // kodu (409 zaten abone, hangi kutu eksik / hatalı) KORUNUR; metin koddan kataloğdan kurulur.
+    if (error) return setErr(odemeBaslatmaHatasi({ error, kod, alan, sebep }))
     if (content) {
       // scriptHost.current'a burada DOKUNMA (henüz render olmadı → null). İçeriği sakla + paying'e
       // geç; enjeksiyonu yukarıdaki useEffect div render olunca yapar.

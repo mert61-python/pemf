@@ -73,8 +73,13 @@
   "kayitOlun": "Sign up",
   "odeme": {
     "abonelikYok": "No active subscription appears on your account. If the problem continues, write to {{email}}.",
+    "adresUzun": "The address or city field is too long.",
+    "alanEksik": "Please fill in the \"{{alan}}\" field.",
     "bankaDogrulamadi": "Your bank could not verify the transaction. Check your card details and try again.",
-    "tahsilEdilemedi": "The payment could not be collected from your card (limit/balance). You can try again with a different card."
+    "tahsilEdilemedi": "The payment could not be collected from your card (limit/balance). You can try again with a different card.",
+    "tcBicim": "The Turkish ID number (TC Kimlik No) must be 11 digits.",
+    "telefonBicim": "The phone number is invalid (e.g. +905xxxxxxxxx).",
+    "zatenAbone": "Your account already has an active subscription. To change plans, first cancel your current subscription from the My account menu."
   },
   "pencere": {
     "abonelikAciklama": "Your subscription is attached to this account (the same as on mobile and desktop).",

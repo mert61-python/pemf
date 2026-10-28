@@ -270,7 +270,8 @@ if (FREE_MODE) {
         [tl(PLANS[2].yearly! + RESEARCH_ADDON.yearly), tl(PLANS[2].yearly! + RESEARCH_ADDON.yearly)],
         ['yıl', 'yr'],
         ['Aylık eşdeğeri', 'Monthly equivalent'],
-        [`${tl(Math.round(PLANS[2].yearly! / 12) + RESEARCH_ADDON.monthly)}/ay`, `${tl(Math.round(PLANS[2].yearly! / 12) + RESEARCH_ADDON.monthly)}/mo`],
+        // D6.30 (B-7.6): yıllıkta eklentinin aylık eşdeğeri de YILLIK tarifeden (eskiden aylık ₺390 eklenip ₺1.215 × 12 ≠ tahsil ₺13.800 kilitleniyordu)
+        [`${tl(Math.round(PLANS[2].yearly! / 12) + Math.round(RESEARCH_ADDON.yearly / 12))}/ay`, `${tl(Math.round(PLANS[2].yearly! / 12) + Math.round(RESEARCH_ADDON.yearly / 12))}/mo`],
         [`${tl(PLANS[2].yearly! + RESEARCH_ADDON.yearly)} tutarındaki yıllık ödeme, siz iptal edene kadar her dönem sonunda otomatik tahsil edilir. Gösterilen tutar KDV dâhil toplam bedeldir; başka bir ücret eklenmez. Ayrıntılar için`,
          `The annual payment of ${tl(PLANS[2].yearly! + RESEARCH_ADDON.yearly)} is charged automatically at the end of each period until you cancel. The amount shown is the total price including VAT; no other fee is added. For details, see the`],
       ],

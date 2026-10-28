@@ -45,22 +45,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ['city', 'Şehir'],
       ['address', 'Adres'],
     ]
+    // D6.30 (B-7.5): yanıt hangi kutunun (`alan`) neden (`sebep`) yanlış olduğunu MAKİNE-OKUR taşır — site koddan kendi
+    // kataloğundaki metni gösterir (i18n KURALLAR §4.13); `message` Türkçe yedek kalır.
     for (const [alan, etiket] of ZORUNLU) {
       if (!String(c[alan] ?? '').trim()) {
-        return res.status(400).json({ error: 'customer', message: `Lütfen "${etiket}" alanını doldurun.` })
+        return res.status(400).json({ error: 'customer', alan, sebep: 'eksik', message: `Lütfen "${etiket}" alanını doldurun.` })
       }
     }
     // BİÇİM DOĞRULAMASI: alanlar eskiden yalnız "boş değil" diye kontrol ediliyordu → hatalı TC/GSM
     // iyzico'ya gidip anlamsız bir sağlayıcı hatasıyla dönüyordu; ayrıca sınırsız uzunlukta adres
     // kabul ediliyordu. Kullanıcıya net mesaj ver, uç noktayı da sınırla.
     if (!/^\d{11}$/.test(String(c.identityNumber).trim())) {
-      return res.status(400).json({ error: 'customer', message: 'TC Kimlik No 11 haneli olmalıdır.' })
+      return res.status(400).json({ error: 'customer', alan: 'identityNumber', sebep: 'bicim', message: 'TC Kimlik No 11 haneli olmalıdır.' })
     }
     if (!/^\+?\d{10,15}$/.test(String(c.gsmNumber).replace(/\s/g, ''))) {
-      return res.status(400).json({ error: 'customer', message: 'Telefon numarası geçersiz (ör. +905xxxxxxxxx).' })
+      return res.status(400).json({ error: 'customer', alan: 'gsmNumber', sebep: 'bicim', message: 'Telefon numarası geçersiz (ör. +905xxxxxxxxx).' })
     }
     if (String(c.address).trim().length > 400 || String(c.city).trim().length > 60) {
-      return res.status(400).json({ error: 'customer', message: 'Adres veya şehir alanı çok uzun.' })
+      const alan = String(c.address).trim().length > 400 ? 'address' : 'city'
+      return res.status(400).json({ error: 'customer', alan, sebep: 'uzun', message: 'Adres veya şehir alanı çok uzun.' })
     }
 
     // AÇIK YÖNLENDİRME: `origin` İSTEMCİ GÖVDESİNDEN geliyordu ve doğrulanmadan iyzico

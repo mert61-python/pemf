@@ -81,7 +81,9 @@ describe('B6 · api iletileri', () => {
   })
 
   it('sitedeki tüketiciler hata metnini YALNIZ sınıflandırıcıdan geçirir (ham sunucu iletisi ekrana çıkmaz)', () => {
-    expect(ODEME_SRC).toMatch(/if \(error\) return setErr\(odemeHatasiTurkce\(error\)\)/)
+    // D6.30 (B-7.5): ödeme sayfası sunucunun makine-okur kodunu (409 · alan-özel 400) koruyan sınıflandırıcıdan geçirir; o da metni
+    // kataloğdan kurar, tanımadığını `odemeHatasiTurkce`ye düşürür (ham metin yine basılmaz — zincir api/_lib/__tests__/odeme-baslatma-hatasi.D6_30).
+    expect(ODEME_SRC).toMatch(/if \(error\) return setErr\(odemeBaslatmaHatasi\(\{ error, kod, alan, sebep \}\)\)/)
     expect(HESAP_SRC).toMatch(/:\s*odemeHatasiTurkce\(error\)/)
     expect(ODEME_SRC).not.toMatch(/setErr\(error\)/)
   })

@@ -91,3 +91,32 @@ export function odemeHatasiTurkce(ham?: string | null): string {
   }
   return i18n.t('hesap.hata.islemTamamlanamadi', { email: COMPANY.email })
 }
+
+/** Ödeme formundaki kutuların ekran etiketleri (`Odeme.tsx` placeholder'larıyla AYNI anahtar) — hata metni kutuyu adıyla anar.
+ *  Değişmez anahtarlı çağrılar (dinamik `t(degisken)` YOK — K-3 kapısı anahtarları katalogda doğrular). */
+const ODEME_ALAN_ETIKETI: Record<string, () => string> = {
+  name: () => i18n.t('odeme.ad'),
+  surname: () => i18n.t('odeme.soyad'),
+  identityNumber: () => i18n.t('odeme.tc'),
+  gsmNumber: () => i18n.t('odeme.telefon'),
+  city: () => i18n.t('hesap.alan.sehir'),
+  address: () => i18n.t('odeme.adres'),
+}
+
+/**
+ * ÖDEME BAŞLATMA HATASI (D6.30 · B-7.5): `api/checkout.ts` makine-okur `error` (kod) + `alan` + `sebep` döner; eskiden ekran HEPSİNİ
+ * `odemeHatasiTurkce`ye sokuyordu → 409 "zaten aktif abonelik" ve "TC Kimlik No 11 haneli olmalı" gibi alan-özel iletiler genel
+ * "İşlem tamamlanamadı … tekrar deneyin"e dönüşüyordu (kullanıcı neyi düzelteceğini / önce iptal etmesi gerektiğini bilemiyordu).
+ * Ham sunucu metni YİNE ekrana basılmaz: metin koddan, kataloğdan kurulur; tanınmayan durum `odemeHatasiTurkce`ye düşer.
+ */
+export function odemeBaslatmaHatasi(h: { error?: string | null; kod?: string; alan?: string; sebep?: string }): string {
+  if (h.kod === 'already_subscribed') return i18n.t('hesap.odeme.zatenAbone')
+  if (h.kod === 'customer') {
+    if (h.sebep === 'bicim' && h.alan === 'identityNumber') return i18n.t('hesap.odeme.tcBicim')
+    if (h.sebep === 'bicim' && h.alan === 'gsmNumber') return i18n.t('hesap.odeme.telefonBicim')
+    if (h.sebep === 'uzun') return i18n.t('hesap.odeme.adresUzun')
+    const etiket = h.alan && Object.hasOwn(ODEME_ALAN_ETIKETI, h.alan) ? ODEME_ALAN_ETIKETI[h.alan] : undefined
+    if (h.sebep === 'eksik' && etiket) return i18n.t('hesap.odeme.alanEksik', { alan: etiket() })
+  }
+  return odemeHatasiTurkce(h.error)
+}
