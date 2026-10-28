@@ -7,7 +7,8 @@ yazıyordu → konsol yok → HER mesaj kayboluyordu. Aynı script'te Mosquitto 
 (`PEMF Mosquitto MQTT`, TCP 1883 <- 192.168.137.0/24) try/catch'siz, `-ErrorAction Stop`suz ve
 SON-KONTROLSÜZ oluşturuluyordu. MpsSvc durmuşsa / GPO firewall'u kilitlediyse cmdlet hata akışına
 düşer, 1883 loopback probe'u yine geçer, "Mosquitto hazır" loglanır, `.install_verified` yazılır.
-Sonuç: ESP bobin 6-8 (hotspot subnet) broker'a ULAŞAMAZ ama yerel her gösterge YEŞİL — sıfır kanıt.
+Sonuç: ESP bobini (hotspot subnet) broker'a ULAŞAMAZ ama yerel her gösterge YEŞİL — sıfır kanıt.
+(D6.54: betiğin ESP bobin etiketi topolojiden — `live_state.ESP_COIL_IDS` — türetilip ölçülür; bugün "ESP bobin 8".)
 
 Bu dosya ÜÇ şeyi ÖLÇER (metin aramaz):
   (a) `Ensure-PemfMosquittoFirewallRule` fonksiyonu, PowerShell'in KENDİ parser'ıyla script'ten
@@ -56,6 +57,24 @@ def _pwsh_file(tmp_path: Path, name: str, body: str) -> subprocess.CompletedProc
         errors="replace",
         timeout=120,
     )
+
+
+def _esp_bobin_numarasi() -> str:
+    """D6.54: betikteki ESP bobin etiketi TEK KAYNAKTAN — `live_state.ESP_COIL_IDS` (yönlendirme kümesi). Tek bobin "8",
+    ardışık küme "6-8", dağınık küme "6, 8". Elle yazılmış "6-8" topoloji 2026-09-10'da (bobin 6-7 STM'e) değişince bayatladı."""
+    from servers import live_state
+
+    ids = sorted(int(i) for i in live_state.ESP_COIL_IDS)
+    assert ids, "live_state.ESP_COIL_IDS BOŞ — ESP bobin etiketi türetilemez"
+    if len(ids) == 1:
+        return str(ids[0])
+    if ids == list(range(ids[0], ids[-1] + 1)):
+        return f"{ids[0]}-{ids[-1]}"
+    return ", ".join(str(i) for i in ids)
+
+
+# "ESP bobin 8", "ESP bobini (8)", "ESP bobinleri 6-8", "ESP 6-8" … — betikteki HER ESP bobin numarası (yorum dahil: aynı iddia).
+_ESP_NUMARA_RE = re.compile(r"ESP(?:[ \t]+bobin\w*)?[ \t]*\(?[ \t]*(\d+(?:[ \t]*-[ \t]*\d+)?)(?![\d.])")
 
 
 def _ps_lit(s: str | Path) -> str:
@@ -150,7 +169,8 @@ def test_firewall_kural_yaratilamaz_ve_yok_ise_False_ve_eylemli_UYARI(tmp_path):
     assert "MpsSvc" in log and "New-NetFirewallRule" in log, (
         f"UYARI eylem SOYLEMIYOR: 'MpsSvc' kontrolu ve elle 'New-NetFirewallRule' komutu olmali.\nLog:\n{log}"
     )
-    assert "ESP bobin 6-8" in log, f"UYARI sonucu (ESP bobin 6-8 ulasamaz) soylemiyor.\nLog:\n{log}"
+    etiket = f"ESP bobin {_esp_bobin_numarasi()}"
+    assert etiket in log, f"UYARI sonucu ({etiket} ulasamaz — live_state.ESP_COIL_IDS) soylemiyor.\nLog:\n{log}"
     # catch dalı GERÇEKTEN çalıştı mı? (-ErrorAction Stop yoksa Write-Error yutulur, bu satır düşmez)
     assert "Firewall kuralı oluşturulamadı" in log and "RPC server unavailable" in log, (
         f"New-NetFirewallRule hatasi catch'e DUSMEDI — '-ErrorAction Stop' eksik/try yok; hata akisa "
@@ -326,3 +346,30 @@ def test_MosqFirewallOk_her_yolda_tanimli_ve_ozette_gorunur():
         "'mosqFirewall=' bos yazilir. Fonksiyon tanimindan sonra, cagridan once '$MosqFirewallOk = $false' koy."
     )
     assert "mosqFirewall=$MosqFirewallOk" in src, "ozet/bayrak 'mosqFirewall=$MosqFirewallOk' kanitini tasimiyor"
+
+
+def test_ESP_bobin_etiketi_HER_yerde_topolojiden_D6_54():
+    """D6.54 (B-10.195): operatör uyarıları, NSSM açıklaması ve yorumlar ESP bobin numarasını `live_state.ESP_COIL_IDS` ile AYNI söyler.
+
+    Bobin 6-7 2026-09-10'da STM'e taşındı (ESP_COIL_IDS = {8}); betik 'ESP bobin 6-8' diyordu → operatör olmayan iki bobini arardı.
+    Tek uyarı satırına bakan (a) kolu ikiz yerleri (NSSM açıklaması, özet uyarıları, hotspot hatırlatması) görmez → dosyanın TAMAMI taranır."""
+    beklenen = _esp_bobin_numarasi()
+    src = PS1.read_text(encoding="utf-8-sig")
+    bulunan = [
+        (src.count("\n", 0, m.start()) + 1, re.sub(r"[ \t]+", "", m.group(1))) for m in _ESP_NUMARA_RE.finditer(src)
+    ]
+    assert bulunan, (
+        "setup_services.ps1'de 'ESP bobin <numara>' etiketi HİÇ bulunamadı — desen ya da betik değişti; operatör uyarısı "
+        "hangi bobinin broker'a ulaşamadığını SÖYLEMELİ."
+    )
+    yanlis = [(satir, numara) for satir, numara in bulunan if numara != beklenen]
+    assert not yanlis, (
+        f"setup_services.ps1 ESP bobin numarası topolojiyle ÇELİŞİYOR (live_state.ESP_COIL_IDS → '{beklenen}'): "
+        + "; ".join(f"satır {s}: '{n}'" for s, n in yanlis)
+        + f" — 'ESP bobin {beklenen}' yaz."
+    )
+    # NSSM servis açıklaması (services.msc'de operatörün gördüğü) da aynı etiketi taşır.
+    aciklama = re.search(r'\$ServiceMosq\s+Description\s+"([^"]*)"', src)
+    assert aciklama and f"ESP bobin {beklenen}" in aciklama.group(1), (
+        f"Mosquitto NSSM açıklaması 'ESP bobin {beklenen}' demiyor: {aciklama.group(1) if aciklama else 'BULUNAMADI'}"
+    )

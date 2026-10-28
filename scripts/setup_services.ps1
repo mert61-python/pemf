@@ -14,8 +14,8 @@ param(
     [switch]$Uninstall,
     [switch]$PurgeData,         # -Uninstall ile: hasta DB + şifreleme anahtarlarını da KALICI sil (KVKK; varsayılan KORU)
     # ⚠️ BİLİNÇLİ SAHİP KARARI (2026-08-04): hotspot SSID/parolası SABİTTİR
-    # (`PEMF-Gateway` / `pemf1234`) ve her kurulan makinede AYNI kalacaktır — ESP bobinleri
-    # (6-8) bu değerleri KENDİ firmware'lerinde (`secrets_coil_*.h`, bu depoda DEĞİL) taşır.
+    # (`PEMF-Gateway` / `pemf1234`) ve her kurulan makinede AYNI kalacaktır — ESP bobin 8
+    # bu değerleri KENDİ firmware'inde (`secrets_coil_*.h`, bu depoda DEĞİL) taşır.
     # Bu iki parametre VERİLMEZSE davranış eski hâliyle BİREBİR aynıdır; yalnızca ileride
     # cihaz-başına parola istenirse (ESP reflash'ıyla BİRLİKTE) kullanılmak üzere vardır.
     # Verilirse C:\ProgramData\PEMF_System\hotspot.json'a yazılır ve start_hotspot.ps1 oradan okur.
@@ -100,7 +100,7 @@ $NssmExe = if (Test-Path $NssmBundled) {
 $MosqInstallDir = "C:\Program Files\PEMF\mosquitto"
 $MosqDataRoot   = "C:\ProgramData\PEMF_System\mosquitto"
 # Mosquitto firewall kuralı: 'PEMF Mosquitto MQTT' = TCP 1883 inbound, YALNIZ hotspot subnet'i.
-# P0-3 (GÜVENLİK): Broker'a 1883 yalnız HOTSPOT subnet'inden (ESP bobin 6-8, 192.168.137.x)
+# P0-3 (GÜVENLİK): Broker'a 1883 yalnız HOTSPOT subnet'inden (ESP bobin 8, 192.168.137.x)
 # erişilebilsin; klinik LAN'ından KAPALI. ESP firmware'i broker'a ANON bağlandığından
 # (BLE provisioner kimlik göndermiyor) auth açılamaz → savunma: hotspot WPA2 + bu subnet
 # kısıtı. Loopback (127.0.0.1) firewall'dan muaftır → backend localhost bağlantısı çalışır.
@@ -108,7 +108,7 @@ $MosqDataRoot   = "C:\ProgramData\PEMF_System\mosquitto"
 # DENETİM 2026-09-06: eski kod New-NetFirewallRule'u try/catch'siz, -ErrorAction Stop'suz ve
 # SON-KONTROLSÜZ çağırıyordu. MpsSvc durmuşsa / GPO firewall'u kilitlediyse cmdlet hata akışına
 # düşüp geçiyordu; 1883 loopback probe'u yine geçer, "Mosquitto hazır" loglanır, .install_verified
-# yazılır → ESP bobin 6-8 broker'a ULAŞAMAZ ama yerel her gösterge YEŞİL, sıfır kanıt. Şimdi:
+# yazılır → ESP bobin 8 broker'a ULAŞAMAZ ama yerel her gösterge YEŞİL, sıfır kanıt. Şimdi:
 # try/catch + her yolda kuralı YENİDEN SORGULA + eylem söyleyen UYARI + [bool] dönüş (özet+bayrağa).
 # Fonksiyon olarak ayrıldı ki testler installer'ı çalıştırmadan dot-source edip mock'la ölçebilsin.
 #
@@ -122,7 +122,7 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
     $Hotspot = "192.168.137.0/24"
     $Genis = $false
     # DEV-C4 (D4B §8 #2 — İG-9.5 / 4B-3.5 ile aynı sınıf): uzak adres dışındaki içerik de doğrulanır. Aynı adlı ama devre dışı / Block / giden /
-    # UDP / başka port / dar profilli kural "var" sayılınca sonuç True, `.install_verified` mosqFirewall=True yazıyordu; ESP bobinleri (6-8) 1883'e
+    # UDP / başka port / dar profilli kural "var" sayılınca sonuç True, `.install_verified` mosqFirewall=True yazıyordu; ESP bobini (8) 1883'e
     # ULAŞAMAZDI. ESP KAPALI: uymayan kural silinir, doğrusu kurulur (uyan kural varsa yenisi kurulmaz). ESP ETKİN: dokunulmaz (Y3), uyarı, $false.
     # Kapı: tests/test_setup_services_MOSQ_FW_kurali_ICERIKLE_DEV_C4.py
     $IcerikUymuyor = $false
@@ -140,7 +140,7 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
             $PortFiltresi = $Kural | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
             $Icerik = "$($PortFiltresi.Protocol) $($PortFiltresi.LocalPort), Enabled=$($Kural.Enabled), Action=$($Kural.Action), Direction=$($Kural.Direction), Profile=$($Kural.Profile)"
             if ($EspEtkin) {
-                Log "UYARI: 'PEMF Mosquitto MQTT' adlı kural VAR ama içeriği TCP 1883 Inbound Allow (etkin, tüm profiller) DEĞİL ($Icerik) — ESP ETKİN: DOKUNULMADI (Y3 / A-04); ESP bobinleri (6-8) broker'a ulaşamayabilir. Elle: Remove-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT'; $ElleKur" "Yellow"
+                Log "UYARI: 'PEMF Mosquitto MQTT' adlı kural VAR ama içeriği TCP 1883 Inbound Allow (etkin, tüm profiller) DEĞİL ($Icerik) — ESP ETKİN: DOKUNULMADI (Y3 / A-04); ESP bobini (8) broker'a ulaşamayabilir. Elle: Remove-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT'; $ElleKur" "Yellow"
                 $IcerikUymuyor = $true
             } else {
                 try {
@@ -148,7 +148,7 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
                     $SilinenKural++
                     Log "'PEMF Mosquitto MQTT' adlı kuralın içeriği uymuyordu ($Icerik) -> silindi; doğrusu (TCP 1883 <- $Hotspot) kurulacak." "Yellow"
                 } catch {
-                    Log "UYARI: 'PEMF Mosquitto MQTT' adlı kuralın içeriği uymuyor ($Icerik) ve silinemedi ($_) — ESP bobinleri (6-8) broker'a ulaşamayabilir. Elle: Remove-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT'; $ElleKur" "Yellow"
+                    Log "UYARI: 'PEMF Mosquitto MQTT' adlı kuralın içeriği uymuyor ($Icerik) ve silinemedi ($_) — ESP bobini (8) broker'a ulaşamayabilir. Elle: Remove-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT'; $ElleKur" "Yellow"
                     $IcerikUymuyor = $true
                 }
             }
@@ -200,7 +200,7 @@ function Ensure-PemfMosquittoFirewallRule([bool]$EspEtkin = $false) {
     $UyanKural = @(Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue | Where-Object { $_ -and (& $IcerikUygun $_) })
     $MosqFirewallOk = $UyanKural.Count -gt 0 -and -not $Genis -and -not $IcerikUymuyor
     if (-not $MosqFirewallOk -and -not $Genis -and -not $IcerikUymuyor) {
-        Log "UYARI: 'PEMF Mosquitto MQTT' (TCP 1883 <- 192.168.137.0/24) kuralı YOK -> ESP bobin 6-8 broker'a ULAŞAMAZ. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) GPO firewall'u kilitliyor mu? Kural elle: New-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any" "Yellow"
+        Log "UYARI: 'PEMF Mosquitto MQTT' (TCP 1883 <- 192.168.137.0/24) kuralı YOK -> ESP bobin 8 broker'a ULAŞAMAZ. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) GPO firewall'u kilitliyor mu? Kural elle: New-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any" "Yellow"
     }
     return [bool]$MosqFirewallOk
 }
@@ -525,7 +525,7 @@ include_dir $($MosqDataRoot -replace '\\','/')/conf.d
     # "C:\Program Files\..." mosquitto'ya "C:\Program" olarak geçip "Unable to open config" verirdi.
     Set-Content -Path "$MosqDataRoot\mosquitto.conf" -Value $conf -Encoding ASCII
 
-    # Firewall (TCP 1883 — yalnız hotspot subnet, ESP bobin 6-8). D3.42: ESP ETKİN mi — backend'in göreceği değer (profil > makine ortamı).
+    # Firewall (TCP 1883 — yalnız hotspot subnet, ESP bobin 8). D3.42: ESP ETKİN mi — backend'in göreceği değer (profil > makine ortamı).
     $EspEtkin = Test-PemfEspEtkin $OnProfil ([Environment]::GetEnvironmentVariable('PEMF_ESP_ENABLED', 'Machine'))
     $MosqFirewallOk = Ensure-PemfMosquittoFirewallRule -EspEtkin $EspEtkin
 
@@ -543,7 +543,7 @@ include_dir $($MosqDataRoot -replace '\\','/')/conf.d
         & $NssmExe set $ServiceMosq AppParameters "-c $mconf" *>$null
         & $NssmExe set $ServiceMosq AppDirectory  $MosqInstallDir *>$null
         & $NssmExe set $ServiceMosq DisplayName    "PEMF Mosquitto Broker" *>$null
-        & $NssmExe set $ServiceMosq Description     "PEMF yerel MQTT broker (ESP bobin 6-8)." *>$null
+        & $NssmExe set $ServiceMosq Description     "PEMF yerel MQTT broker (ESP bobin 8)." *>$null
         & $NssmExe set $ServiceMosq Start           SERVICE_AUTO_START *>$null
         & $NssmExe set $ServiceMosq AppStdout       "$MosqDataRoot\log\nssm_mosquitto.log" *>$null
         & $NssmExe set $ServiceMosq AppStderr       "$MosqDataRoot\log\nssm_mosquitto.log" *>$null
@@ -717,9 +717,9 @@ if ($AtRest -ne 'dogrulandi') {
     exit 1
 }
 Log "At-rest şifreleme DOĞRULANDI (atRestEncrypted=true)." "Green"
-if ($MosqFailed) { Log "UYARI: Backend çalışıyor AMA Mosquitto broker başlamadı → ESP bobinleri (6-8) bağlanamaz. Yukarıdaki mosquitto hatasını giderin." "Yellow" }
-# DENETİM 2026-09-06: firewall kuralı yoksa broker yerelde çalışsa bile ESP 6-8 (hotspot subnet) erişemez → özette görünsün.
-if ($Mode -eq "device" -and -not $MosqFirewallOk) { Log "UYARI: Mosquitto firewall kuralı (PEMF Mosquitto MQTT) DOĞRULANAMADI → ESP bobinleri (6-8) broker'a ulaşamaz. Yukarıdaki firewall uyarısındaki komutu elle çalıştırın." "Yellow" }
+if ($MosqFailed) { Log "UYARI: Backend çalışıyor AMA Mosquitto broker başlamadı → ESP bobini (8) bağlanamaz. Yukarıdaki mosquitto hatasını giderin." "Yellow" }
+# DENETİM 2026-09-06: firewall kuralı yoksa broker yerelde çalışsa bile ESP bobin 8 (hotspot subnet) erişemez → özette görünsün.
+if ($Mode -eq "device" -and -not $MosqFirewallOk) { Log "UYARI: Mosquitto firewall kuralı (PEMF Mosquitto MQTT) DOĞRULANAMADI → ESP bobini (8) broker'a ulaşamaz. Yukarıdaki firewall uyarısındaki komutu elle çalıştırın." "Yellow" }
 # D5 M-1: API / keşif kuralı içerikle doğrulanamadıysa backend localhost'ta sağlıklı olsa da LAN'dan erişilemeyebilir → özette görünsün.
 if (-not $ApiFirewallOk) { Log "UYARI: Backend güvenlik duvarı kuralı ($($FwKurallar.n -join ' + ')) içerikle DOĞRULANAMADI → mobil / web istemci (ACİL DURDUR dahil) LAN'dan bağlanamayabilir. Yukarıdaki firewall uyarısındaki komutu elle çalıştırın." "Yellow" }
 Log "Kurulum DOĞRULANDI → http://localhost:$probePort (mosqFirewall=$MosqFirewallOk, apiFirewall=$ApiFirewallOk)" "Green"
@@ -728,7 +728,7 @@ Log "Kurulum DOĞRULANDI → http://localhost:$probePort (mosqFirewall=$MosqFire
 Set-Content -Path (Join-Path $AppDir ".install_verified") -Value @((Get-Date -Format o), "mosqFirewall=$MosqFirewallOk", "apiFirewall=$ApiFirewallOk") -Encoding ASCII -ErrorAction SilentlyContinue
 
 # ───────────────────── HOTSPOT (PEMF-Gateway WiFi — yalnız KLİNİK/device) ─────────────────────
-# ESP bobinleri (6-8) bu WiFi'ye bağlanıp yerel mosquitto'ya (1883) MQTT yapar. Windows Mobile Hotspot
+# ESP bobini (8) bu WiFi'ye bağlanıp yerel mosquitto'ya (1883) MQTT yapar. Windows Mobile Hotspot
 # KULLANICI OTURUMU ister (LocalSystem servisi/session-0 başlatamaz) → (1) logon Scheduled Task ile her
 # açılışta kullanıcı oturumunda başlat (eski GUI sistem davranışı) + (2) kurulumda bir kez hemen başlat.
 if ($Mode -eq "device") {
@@ -748,10 +748,10 @@ if ($Mode -eq "device") {
                 }
                 ($hcObj | ConvertTo-Json -Compress) | Set-Content -LiteralPath $hcPath -Encoding UTF8
                 Log "Hotspot kimliği yazıldı: $hcPath (SSID=$($hcObj.ssid))" "Green"
-                Log "HATIRLATMA: parola değiştiyse ESP bobinleri 6-8 secrets_coil_*.h ile YENİDEN FLASH'LANMALI." "Yellow"
+                Log "HATIRLATMA: parola değiştiyse ESP bobin 8 secrets_coil_*.h ile YENİDEN FLASH'LANMALI." "Yellow"
             } catch { Log "hotspot.json yazılamadı: $_" "Yellow" }
         } else {
-            Log "Hotspot kimliği verilmedi → varsayılan SSID/parola kullanılacak (bilinçli karar; ESP 6-8 firmware'iyle eşleşir)." "Gray"
+            Log "Hotspot kimliği verilmedi → varsayılan SSID/parola kullanılacak (bilinçli karar; ESP bobin 8 firmware'iyle eşleşir)." "Gray"
         }
         # LattePanda 3 = Intel AX201 → legacy hosted-network YOK (Intel SoftAP'yi AX2xx'te kaldırdı); tek yol WinRT
         # Mobile Hotspot, o da KULLANICI OTURUMU ister (LocalSystem servisi/session-0 AÇAMAZ). Bu yüzden logon-task +
