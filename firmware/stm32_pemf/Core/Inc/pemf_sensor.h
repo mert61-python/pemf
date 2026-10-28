@@ -32,9 +32,10 @@
  * ⚠️ TERMAL KESME YOK — SAHİP KARARI
  * ============================================================================
  * Bu dosya sıcaklığı OKUR ve bildirir; **PWM'i durdurmaz**. Sahip 2026-09-10'da bobin 6-7 için
- * termal kesme istemedi. Kalan tek otomatik katman arayüzdeki 48 °C istemci interlock'udur
- * (`pf/src/components/domain/CoilParameterPanel.tsx:21`) ve o da ölçümün arayüze ULAŞMASINA
- * bağlıdır — bu dosyanın asıl işlevi budur. Buraya sessizce bir kesme EKLENMEZ.
+ * termal kesme istemedi. A-47 (2026-09-29) arayüzdeki 48 °C istemci interlock'unu da KALDIRDI: hiçbir katmanda
+ * otomatik termal kesme yok; 48 °C üstü yalnız GÖRSEL uyarı (`apps/ui/src/components/domain/CoilParameterPanel.tsx`
+ * `SICAKLIK_UYARI_ESIGI_C`) ve o da ölçümün arayüze ULAŞMASINA bağlıdır — bu dosyanın asıl işlevi budur.
+ * Buraya sessizce bir kesme EKLENMEZ.
  *
  * ============================================================================
  * BU DOSYADA AKIM YOK — AMA SİSTEMDE VAR

@@ -1053,13 +1053,15 @@ static uint8_t Coil_DecodeAndValidatePacket(const BinaryCmdPacket_t *pkt,
  * kesmesine sahip" yazıyordu. Bobin 6-7 artık ESP'de DEĞİL, BU KARTTA (2026-09-10)
  * ve onlarda da CİHAZ-TARAFLI termal kesme YOK (sahip kararı). Yani BUGÜN yedi
  * bobinin HİÇBİRİNDE cihaz-yerel termal koruma yoktur.
- * Kalan tek otomatik katman arayüzdeki 48 °C istemci interlock'udur ve o da
- * `T=` telemetrisinin ULAŞMASINA bağlıdır (bkz. printf-float notu, dosya başı).
- * Backend 48°C limiti sahip kararıyla kaldırıldı ve GERİ EKLENMEYECEK.
+ * ⚠️ A-47 (sahip, 2026-09-29 — L1-7.2): arayüzdeki 48 °C istemci interlock'u da KALDIRILDI; HİÇBİR katmanda
+ * (firmware / backend / istemci) otomatik termal engelleme ya da kesme YOK. Sıcaklık ölçülür, gösterilir, kaydedilir;
+ * 48 °C üstü yalnız GÖRSEL uyarıdır ve o da `T=` telemetrisinin ULAŞMASINA bağlıdır (bkz. printf-float notu,
+ * dosya başı). Backend 48 °C limiti de kaldırıldı ve GERİ EKLENMEYECEK.
  *
  * Bu blok TAM bir NTC termal kesme uygular ama ⚠️ DONANIM HENÜZ BAĞLI DEĞİL:
  * PEMF_NTC_TERMAL_ENABLED=0 iken hiçbir kod derlenmez (davranış birebir eski).
- * NTC'ler bağlanınca 1 yapıp tezgahta doğrulayın.
+ * ⛔ A-47: NTC termal kesme YAPILMAYACAK — bayrak 0 kalır (1 yapılırsa `pemf_akim.c` `#error` ile derleme DURUR,
+ * D5.06). Aşağıdaki blok TARİHÇEDİR; "NTC'ler bağlanınca bayrağı aç" önerisi geçersiz.
  *
  * Devre (bobin başına): 3V3 ── NTC(10k, B=3950) ──●── R(10k) ── GND, ● → ADC pini.
  * Pinler (bobin 1..5): PA0=IN0, PA3=IN3, PA4=IN4, PC0=IN10, PC3=IN13 (ADC1).
@@ -1324,9 +1326,9 @@ int main(void) {
 
     /* ── BOBIN 6-7 SENSOR TELEMETRISI (STM_TELE) ────────────────────────────────────
      * ⚠️ Bu satir, bobin 6-7'nin sicakligini arayuze tasiyan TEK yoldur ve arayuzdeki
-     * 48 °C istemci interlock'u (CoilParameterPanel.tsx:21,143) buna bagimlidir — cihaz
-     * tarafli termal kesme sahip karariyla YOK. Yani bu satir kesilirse o iki bobinde
-     * HICBIR otomatik termal koruma kalmaz. Sessizce kaldirilmamali.
+     * 48 °C GORSEL uyarisi (CoilParameterPanel.tsx SICAKLIK_UYARI_ESIGI_C) buna bagimlidir — A-47: hicbir
+     * katmanda otomatik termal kesme / engelleme YOK (istemci interlock'u da kaldirildi). Yani bu satir
+     * kesilirse o iki bobinin sicakligi ne gosterilir ne kaydedilir. Sessizce kaldirilmamali.
      *
      * ⚠️ AKIM ALANI YOK (sahip karari 3: ACS712 tasinmiyor). 0.0 gondermek 'olculdu' gibi
      * kaydedilir; gecmiste ayni desen PDF'e '0.0 °C olculdu' yazdirmisti. Olculmeyen alan
