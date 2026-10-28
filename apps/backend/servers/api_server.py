@@ -5648,13 +5648,16 @@ def _sensor_persistence_loop():
 
 
 def _daily_maintenance_loop():
-    """Asama-2 (4): GUNLUK arka-plan bakim — retention temizligi + .db yedek.
+    """Asama-2 (4): GUNLUK arka-plan bakim — retention temizligi + haftalik VACUUM. YEDEK ALMAZ.
     - Retention: session_events (PEMF_RETAIN_EVENT_DAYS, vars. 365, 0 = silme — headless bakımla aynı ayar; B2-1.6).
       ⚠️ D2.44 (B-4.18 · O-B2.1): sensör örneklerini bu döngü SİLMEZ — tek silici `services/headless_db_maintenance`
       (`PEMF_RETAIN_SENSOR_DAYS`, 0 = kapalı).
-    - Haftada bir wal_checkpoint(TRUNCATE) + VACUUM (run_maintenance helper'i + VACUUM).
-    - Gunluk .db yedek: once wal_checkpoint, sonra pemf_treatment_history.db ->
-      app_data/backups/pemf_treatment_history_YYYYMMDD.db (shutil.copy2). Son 14 yedek tutulur.
+    - KVKK anonimlestirme turu (`services.kvkk_anonimlestirme.tur`; operator onayina bagli — D2.54 · A-06).
+    - Haftada bir wal_checkpoint(TRUNCATE) + VACUUM (run_maintenance helper'i + VACUUM); seans yokken ertelenmis
+      KVKK VACUUM'lari (tedavi DB'si D1.58, hasta DB'si Y121).
+    - ⚠️ Gunluk .db yedegini BU DONGU ALMAZ (D6.07 · B-4.22): tek yedekleyici `services/headless_db_maintenance`
+      (`_run_backup` → `create_backup`: online backup API; sifreli DB'de yedek de sifreli). Eskiden burada duz-metin
+      dosya kopyasi aliniyordu — govdedeki "3) GUNLUK YEDEK" notu. Kapi: tests/test_belge_capalari_ve_yedek_iddiasi_D6_07.py
     Hata olursa loglanir, cokmez. Ilk calisma acilistan ~60sn sonra (acilisi yavaslatmamak icin)."""
     import time as _t
 

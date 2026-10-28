@@ -22,14 +22,14 @@ Hepsi **Qt-bağımsızdır** (headless EXE'ye uygun).
 | Dosya | Görev |
 |---|---|
 | `headless_services.py` | Üç denetleyici: **`MosquittoSupervisor`** (MQTT broker'ı bul/başlat/izle), **`NetworkStatusService`** (internet/hotspot/gateway-modu yoklama), **`UdpDiscoveryService`** (LAN UDP keşif yanıtlayıcı) |
-| `credential_manager.py` | **`CredentialManager`** — ESP bobin / köprü / Android için cihaz-başı MQTT kimlik-bilgilerini (`DeviceCredential`) deterministik türetir; Mosquitto parola+ACL / HiveMQ / ESP-secrets dosyalarını dışa yazar |
+| `credential_manager.py` | **`CredentialManager`** — **elle koşulan CLI** (`python -m services.credential_manager generate / list / export / provision`); çalışan backend onu içe aktarmaz / örneklemez. ESP bobin / köprü / Android için cihaz-başı MQTT kimlik-bilgilerini (`DeviceCredential`) deterministik türetir; Mosquitto parola+ACL / HiveMQ / ESP-secrets dosyalarını dışa yazar. Silinmez (Y7 sınıfı) |
 | `mdns_service.py` | **`MDNSService`** — bağımsız mDNS ilancısı; host IP değişince servisi (ve MQTT'yi) yeniden kaydeden IP-izleme döngüsü |
 | `headless_db_maintenance.py` | **`HeadlessDBMaintenance`** — periyodik thread: disk-alanı kontrolü, DB bakımı, yedek + yedek rotasyonu, saha-dışı kopya |
 
 ## Sistemdeki yeri
 - `MosquittoSupervisor` yerel broker'ı (`bin/mosquitto`) yönetir → ESP bobinler ve API buna bağlanır.
-- `credential_manager` [`config/credentials/`](../../../config/README.md) altındaki Mosquitto parola/ACL dosyalarını üretir.
-- Bu servisler `headless_core.py` tarafından oluşturulur; API katmanından [`event_bus`](../event_bus.py) ile gevşek bağlıdır.
+- `credential_manager` yalnız **elle koşulunca** (CLI) Mosquitto parola/ACL dosyalarını `<veri kökü>/config/credentials/` altına üretir (`CREDENTIALS_DIR`; deponun [`config/`](../../../config/README.md) dizini DEĞİL). Sahada Python yoktur; yerel broker kimliğini bugün `PEMF_Backend.exe --mqtt-kimlik hazirla` (`utils/mqtt_kimlik.py`, A-04) hazırlar.
+- `MosquittoSupervisor`, `NetworkStatusService` ve `UdpDiscoveryService` `headless_core.py` tarafından oluşturulur; `MDNSService`'i `MosquittoSupervisor` oluşturur (`headless_services.py`), `HeadlessDBMaintenance` `backend_service.py` → `start_headless_db_maintenance` ile başlar. API katmanından [`event_bus`](../event_bus.py) ile gevşek bağlıdırlar.
 
 ---
 İlgili: [proje geneli](../../../README.md) · [servers/](../servers/README.md) · [config/](../../../config/README.md) · [mimari](../../../docs/ARCHITECTURE.md)

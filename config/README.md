@@ -24,12 +24,12 @@ kök `.env.example`'daki `PEMF_*` değişkenlerindedir.)
 | `config.json` | Ana app config: MQTT `mode:local` (Mosquitto 127.0.0.1:1883, HiveMQ bulut kaldırıldı), zamanlayıcılar, performans (sensör penceresi, sqlite batch, bulut-sync temposu) |
 | `config.json.template` | Yukarıdakinin temizlenmiş şablonu |
 | `pemf_config.json` | ⚠️ **KULLANIM DIŞI** (denetim 2026-08-03: hiçbir kod okumuyor; dosyanın kendi `_DEPRECATED` notu var). Eski sunucu-ağ config'i (`http_port 5080`, `websocket_port 5555`, UDP keşif 5766, `max_esp_devices 8`, SSL kapalı) — değerleri CANLI YAPILANDIRMA DEĞİL. Gerçek ayarlar: CORS/host/auth → `deploy/*.env` (`PEMF_CORS_ORIGINS`/`PEMF_API_HOST`/`PEMF_REQUIRE_AUTH`); app ayarları → `config.json` + `apps/backend/utils/production_config_manager.py`. Yeni ayar EKLEME |
-| `credentials/` | **Sırlar** — `credentials.json`, `mosquitto_acl.conf`, `mosquitto_passwords.txt`, `secrets_coil_6.h` (ESP bobin-6 sır başlığı) |
+| `credentials/` | **Sırlar** — depoda YOK (`.gitignore`). Elle koşulan `credential_manager` CLI'ı aynı adlı dosyaları `<veri kökü>/config/credentials/` altına yazar (`credentials.json`, `mosquitto_acl.conf`, `mosquitto_passwords.txt`, `hivemq_users.json`, `secrets_coil_<n>.h` ESP sır başlığı); çalışan backend bu dizini okumaz / yazmaz |
 | `mosquitto/mosquitto.conf` | Yerel broker: `listener 1883 0.0.0.0`, taban `allow_anonymous true` + sonda `include_dir conf.d` — A-04 · D1.104: `PEMF_Backend.exe --mqtt-kimlik hazirla` oraya kimlik parçası (`allow_anonymous false` + parola + ACL) yazınca broker KİMLİKLİ olur; hazırlanmamışsa anonim (hotspot-subnet firewall + WPA2 ile savunulur), persistence kapalı |
 
 ## Notlar
 - **Bobin GPIO haritası yalnız firmware'dedir** (`../firmware/stm32_pemf/Core/Src/main.c`), config'te değil.
-- `credentials/` dosyaları [`../services/credential_manager.py`](../apps/backend/services/README.md) tarafından üretilir/tüketilir.
+- `credentials/` dosyalarını yalnız **elle koşulan CLI** [`apps/backend/services/credential_manager.py`](../apps/backend/services/README.md) üretir (`python -m services.credential_manager …`); çalışan backend onu içe aktarmaz / çağırmaz. Yerel broker kimliğini bugün `PEMF_Backend.exe --mqtt-kimlik hazirla` (`apps/backend/utils/mqtt_kimlik.py`, A-04) hazırlar.
 - ⚠️ `credentials/` sır içerir → repoya girmemeli / ACL-kilitli olmalı (bkz. [`../utils/file_acl.py`](../apps/backend/utils/README.md)).
 
 ---

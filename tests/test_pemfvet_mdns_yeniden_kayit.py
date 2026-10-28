@@ -6,7 +6,7 @@
 telefonu kendi 127.0.0.1'ine gönderir) ve log *"arayüz gelince kaydolacak"* diyor. Ama `_reregister`
 `_mdns_service_info is None` ise ERKEN DÖNÜYORDU — yani tam da kaydın atlandığı durumda re-register
 hiç çalışmıyordu. Ölçüldü: `get_shared_zeroconf` HİÇ çağrılmıyor. Kardeş yayıncı doğru yapıyor
-(`apps/backend/services/mdns_service.py:219-236` ServiceInfo'yu SIFIRDAN kuruyor) → `_mqtt` toparlanıyor,
+(`apps/backend/services/mdns_service.py` → `MDNSService._reregister_mqtt` ServiceInfo'yu SIFIRDAN kuruyor) → `_mqtt` toparlanıyor,
 `_pemfvet` toparlanmıyordu.
 
 ⚠️ RAPORUN ÖNERDİĞİ TEK SATIRLIK DÜZELTME YETERSİZDİ (analizle ortaya çıktı). İki ayrı senaryo var:
@@ -21,12 +21,12 @@ rota bulamazsa `ifaddr` tabanlı gerçek arayüz adresine düşüyor.
 
 ⚠️ Guard'ı TAMAMEN SİLMEK bir REGRESYON olurdu: `stop_mdns()` callback'i listeden silmiyor, yani
 guard kalkarsa bir arayüz değişimi KASITLI OLARAK KALDIRILMIŞ servisi diriltir
-(`mdns_service.py:222-223` bunu açıkça yasaklıyor). Aşağıdaki 3. test bu yönü kilitler — yani süit,
+(`mdns_service.py` → `MDNSService._reregister_mqtt`, "Audit P3" guard'ı bunu açıkça yasaklıyor). Aşağıdaki 3. test bu yönü kilitler — yani süit,
 iki hatalı düzeltme yönünü BİRBİRİNDEN AYIRT EDİYOR.
 
-⚠️ KAPSAM DIŞI (bilerek): `_mqtt` yayıncısının kendi `_get_local_ip`i (`mdns_service.py:38-47`) AYNI
-kör noktayı taşıyor → offline klinikte `_pemfvet` toparlanır, `pemf-gateway.local` HÂLÂ yayınlanmaz.
-İkinci dosya = daha büyük yama; ayrı kalem.
+⚠️ O GÜN KAPSAM DIŞIYDI, SONRADAN KAPANDI: `_mqtt` yayıncısının kendi `_get_local_ip`i (`mdns_service._get_local_ip`)
+aynı kör noktayı taşıyordu; bugün o da rota yoksa `utils.zeroconf_singleton._real_lan_ipv4s` (ifaddr) ikinci aşamasına
+düşüyor → offline klinikte `pemf-gateway.local` da yayınlanır.
 """
 
 import os

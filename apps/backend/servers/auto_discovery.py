@@ -32,12 +32,15 @@ _mdns_device_name = "PEMF-Vet"
 #   (b) `start_mdns` çağrıldı ama LAN IP yoktu, İLK kayıt ATLANDI → re-register TAM DA BURADA GEREKLİ
 # (b) durumunda `_pemfvet` süreç ömrü boyunca HİÇ yayınlanmıyordu; log ise "arayüz gelince
 # kaydolacak" diyordu (ölçüldü: `get_shared_zeroconf` hiç çağrılmadı). Kardeş yayıncı doğru
-# yapıyor: `services/mdns_service.py:219-236` ServiceInfo'yu SIFIRDAN kuruyor.
+# yapıyor: `services/mdns_service.py` → `MDNSService._reregister_mqtt` ServiceInfo'yu SIFIRDAN kuruyor
+# (`self._build_service_info(ip)` + `register_service`). (Çapa SATIR NUMARASIYLA değil ADLA verilir — satır
+# çapası kaymıştı, D6.07 · B-4.23. Kapı: tests/test_belge_capalari_ve_yedek_iddiasi_D6_07.py)
 #
 # ⚠️ Guard'ı TAMAMEN SİLMEK YANLIŞ OLURDU: `stop_mdns()` `_reregister_cbs`'ten callback'i SİLMİYOR
 # (`utils/zeroconf_singleton` kaldırma API'si sunmuyor), dolayısıyla guard kalkarsa bir arayüz
 # değişimi KASITLI OLARAK KALDIRILMIŞ servisi DİRİLTİR — kardeş dosya bunu açıkça yasaklıyor
-# (`mdns_service.py:222-223`, "Audit P3: stop() sonrası callback re-publish etmesin").
+# (`mdns_service.py` → `MDNSService._reregister_mqtt` ilk deyimi: `if not self._running: return`,
+# "Audit P3: stop() sonrası callback re-publish etmesin").
 _mdns_started = False
 
 

@@ -229,13 +229,19 @@ def _kilit_direncli_tasi(src, dst, logger=None, deneme=_KILIT_DENEME, bekleme_s=
         deney: dosyada `open(db, "rb")` acikken karantinaya_al -> None
                -> cagiran RuntimeError firlatir -> BACKEND ACILMAZ
 
-    SADECE OKUMA tutamaci bile yetiyor. Uründe tam bunu yapan bir daemon var:
-    `api_server._daily_maintenance_loop` gunluk yedegi `shutil.copy2` ile aliyor, yani
-    `pemf_treatment_history.db`yi ACIYOR. Anahtar uyusmazligi tam o ana denk gelirse
-    tuglalasmayi ONLEMEK icin yazilan zarf tuglalastiriyordu — ilk 4 deneme (0,75 sn)
-    kisa bir kopyalamayi bile beklemeye yetmiyor.
+    SADECE OKUMA tutamaci bile yetiyor. Anahtar uyusmazligi tam bir okuma anina denk gelirse
+    tuglalasmayi ONLEMEK icin yazilan zarf tuglalastiriyordu — ilk 4 deneme (0,75 sn) kisa bir
+    okumayi bile beklemeye yetmiyor.
 
-    24 x 0,25 sn = 6 sn: kucuk bir DB kopyasi buraya rahat sigar. Acilista en kotu
+    ⚠️ D6.07 · B-4.22: bu gerekce 2026-09-19'da sucluyu `api_server._daily_maintenance_loop`un
+    gunluk dosya kopyasi olarak gosteriyordu; o kopyalayici KALDIRILDI (yedegi artik
+    `services/headless_db_maintenance` → `create_backup` alir: surec ici online backup API,
+    dosyayi ayrica acan bir kopyalama yok). Karantina DB nesnesi KURULURKEN (`_init_database`) kosar; o anda
+    dosyayi tutabilecek okuyucu surec DISINDANDIR: antivirus taramasi, dosya yedekleyici /
+    indeksleyici, ikinci bir backend ornegi ya da elle acilmis bir DB goruntuleyicisi. Butce
+    onlar icin KORUNUR. Kapi: tests/test_belge_capalari_ve_yedek_iddiasi_D6_07.py
+
+    24 x 0,25 sn = 6 sn: kisa bir dis okuma buraya rahat sigar. Acilista en kotu
     durumda 6 sn gecikme, ACILMAMAKTAN kiyaslanamayacak kadar iyidir. Kalici bir
     okuyucu varsa yine duser ve hata mesaji operatore ne yapacagini soyler.
 
