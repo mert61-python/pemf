@@ -7818,6 +7818,13 @@
      "turler": [
       "dizi"
      ]
+    },
+    {
+     "metin": "(CASE WHEN json_valid({{kolon}}) THEN json_extract({{kolon2}}, '$.{{alan}}') END)",
+     "gerekce": "SQL parçası / sütun tanımı — metin değil (DB şeması / sorgu; Y208 olay yükü alanı)",
+     "turler": [
+      "donus"
+     ]
     }
    ],
    "birlesikIstisna": [],

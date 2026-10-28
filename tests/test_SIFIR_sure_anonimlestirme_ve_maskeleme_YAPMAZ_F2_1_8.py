@@ -57,7 +57,8 @@ def test_KRITIK_redact_old_session_pii_SIFIR_ve_negatifte_HICBIR_seansi_maskelem
         )
         c.commit()
     assert tdb.redaksiyon_bekleyen_sayisi(gun) == 0, "süre 0/negatif (kapalı) iken bekleyen sayıldı"
-    assert tdb.redact_old_session_pii(gun) == {"sessions_redacted": 0, "parameters_redacted": 0}
+    # SON (Y208): rapor olay sayacını da taşır (`events_redacted`) — sıfır / negatif sürede o da 0.
+    assert tdb.redact_old_session_pii(gun) == {"sessions_redacted": 0, "parameters_redacted": 0, "events_redacted": 0}
     with tdb._get_connection() as c:
         assert (
             c.execute("SELECT patient_name FROM treatment_sessions WHERE id=?", (sid,)).fetchone()[0]

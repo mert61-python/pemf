@@ -37,17 +37,27 @@ class PiiKarisimi:
         siz = ", ".join(f"'{d}'" for d in cls._PII_SIZ_DEGERLER)
         return f"({sutun} IS NOT NULL AND {sutun} != '' AND {sutun} NOT IN ({siz}))"
 
-    def _redaksiyon_kosulu(self):
-        """(SQL koşulu, parametreler): seansın maskelenecek alanı VAR mı (seans sütunu ya da PII parametresi)?
+    @classmethod
+    def _olay_alani_sql(cls, alan: str, kolon: str = "payload") -> str:
+        """`session_events` JSON yükündeki alan — geçersiz JSON'da NULL (json_extract hata verip bütün UPDATE'i düşürmesin)."""
+        return f"(CASE WHEN json_valid({kolon}) THEN json_extract({kolon}, '$.{alan}') END)"
 
-        ⚠️ D2.58 (B-3.89): bekleyen sayısı ve maskeleme bu TEK ölçütten türer — ekranın "N kayıt" dediği, maskelemenin değiştirdiğidir."""
+    def _redaksiyon_kosulu(self):
+        """(SQL koşulu, parametreler): seansın maskelenecek alanı VAR mı (seans sütunu, PII parametresi ya da olay yükündeki hasta adı)?
+
+        ⚠️ D2.58 (B-3.89): bekleyen sayısı ve maskeleme bu TEK ölçütten türer — ekranın "N kayıt" dediği, maskelemenin değiştirdiğidir.
+        ⚠️ Y208 (S-D5.6): yalnız `session_events` yükünde ad kalan seans da sayılır (maskeleme onu da değiştirir)."""
         adlar = tuple(sorted(self._PII_PARAM_NAMES))
         seans = " OR ".join(self._maskelenecek_mi_sql(s) for s in self._PII_MASKELENEN_SEANS_SUTUNLARI)
         param = (
             "EXISTS (SELECT 1 FROM session_parameters p WHERE p.session_id = treatment_sessions.id "
             f"AND p.parameter_name IN ({','.join('?' * len(adlar))}) AND {self._maskelenecek_mi_sql('p.parameter_value')})"
         )
-        return f"({seans} OR {param})", adlar
+        olay = " OR ".join(
+            self._maskelenecek_mi_sql(self._olay_alani_sql(a, "e.payload")) for a in self._PII_MASKELENEN_OLAY_ALANLARI
+        )
+        olay = f"EXISTS (SELECT 1 FROM session_events e WHERE e.session_id = treatment_sessions.id AND ({olay}))"
+        return "(" + " OR ".join((seans, param, olay)) + ")", adlar
 
     def redaksiyon_bekleyen_sayisi(self, retain_days: int = 365) -> Optional[int]:
         """Bu ayarla KAÇ seans maskelenecek? (kuru çalışma — hiçbir şey değiştirmez)
@@ -83,11 +93,17 @@ class PiiKarisimi:
 
     #: Maskelenen seans sütunları — `redact_old_session_pii` UPDATE'i ve onay KAPSAM imzası BURADAN türer (tek kaynak).
     _PII_MASKELENEN_SEANS_SUTUNLARI = ("patient_name", "operator_name", "patient_notes")
+    #: Y208 (S-D5.6, sahip): `session_events` JSON yükünde maskelenen alanlar (SessionManager `session_started` yükü hasta adını taşır).
+    _PII_MASKELENEN_OLAY_ALANLARI = ("patient_name",)
 
     def pii_kapsam_imzasi(self) -> str:
-        """Maskeleme KAPSAMI (hangi alanlar maskelenir) — bir sürüm kapsamı genişletirse eski onay geçersiz olur (A-09)."""
-        return "seans:{}|parametre:{}".format(
-            ",".join(self._PII_MASKELENEN_SEANS_SUTUNLARI), ",".join(sorted(self._PII_PARAM_NAMES))
+        """Maskeleme KAPSAMI (hangi alanlar maskelenir) — bir sürüm kapsamı genişletirse eski onay geçersiz olur (A-09).
+
+        ⚠️ Y208: olay yükü alanı kapsama girdi → `|olay:` bölümü eklendi; ondan önce verilmiş onay GEÇERSİZ (operatör yeniden onaylar)."""
+        return "seans:{}|parametre:{}|olay:{}".format(
+            ",".join(self._PII_MASKELENEN_SEANS_SUTUNLARI),
+            ",".join(sorted(self._PII_PARAM_NAMES)),
+            ",".join(self._PII_MASKELENEN_OLAY_ALANLARI),
         )
 
     def pii_onayi_oku(self) -> Optional[dict]:
@@ -175,6 +191,7 @@ class PiiKarisimi:
         report = {
             'sessions_redacted': 0,
             'parameters_redacted': 0,
+            'events_redacted': 0,
         }
         # ⚠️ F2-1.8 (2-F incelemesi · D2.49 kuralı): süre 0/negatif → HİÇBİR şey maskelenmez (eskiden `max(1, …)` → 1 GÜNLÜK kesim:
         # dünden önceki tüm seanslar geri dönüşsüz maskelenirdi — ölçüldü).
@@ -225,8 +242,25 @@ class PiiKarisimi:
                 )
                 report['parameters_redacted'] = int(cursor.rowcount)
 
+                # ⚠️ Y208 (S-D5.6, sahip): olay yükündeki hasta adı da — `SessionManager` yaşam döngüsü olayı (`session_started`) adı
+                # düz taşıyordu, maskeleme yalnız sütun / parametreye bakıyordu → ad olay tablosunda SÜRESİZ kalıyordu. YALNIZ maskelenecek
+                # değeri olan satır yazılır (D2.58); yükün geri kalanı (opak `patient_id`, olay türü) aynen kalır.
+                for _alan in self._PII_MASKELENEN_OLAY_ALANLARI:
+                    cursor.execute(
+                        f'''
+                        UPDATE session_events
+                        SET payload = json_set(payload, '$.{_alan}', '[REDACTED]')
+                        WHERE session_id IN (
+                            SELECT id FROM treatment_sessions WHERE session_date < ?
+                        )
+                        AND {self._maskelenecek_mi_sql(self._olay_alani_sql(_alan))}
+                    ''',
+                        (cutoff_date,),
+                    )
+                    report['events_redacted'] += int(cursor.rowcount)
+
                 conn.commit()
-                if report['sessions_redacted'] or report['parameters_redacted']:
+                if report['sessions_redacted'] or report['parameters_redacted'] or report['events_redacted']:
                     self._silme_sonrasi_denetim_noktasi(conn, "PII maskeleme")  # F2-2.3 (Y13 · D2.29 ilkesi)
         except Exception as e:
             self.logger.warning(f"PII redaction uyarısı: {e}")

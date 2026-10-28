@@ -324,6 +324,7 @@ class BakimKarisimi:
             'dead_outbox_removed': 0,
             'sessions_pii_redacted': 0,
             'parameters_pii_redacted': 0,
+            'events_pii_redacted': 0,
         }
         # ⚠️ F2-1.2 · A-73: saat akla yatkın değilse HİÇBİR geri dönüşsüz adım koşmaz (bkz. `saat_akla_yatkin_mi`).
         if not self.saat_akla_yatkin_mi():
@@ -380,10 +381,16 @@ class BakimKarisimi:
                 pii_report = self.redact_old_session_pii(pii_retain_days)
                 report['sessions_pii_redacted'] = int(pii_report.get('sessions_redacted', 0))
                 report['parameters_pii_redacted'] = int(pii_report.get('parameters_redacted', 0))
+                # Y208 (S-D5.6): olay yükündeki hasta adı — iz `olay` = yükü maskelenen OLAY satırı (birim adında).
+                report['events_pii_redacted'] = int(pii_report.get('events_redacted', 0))
                 # Denetim izi (2026-08-09, Tier 3): maskeleme GERİ DÖNÜŞSÜZ ve arka planda,
                 # kimse bakmadan çalışır. Kaç kaydın hangi eşikle maskelendiği yazılmazsa,
                 # klinik 366. günde [REDACTED] görüp sebebini hiçbir yerde bulamaz.
-                if report['sessions_pii_redacted'] or report['parameters_pii_redacted']:
+                if (
+                    report['sessions_pii_redacted']
+                    or report['parameters_pii_redacted']
+                    or report['events_pii_redacted']
+                ):
                     self.denetim_yaz(
                         "retention.pii_maskelendi",
                         scope="otomatik",
@@ -391,6 +398,7 @@ class BakimKarisimi:
                         detail={
                             "gun": int(pii_retain_days),
                             "parametre": report['parameters_pii_redacted'],
+                            "olay": report['events_pii_redacted'],
                             "etkilenen_seans": etkilenen_seans,
                         },
                     )
