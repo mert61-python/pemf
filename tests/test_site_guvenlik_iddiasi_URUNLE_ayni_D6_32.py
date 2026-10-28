@@ -217,6 +217,16 @@ def test_KARSIT_KANIT_termal_deseni_AYIRIYOR(dil, metin, beklenen):
 #: Kılavuz kuralı (METIN-KILAVUZU "Klinik riski olan özellik açıklanır") yazarı SSS'te NEYİ yazmaya yönlendirir: belirsiz "güvenlik kesmeleri"
 #: (termal kesme olarak okunuyordu — B-11.8) yerine ürünün GERÇEK iki kesmesi (acil durdurma, süre sınırı).
 DEMA_KAYNAK = "dema-terapi-simülatörü/src"
+#: TUR 2 (çürütücü kolu): "ISO-13485" / "ISO 13485:2016" / yalın "13485" yazımları da aynı uyumluluk iddiası — eski `ISO\s*13485` tireli yazımı
+#: görmüyordu (mutant `cur670_n2`: DEMA EN kataloğuna "ISO-13485 certified" TÜM kümede YAŞIYORDU; EN değer bayt bayt pinli değil).
+DEMA_ISO = re.compile(r"ISO\W{0,3}13485|\b13485\b", re.I)
+
+
+def test_KARSIT_KANIT_D6_70_ISO_deseni_yazim_bicimlerini_yakalar():
+    for metin in ("EU ISO 13485 uyumlu", "ISO-13485 certified", "ISO 13485:2016", "EN ISO13485", "13485 sertifikası"):
+        assert DEMA_ISO.search(metin), metin
+    for metin in ("Bu simülatör tanıtım/eğitim amaçlıdır", "frekans 134 Hz · 85 mT", "ISO 9001"):
+        assert not DEMA_ISO.search(metin), metin
 
 
 def test_KRITIK_D6_70_kilavuz_AI_Pro_kurali_GERCEK_kesmeleri_anar():
@@ -247,6 +257,6 @@ def test_KRITIK_D6_70_DEMA_kaynagi_ISO_13485_ve_termal_iddia_TASIMAZ():
     sorun = []
     for d in dosyalar:
         t = d.read_text(encoding="utf-8")
-        sorun += [f"{d.relative_to(KOK)}: {m.group(0)!r}" for m in re.finditer(r"ISO\s*13485", t, re.I)]
+        sorun += [f"{d.relative_to(KOK)}: {m.group(0)!r}" for m in DEMA_ISO.finditer(t)]
         sorun += [f"{d.relative_to(KOK)}: {m.group(0)!r}" for r in (TERMAL_TR, TERMAL_EN) for m in r.finditer(t)]
     assert not sorun, "DEMA simülatöründe dayanaksız uyumluluk / termal kesme iddiası:\n  " + "\n  ".join(sorun)
