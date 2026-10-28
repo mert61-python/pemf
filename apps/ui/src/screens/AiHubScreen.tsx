@@ -3783,6 +3783,13 @@ function CatSoundModule({ patientName }: { patientName: string }) {
 
       {result && (
         <View style={styles.resultBox}>
+          {/* D6.23 (B-6.31): sunucu belirsizliği `guvenilir` ile taşır — ev sahibi kartı gibi hekim modülü de zayıf sonucu kesin bulgu
+              gibi sunmaz (reddetmez: gerçek ağrı kaydı da düşük güvende olabilir; sahip kararı 2026-08-15). */}
+          {result.guvenilir === false && (
+            <View style={styles.sesGuvenUyari}>
+              <Text style={styles.sesGuvenUyariText}>{t("ai.ses.guvenilirDegil")}</Text>
+            </View>
+          )}
           {(() => {
             const tc = result.top_1_class ?? "";
             const a = catSoundAdvice()[tc];
@@ -4008,9 +4015,14 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
                 {t("ai.ct.bulgu", { parcalar: [nStone > 0 ? t("ai.ct.bulguTas", { count: nStone }) : "", nCyst > 0 ? t("ai.ct.parcaKist", { count: nCyst }) : ""].filter(Boolean).join(" + ") })}
               </Text>
             </View>
-          ) : (
+          ) : nKidney > 0 ? (
             <View style={[styles.ctFindingChip, { backgroundColor: colors.success + "22", borderColor: colors.success }]}>
               <Text style={[styles.resultText, { fontWeight: "800", color: colors.success }]}>{t("ai.ct.bulguYok")}</Text>
+            </View>
+          ) : (
+            // D6.23 (B-6.32): böbrek dokusu görülmediyse model taş / kist YOKLUĞUNU söyleyemez — yeşil "bulgu yok" yerine nötr not.
+            <View style={[styles.ctFindingChip, { borderColor: colors.textMuted }]}>
+              <Text style={[styles.resultText, { fontWeight: "700", color: colors.textMuted }]}>{t("ai.ct.bulguDegerlendirilemedi")}</Text>
             </View>
           )}
 

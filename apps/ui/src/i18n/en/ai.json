@@ -87,6 +87,7 @@
     "analiziBaslat": "Start CT Analysis",
     "baslik": "Kidney CT Analysis",
     "bulgu": "⚠ Finding: {{parcalar}}",
+    "bulguDegerlendirilemedi": "No kidney tissue was found, so stones and cysts could not be assessed — check that the image is a kidney CT slice.",
     "bulguTas_one": "{{count}} kidney stone",
     "bulguTas_other": "{{count}} kidney stones",
     "bulguYok": "✓ No stone or cyst finding",

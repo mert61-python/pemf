@@ -1133,24 +1133,30 @@ describe("bölüm 9 — Böbrek CT ve Böbrek Patoloji modülleri (araştırma)"
     const tr = render(<AiHubScreen />);
     await gorselAnaliz2(tr, "Böbrek CT", "Galeriden Seç", "CT Analizini Başlat", bos);
     expect(tr.getByText("Görüntüde böbrek yapısı tespit edilemedi.")).toBeTruthy();
-    expect(tr.getByText("✓ Taş veya kist bulgusu yok")).toBeTruthy();
+    // D6.23 (B-6.32): böbreği görmeyen model taş / kist YOKLUĞUNU söyleyemez — boş sonuçta yeşil "bulgu yok" yerine nötr not;
+    // yeşil rozet böbrek dokusu görülen sonuçta (aşağıda `uc`) iki dilde de durur.
+    expect(tr.getByText("Böbrek dokusu bulunamadığı için taş ve kist değerlendirilemedi — görüntünün böbrek CT kesiti olduğunu kontrol edin.")).toBeTruthy();
+    expect(tr.queryByText("✓ Taş veya kist bulgusu yok")).toBeNull();
     tr.unmount();
     mockHastaNo += 1;
     const tr2 = render(<AiHubScreen />);
     await gorselAnaliz2(tr2, "Böbrek CT", "Galeriden Seç", "CT Analizini Başlat", uc);
     expect(tr2.getByText("2. Böbrek (soldan 2.) — güven %80")).toBeTruthy();
+    expect(tr2.getByText("✓ Taş veya kist bulgusu yok")).toBeTruthy();
     tr2.unmount();
     mockHastaNo += 1;
     await enYap();
     const en = render(<AiHubScreen />);
     await gorselAnaliz2(en, "Kidney CT", "Choose from Gallery", "Start CT Analysis", bos);
     expect(en.getByText("No kidney structure could be detected in the image.")).toBeTruthy();
-    expect(en.getByText("✓ No stone or cyst finding")).toBeTruthy();
+    expect(en.getByText("No kidney tissue was found, so stones and cysts could not be assessed — check that the image is a kidney CT slice.")).toBeTruthy();
+    expect(en.queryByText("✓ No stone or cyst finding")).toBeNull();
     en.unmount();
     mockHastaNo += 1;
     const en2 = render(<AiHubScreen />);
     await gorselAnaliz2(en2, "Kidney CT", "Choose from Gallery", "Start CT Analysis", uc);
     expect(en2.getByText("2. Kidney (#2 from the left) — confidence 80%")).toBeTruthy();
+    expect(en2.getByText("✓ No stone or cyst finding")).toBeTruthy();
   });
 
   it("Patoloji: TR + EN statik; sonuç (derece adı / yüzde / çubuklar); AI geçmişi kaydı TR ile BAYT BAYT aynı", async () => {

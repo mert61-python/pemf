@@ -87,6 +87,7 @@
     "analiziBaslat": "CT Analizini Başlat",
     "baslik": "Böbrek CT Analizi",
     "bulgu": "⚠ {{parcalar}} bulgusu",
+    "bulguDegerlendirilemedi": "Böbrek dokusu bulunamadığı için taş ve kist değerlendirilemedi — görüntünün böbrek CT kesiti olduğunu kontrol edin.",
     "bulguTas_one": "{{count}} böbrek taşı",
     "bulguTas_other": "{{count}} böbrek taşı",
     "bulguYok": "✓ Taş veya kist bulgusu yok",
