@@ -14,8 +14,27 @@ import os
 import threading
 
 import httpx
+from utils import ceviri
 
 logger = logging.getLogger("ai_client")
+
+#: DEV-D5.GPU (22-SON · D67 devri): GPU servisi (`ai_service/app.py`) katalog TAŞIMAZ → açıklama hatasını SABİT Türkçe metinle döndürür.
+#: İstemciye İSTEK dilinde gitsin diye yanıt burada katalog metnine çevrilir (gömülü yol `ai_router` ile AYNI anahtarlar). Servisin metni
+#: eşleme ANAHTARIDIR — değişirse kapı kırmızı (`tests/test_ai_servisi_XAI_HATASI_istek_dilinde_DEV_D5_GPU.py`).
+_XAI_HATA_METINLERI = {
+    "Açıklama üretilemedi": "ai.sonuc.aciklamaUretilemedi",
+    "Açıklama en fazla 25 hastalık CSV için üretilir (IG maliyeti).": "ai.hata.xaiEnFazla25",
+}
+
+
+def _xai_hatasini_cevir(yanit):
+    """Servis yanıtındaki bilinen `xai_error` metnini istek dilindeki katalog metnine çevirir; başka her şey AYNEN."""
+    if isinstance(yanit, dict):
+        anahtar = _XAI_HATA_METINLERI.get(yanit.get("xai_error"))
+        if anahtar:
+            yanit["xai_error"] = ceviri.t(anahtar)
+    return yanit
+
 
 AI_SERVICE_URL = os.environ.get("PEMF_AI_SERVICE_URL", "").rstrip("/")
 # ⚠️ D1.14 (B-2.17): BOZUK değer (ör. 'yuzseksen') eskiden modül içe aktarımında ValueError atıyordu
@@ -59,7 +78,7 @@ def _post_sync(url: str, **kw):
         try:
             resp = client.post(url, **kw)
             resp.raise_for_status()
-            return resp.json()
+            return _xai_hatasini_cevir(resp.json())
         except Exception as e:
             if doldu.is_set() and not isinstance(e, httpx.HTTPStatusError):
                 raise _toplam_sure_asildi(url) from e
@@ -76,7 +95,7 @@ async def _post_async(url: str, **kw):
         except asyncio.TimeoutError as e:
             raise _toplam_sure_asildi(url) from e
         resp.raise_for_status()
-        return resp.json()
+        return _xai_hatasini_cevir(resp.json())
 
 
 async def delegate_infer(
