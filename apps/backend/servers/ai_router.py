@@ -700,9 +700,13 @@ _ai_started_at = 0.0
 _AI_PRO_MAX_DURATION_MIN = 120
 # AI Pro freq sabit 1 Hz (eski PyQt DDS varsayılanı). Sabit; backend'de limit/clamp EKLEME.
 _AI_PRO_FREQ_HZ = 1.0
-# em_kedi modelinin sabit ekstra girdileri (eski camera_ai_thread ile birebir).
-_AI_ACHIEVED_B = 0.001  # Tesla (1 mT)
-_AI_DUTY_SUM = 1.5
+# em_kedi modelinin sabit ekstra girdileri (eski camera_ai_thread ile birebir: 0.001 T = 1 mT · 1.5).
+# ⚠️ D7.02 (DENETIM-12 P2): TEK KAYNAK `ai_pro_hedef.KEDI_*` — sürüş (`_predict_and_drive_cpu/_gpu`) bu adları, XAI açıklaması
+# ve onay metası `KediSaglayici.achieved_B/duty_sum`'ı okur; iki ayrı literal sahip kararı #9'u ("açıklama dozun FİİLEN
+# hesaplandığı girdilerle") yalnız TESADÜFEN tutuyordu. Adlar korunur (monkeypatch çıpaları). Kapı:
+# tests/test_kedi_ai_pro_ek_girdileri_TEK_KAYNAK_D7_02.py
+_AI_ACHIEVED_B = ai_pro_hedef.KEDI_ACHIEVED_B
+_AI_DUTY_SUM = ai_pro_hedef.KEDI_DUTY_SUM
 #: Organ kimliği → ad işlevi (`ai.organ.*`; anahtarlar AÇIK yazılır — dinamik anahtar yok). Ad `mode` VERİSİNE de girer (`AI Pro · model · organ`) → veri için `dil="tr"`.
 _ORGAN_ADLARI = {
     0: lambda dil: ceviri.t("ai.organ.tumVucut", dil=dil),
