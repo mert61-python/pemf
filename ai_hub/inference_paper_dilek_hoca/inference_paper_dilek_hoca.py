@@ -66,11 +66,16 @@ TEXT_COLOR = (0, 0, 255)                          # BGR — kirmizi
 LINE_SPACE = 24
 
 # --- ROI kusagi (analysis fonksiyonu icin) ---
-HALF_BAND_RATIO = 0.10                            # toplam %20 ROI
+# ⚠️ D6.19 (B-5.20 · Y19): "Analiz" paneli (`draw_analysis`) bu YARI-bandla cizer: [orta - max(50, 0.10*eksen),
+# orta + max(50, 0.10*eksen)) → eksenin ~%20'si. "Kapanma" paneli ve closure METRIKLERI (`compute_closure_metrics`) ise
+# SCRATCH_ROI_RATIO (%30) bandini kullanir — IKI BANT BILEREK AYRI (sahip karari Y19: yalniz etiket / yorum duzelir,
+# hesaplanan metrikler degismez; gecmis analizlerle kiyaslanabilirlik korunur). Ornek 1600 px: analiz [640, 960),
+# closure [560, 1040). Analiz panelindeki "ROI cells / ROI bg/cell ratio / Gap distance" sayilari %20 bandindandir.
+HALF_BAND_RATIO = 0.10                            # yari-bant: toplam ~%20 ROI (yalniz Analiz paneli; min 2x50 px)
 BLOB_MAX_DEVIATION = 300                          # sari marker mesafe limiti (px)
 
 # --- Closure analizi (quantitative scratch wound healing) ---
-SCRATCH_ROI_RATIO = 0.30                          # ROI genisligi = %30 goruntu genisligi
+SCRATCH_ROI_RATIO = 0.30                          # ROI genisligi = %30 eksen (closure metrikleri + Kapanma paneli; Analiz paneli DEGIL)
 SMOOTH_KERNEL = np.ones((5, 5), np.uint8)
 SMOOTH_ITERS = 3                                   # gap-width olcumu icin morfoloji
 
@@ -502,8 +507,13 @@ def draw_analysis(binary: np.ndarray, dikey_kusak: bool = True) -> np.ndarray:
 
     ⚠️ 2026-09-09'a kadar bu esleme TERSTI (`vertical_box=(scratch_yonu == "yatay")`): kullanici
     "dikey" secmesine ragmen YATAY cizgiler ciziliyor, hem sahip bildirimi hem de Kapanma paneli
-    ile celisiyordu (o panel kolon bandi ciziyor). Kusagin isi yarayi ICINE almaktir; closure
-    metrikleri de ayni bandi kullanir.
+    ile celisiyordu (o panel kolon bandi ciziyor). Kusagin isi yarayi ICINE almaktir.
+
+    ⚠️ BANT GENISLIGI FARKLI (D6.19 · Y19): bu panel HALF_BAND_RATIO ile ~%20'lik bant cizer (yari-bant
+    max(50 px, %10)); closure metrikleri ve Kapanma paneli SCRATCH_ROI_RATIO ile %30'luk bandi kullanir
+    (`compute_closure_metrics` `roi_bas`/`roi_son`). Eski "closure metrikleri de ayni bandi kullanir"
+    cumlesi YANLISTI. Bant bilerek esitlenmedi (Y19: metrikler degismez); bu panelin ROI sayilari kendi
+    %20 bandina aittir.
     """
     vis_bgr = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
     height, width = binary.shape
