@@ -20,6 +20,10 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
 `deploy/staging.env` (üretim-benzeri doğrulama — audit B-9.4). Python kodu değişmez; kurulum scripti
 `setup_services.ps1 -Mode device|server|staging` doğru profili okur.
 
+> **Profil dosyaları UTF-8 kaydedilir (Y205 · S-D5.21):** `deploy\*.env` elle düzenlenirse UTF-8 olarak kaydedin. Kurulum betikleri
+> (`setup_services.ps1`, `install_backend_service.ps1` — `Read-PemfProfilEnv`) profili hem PowerShell 5.1'de hem 7'de UTF-8 okur;
+> Not Defteri'nde "ANSI" ile kaydedilen dosyada ASCII dışı değerler (Türkçe karakterli yol / ad) bozuk okunur.
+
 > **Staging (B-9.4):** Bir release'i GERÇEK klinik cihazına deploy ETMEDEN önce sınamak için
 > üretim-benzeri profil: simülasyon (donanımsız) + auth/at-rest-şifreleme AÇIK. **AYRI (D2.74):** servis adı
 > (`PemfBackendStaging`), veri/log kökü (`C:\ProgramData\PEMF_Staging`), bulut cihaz kimliği, API portu (8010), güvenlik duvarı
