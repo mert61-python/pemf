@@ -107,8 +107,11 @@ def test_KRITIK_firewall_temizligi_CIKIS_KODUNU_gunluge_yazar_DEV_D5b():
     govde = kaynak[i : i + 4000]
     # Tur 2 kolu (D67 çürütme, mutant w1): satır yorumları SOYULUR (dize dışındaki `//`) — çağrı yalnız bir yorumda kalırsa SAYILMAZ.
     govde = "\n".join(_yorumsuz_rust_satiri(s) for s in govde.splitlines())
-    j = govde.find("firewall::silme_betigi()")
-    assert j != -1, "kaldırma akışı firewall temizliğini çağırmıyor"
+    # SON-A1.53 (22): temizlik BU launcher'ın exe'siyle (uninstall'ın kendi kökü) çağrılır — başka programın aynı adlı kuralı silinmez.
+    j = govde.find("firewall::silme_betigi(&install::backend_path(&root))")
+    assert j != -1, (
+        "kaldırma akışı firewall temizliğini bu kurulumun exe'siyle (install::backend_path(&root)) çağırmıyor"
+    )
     satir = govde[govde.rfind("\n", 0, j) : govde.find("\n", j)]
     assert "ps_yukselterek_kos_kodlu(" in satir, (
         f"temizlik çıkış kodunu okumayan sarmalayıcıyla koşuyor: {satir.strip()}"

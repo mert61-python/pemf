@@ -38,11 +38,17 @@ pub fn api_portu(install_root: &Path) -> u16 {
 /// mDNS/UDP keşif portu — mobil uygulama cihazı bununla bulur.
 pub const DISCOVERY_PORT: u16 = 5051;
 
-/// Kural adları — ESKİ servis kurulumundakiyle (`install_backend_service.ps1` / `setup_services.ps1`) AYNI: klinikte
-/// hem servis hem launcher kurulumu bulunabiliyor. D5 I-1: aynı ad = aynı kural DEĞİL — kural PROGRAMIYLA ayrılır; başka
-/// programın aynı adlı kuralı launcher çocuğunu kapsamaz (sayılmaz) ve SİLİNMEZ. Aynı exe için ikinci kural eklenmez.
-pub const KURAL_API: &str = "PEMF Backend API";
-pub const KURAL_KESIF: &str = "PEMF UDP Discovery";
+/// Kural adları — Y204 · S-D5.12 (sahip): launcher'ınki servis kurulumundan (`install_backend_service.ps1` / `setup_services.ps1`,
+/// `ESKI_KURAL_*`) AYRI. Aynı adı paylaşınca iki yol birbirinin kuralını ADLA siliyordu (servis betikleri İG-9.5 "taşınmış kurulum"
+/// kuralıyla launcher'ınkini; launcher kaldırması servisinkini — SON-A1.53). D5 I-1 sürer: kural İÇERİK + PROGRAMLA ölçülür, başka
+/// programın kuralı sayılmaz / silinmez, aynı exe için ikinci kural eklenmez.
+pub const KURAL_API: &str = "PEMF Backend API (Launcher)";
+pub const KURAL_KESIF: &str = "PEMF UDP Discovery (Launcher)";
+/// 1.9.51 öncesi launcher'ın (ve bugün servis kurulumunun) adları. Launcher yalnız PROGRAMI kendi exe'si olan eski adlı kuralı kendisininki
+/// sayar: durumda geçerlidir (güncelleme sonrası gereksiz uyarı yok), "İzin ver"de yeni adlı kurallar KURULDUKTAN sonra taşınır (silinir),
+/// kaldırmada silinir. Başka programın (servis kurulumu) eski adlı kuralına DOKUNULMAZ.
+pub const ESKI_KURAL_API: &str = "PEMF Backend API";
+pub const ESKI_KURAL_KESIF: &str = "PEMF UDP Discovery";
 
 /// Adlı kural İÇERİKLE doğrulanır (D5 I-1 · S-4BI.5; `setup_services.ps1` İG-9.5 / 4B-3.5 ölçütü): aynı adlı ama devre dışı /
 /// Block / giden / yanlış protokol / yanlış port / dar profil / BAŞKA programın kuralı "var" SAYILMAZ. `$p` boşsa (exe
@@ -119,15 +125,19 @@ pub fn ekleme_betigi(backend_exe: &Path, api_port: u16) -> String {
              try {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p \
                -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any -ErrorAction Stop | Out-Null }} \
              catch {{ $kurulamadi++ }} }} }}; \
+         if ($kurulamadi -eq 0) {{ foreach ($eski in @('{eski_api}', '{eski_kesif}')) {{ \
+           foreach ($r in @(Get-NetFirewallRule -DisplayName $eski -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ \
+             if (PemfKuralBizim $r) {{ try {{ $r | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ $silinemedi++ }} }} }} }} }}; \
          $engel = 0; \
          try {{ foreach ($x in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | \
                   Where-Object {{ $_.Program -and ($_.Program -ieq $p) }})) {{ \
                   foreach ($rr in @($x | Get-NetFirewallRule -ErrorAction SilentlyContinue)) {{ \
                     if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True' -and $rr.Action -eq 'Block' -and \
-                        @('{api}', '{kesif}') -notcontains $rr.DisplayName) {{ $engel++ }} }} }} }} catch {{ }}; \
+                        @('{api}', '{kesif}', '{eski_api}', '{eski_kesif}') -notcontains $rr.DisplayName) {{ $engel++ }} }} }} }} catch {{ }}; \
          if ($engel -gt 0) {{ exit {kod_engel} }}; \
          if ($kurulamadi -gt 0) {{ exit {kod_kur} }}; if ($silinemedi -gt 0) {{ exit {kod_sil} }}; exit {kod_tamam}",
         p = p, islevler = ICERIK_ISLEVLERI, api = KURAL_API, kesif = KURAL_KESIF, tcp = api_port, udp = DISCOVERY_PORT,
+        eski_api = ESKI_KURAL_API, eski_kesif = ESKI_KURAL_KESIF,
         kod_kur = KOD_KURAL_KURULAMADI, kod_sil = KOD_BOZUK_KURAL_SILINEMEDI, kod_tamam = KOD_TAMAM, kod_engel = KOD_WINDOWS_ENGEL_KURALI,
     )
 }
@@ -171,16 +181,31 @@ pub fn ekleme_hata_anahtari(kod: i32) -> Option<&'static str> {
 ///
 /// ⚠️ Admin gerektirir (`Remove-NetFirewallRule`). Çağıran UAC ile yükseltir ve BAŞARISIZLIĞI
 /// YUTAR: temizlik bir nezakettir, kaldırmayı düşürmesi kabul edilemez.
-pub fn silme_betigi() -> String {
+///
+/// ⚠️ SON-A1.53 (22 · D5 I-1 değişmezinin ikiz çağrı yeri): adlar servis kurulumuyla (`install_backend_service.ps1` /
+/// `setup_services.ps1`) AYNI — aynı ad = aynı kural DEĞİL. Adla bulunan kural YALNIZ bu launcher'ın exe'sine aitse
+/// (`PemfKuralBizim`, `backend_exe` = `install::backend_path(kök)`) ya da programı artık VAR OLMAYAN yetim kuralsa
+/// (`PemfKuralYetim`, saha bulgusu 2026-08-29) silinir. Eskiden ADLA hepsi siliniyordu: launcher kaldırılınca servis
+/// backend'ine LAN'dan (mobil / web, ACİL DURDUR dahil) erişim SESSİZCE kapanıyordu (servis yolu kuralı yeniden denetlemez).
+pub fn silme_betigi(backend_exe: &Path) -> String {
     format!(
-        "$ErrorActionPreference='SilentlyContinue'; \
-         foreach ($ad in @('{api}','{kesif}')) {{ \
-           Get-NetFirewallRule -DisplayName $ad -ErrorAction SilentlyContinue | \
-             Remove-NetFirewallRule -ErrorAction SilentlyContinue }}",
+        "$ErrorActionPreference='SilentlyContinue'; $p='{p}'; {islevler}{yetim}\
+         foreach ($ad in @('{api}','{kesif}','{eski_api}','{eski_kesif}')) {{ \
+           foreach ($r in @(Get-NetFirewallRule -DisplayName $ad -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ \
+             if ((PemfKuralBizim $r) -or (PemfKuralYetim $r)) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }} }}",
+        p = ps_kacis(&backend_exe.to_string_lossy()),
+        islevler = ICERIK_ISLEVLERI,
+        yetim = YETIM_ISLEVI,
         api = KURAL_API,
-        kesif = KURAL_KESIF
+        kesif = KURAL_KESIF,
+        eski_api = ESKI_KURAL_API,
+        eski_kesif = ESKI_KURAL_KESIF,
     )
 }
+
+/// SON-A1.53: adlı kuralın programı (ortam değişkenleri açılarak) diskte YOKSA yetimdir — hiçbir kurulum onu kullanamaz.
+/// Programsız (`Any`) ya da okunamayan kural yetim SAYILMAZ (kimin olduğu bilinmiyor → dokunulmaz).
+const YETIM_ISLEVI: &str = r##"function PemfKuralYetim($r) { $af = $r | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue; $prog = "$($af.Program)"; [bool]($prog -and $prog -ne 'Any' -and $prog -ne 'System' -and -not [System.IO.File]::Exists([Environment]::ExpandEnvironmentVariables($prog))) }; "##;
 
 /// Durum denetimi betiği — `backend_exe` biliniyorsa Windows'un KENDİ izni de sayılır.
 ///
@@ -203,13 +228,15 @@ pub fn silme_betigi() -> String {
 fn durum_betigi(backend_exe: Option<&Path>, api_port: u16) -> String {
     let adli = format!(
         "$p='{p}'; {islevler}\
-         $a = @(Get-NetFirewallRule -DisplayName '{api}' -ErrorAction SilentlyContinue | Where-Object {{ $_ -and (PemfKuralUyar $_ 'TCP' {tcp}) }}); \
-         $b = @(Get-NetFirewallRule -DisplayName '{kesif}' -ErrorAction SilentlyContinue | Where-Object {{ $_ -and (PemfKuralUyar $_ 'UDP' {udp}) }}); \
+         $a = @(@(Get-NetFirewallRule -DisplayName '{api}' -ErrorAction SilentlyContinue) + @(Get-NetFirewallRule -DisplayName '{eski_api}' -ErrorAction SilentlyContinue) | Where-Object {{ $_ -and (PemfKuralUyar $_ 'TCP' {tcp}) }}); \
+         $b = @(@(Get-NetFirewallRule -DisplayName '{kesif}' -ErrorAction SilentlyContinue) + @(Get-NetFirewallRule -DisplayName '{eski_kesif}' -ErrorAction SilentlyContinue) | Where-Object {{ $_ -and (PemfKuralUyar $_ 'UDP' {udp}) }}); \
          $adli = [bool]($a.Count -gt 0 -and $b.Count -gt 0); ",
         p = backend_exe.map(|e| ps_kacis(&e.to_string_lossy())).unwrap_or_default(),
         islevler = ICERIK_ISLEVLERI,
         api = KURAL_API,
         kesif = KURAL_KESIF,
+        eski_api = ESKI_KURAL_API,
+        eski_kesif = ESKI_KURAL_KESIF,
         tcp = api_port,
         udp = DISCOVERY_PORT,
     );
@@ -228,13 +255,15 @@ fn durum_betigi(backend_exe: Option<&Path>, api_port: u16) -> String {
                      foreach ($rr in $r) {{ \
                        if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True') {{ \
                          if ($rr.Action -eq 'Block') {{ $engel = $true }} \
-                         elseif ($rr.Action -eq 'Allow' -and @('{api}', '{kesif}') -notcontains $rr.DisplayName -and (PemfPortuKapsar $rr {tcp})) {{ $izin = $true }} \
+                         elseif ($rr.Action -eq 'Allow' -and @('{api}', '{kesif}', '{eski_api}', '{eski_kesif}') -notcontains $rr.DisplayName -and (PemfPortuKapsar $rr {tcp})) {{ $izin = $true }} \
                        }} }} }} \
                  }} catch {{ }} \
                  if ($engel) {{ 'ENGEL' }} elseif ($adli -or $izin) {{ 'VAR' }} else {{ 'YOKSA' }}",
                 kapsam = PORT_KAPSAMI,
                 api = KURAL_API,
                 kesif = KURAL_KESIF,
+                eski_api = ESKI_KURAL_API,
+                eski_kesif = ESKI_KURAL_KESIF,
                 tcp = api_port,
             )
         }
@@ -681,6 +710,10 @@ mod tests {
         fn durum_betik(exe: Option<&str>, port: u16) -> String {
             durum_betigi(exe.map(Path::new), port)
         }
+        /// SON-A1.53: kaldırma temizliği betiği (bu launcher'ın exe'si `EXE`).
+        fn silme_betik() -> String {
+            silme_betigi(Path::new(EXE))
+        }
 
         #[derive(Clone)]
         struct Kural {
@@ -1022,6 +1055,79 @@ mod tests {
             );
             // D5 J-3: doğrusu kurulsa da silinemeyen bozuk kural SÖYLENİR (çıkış 3); başka programın kuralına dokunmamak hata değil (0).
             assert_eq!((x.kod, r["e_silinemez"].kod), (0, 3), "çıkış kodları (servis kuralı, silinemeyen bozuk kural)");
+        }
+
+        /// SON-A1.53 (22 · A1b) · D5 I-1 değişmezinin İKİZ ÇAĞRI YERİ: KALDIRMA temizliği (`silme_betigi`, `main.rs` `uninstall`) de
+        /// başka programın (servis kurulumu — `install_backend_service.ps1` / `setup_services.ps1` AYNI adları kullanır) aynı adlı
+        /// kuralını SİLMEMELİ: launcher kaldırılınca servis backend'ine LAN'dan (mobil / web, ACİL DURDUR dahil) erişim sessizce kapanır
+        /// (servis yolu kuralı yeniden denetlemez). Silinen: bu launcher'ın exe'sinin adlı kuralları + programı artık VAR OLMAYAN (yetim,
+        /// saha bulgusu 2026-08-29) adlı kural. Windows'un kendi (exe adlı) kuralına dokunulmaz (`test_kaldirma_tam_temizlik.py` kapsam sınırı).
+        /// Servis programı GERÇEKTEN var olmalı (yetim sayılmasın) → geçici dizinde boş dosya; gerçek güvenlik duvarına YOL YOK (gölge).
+        #[test]
+        fn KRITIK_SON_A1_53_kaldirma_BASKA_programin_ayni_adli_kuralini_SILMEZ_yetimi_ve_kendisini_siler() {
+            let d = tempfile::tempdir().expect("geçici dizin");
+            let servis_exe = d.path().join("PEMF_Backend.exe");
+            std::fs::write(&servis_exe, b"").expect("sahte servis exe yazılamadı");
+            let servis = servis_exe.to_string_lossy().into_owned();
+            let yetim = d.path().join("tasindi").join("PEMF_Backend.exe").to_string_lossy().into_owned();
+            // Y204 · S-D5.12: servis kurulumu ESKİ adları kullanır; launcher'ın taşınmamış eski adlı kendi kuralı da silinir.
+            let servis_api = Kural { ad: ESKI_KURAL_API, program: servis.clone(), ..api(8000) };
+            let servis_kesif = Kural { ad: ESKI_KURAL_KESIF, program: servis.clone(), ..kesif() };
+            let yetim_api = Kural { ad: ESKI_KURAL_API, program: yetim, ..api(8000) };
+            let eski_kendi = Kural { ad: ESKI_KURAL_KESIF, ..kesif() };
+            let windows_izni = win("TCP", "Any", "Allow");
+            let kurallar =
+                vec![api(COCUK), kesif(), eski_kendi, servis_api.clone(), servis_kesif.clone(), yetim_api, windows_izni.clone()];
+            let (kod, olay, son) = golge_surec_kos(&kurallar, &silme_betik(), "");
+            assert_eq!(
+                son,
+                tablo(vec![satir(&servis_api), satir(&servis_kesif), satir(&windows_izni)]),
+                "kaldırma temizliği yanlış kuralları sildi — başka programın (servis kurulumu) aynı adlı kuralı SİLİNİRSE o backend'e LAN'dan \
+                 (ACİL DURDUR dahil) erişim sessizce kapanır; bu launcher'ın / yetim kural KALIRSA yetim kural sızıntısı (2026-08-29). Olaylar: {olay:?}"
+            );
+            assert_eq!(kod, 0, "temizlik betiği sıfır dışı çıktı");
+        }
+
+        /// Y204 · S-D5.12 (sahip): launcher kuralları servis kurulumundan AYRI adla kurulur. Bu exe'nin ESKİ adlı kuralı yeni adlı kurallar
+        /// KURULDUKTAN sonra taşınır (silinir); yeni kural kurulamazsa çalışan eski kural SİLİNMEZ (LAN erişimi — ACİL DURDUR dahil — kesilmez).
+        /// Servis kurulumunun eski adlı kuralına (başka program) dokunulmaz. Güncelleme sonrası, taşınmamış eski adlı kendi kuralı durumda
+        /// geçerlidir (gereksiz uyarı / UAC yok); yalnız servisin eski adlı kuralı launcher çocuğunu kapsamaz.
+        #[test]
+        fn KRITIK_Y204_S_D5_12_AYRI_ad_ESKI_adli_kendi_kurali_TASINIR_servisinki_DOKUNULMAZ() {
+            assert_ne!(KURAL_API, ESKI_KURAL_API, "launcher kuralı servis kurulumuyla AYNI adı taşıyor");
+            assert_ne!(KURAL_KESIF, ESKI_KURAL_KESIF, "launcher keşif kuralı servis kurulumuyla AYNI adı taşıyor");
+            let eski_api = Kural { ad: ESKI_KURAL_API, ..api(COCUK) };
+            let eski_kesif = Kural { ad: ESKI_KURAL_KESIF, ..kesif() };
+            let servis = r"C:\Program Files\PEMF\PEMF_Backend.exe".to_string();
+            let servis_api = Kural { ad: ESKI_KURAL_API, program: servis.clone(), ..api(8000) };
+            let servis_kesif = Kural { ad: ESKI_KURAL_KESIF, program: servis, ..kesif() };
+            let r = golge_kos_ayarli(&[
+                ("t_tasima", vec![eski_api.clone(), eski_kesif.clone(), servis_api.clone()], ekle_betik(COCUK), 1, ""),
+                ("t_kurulamaz", vec![eski_api.clone(), eski_kesif.clone()], ekle_betik(COCUK), 1, "yeni_hata"),
+            ]);
+            temiz(&r);
+            let t = &r["t_tasima"];
+            assert_eq!(t.kod, KOD_TAMAM, "taşıma 'tamam' demedi: {:?}", t.olay);
+            assert_eq!(
+                t.tablo,
+                tablo(vec![satir(&servis_api), satir(&api(COCUK)), satir(&kesif())]),
+                "taşıma sonrası tablo yanlış (yeni adlı kurallar + servisin DOKUNULMAMIŞ eski adlı kuralı beklenir): {:?}",
+                t.olay
+            );
+            let k = &r["t_kurulamaz"];
+            assert_eq!(k.kod, KOD_KURAL_KURULAMADI);
+            assert!(
+                k.tablo.contains(&satir(&eski_api)) && k.tablo.contains(&satir(&eski_kesif)),
+                "yeni kural KURULAMADI ama çalışan ESKİ kural silindi → LAN erişimi kesilir: {:?}",
+                k.tablo
+            );
+            let d = golge_kos(&[
+                ("d_eski_kendi", vec![eski_api.clone(), eski_kesif.clone()], durum_betik(Some(EXE), COCUK), 1),
+                ("d_yalniz_servis", vec![servis_api.clone(), servis_kesif.clone()], durum_betik(Some(EXE), COCUK), 1),
+            ]);
+            temiz(&d);
+            assert_eq!(d["d_eski_kendi"].cikti, "VAR", "güncelleme sonrası taşınmamış eski adlı KENDİ kuralı yok sayıldı (gereksiz uyarı)");
+            assert_eq!(d["d_yalniz_servis"].cikti, "YOKSA", "servisin eski adlı kuralı launcher çocuğunu kapsıyor sayıldı");
         }
 
         #[test]

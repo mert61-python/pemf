@@ -1483,7 +1483,9 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
         // `scripts/pemf_teardown.ps1` zaten var.
         // DEV-D5.b: temizliğin ÇIKIŞ KODU da günlüğe yazılır (kodlu sarmalayıcı; eskiden yalnız UAC reddi görülüyordu).
         // Sonuç yine YUTULUR — kaldırma her durumda sürer.
-        let fw_temizlik = ps_yukselterek_kos_kodlu(&pemf_launcher_core::firewall::silme_betigi());
+        // SON-A1.53: yalnız BU launcher'ın exe'sinin (aynı kök) adlı kuralları + yetim kurallar silinir — servis kurulumunun aynı
+        // adlı kuralı (başka program) KALIR (D5 I-1 değişmezi; eskiden adla hepsi siliniyordu → servis LAN'ı sessizce kapanırdı).
+        let fw_temizlik = ps_yukselterek_kos_kodlu(&pemf_launcher_core::firewall::silme_betigi(&install::backend_path(&root)));
         if let Ok(kod) = &fw_temizlik {
             eprintln!("[uninstall] güvenlik duvarı temizliği çıkış kodu {kod}{} (0 = tamam) — kaldırma sürer", if *kod == pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI { format!(": {}", pemf_launcher_core::dil::t("rust.hata.yoneticiIzniVerilmedi")) } else { String::new() });
         }

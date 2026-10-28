@@ -10834,10 +10834,17 @@
      ]
     },
     {
-     "metin": "$ErrorActionPreference='SilentlyContinue'; foreach ($ad in @('{{api}}','{{kesif}}')) {{ Get-NetFirewallRule -DisplayName $ad -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue }}",
+     "metin": "$ErrorActionPreference='SilentlyContinue'; $p='{{p}}'; {{islevler}}{{yetim}}foreach ($ad in @('{{api}}','{{kesif}}','{{eski_api}}','{{eski_kesif}}')) {{ foreach ($r in @(Get-NetFirewallRule -DisplayName $ad -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ if ((PemfKuralBizim $r) -or (PemfKuralYetim $r)) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }} }}",
      "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
      "turler": [
       "rust-sablon"
+     ]
+    },
+    {
+     "metin": "function PemfKuralYetim($r) { $af = $r | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue; $prog = \"$($af.Program)\"; [bool]($prog -and $prog -ne 'Any' -and $prog -ne 'System' -and -not [System.IO.File]::Exists([Environment]::ExpandEnvironmentVariables($prog))) };",
+     "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
+     "turler": [
+      "rust"
      ]
     },
     {
@@ -10883,24 +10890,38 @@
      ]
     },
     {
-     "metin": "$ErrorActionPreference='Stop'; $kurulamadi = 0; $silinemedi = 0; $p='{{p}}'; {{islevler}}foreach ($k in @(@('{{api}}', 'TCP', {{tcp}}), @('{{kesif}}', 'UDP', {{udp}}))) {{ $uyan = 0; foreach ($r in @(Get-NetFirewallRule -DisplayName $k[0] -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ if (PemfKuralUyar $r $k[1] $k[2]) {{ $uyan++ }} elseif (PemfKuralBizim $r) {{ try {{ $r | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ $silinemedi++ }} }} }}; if ($uyan -eq 0) {{ try {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any -ErrorAction Stop | Out-Null }} catch {{ $kurulamadi++ }} }} }}; $engel = 0; try {{ foreach ($x in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $p) }})) {{ foreach ($rr in @($x | Get-NetFirewallRule -ErrorAction SilentlyContinue)) {{ if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True' -and $rr.Action -eq 'Block' -and @('{{api}}', '{{kesif}}') -notcontains $rr.DisplayName) {{ $engel++ }} }} }} }} catch {{ }}; if ($engel -gt 0) {{ exit {{kod_engel}} }}; if ($kurulamadi -gt 0) {{ exit {{kod_kur}} }}; if ($silinemedi -gt 0) {{ exit {{kod_sil}} }}; exit {{kod_tamam}}",
+     "metin": "$ErrorActionPreference='Stop'; $kurulamadi = 0; $silinemedi = 0; $p='{{p}}'; {{islevler}}foreach ($k in @(@('{{api}}', 'TCP', {{tcp}}), @('{{kesif}}', 'UDP', {{udp}}))) {{ $uyan = 0; foreach ($r in @(Get-NetFirewallRule -DisplayName $k[0] -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ if (PemfKuralUyar $r $k[1] $k[2]) {{ $uyan++ }} elseif (PemfKuralBizim $r) {{ try {{ $r | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ $silinemedi++ }} }} }}; if ($uyan -eq 0) {{ try {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p -Action Allow -Protocol $k[1] -LocalPort $k[2] -Profile Any -ErrorAction Stop | Out-Null }} catch {{ $kurulamadi++ }} }} }}; if ($kurulamadi -eq 0) {{ foreach ($eski in @('{{eski_api}}', '{{eski_kesif}}')) {{ foreach ($r in @(Get-NetFirewallRule -DisplayName $eski -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ if (PemfKuralBizim $r) {{ try {{ $r | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ $silinemedi++ }} }} }} }} }}; $engel = 0; try {{ foreach ($x in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $p) }})) {{ foreach ($rr in @($x | Get-NetFirewallRule -ErrorAction SilentlyContinue)) {{ if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True' -and $rr.Action -eq 'Block' -and @('{{api}}', '{{kesif}}', '{{eski_api}}', '{{eski_kesif}}') -notcontains $rr.DisplayName) {{ $engel++ }} }} }} }} catch {{ }}; if ($engel -gt 0) {{ exit {{kod_engel}} }}; if ($kurulamadi -gt 0) {{ exit {{kod_kur}} }}; if ($silinemedi -gt 0) {{ exit {{kod_sil}} }}; exit {{kod_tamam}}",
      "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
      "turler": [
       "rust-sablon"
      ]
     },
     {
-     "metin": "$p='{{p}}'; {{islevler}}$a = @(Get-NetFirewallRule -DisplayName '{{api}}' -ErrorAction SilentlyContinue | Where-Object {{ $_ -and (PemfKuralUyar $_ 'TCP' {{tcp}}) }}); $b = @(Get-NetFirewallRule -DisplayName '{{kesif}}' -ErrorAction SilentlyContinue | Where-Object {{ $_ -and (PemfKuralUyar $_ 'UDP' {{udp}}) }}); $adli = [bool]($a.Count -gt 0 -and $b.Count -gt 0);",
+     "metin": "$p='{{p}}'; {{islevler}}$a = @(@(Get-NetFirewallRule -DisplayName '{{api}}' -ErrorAction SilentlyContinue) + @(Get-NetFirewallRule -DisplayName '{{eski_api}}' -ErrorAction SilentlyContinue) | Where-Object {{ $_ -and (PemfKuralUyar $_ 'TCP' {{tcp}}) }}); $b = @(@(Get-NetFirewallRule -DisplayName '{{kesif}}' -ErrorAction SilentlyContinue) + @(Get-NetFirewallRule -DisplayName '{{eski_kesif}}' -ErrorAction SilentlyContinue) | Where-Object {{ $_ -and (PemfKuralUyar $_ 'UDP' {{udp}}) }}); $adli = [bool]($a.Count -gt 0 -and $b.Count -gt 0);",
      "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
      "turler": [
       "rust-sablon"
      ]
     },
     {
-     "metin": "{{adli}} $exe='{{p}}'; $izin=$false; $engel=$false; {{kapsam}}try {{ $f = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $exe) }}; foreach ($x in $f) {{ $r = $x | Get-NetFirewallRule -ErrorAction SilentlyContinue; foreach ($rr in $r) {{ if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True') {{ if ($rr.Action -eq 'Block') {{ $engel = $true }} elseif ($rr.Action -eq 'Allow' -and @('{{api}}', '{{kesif}}') -notcontains $rr.DisplayName -and (PemfPortuKapsar $rr {{tcp}})) {{ $izin = $true }} }} }} }} }} catch {{ }} if ($engel) {{ 'ENGEL' }} elseif ($adli -or $izin) {{ 'VAR' }} else {{ 'YOKSA' }}",
+     "metin": "{{adli}} $exe='{{p}}'; $izin=$false; $engel=$false; {{kapsam}}try {{ $f = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $exe) }}; foreach ($x in $f) {{ $r = $x | Get-NetFirewallRule -ErrorAction SilentlyContinue; foreach ($rr in $r) {{ if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True') {{ if ($rr.Action -eq 'Block') {{ $engel = $true }} elseif ($rr.Action -eq 'Allow' -and @('{{api}}', '{{kesif}}', '{{eski_api}}', '{{eski_kesif}}') -notcontains $rr.DisplayName -and (PemfPortuKapsar $rr {{tcp}})) {{ $izin = $true }} }} }} }} }} catch {{ }} if ($engel) {{ 'ENGEL' }} elseif ($adli -or $izin) {{ 'VAR' }} else {{ 'YOKSA' }}",
      "gerekce": "PowerShell komut metni — komut, kullanıcı metni değil",
      "turler": [
       "rust-sablon"
+     ]
+    },
+    {
+     "metin": "PEMF Backend API (Launcher)",
+     "gerekce": "Windows Güvenlik Duvarı KURAL ADI — makine verisi: launcher kuralı bu adla aranır / silinir; Y204 · S-D5.12 servis kurulumundan AYRI ad (eski ad ESKI_KURAL_* ile taşınır); ekran metni değil",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "PEMF UDP Discovery (Launcher)",
+     "gerekce": "Windows Güvenlik Duvarı KURAL ADI — makine verisi: launcher kuralı bu adla aranır / silinir; Y204 · S-D5.12 servis kurulumundan AYRI ad (eski ad ESKI_KURAL_* ile taşınır); ekran metni değil",
+     "turler": [
+      "rust"
      ]
     }
    ],
