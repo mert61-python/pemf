@@ -75,6 +75,8 @@
     "parametreleriUygula": "🔄 Apply Parameters",
     "seansBaslatilamadi": "The session could not be started.",
     "seansHedefi": "Session Goal",
+    "seansKartDisinda_one": "⚠️ ACTIVE SESSION running — started outside this card (another client or AI Pro); {{count}} coil energized. You can stop it with EMERGENCY STOP below.",
+    "seansKartDisinda_other": "⚠️ ACTIVE SESSION running — started outside this card (another client or AI Pro); {{count}} coils energized. You can stop it with EMERGENCY STOP below.",
     "secili": "selected",
     "seciliDegil": "not selected",
     "topluUygulama": "📡 Apply to All",

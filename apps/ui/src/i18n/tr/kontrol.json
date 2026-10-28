@@ -75,6 +75,8 @@
     "parametreleriUygula": "🔄 Parametreleri Uygula",
     "seansBaslatilamadi": "Seans başlatılamadı.",
     "seansHedefi": "Seans Hedefi",
+    "seansKartDisinda_one": "⚠️ AKTİF SEANS sürüyor — bu kartın dışında başlatıldı (başka istemci ya da AI Pro); {{count}} bobin enerjili. Aşağıdaki ACİL DURDUR ile durdurabilirsiniz.",
+    "seansKartDisinda_other": "⚠️ AKTİF SEANS sürüyor — bu kartın dışında başlatıldı (başka istemci ya da AI Pro); {{count}} bobin enerjili. Aşağıdaki ACİL DURDUR ile durdurabilirsiniz.",
     "secili": "seçili",
     "seciliDegil": "seçili değil",
     "topluUygulama": "📡 Toplu Uygulama",

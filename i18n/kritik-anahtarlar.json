@@ -564,6 +564,13 @@
   },
   {
    "yuzey": "arayuz",
+   "anahtar": "kontrol.ekran.seansKartDisinda",
+   "tur": "seans",
+   "kaynak": "apps/ui/src/screens/ControlScreen.tsx",
+   "aciklama": "AKTİF SEANS kartın dışında başlatıldı (başka istemci / AI Pro) — bobin enerjili, ACİL DURDUR yönlendirmesi"
+  },
+  {
+   "yuzey": "arayuz",
    "anahtar": "kontrol.sinir.cekildi",
    "tur": "bobin",
    "kaynak": "apps/ui/src/services/therapyLimits.ts",

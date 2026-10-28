@@ -542,11 +542,16 @@ export function ControlScreen() {
       {/* DONANIM UYARISI: kart yalnız KENDİ seans state'ine (useSessionControl) bakıyordu. AI Pro,
           AI-Auto, fiziksel kontrol veya başka bir istemci bobinleri enerjileyebilir ama session_*
           yayınlamaz → `isActive` false kalır ve ekran "Seans Bekleniyor" derken hayvanın üzerinde
-          bobinler çalışıyor olabilir. DashboardScreen'de bu koruma vardı, burada yoktu. */}
+          bobinler çalışıyor olabilir. DashboardScreen'de bu koruma vardı, burada yoktu.
+          ⚠️ L1-7.10 · İG-6.11 (a): bant WS'te AKTİF seans varken (başka istemci / AI Pro başlattı; kart yalnız açılışta
+          `/session/active` okur) "seans bağlamı dışında" diyordu — YANLIŞ. O durumda metin AKTİF SEANS'ı söyler. Yalnız METİN
+          değişir: bandın görünme koşulu, ACİL DURDUR ve kartın Durdur yolu AYNI. Kapı: ControlScreen.L1_7_10.seansKartDisinda.test.tsx */}
       {!isActive && hardwareRunningOutOfSession && (
         <View style={styles.hwWarnBanner}>
           <Text style={styles.hwWarnText}>
-            {t("kontrol.ekran.donanimCalisiyor", { count: runningCount })}
+            {wsSeans
+              ? t("kontrol.ekran.seansKartDisinda", { count: runningCount })
+              : t("kontrol.ekran.donanimCalisiyor", { count: runningCount })}
           </Text>
         </View>
       )}
