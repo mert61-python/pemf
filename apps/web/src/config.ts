@@ -462,7 +462,8 @@ export const PLANS: Plan[] = [
     get cta() { return i18n.t('icerik.plan.proPlus.cta') },
     to: '/download',
     highlight: true,
-    get badge() { return i18n.t('icerik.plan.proPlus.rozet') },
+    // D6.31 (B-7.1): "Anında analiz" rozeti KALDIRILDI — kaldırılan hız / kuyruk vaadinin (2026-08-20) fiyat kartındaki son kalıntısıydı
+    // (ödeme sayfasındaki ikizi 8. partide silinmişti). Planlar jeton hakkıyla ayrışır; rozet yeni bir vaat taşımaz.
   },
 ]
 

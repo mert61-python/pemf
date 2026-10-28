@@ -171,7 +171,7 @@ const ALTIN: Record<string, unknown> = {
     "Öncelikli destek — aynı iş günü içinde yanıt"
    ],
    "cta": "Pro+’ya Yükselt",
-   "badge": "Anında analiz"
+   "badge": null
   }
  ],
  "RESEARCH_ADDON_label": "Araştırma profili",

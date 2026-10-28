@@ -134,9 +134,10 @@ const DESTEK: Cift[] = [
   ['Sık sorulan sorular', 'Frequently asked questions'],
   ['Kurulum, kullanım ve abonelik hakkında en çok merak edilenler.', 'The most common questions about installation, usage and subscription.'],
   ['Hâlâ yardıma mı ihtiyacınız var?', 'Still need help?'],
-  ['Kurulum, abonelik ya da kliniğinize özel çözümler için bize yazın; en geç bir iş günü içinde dönüş yapıyoruz.', 'Write to us for installation, subscription or clinic-specific solutions; we reply within one business day at the latest.'],
+  // D6.31 (B-7.15): yanıt süresi plan karşılaştırmasının en uzun süresine (Başlangıç "2 iş günü") indirildi — TR DEĞİŞTİ
+  ['Kurulum, abonelik ya da kliniğinize özel çözümler için bize yazın; en geç iki iş günü içinde dönüş yapıyoruz.', 'Write to us for installation, subscription or clinic-specific solutions; we reply within two business days at the latest.'],
   ['PEMF Vet’i İndir', 'Download PEMF Vet'],
-  ['Hafta içi 09:00–18:00 arası ulaşabilirsiniz; e-postalara en geç bir iş günü içinde dönüyoruz.', 'You can reach us on weekdays between 09:00 and 18:00; we reply to emails within one business day at the latest.'],
+  ['Hafta içi 09:00–18:00 arası ulaşabilirsiniz; e-postalara en geç iki iş günü içinde dönüyoruz.', 'You can reach us on weekdays between 09:00 and 18:00; we reply to emails within two business days at the latest.'],
 ]
 const BULUNAMADI: Cift[] = [
   ['Sayfa yok', 'No such page'],
