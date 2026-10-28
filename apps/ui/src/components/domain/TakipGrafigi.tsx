@@ -34,6 +34,11 @@ export function TakipGrafigi({ seri, hasta, testID = "takip-grafigi" }: {
   const ilk = seri.noktalar[0].deger;
   const son = seri.noktalar[seri.noktalar.length - 1].deger;
   const fark = son - ilk;
+  // ⚠️ D6.22 (B-6.17): yön YALNIZ artışı "iyiye gidiş" olduğu bilinen ölçütte renklenir (yara kapanması); güven / tümör / kuyu
+  // sayısında artış yeşil "iyileşme" diye boyanmaz — nötr. İG-6.134: ondalıklı ölçüm (kapanma %29.3 → %41.62) farkı kayan nokta
+  // artığıyla (12.319999999999997) değil, ölçümün kendi duyarlığıyla (≤ 2 basamak) yazılır.
+  const farkRengi = fark === 0 || !seri.artisIyi ? styles.farkNotr : fark > 0 ? styles.farkArti : styles.farkEksi;
+  const farkBuyuklugu = Math.round(Math.abs(fark) * 100) / 100;
 
   return (
     <Card style={styles.kart}>
@@ -41,8 +46,8 @@ export function TakipGrafigi({ seri, hasta, testID = "takip-grafigi" }: {
         <Text style={styles.baslik} numberOfLines={1}>
           {t("ai.pro.takip.baslik", { ad: hasta, baslik: seri.baslik })}
         </Text>
-        <Text style={[styles.fark, fark === 0 ? styles.farkNotr : fark > 0 ? styles.farkArti : styles.farkEksi]}>
-          {fark > 0 ? "▲" : fark < 0 ? "▼" : "■"} {Math.abs(fark)}
+        <Text style={[styles.fark, farkRengi]}>
+          {fark > 0 ? "▲" : fark < 0 ? "▼" : "■"} {farkBuyuklugu}
           {seri.birim}
         </Text>
       </View>

@@ -21,15 +21,25 @@
 import i18n from "i18next";
 import type { AnalizKaydi } from "@/utils/sonAnaliz";
 
-/** Zaman serisine alınabilecek sayısal ölçütler — modül bazında; `etiket` bir katalog ANAHTARIDIR (gösterimde çevrilir). */
-export const IZLENEN_OLCUTLER: Record<string, { alan: string; etiket: string; birim: string }> = {
-  cell_scratch: { alan: "closure_pct", etiket: "ai.scratch.galeri.kapanma.ad", birim: "%" },
+/**
+ * Zaman serisine alınabilecek sayısal ölçütler — modül bazında; `etiket` bir katalog ANAHTARIDIR (gösterimde çevrilir).
+ * `alan` noktalı YOL olabilir (iç içe yanıt alanı). `artisIyi`: artışın "iyiye gidiş" olduğu BİLİNEN ölçüt — yalnız onda artış yeşil,
+ * azalış uyarı rengi alır; diğerlerinde değişim NÖTR gösterilir (D6.22 · B-6.17: güven ya da tümör sayısı artışı iyileşme değildir).
+ * ⚠️ İG-6.134: alan adları GERÇEK yanıttan — em_fantom `n_tumor` (servers/ai_router.py), scratch İÇ İÇE `closure.closure_pct`
+ * (`scratch_analiz` → `"closure": {...}`). Eski `n_tumors` / düz `closure_pct` hiçbir kayıtta yoktu: iki modülde grafik hiç oluşmuyordu.
+ */
+export const IZLENEN_OLCUTLER: Record<string, { alan: string; etiket: string; birim: string; artisIyi?: boolean }> = {
+  cell_scratch: { alan: "closure.closure_pct", etiket: "ai.scratch.galeri.kapanma.ad", birim: "%", artisIyi: true },
   em_petri: { alan: "n_wells", etiket: "ai.pro.profil.petri.hedefEtiketi", birim: "" },
-  em_fantom: { alan: "n_tumors", etiket: "ai.pro.profil.fantom.hedefEtiketi", birim: "" },
+  em_fantom: { alan: "n_tumor", etiket: "ai.pro.profil.fantom.hedefEtiketi", birim: "" },
 };
 
-/** Hiçbir modüle özgü ölçüt yoksa kullanılan evrensel ölçüt. */
-export const VARSAYILAN_OLCUT = { alan: "confidence", etiket: "ai.pro.metrik.guven", birim: "%" };
+/** Hiçbir modüle özgü ölçüt yoksa kullanılan evrensel ölçüt (yönü bilinmez: model güveninin artışı iyileşme DEĞİLDİR). */
+export const VARSAYILAN_OLCUT: { alan: string; etiket: string; birim: string; artisIyi?: boolean } = {
+  alan: "confidence",
+  etiket: "ai.pro.metrik.guven",
+  birim: "%",
+};
 
 export interface TakipNoktasi {
   /** Epoch ms — sıralama ve eksen için. */
@@ -45,6 +55,8 @@ export interface TakipSerisi {
   noktalar: TakipNoktasi[];
   /** Başka modüle ait olduğu için seriye ALINMAYAN kayıt sayısı (kullanıcıya söylenir). */
   disaridaKalan: number;
+  /** Artışı "iyiye gidiş" olduğu BİLİNEN ölçüt mü (yoksa / false → değişim nötr renkte). */
+  artisIyi?: boolean;
 }
 
 /**
@@ -59,6 +71,24 @@ interface DetayliKayit extends AnalizKaydi {
 /** `result_detail`i güvenle sözlük olarak okur (değilse boş sözlük). */
 function detaySozlugu(d: unknown): Record<string, unknown> {
   return d && typeof d === "object" && !Array.isArray(d) ? (d as Record<string, unknown>) : {};
+}
+
+/** Noktalı yolu (`closure.closure_pct`) iç içe sözlükte izler; ara düğüm sözlük değilse `undefined`. */
+function yoldanOku(d: unknown, yol: string): unknown {
+  let v: unknown = d;
+  for (const parca of yol.split(".")) v = detaySozlugu(v)[parca];
+  return v;
+}
+
+/**
+ * Ölçümü SAYIYA çevirir; ölçüm YOKSA `NaN` (seriye girmez).
+ * ⚠️ D6.22 (B-6.10): `Number(null) === 0` — güveni saklanmamış kayıt (`confidence: null`) grafikte 0 çubuğu oluyordu. Yalnız sonlu
+ * sayı ya da boş olmayan sayısal metin ölçümdür; null / boş metin / mantıksal / nesne ölçüm DEĞİLDİR.
+ */
+function olcumSayisi(ham: unknown): number {
+  if (typeof ham === "number") return ham;
+  if (typeof ham === "string" && ham.trim() !== "") return Number(ham);
+  return NaN;
 }
 
 /**
@@ -93,8 +123,8 @@ export function takipSerisiKur(kayitlar: readonly DetayliKayit[] | null | undefi
 
   const noktalar: TakipNoktasi[] = [];
   for (const k of ayni) {
-    const ham = olcut.alan === "confidence" ? k.confidence : detaySozlugu(k.result_detail)[olcut.alan];
-    const sayi = typeof ham === "number" ? ham : Number(ham);
+    const ham = olcut.alan === "confidence" ? k.confidence : yoldanOku(k.result_detail, olcut.alan);
+    const sayi = olcumSayisi(ham);
     if (!Number.isFinite(sayi)) continue;
     // Güven 0-1 aralığında saklanır; yüzdeye çevrilir (etiket "%" diyor).
     const deger = olcut.alan === "confidence" ? Math.round(sayi * 100) : sayi;
@@ -113,5 +143,6 @@ export function takipSerisiKur(kayitlar: readonly DetayliKayit[] | null | undefi
     birim: olcut.birim,
     noktalar,
     disaridaKalan: liste.length - ayni.length,
+    artisIyi: olcut.artisIyi === true,
   };
 }

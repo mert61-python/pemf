@@ -94,7 +94,8 @@ const S = (id: number, gun: string, kapanma: number) => ({
   patient_name: "Mia",
   module_id: "cell_scratch",
   created_at: `2026-09-${gun}T10:00:00`,
-  result_detail: { closure_pct: kapanma },
+  // D6.22 · İG-6.134: GERÇEK scratch yanıt şekli — kapanma İÇ İÇE `closure.closure_pct` (düz `closure_pct` hiçbir kayıtta yok).
+  result_detail: { closure: { closure_pct: kapanma } },
 });
 
 test("KRITIK: seri ESKIDEN YENIYE siralanir", () => {
@@ -143,7 +144,7 @@ test("KRITIK: SAYISAL OLMAYAN olcum seriye GIRMEZ", () => {
   // Backend alanı metin/null gönderirse NaN bir çubuk çizilir (görünmez ama ölçeği bozar).
   const seri = takipSerisiKur([
     S(1, "01", 10),
-    { ...S(2, "05", 0), result_detail: { closure_pct: "yok" } },
+    { ...S(2, "05", 0), result_detail: { closure: { closure_pct: "yok" } } },
     S(3, "09", 30),
   ]);
   expect(seri?.noktalar.map((n) => n.deger)).toEqual([10, 30]);

@@ -199,8 +199,9 @@ describe("gorselSahneSayfalari / takipSerisi", () => {
   it("TR + EN: takip serisi başlığı ölçüt etiketinden (Kapanma / Closure; Güven / Confidence)", async () => {
     const kayit = (m: string, t: string, ek: object) => ({ module_id: m, created_at: t, ...ek });
     const kapanma = [
-      kayit("cell_scratch", "2026-10-01T10:00:00Z", { result_detail: { closure_pct: 40 } }),
-      kayit("cell_scratch", "2026-10-02T10:00:00Z", { result_detail: { closure_pct: 55 } }),
+      // D6.22 · İG-6.134: GERÇEK scratch yanıt şekli (iç içe `closure.closure_pct`).
+      kayit("cell_scratch", "2026-10-01T10:00:00Z", { result_detail: { closure: { closure_pct: 40 } } }),
+      kayit("cell_scratch", "2026-10-02T10:00:00Z", { result_detail: { closure: { closure_pct: 55 } } }),
     ] as never;
     const guven = [kayit("disease", "2026-10-01T10:00:00Z", { confidence: 0.5 }), kayit("disease", "2026-10-02T10:00:00Z", { confidence: 0.6 })] as never;
     expect(takipSerisiKur(kapanma)?.baslik).toBe("Kapanma");
