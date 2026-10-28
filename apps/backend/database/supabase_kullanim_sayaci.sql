@@ -17,13 +17,19 @@
 --
 -- ⚠️ auth.users OKUNUR: `security definer` + `set search_path` ile. Yalnız `count(*)` alınır;
 -- hiçbir kullanıcı alanı (e-posta vb.) dışarı çıkmaz.
+--
+-- ⚠️ D6.13 (B-3.60): `-dev` ETİKETLİ SATIRLAR SAYILMAZ. Launcher'sız koşan her backend (geliştirici makinesi, test,
+-- Docker, derleme dizini) bulut kaydını `<ad>-dev` adıyla yazar (`servers/sync_worker._cihaz_adi`; sahip kararı 2026-08-30:
+-- engelleme değil ETİKETLEME). Süzgeç yokken sitedeki "Aktif cihaz (30 gün)" bunları klinik cihazı sayıyordu. Adı boş
+-- (eski istemci) satır gerçek cihaz sayılır (`coalesce`). Kapı: tests/test_kullanim_sayaci_DEV_satirlarini_SAYMAZ_D6_13.py
+-- ⚠️ Canlıya bu dosyayı SAHİP uygular (Y172) — depo değişikliği canlıyı kendiliğinden değiştirmez.
 -- ============================================================================
 
 create or replace function public.usage_counts()
 returns table (
     accounts        bigint,  -- e-postası DOĞRULANMIŞ hesap sayısı = "benzersiz kullanıcı"
-    devices_total   bigint,  -- kurulu cihaz (device_id MAC tabanlı birincil anahtar → benzersiz)
-    devices_active  bigint   -- son 30 günde heartbeat gönderen cihaz
+    devices_total   bigint,  -- kurulu cihaz (device_id MAC tabanlı birincil anahtar → benzersiz; `-dev` hariç)
+    devices_active  bigint   -- son 30 günde heartbeat gönderen cihaz (`-dev` hariç)
 )
 language sql
 security definer
@@ -33,8 +39,9 @@ as $$
         -- ⚠️ YALNIZ DOĞRULANMIŞ hesaplar: doğrulanmamış kayıt "kullanıcı" değildir; e-posta
         -- doğrulaması açık olduğu için (bkz. auth akışı) o satırlar tamamlanmamış denemelerdir.
         (select count(*) from auth.users u where u.email_confirmed_at is not null)::bigint,
-        (select count(*) from public.devices)::bigint,
-        (select count(*) from public.devices d where d.last_seen > now() - interval '30 days')::bigint;
+        (select count(*) from public.devices d where coalesce(d.name, '') not like '%-dev')::bigint,
+        (select count(*) from public.devices d
+          where d.last_seen > now() - interval '30 days' and coalesce(d.name, '') not like '%-dev')::bigint;
 $$;
 
 -- En az ayrıcalık: önce herkesten al, yalnız anon'a ver (diğer RPC'lerle aynı desen).
