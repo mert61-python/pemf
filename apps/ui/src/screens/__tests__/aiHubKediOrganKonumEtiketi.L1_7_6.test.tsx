@@ -67,7 +67,7 @@ const depo = { setItem: async () => undefined };
 /** Backend `cat_organ` yanıt şekli (ai_router `organs_list`): her organda coord_3d_cm + calibrated; kabin yalnız perspektif çözümünde. */
 const YANIT = {
   status: "success",
-  n_organs: 4,
+  n_organs: 6,
   pose_type: "lateral",
   pnp_residual_px: 2.1,
   image_base64: "OVERLAY",
@@ -76,6 +76,10 @@ const YANIT = {
     { name: "dalak", coord_3d_cm: [9, 9, 9], coord_cabin_cm: [4, 5, 6], reliability: 0.7, calibrated: false },
     { name: "bobrek", coord_3d_cm: [-2, 2.5, 3], reliability: 0.25, calibrated: false },
     { name: "mide", reliability: 0.2, calibrated: false },
+    // D67 orkestratör kolu: `calibrated` alanı YOK (eski yanıt) → "kalibre" iddia EDİLMEZ (`!== false` mutantı YAŞIYORDU).
+    { name: "karaciger", coord_cabin_cm: [7, 8, 9], reliability: 0.6 },
+    // D67 orkestratör kolu: boş kabin dizisi → koordinat YOK sayılır ("NaN" / 0 yazılmaz; uzunluk denetimi mutantı YAŞIYORDU).
+    { name: "mesane", coord_cabin_cm: [], reliability: 0.5, calibrated: true },
   ],
 };
 
@@ -97,11 +101,14 @@ afterEach(async () => {
 });
 
 it("KRİTİK TR: ArUco'suz (gövde-göreli) konum 'kalibrasyonsuz' der; kabin konumu kalibre / doğrulanmadı ayrımı; koordinat yoksa 0 UYDURULMAZ", async () => {
-  const u = await analiz(/Kedi Organ/i, "Galeriden Seç", "Organ Analizini Başlat", /4 organ bulundu/);
+  const u = await analiz(/Kedi Organ/i, "Galeriden Seç", "Organ Analizini Başlat", /6 organ bulundu/);
   expect(u.getByText("Kalp (1.0, 2.2, -3.0) cm · kabin konumu (ArUco ile kalibre)")).toBeTruthy();
   expect(u.getByText("Dalak (4.0, 5.0, 6.0) cm · kabin konumu — kalibrasyon doğrulanmadı")).toBeTruthy();
   expect(u.getByText("Böbrek (-2.0, 2.5, 3.0) cm · kedinin gövdesine göre — kalibrasyonsuz (kabin konumu değil)")).toBeTruthy();
   expect(u.getByText("Mide konum yok")).toBeTruthy();
+  expect(u.getByText("Karaciğer (7.0, 8.0, 9.0) cm · kabin konumu — kalibrasyon doğrulanmadı")).toBeTruthy();
+  expect(u.getByText("Mesane konum yok")).toBeTruthy();
+  expect(u.queryAllByText(/NaN/)).toHaveLength(0);
   // Değer kaynağı DEĞİŞMEDİ: kabin varken gövde-göreli (9, 9, 9) gösterilmez; uydurma (0.0, 0.0, 0.0) yok.
   expect(u.queryAllByText(/\(9\.0, 9\.0, 9\.0\)/)).toHaveLength(0);
   expect(u.queryAllByText(/\(0\.0, 0\.0, 0\.0\)/)).toHaveLength(0);
@@ -112,9 +119,11 @@ it("KRİTİK EN: aynı dört durum İngilizce (çeviri anlamı birebir: uncalibr
   await act(async () => {
     await dilSec("en", depo);
   });
-  const u = await analiz(/Feline Organ/i, "Choose from Gallery", "Start Organ Analysis", /4 organs found/);
+  const u = await analiz(/Feline Organ/i, "Choose from Gallery", "Start Organ Analysis", /6 organs found/);
   expect(u.getByText("Heart (1.0, 2.2, -3.0) cm · cabin position (calibrated with ArUco)")).toBeTruthy();
   expect(u.getByText("Spleen (4.0, 5.0, 6.0) cm · cabin position — calibration not verified")).toBeTruthy();
   expect(u.getByText("Kidney (-2.0, 2.5, 3.0) cm · relative to the cat's body — uncalibrated (not a cabin position)")).toBeTruthy();
   expect(u.getByText("Stomach no position")).toBeTruthy();
+  expect(u.getByText("Liver (7.0, 8.0, 9.0) cm · cabin position — calibration not verified")).toBeTruthy();
+  expect(u.getByText("Bladder no position")).toBeTruthy();
 });
