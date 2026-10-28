@@ -39,6 +39,19 @@ def _sifreli_db_yaz(yol: Path, anahtar: str, satir: str = "kayit") -> None:
     c.close()
 
 
+def _modulu_yeniden_yuklet(monkeypatch, onek: str) -> None:
+    """`onek` ile başlayan modülleri sys.modules'tan çıkarır (test yeniden içe aktarır); test sonunda HEM sys.modules girdisi HEM üst
+    paketin özniteliği ESKİ modüle döner. SON-A1.4 yalnız girdiyi geri koyuyordu: yeniden içe aktarma `database.patient_database`
+    paket özniteliğini YENİ modüle çevirdiği için sonraki dosyalarda `from database import patient_database` YENİ, `from
+    database.patient_database import …` ESKİ modülü görüyordu → yamalar ürüne ulaşmadı (22-SON kapanış süitinde 4 kırmızı:
+    SF211 · D254 ×2 · F2-2.2 KARŞIT). Kapı: tests/test_karantina_testi_SYS_MODULES_u_GERI_KOYAR_SON.py"""
+    for mod in [m for m in list(sys.modules) if m.startswith(onek)]:
+        ust, _, ad = mod.rpartition(".")
+        if ust in sys.modules and getattr(sys.modules[ust], ad, None) is sys.modules[mod]:
+            monkeypatch.setattr(sys.modules[ust], ad, sys.modules[mod])
+        monkeypatch.delitem(sys.modules, mod)
+
+
 def test_KRITIK_anahtar_uyusmazligi_TESPIT_edilir(tmp_path):
     """Yanlış anahtarla açış `anahtar_uyusmazligi_mi` ile tanınmalı. Bu ayrım olmadan
     karantina ya hiç çalışmaz ya da HER hatada dosyayı kenara alır."""
@@ -93,9 +106,7 @@ def _patient_db_ac(tmp_path, monkeypatch, anahtar: str):
     monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("PEMF_SQLCIPHER_KEY", anahtar)
-    for mod in [m for m in list(sys.modules) if m.startswith("database.patient_database")]:
-        # SON-A1.4: test sonunda ESKİ modül geri konur (sonraki dosyalar aynı modülü görür)
-        monkeypatch.delitem(sys.modules, mod)
+    _modulu_yeniden_yuklet(monkeypatch, "database.patient_database")
     import database.patient_database as pdb
 
     monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: anahtar)
@@ -132,9 +143,7 @@ def test_KRITIK_karantina_ANAHTAR_YOKKEN_yapilmaz(tmp_path, monkeypatch):
 
     monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path))
-    for mod in [m for m in list(sys.modules) if m.startswith("database.patient_database")]:
-        # SON-A1.4: test sonunda ESKİ modül geri konur (sonraki dosyalar aynı modülü görür)
-        monkeypatch.delitem(sys.modules, mod)
+    _modulu_yeniden_yuklet(monkeypatch, "database.patient_database")
     import database.patient_database as pdb
 
     monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: "")  # anahtar ÇÖZÜLEMEDİ
@@ -160,9 +169,7 @@ def test_KRITIK_TEDAVI_GECMISI_eski_anahtarda_backendi_OLDURMEZ(tmp_path, monkey
 
     monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path))
-    for mod in [m for m in list(sys.modules) if m.startswith("database.treatment_history_db")]:
-        # SON-A1.4: test sonunda ESKİ modül geri konur (sonraki dosyalar aynı modülü görür)
-        monkeypatch.delitem(sys.modules, mod)
+    _modulu_yeniden_yuklet(monkeypatch, "database.treatment_history_db")
     import database.treatment_history_db as thdb
 
     monkeypatch.setattr(thdb.TreatmentHistoryDB, "_get_sqlcipher_key", lambda self: "YENI-ANAHTAR", raising=False)

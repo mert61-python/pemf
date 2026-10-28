@@ -38,6 +38,19 @@ def test_z_sonraki_dosyanin_urun_baglamalari_SYS_MODULES_ile_AYNI():
         if getattr(urun, ad) is not getattr(sys.modules[db], ad)
     ]
     assert not sapma, sapma
+
+
+def test_z_paket_ozniteligi_SYS_MODULES_ile_AYNI_nesne():
+    # 22-SON kapanış: girdi geri konup paket özniteliği YENİ modülde kalırsa `from database import patient_database` ile
+    # `from database.patient_database import …` FARKLI modülleri görür — sonraki dosyaların yamaları ürüne ulaşmaz.
+    import database
+
+    sapma = [
+        f"database.{ad} paket özniteliği sys.modules['database.{ad}'] ile AYNI nesne değil"
+        for ad in ("patient_database", "treatment_history_db")
+        if getattr(database, ad, None) is not sys.modules.get(f"database.{ad}")
+    ]
+    assert not sapma, sapma
 '''
 
 
@@ -65,6 +78,6 @@ def test_KRITIK_karantina_testi_SONRAKI_dosyaya_ESKI_modul_birakmaz(tmp_path):
     )
     assert "FAILED test_z_sonraki" not in cikti, (
         "karantina testi database.* modülünü sys.modules'tan silip GERİ KOYMADI — sonraki dosyaların ürün bağlamaları ESKİ "
-        f"modülde (monkeypatch.delitem(sys.modules, …) kullanın):\n{cikti[-2000:]}"
+        f"modülde ya da paket özniteliği YENİ modülde kaldı (girdiyi VE üst paketin özniteliğini geri koyun):\n{cikti[-2000:]}"
     )
     assert p.returncode == 0, cikti[-2000:]
