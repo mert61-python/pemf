@@ -2453,6 +2453,12 @@ mod tests {
             acl.contains("acl_ver_ile(dir, grup, |arg|") && acl.contains(".args(arg)") && !acl.contains(".arg(") && !acl.contains("S-1-5-32-545"),
             "acl_ver kararı veri_koku_acl_komutu'ndan almıyor ya da icacls'a kendi yolunu ekliyor"
         );
+        // Tur 2 kolu (D67 çürütme, mutant n1): satır yorumları SOYULUR — çağrının metni yalnız bir yorumda kalıp kök `icacls`'a başka
+        // biçimde (`.args([dir…])`) eklenirse de yakalanır: kodda `dir` yalnız imzada + `acl_ver_ile` çağrısında, tek komut çağrısı.
+        let kod: String = acl.lines().map(|l| l.split("//").next().unwrap_or("")).collect::<Vec<_>>().join("\n");
+        assert!(kod.contains("acl_ver_ile(dir, grup, |arg|"), "acl_ver_ile çağrısı yalnız yorumda: {kod}");
+        assert_eq!(kod.matches("dir").count(), 2, "acl_ver kök yolunu (dir) acl_ver_ile dışında kullanıyor: {kod}");
+        assert_eq!(kod.matches("gizli_komut(").count(), 1, "acl_ver birden çok komut koşuyor: {kod}");
         let komut = &src[src.find("pub fn veri_koku_acl_komutu(").expect("veri_koku_acl_komutu yok")..];
         let komut = &komut[..komut.find("fn acl_ver_ile").expect("acl_ver_ile yok")];
         assert!(komut.contains("veri_koku_acl_argumanlari(grup)?"), "komut ACE'i saf fonksiyondan almıyor");
@@ -2492,6 +2498,18 @@ mod tests {
         assert_eq!(n, 0, "grup yokken icacls çağrıldı");
         assert!(!kok.join("PEMF_GUI").exists(), "grup yokken PEMF_GUI yaratıldı — tek hesaplı kurulumun davranışı değişti");
         assert_eq!(veri_koku_acl_komutu(&kok, None), None, "grup yokken komut üretildi");
+    }
+
+    /// Tur 2 kolu (D67 çürütme, mutant n2): hedef ağacında OKUNAMAYAN girdi bağ SAYILIR (hak yazılmaz) — gerçek ACL değiştirilemediğinden
+    /// okunamazlık, kök varken var olmayan `PEMF_GUI` ile ölçülür; kök yokken de komut yok.
+    #[test]
+    fn Y202a_hedef_OKUNAMAZSA_komut_yok_okunamayan_girdi_BAG_sayilir() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("PEMF_System");
+        std::fs::create_dir_all(kok.join("mosquitto")).unwrap();
+        let g = Some("S-1-5-21-111-222-333-1005");
+        assert_eq!(veri_koku_acl_komutu(&kok, g), None, "PEMF_GUI okunamıyorken komut üretildi — okunamayan girdi bağ sayılmalı");
+        assert_eq!(veri_koku_acl_komutu(&d.path().join("yok"), g), None, "kök yokken komut üretildi");
     }
 
     /// Y202 (T-g bağ denetimi deseni) ÖNCE-KIRMIZI: hedef ağacında BAĞ varsa — `PEMF_GUI`'nin kendisi bağlantı noktası, içinde bağlantı
