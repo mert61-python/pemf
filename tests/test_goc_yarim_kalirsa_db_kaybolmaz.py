@@ -275,8 +275,10 @@ def test_KRITIK_toparlama_HATASI_LOGLANIR_davranis(tmp_path, monkeypatch, caplog
 # ============================================================================
 # `sqlcipher_util.migrate_to_encrypted_if_needed` (hasta DB'si) ve
 # `treatment_history_db._migrate_to_encrypted_if_needed` (seans/AI geçmişi) AYNI işi yapan
-# İKİ AYRI kopyadır — `sqlcipher_util` modül başlığı bunu açıkça yazıyor:
-#   "treatment_history_db.py kendi (calisan, test-edilmis) inline kopyasini korur"
+# İKİ AYRI kopyaydı (bu kapı yazıldığında `sqlcipher_util` modül başlığı da öyle diyordu).
+# 2026-09-15'ten (A1 · 2/2) beri tedavi yolu `thdb_sema` üzerinden ORTAK gövdeye delege ediyor;
+# kopya kalktı, başlık D6.10'da düzeltildi. Aşağıdaki çıpa tedavi yolunun yine toparlamayı
+# ALDIĞINI ölçer (doğrudan ya da delegeyle).
 #
 # ⚠️ İLK DÜZELTMEMDE YALNIZ BİRİNİ onardım. Birim testler geçti (onlar paylaşılan kopyayı
 # çağırıyor) ama ÜRÜNDE hasta geçmişi hâlâ kayboluyordu, çünkü o yol İKİNCİ kopyayı kullanıyor.
@@ -326,7 +328,7 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     # satırı adı taşıyor. Bu depoda tekrar eden ders — çıpayı GERÇEK çağrıya pinle.
     # ⚠️ ÜÇ YOL VAR, ÜÇÜ DE TOPARLAMAYI ÇAĞIRMALI:
     #   · sqlcipher_util            → hasta DB'si
-    #   · treatment_history_db      → seans / AI geçmişi (inline kopya)
+    #   · treatment_history_db      → seans / AI geçmişi (bugün `thdb_sema` → ortak göçe delege)
     #   · path_utils.initialize_database → "0 KM" ŞABLON KOPYALAYICI
     # Üçüncüsü açılışta EN ÖNCE koşar ve `db` yok görünce ŞABLONU koyar. Ölçüldü (2026-09-13):
     # ilk iki düzeltme ürünü KURTARMADI çünkü şablon kopyalayıcı önce davranıyordu — hasta

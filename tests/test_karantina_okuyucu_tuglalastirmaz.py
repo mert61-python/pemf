@@ -12,11 +12,15 @@ altından ÜRÜN ARIZASI çıktı.
         `RuntimeError(... karantinaya ALINAMADI ...)` fırlatır
       → **BACKEND AÇILMAZ.**
 
-SADECE OKUMA tutamacı yetiyor. Üründe tam bunu yapan bir daemon var:
-`api_server._daily_maintenance_loop` günlük yedeği `shutil.copy2` ile alıyor — yani
-`pemf_treatment_history.db`'yi AÇIYOR. Anahtar uyuşmazlığı (kaldır-yeniden-kur sonrası
-yenilenen `pemf_secrets.json`) tam o ana denk gelirse, TUĞLALAŞMAYI ÖNLEMEK için yazılmış
-kurtarma zarfı tuğlalaşmaya sebep oluyordu.
+SADECE OKUMA tutamacı yetiyor. Anahtar uyuşmazlığı (kaldır-yeniden-kur sonrası
+yenilenen `pemf_secrets.json`) tam bir okuma anına denk gelirse, TUĞLALAŞMAYI ÖNLEMEK için
+yazılmış kurtarma zarfı tuğlalaşmaya sebep oluyordu.
+
+⚠️ D6.10 · B-3.55: bu gerekçe 2026-09-19'da okuyucu olarak `api_server._daily_maintenance_loop`un
+günlük dosya kopyasını gösteriyordu; o kopyalayıcı KALDIRILDI (yedeği `services/headless_db_maintenance`
+→ `create_backup` alır: süreç içi online backup API). Karantina DB nesnesi kurulurken (`_init_database`)
+koşar; o anda dosyayı tutabilecek okuyucu süreç DIŞINDANDIR — antivirüs, dosya yedekleyici / indeksleyici,
+ikinci bir backend örneği ya da elle açılmış bir DB görüntüleyicisi. Bütçe onlar için KORUNUR.
 
 ⚠️ ESKİ BÜTÇE YETMİYORDU: `_kilit_direncli_tasi` 4 × 0,25 sn = **0,75 sn** bekliyordu.
 Docstring'i yalnız BU SÜRECİN kendi yetim SQLCipher tutamacını anlatıyor ve onu

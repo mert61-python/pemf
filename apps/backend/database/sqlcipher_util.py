@@ -4,14 +4,19 @@ SQLCipher at-rest sifreleme yardimcilari (paylasilan).
 
 patient_database.py + treatment_history_db.py ayni at-rest anahtarini (SecretsManager:
 <veri koku>/pemf_secrets.json -> auto.sqlcipher_key, DPAPI ile makineye bagli; keyring / .sqlcipher_key
-yalniz ESKI kaynak olarak bir kez okunup oraya tasinir — D6.09) ve ayni plaintext->encrypted migrasyon
-desenini kullanir.
+yalniz ESKI kaynak olarak bir kez okunup oraya tasinir — D6.09) ve ayni plaintext->encrypted goc
+GOVDESINI kullanir.
 PEMF_ENCRYPT_AT_REST=1 + sqlcipher3 binding varsa whole-DB sifreleme; aksi halde duz-metin
 (geriye uyumlu). [audit 2026-06-28 P0: hasta PII whole-DB sifrelenmeli — patient_database
 eskiden duz sqlite3 + yalniz alan-Fernet idi; metadata/HMAC-index duz-metin kaliyordu.]
 
-NOT: treatment_history_db.py kendi (calisan, test-edilmis) inline kopyasini korur; bu modul
-yeni cagiranlar (patient_database) icindir. Anahtar ADI ayni oldugundan ayni anahtar paylasilir.
+NOT (D6.10 · B-3.54): goc govdesi TEK ve BURADA (`migrate_to_encrypted_if_needed`). Tedavi DB'si kendi
+kopyasini TASIMAZ: `thdb_sema.SemaKarisimi._migrate_to_encrypted_if_needed` buraya delege eder (2026-09-15,
+A1 · 2/2 — 157 satirlik ikinci kopya kaldirildi); hasta DB'si (`patient_database`) de dogrudan bunu cagirir.
+Anahtar ADI ayni oldugundan ayni anahtar paylasilir. `database/yedek_dosyasi.py` de `sqlcipher_export`
+cagirir ama goc icin DEGIL — yedek sifreleme / cozme (`duz_dbyi_yedekle`, `sifreli_yedegi_duze_coz`);
+MESRU ikinci cagirandir.
+Kapilar: tests/test_goc_yarim_kalirsa_db_kaybolmaz.py · tests/test_sqlcipher_goc_govdesi_belgesi_D6_10.py
 """
 
 import contextlib
