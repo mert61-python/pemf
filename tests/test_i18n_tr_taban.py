@@ -5,7 +5,8 @@ ya kaynakta (muaf / genel / kod), ya dosyanın kullandığı bir anahtarın TR d
 `{"detail":"…"}` → `_json_detay(ceviri.t(…))`, 168 launcher `index.html`'in yayındaki EN sözlük metni); argümansız çağrı `[OK] (0 dosya)`
 diyordu; `birlesikIstisna.sonra` doğrulanmıyordu (3 girdi ilgisiz anahtar gösteriyordu).
 Taban depo DIŞINDA: `PEMF_I18N_TABAN` ya da `ortak.varsayilan_taban()` (`~/Desktop/DENETIM/I18N/…`; kullanıcı adı GÖMÜLMEZ); yoksa gerekçeyle
-ATLANIR (CI'da koşmaz; göç / inceleme / yayın hazırlığı makinesinde koşar — kafesli koşucuda tabanı açıkça verin).
+ATLANIR (CI'da koşmaz; göç / inceleme / yayın hazırlığı makinesinde koşar — kafesli koşucuda tabanı açıkça verin);
+`PEMF_CAPRAZ_KAYNAK_ZORUNLU=1` iken taban yoksa DÜŞER (Y205 · S-D5.19 — `capraz.atla`).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import os
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 
@@ -32,7 +34,9 @@ if str(KOK) not in sys.path:
 from scripts.i18n import katalog, ortak  # noqa: E402
 
 TABAN = ortak.varsayilan_taban()  # PEMF_I18N_TABAN > ~/Desktop/DENETIM/I18N/taban-tr-metinler.json
-pytestmark = pytest.mark.skipif(not TABAN.is_file(), reason=f"TR tabanı yok ({TABAN}) — depo dışında")
+# Y205 · S-D5.19 (sahip): yayın hazırlığı makinesinde (ZORUNLU=1) taban yoksa koşu DÜŞER — sessiz atlama yok.
+if not TABAN.is_file():
+    capraz.atla(f"TR tabanı yok ({TABAN}) — depo dışında")
 DEFTER = json.loads((KOK / "i18n" / "kapsam.json").read_text(encoding="utf-8"))
 
 

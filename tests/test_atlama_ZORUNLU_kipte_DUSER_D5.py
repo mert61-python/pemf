@@ -753,10 +753,6 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         "TASARIM: asgari NSIS betiğinin Tauri şablonuna özgü sembol sınırı (makensis ÇIKTISINA bağlı); eser yokluğu değil — dönüştürmek ZORUNLU'da sahte kırmızı üretirdi (K5-F P9 --haric)",
     ),
-    'tests/test_i18n_tr_taban.py': (
-        1,
-        "DIS-KAYNAK: TR tabanı depo DIŞINDA (`PEMF_I18N_TABAN`, sahibin denetim dizini); capraz.atla_yoksa depo-göreli yol alır — [SAHİBE] tabanı depoya alma ya da ZORUNLU'ya bağlama kararı",
-    ),
     'tests/test_inno_kod_derlenir.py': (
         1,
         "ARAC: ISCC (Inno Setup) — 'eser var' kolu gerçek Inno derlemesi ister (ORTAK §1 yasak); dönüşüm + ölçüm ORKESTRATÖRDE",
