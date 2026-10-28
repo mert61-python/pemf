@@ -191,6 +191,16 @@ def _credential_manager_ice_aktaranlar() -> list[str]:
                 adlar = [d.module or ""] + [a.name for a in d.names]
             elif isinstance(d, ast.Import):
                 adlar = [a.name for a in d.names]
+            elif (
+                # Tur 2 (çürütücü): dinamik içe aktarma (`importlib.import_module("services.credential_manager")`,
+                # `__import__(…)`) da kullanımdır — eskiden yalnız `import` deyimleri sayılıyordu.
+                isinstance(d, ast.Call)
+                and (getattr(d.func, "attr", None) or getattr(d.func, "id", None)) in ("import_module", "__import__")
+                and d.args
+                and isinstance(d.args[0], ast.Constant)
+                and isinstance(d.args[0].value, str)
+            ):
+                adlar = [d.args[0].value]
             else:
                 continue
             if any(a.split(".")[-1] == "credential_manager" for a in adlar):
@@ -241,7 +251,12 @@ def test_gunluk_bakim_docstringi_govdede_OLMAYAN_yedegi_vaat_etmez():
     fn = _bakim_dongusu()
     doc = ast.get_docstring(fn) or ""
     yedek_cagrisi = _cagri_adlari(ast.Module(body=_govde_docstringsiz(fn), type_ignores=[])) & YEDEK_CAGRILARI
-    if yedek_cagrisi:  # gövde yeniden yedek alıyorsa bu kol iddiayı denetlemez
+    if yedek_cagrisi:
+        # Tur 2 (çürütücü, ters yön): gövde yeniden yedek alıyorsa docstring "YEDEK ALMAZ" DİYEMEZ — eskiden bu dal sessizce
+        # dönüyordu; döngüye yedek geri konsa bile yeni (yanlış) güvence yeşil kalırdı.
+        assert "YEDEK ALMAZ" not in doc, (
+            f"docstring 'YEDEK ALMAZ' diyor ama gövde yedek alıyor: {sorted(yedek_cagrisi)}"
+        )
         return
     assert "copy2" not in doc, "docstring `copy2` yedeğini anıyor; gövdede yedek çağrısı YOK"
     assert not re.search(r"Gunluk \.db yedek\s*:", doc), "docstring günlük .db yedeğini döngünün işi gibi listeliyor"
@@ -252,12 +267,16 @@ def test_gunluk_bakim_docstringi_govdede_OLMAYAN_yedegi_vaat_etmez():
 
 def test_kilit_butcesi_gerekcesi_bakim_dongusunu_KOPYALAYICI_diye_suclamaz():
     fn = _bakim_dongusu()
-    if _cagri_adlari(fn) & YEDEK_CAGRILARI:
-        return
     tasi = _modul_islevi(_agac(BE / "database" / "sqlcipher_util.py"), "_kilit_direncli_tasi")
     assert tasi is not None
     doc = ast.get_docstring(tasi) or ""
     paragraflar = [p for p in re.split(r"\n\s*\n", doc) if "_daily_maintenance_loop" in p]
+    if _cagri_adlari(fn) & YEDEK_CAGRILARI:
+        # Tur 2 (çürütücü, ters yön): döngü yeniden kopyalıyorsa gerekçe "kopyalayıcı KALDIRILDI" DİYEMEZ.
+        assert not [p for p in paragraflar if "KALDIRILDI" in p], (
+            "bütçe gerekçesi kopyalayıcının KALDIRILDIĞINI söylüyor ama _daily_maintenance_loop yeniden yedek alıyor"
+        )
+        return
     assert paragraflar, (
         "bütçe gerekçesi eski suçluyu (_daily_maintenance_loop) artık hiç anmıyor — kapıyı yeniden ölçün"
     )
