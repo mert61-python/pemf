@@ -156,9 +156,12 @@ Windows `%APPDATA%\PEMF_GUI` (launcher `PEMF_DATA_DIR` verirse `<PEMF_DATA_DIR>\
 NSIS KVKK iletisi onu gösterir — LN L7), macOS `~/Library/Application Support/PEMF_GUI`,
 Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etmemeli.**
 
-**Makine-geneli veri kökünün ACL'i (Y96 · LN L8):** kök İLK kez yaratılırken yalnız paylaşılan YEREL grup (`PEMF_DATA_GROUP_SID`,
+**Makine-geneli veri kökünün ACL'i (Y96 · LN L8 · Y202):** kök İLK kez yaratılırken yalnız paylaşılan YEREL grup (`PEMF_DATA_GROUP_SID`,
 biçim `S-1-5-21-…` + bu makinenin yerel grubu — backend `file_acl` ile aynı kural) `Değiştir` alır ve SID backend'e de geçer; yerel
-`Users` VERİLMEZ. Grup tanımlı değilse ek hak verilmez (tek hesap: yaratan hesap sahip). ⚠️ YLI-A3.1 (ölçüldü): bu, ikinci Windows
+`Users` VERİLMEZ. Hak YALNIZ hasta veri dizinine, `<kök>\PEMF_GUI` ağacına yazılır (launcher onu bu adımda yaratır); kökün kendisi ve
+kardeşleri (mosquitto, logs, kimlik dosyaları) gruba AÇILMAZ (Y202 · S-D3I.4; `install::veri_koku_acl_komutu`). Kök ya da `PEMF_GUI`
+ağacı bağlantı noktası / sembolik / sabit bağ içeriyorsa hak yazılmaz (T-g bağ denetimi deseni). Grup tanımlı değilse ek hak verilmez
+ve `PEMF_GUI`'yi backend kurar (tek hesap: yaratan hesap sahip). ⚠️ YLI-A3.1 (ölçüldü): bu, ikinci Windows
 hesabını kendi kullanıcı köküne DÜŞÜRMEZ — `C:\ProgramData` mirası (`Users: Write (CI)`) köke yazdırır, yoklama geçer; ama backend
 `<kök>\PEMF_GUI`'yi ilk hesaba kilitlediği için ikinci hesap hasta verisine erişemez (DB açılmaz — görünür arıza). Çok hesaplı klinik
 kurulumda paylaşılan grup ZORUNLU (Y96); grupsuz ikinci hesabın ne yapacağı sahip kararıdır (S-YLI.1).
@@ -167,7 +170,7 @@ kurulumda paylaşılan grup ZORUNLU (Y96); grupsuz ikinci hesabın ne yapacağı
 `<kök>\PEMF_GUI`'yi listeleyip içine yazamadığını görürse (başka hesabın verisi) bildirim kutusunda nedeni ve KVKK sonucunu yazar
 ("hasta verisi gruptaki hesaplar arasında PAYLAŞILIR"); "Paylaşımı kur (yönetici)" TEK SEFERLİK yükseltilmiş PowerShell (UAC) koşar:
 `PEMF Data Users` yerel grubunu kurar (yoksa), bu hesabı (SID'i YÜKSELTİLMEMİŞ süreçten) ve `PEMF_GUI`'nin sahibini (`S-1-5-21-…` ise)
-gruba ekler, köke grubun `(OI)(CI)M` hakkını ağaçta verir. Kökü betik kendisi çözer (`CommonApplicationData`; kullanıcı etkili yol
+gruba ekler, `<kök>\PEMF_GUI`'ye grubun `(OI)(CI)M` hakkını ağaçta verir (D3I-A2.9; kök gruba açılmaz). Kökü betik kendisi çözer (`CommonApplicationData`; kullanıcı etkili yol
 betiğe girmez); ağaçta bağlantı noktası / sembolik / sabit bağ varsa hak yazmadan durur (kod 4). Çıkış kodları: 0 tamam · 3 izin
 verilemedi · 4 bağ · 5 veri yok · 1223 UAC reddi. `PEMF_DATA_GROUP_SID` yoksa launcher grubu ADIYLA bulur (`paylasilan_grup_sid`) ve
 backend'e verir; değişken varsa yalnız o geçerlidir. Grup üyeliği iki hesapta da Windows oturumu yeniden açılınca geçerli olur.

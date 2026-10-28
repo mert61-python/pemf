@@ -414,7 +414,111 @@ pub fn veri_koku_acl_argumanlari(grup: Option<&str>) -> Option<Vec<String>> {
     grup.map(|g| ["/grant".to_string(), format!("*{g}:(OI)(CI)M"), "/T".into(), "/C".into(), "/Q".into()].to_vec())
 }
 
-/// Yeni yaratılan makine-geneli klasöre ACL ver (`veri_koku_acl_argumanlari`).
+/// Y202 (S-D3I.4, sahip): yeni makine kökünde grup hakkının TEK hedefi — hasta veri dizini `<kök>\PEMF_GUI` (T-g
+/// `paylasim::kurma_betigi` ile aynı hedef, D3I-A2.9). Kökün kendisi ve kardeşleri (mosquitto, logs, kimlik dosyaları) gruba AÇILMAZ;
+/// eskiden grup `M /T` kökün TAMAMINA veriliyordu.
+pub fn veri_koku_acl_hedefi(kok: &Path) -> PathBuf {
+    kok.join("PEMF_GUI")
+}
+
+/// Y202: dosya sistemi girdisi bir BAĞ mı — Windows'ta HER yeniden ayrıştırma noktası (sembolik bağ, bağlantı noktası / junction ve
+/// öbürleri; T-g `ReparsePoint` ile aynı), başka platformda sembolik bağ.
+fn bag_ozniteligi_mi(m: &std::fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        m.file_attributes() & windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT != 0
+    }
+    #[cfg(not(windows))]
+    {
+        m.file_type().is_symlink()
+    }
+}
+
+/// Y202: dosyanın birden çok adı (sabit bağ) var mı; okunamazsa VAR sayılır (hak yazılmaz).
+#[cfg(windows)]
+fn birden_cok_adli_mi(yol: &Path) -> bool {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    };
+    // FILE_READ_ATTRIBUTES yeter; bağı İZLEMEDEN açılır.
+    let Ok(f) = std::fs::OpenOptions::new()
+        .access_mode(0x80)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(yol)
+    else {
+        return true;
+    };
+    // SAFETY: tutamaç `f` yaşadıkça geçerli; yapı tam boyutuyla verilir.
+    let mut bi: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    if unsafe { GetFileInformationByHandle(f.as_raw_handle() as _, &mut bi) } == 0 {
+        return true;
+    }
+    bi.nNumberOfLinks > 1
+}
+
+#[cfg(not(windows))]
+fn birden_cok_adli_mi(yol: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::symlink_metadata(yol).map(|m| m.nlink() > 1).unwrap_or(true)
+}
+
+/// Y202: ağaçta (kendisi dahil) bağ var mı — T-g `paylasim::kurma_betigi` bağ denetiminin (`ReparsePoint` / `LinkType`) karşılığı:
+/// `icacls /T` bağın HEDEFİNE (ör. hesabın başka bir klasörüne) grup hakkı yazardı. ProgramData mirası (`Users: (CI)` yaratma) başka
+/// bir yerel hesaba yeni klasörün İÇİNE bağ koydurabilir. Okunamayan girdi de bağ SAYILIR (hak yazılmaz).
+fn agacta_bag_var(dir: &Path) -> bool {
+    let mut yigin = vec![dir.to_path_buf()];
+    while let Some(p) = yigin.pop() {
+        let Ok(m) = std::fs::symlink_metadata(&p) else { return true };
+        if bag_ozniteligi_mi(&m) {
+            return true;
+        }
+        if !m.is_dir() {
+            if birden_cok_adli_mi(&p) {
+                return true;
+            }
+            continue;
+        }
+        let Ok(girdiler) = std::fs::read_dir(&p) else { return true };
+        for e in girdiler {
+            match e {
+                Ok(e) => yigin.push(e.path()),
+                Err(_) => return true,
+            }
+        }
+    }
+    false
+}
+
+/// Y96 · Y202: yeni makine kökü için `icacls` argümanlarının TAMAMI (hedef dahil — testli). Hedef `veri_koku_acl_hedefi` (`PEMF_GUI`);
+/// `/T` yalnız onun ağacına. Grup yoksa, kökün kendisi bağsa ya da hedef ağacında bağ varsa `None` (hak VERİLMEZ).
+pub fn veri_koku_acl_komutu(kok: &Path, grup: Option<&str>) -> Option<Vec<std::ffi::OsString>> {
+    let arg = veri_koku_acl_argumanlari(grup)?;
+    let hedef = veri_koku_acl_hedefi(kok);
+    let kok_bag = std::fs::symlink_metadata(kok).map(|m| bag_ozniteligi_mi(&m)).unwrap_or(true);
+    if kok_bag || agacta_bag_var(&hedef) {
+        return None;
+    }
+    Some(std::iter::once(hedef.into_os_string()).chain(arg.into_iter().map(Into::into)).collect())
+}
+
+/// `acl_ver`'in gövdesi; komut koşucusu ENJEKTE (testler gerçek `icacls` ÇALIŞTIRMAZ). Grup yoksa HİÇBİR şey yapılmaz (tek hesaplı
+/// kurulum — bugünkü gibi, `PEMF_GUI`'yi backend kurar); grup varsa hak yazılabilsin diye `PEMF_GUI` yaratılır (zaten varsa bağ
+/// denetimi karar verir).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn acl_ver_ile<K: FnOnce(Vec<std::ffi::OsString>)>(kok: &Path, grup: Option<&str>, kos: K) {
+    if grup.is_none() {
+        return;
+    }
+    let _ = std::fs::create_dir(veri_koku_acl_hedefi(kok));
+    if let Some(arg) = veri_koku_acl_komutu(kok, grup) {
+        kos(arg);
+    }
+}
+
+/// Yeni yaratılan makine-geneli kökte paylaşılan gruba hak ver (`veri_koku_acl_komutu` — Y202: yalnız `<kök>\PEMF_GUI`).
 ///
 /// Klasörü YARATAN kullanıcı sahibidir ve sahip, yönetici olmasa da DACL'i değiştirebilir →
 /// UAC gerekmez. ⚠️ YLI-A3.1 (ÖLÇÜLDÜ, 2026-10-22): grup verilmese de `C:\ProgramData` mirası (`Users: Write (CI)`) ikinci Windows
@@ -425,10 +529,11 @@ pub fn veri_koku_acl_argumanlari(grup: Option<&str>) -> Option<Vec<String>> {
 /// Başarısız olursa sessizce geçilir: `dizin_yazilabilir_mi` kapısı zaten koruyor.
 #[cfg(windows)]
 fn acl_ver(dir: &Path, grup: Option<&str>) {
-    let Some(arg) = veri_koku_acl_argumanlari(grup) else { return };
     // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut): kurulum/güncelleme akışında koşar;
     // çıplak `Command` kullanıcıya siyah pencere gösteriyordu.
-    let _ = crate::platform::gizli_komut("icacls").arg(dir).args(arg).output();
+    acl_ver_ile(dir, grup, |arg| {
+        let _ = crate::platform::gizli_komut("icacls").args(arg).output();
+    });
 }
 
 #[cfg(not(windows))]
@@ -2339,10 +2444,103 @@ mod tests {
         let a = veri_koku_acl_argumanlari(Some(g)).expect("grup ACL'i yok");
         assert!(a.iter().any(|x| x == "*S-1-5-21-111-222-333-1005:(OI)(CI)M"), "{a:?}");
         assert!(!a.iter().any(|x| x.contains("S-1-5-32-545")), "Users ACL'de: {a:?}");
+        // Y202a: karar `veri_koku_acl_komutu`nda (davranış kapıları aşağıda); Windows `acl_ver` YALNIZ onun argümanlarını koşar —
+        // kendi yolunu (`.arg(dir)` = kök) eklemez.
         let src = include_str!("install.rs").replace("\r\n", "\n");
         let acl = &src[src.find("fn acl_ver(dir: &Path, grup: Option<&str>)").expect("acl_ver yok")..];
         let acl = &acl[..acl.find("\n#[cfg(not(windows))]").unwrap()];
-        assert!(acl.contains("veri_koku_acl_argumanlari(grup)") && !acl.contains("S-1-5-32-545"), "acl_ver kararı saf fonksiyondan almıyor");
+        assert!(
+            acl.contains("acl_ver_ile(dir, grup, |arg|") && acl.contains(".args(arg)") && !acl.contains(".arg(") && !acl.contains("S-1-5-32-545"),
+            "acl_ver kararı veri_koku_acl_komutu'ndan almıyor ya da icacls'a kendi yolunu ekliyor"
+        );
+        let komut = &src[src.find("pub fn veri_koku_acl_komutu(").expect("veri_koku_acl_komutu yok")..];
+        let komut = &komut[..komut.find("fn acl_ver_ile").expect("acl_ver_ile yok")];
+        assert!(komut.contains("veri_koku_acl_argumanlari(grup)?"), "komut ACE'i saf fonksiyondan almıyor");
+    }
+
+    /// Y202 (S-D3I.4, sahip) ÖNCE-KIRMIZI: yeni makine kökünde paylaşılan grubun hakkı YALNIZ `<kök>\PEMF_GUI` ağacına (`/T` yalnız
+    /// ona; T-g `kurma_betigi` ile aynı hedef); kökün kendisi ve kardeşleri (mosquitto, logs, kimlik dosyaları) gruba AÇILMAZ — eskiden
+    /// `icacls <kök> … /T`. Gerçek `icacls` ÇALIŞMAZ: enjekte koşucu argümanları kaydeder; her şey geçici dizinde.
+    #[test]
+    fn KRITIK_Y202a_grup_hakki_YALNIZ_PEMF_GUI_agacina_kok_DISARIDA() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("PEMF_System");
+        std::fs::create_dir_all(kok.join("mosquitto")).unwrap();
+        let gui = kok.join("PEMF_GUI");
+        let mut kayit: Vec<Vec<std::ffi::OsString>> = Vec::new();
+        acl_ver_ile(&kok, Some("S-1-5-21-111-222-333-1005"), |a| kayit.push(a));
+        assert_eq!(kayit.len(), 1, "grup varken icacls çağrılmadı: {kayit:?}");
+        let a: Vec<String> = kayit[0].iter().map(|x| x.to_string_lossy().into_owned()).collect();
+        assert_eq!(Path::new(&kayit[0][0]), gui.as_path(), "icacls hedefi PEMF_GUI değil (kök / kardeşler gruba açılır): {a:?}");
+        assert_eq!(
+            &a[1..],
+            &["/grant", "*S-1-5-21-111-222-333-1005:(OI)(CI)M", "/T", "/C", "/Q"],
+            "icacls'a PEMF_GUI dışında yol ya da beklenmeyen argüman gitti: {a:?}"
+        );
+        assert!(gui.is_dir(), "PEMF_GUI yaratılmadı — hakkın yazılacağı dizin yok");
+        assert_eq!(veri_koku_acl_komutu(&kok, Some("S-1-5-21-111-222-333-1005")), Some(kayit[0].clone()), "ikinci tur farklı komut");
+    }
+
+    /// Y202: grup YOKKEN (tek hesaplı kurulum) bugünkü gibi — ne `icacls` ne `PEMF_GUI` (onu backend kurar).
+    #[test]
+    fn Y202a_grup_YOKKEN_komut_yok_PEMF_GUI_yaratilmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("PEMF_System");
+        std::fs::create_dir_all(&kok).unwrap();
+        let mut n = 0;
+        acl_ver_ile(&kok, None, |_| n += 1);
+        assert_eq!(n, 0, "grup yokken icacls çağrıldı");
+        assert!(!kok.join("PEMF_GUI").exists(), "grup yokken PEMF_GUI yaratıldı — tek hesaplı kurulumun davranışı değişti");
+        assert_eq!(veri_koku_acl_komutu(&kok, None), None, "grup yokken komut üretildi");
+    }
+
+    /// Y202 (T-g bağ denetimi deseni) ÖNCE-KIRMIZI: hedef ağacında BAĞ varsa — `PEMF_GUI`'nin kendisi bağlantı noktası, içinde bağlantı
+    /// noktası, içinde sabit bağlı dosya ya da kökün kendisi bağlantı noktası — hak YAZILMAZ (`icacls /T` bağın HEDEFİNE, hesabın başka
+    /// bir klasörüne grup hakkı yazardı). KARŞIT: içinde sıradan klasör / dosya varken hak yazılır. Bağlantı noktası `mklink /J`
+    /// (yönetici gerektirmez); her şey geçici dizinde, gerçek `icacls` ÇALIŞMAZ.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_Y202a_hedef_agacinda_BAG_varsa_hak_YAZILMAZ() {
+        fn junction(bag: &Path, hedef: &Path) {
+            let c = std::process::Command::new("cmd").args(["/d", "/c", "mklink", "/J"]).arg(bag).arg(hedef).output().unwrap();
+            assert!(c.status.success() && bag.is_dir(), "junction kurulamadı: {c:?}");
+        }
+        let d = tempfile::tempdir().unwrap();
+        let dis = d.path().join("hesabin_baska_klasoru");
+        std::fs::create_dir_all(&dis).unwrap();
+        std::fs::write(dis.join("ozel.txt"), b"x").unwrap();
+        let kok = |ad: &str| {
+            let k = d.path().join(ad);
+            std::fs::create_dir_all(k.join("PEMF_GUI").join("alt")).unwrap();
+            k
+        };
+        let k1 = d.path().join("gui_bag");
+        std::fs::create_dir_all(&k1).unwrap();
+        junction(&k1.join("PEMF_GUI"), &dis);
+        let k2 = kok("icte_bag");
+        junction(&k2.join("PEMF_GUI").join("alt").join("bag"), &dis);
+        let k3 = kok("sabit_bag");
+        std::fs::hard_link(dis.join("ozel.txt"), k3.join("PEMF_GUI").join("ozel.txt")).unwrap();
+        let gercek = kok("gercek_kok");
+        let k4 = d.path().join("kok_bag");
+        junction(&k4, &gercek);
+        let k5 = kok("karsit");
+        std::fs::write(k5.join("PEMF_GUI").join("alt").join("dosya.txt"), b"x").unwrap();
+        let mut sonuc = Vec::new();
+        for (ad, k) in [("PEMF_GUI bağ", &k1), ("içte bağ", &k2), ("sabit bağ", &k3), ("kök bağ", &k4), ("KARŞIT sıradan", &k5)] {
+            let mut n = 0;
+            acl_ver_ile(k, Some("S-1-5-21-111-222-333-1005"), |_| n += 1);
+            sonuc.push((ad, n));
+        }
+        for b in [k1.join("PEMF_GUI"), k2.join("PEMF_GUI").join("alt").join("bag"), k4.clone()] {
+            let _ = std::fs::remove_dir(&b);
+        }
+        assert!(dis.join("ozel.txt").exists(), "aparat dış klasörü bozdu");
+        assert_eq!(
+            sonuc,
+            [("PEMF_GUI bağ", 0), ("içte bağ", 0), ("sabit bağ", 0), ("kök bağ", 0), ("KARŞIT sıradan", 1)],
+            "bağ varken hak yazıldı ya da sıradan ağaçta yazılmadı"
+        );
     }
 
     /// LN L8 · Y96: grup SID'i biçim + bu makinenin YEREL grubu olmalı (backend `file_acl` ile aynı kural): Users / Authenticated Users
