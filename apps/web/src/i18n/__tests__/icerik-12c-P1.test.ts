@@ -55,7 +55,7 @@ const ALTIN: Record<string, unknown> = {
    "title": "Kullanım Şartları"
   }
  ],
- "COMPANY_updated": "7 Ağustos 2026",
+ "COMPANY_updated": "10 Ekim 2026",
  "MEDICAL_DISCLAIMER": "PEMF Vet, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış klinik destek yazılımıdır. Akıllı teşhis ve AI analiz çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve tedavisinin yerine geçmez. Otonom seans (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır.",
  "DOWNLOAD_HOST": {
   "androidRolNotu": "Kliniğinizdeki cihaza bağlanır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensörleri izleyebilir ve hasta kayıtlarına bakabilirsiniz. Cihazın bağlı olduğu klinik bilgisayarı açık olmalıdır.",
