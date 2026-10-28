@@ -2840,11 +2840,17 @@ mod tests {
     /// Satır içi bir sürüm kıyası geri gelirse (ters argüman sırası dahil) çekirdek testi onu görmez — bu kapı görür.
     #[test]
     fn KRITIK_L12_acilis_bildirimi_cekirdegin_TEK_kararini_kullanir() {
-        let src = include_str!("main.rs");
+        // SON-A3.53 (22-SON): yorum SOYULUR — çağrı metni yalnız yorumda kalıp satır içi `!=` kıyası gelince kapı yeşil kalıyordu
+        // (mutant ölçüldü: 1.9.52 yayındaki 1.9.51'i "yeni" sayar → kendini geri indirir). Dize içine taşınan çağrı metnine karşı
+        // `manifest.launcher` ALANINA doğrudan erişim de yasak (yalnız `manifest.launcher_guncellemesi(` yöntemi serbest).
+        let src = f5_yorumlari_soy(include_str!("main.rs"));
         let g = &src[src.find(concat!("fn fetch_profiles_", "blocking(")).expect("fetch_profiles_blocking yok")..];
         let g = &g[..g.find("\n\u{7d}").expect("gövde sonu yok")];
         assert!(g.contains("manifest.launcher_guncellemesi(current_launcher)"), "açılış bildirimi çekirdeğin kararını kullanmıyor");
         assert!(!g.contains(concat!("is_", "newer(")), "açılış bildiriminde satır içi sürüm kıyası var");
+        let alan = concat!("manifest.", "launcher");
+        let dogrudan: Vec<usize> = g.match_indices(alan).map(|(i, _)| i).filter(|&i| !g[i + alan.len()..].starts_with('_')).collect();
+        assert!(dogrudan.is_empty(), "açılış bildirimi `manifest.launcher` alanını doğrudan okuyor (çekirdek kararını atlayan satır içi kıyas yolu)");
     }
 
     /// SAHİP BİLDİRİMİ 2026-10-18: "güncelleme kontrol ediliyor yazarken pencere bloklanıyor hareket ettiremiyorum".
