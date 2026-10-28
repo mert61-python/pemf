@@ -111,16 +111,71 @@ CKD_ETIKET = {
 #: (router bugün 24 yazıyor; mesaj dizesi testlerle kilitli).
 CKD_TOPLAM_ALAN = 24
 
+#: D6.20 (B-5.21): 10 kategorik alanın EĞİTİM SÖZLÜĞÜ — `preprocessor.pkl` `OneHotEncoder.categories_` (ölçüldü:
+#: `drop='first'`, `handle_unknown='ignore'`). Sözlük DIŞI değer ('evet', 'var', '1', 'true', 'anormal' …) modelde SESSİZCE
+#: düşürülen ilk kategoriye ('abnormal' / 'notpresent' / 'no' / 'good') dönüşüyordu: `htn: "evet"` = hipertansiyon YOK
+#: (ölçüldü: 'evet' 0,115 notckd ↔ 'yes' 0,795 ckd) — klinik anlam TERSİNE, 200 + `filled_fields` onu DOLU sayıyordu.
+#: Arayüz (ve APK 2.3.34) yalnız bu kodları gönderir. Karşılaştırma modelin normalizasyonuyla (strip + lower).
+CKD_KATEGORIK = {
+    "rbc": ("normal", "abnormal"),
+    "pc": ("normal", "abnormal"),
+    "pcc": ("notpresent", "present"),
+    "ba": ("notpresent", "present"),
+    "htn": ("no", "yes"),
+    "dm": ("no", "yes"),
+    "cad": ("no", "yes"),
+    "appet": ("good", "poor"),
+    "pe": ("no", "yes"),
+    "ane": ("no", "yes"),
+}
+#: Modelin EKSİK saydığı yer tutucular (`inference_human_kidney_disease._eksik` ile aynı küme) — impute edilir, DOLU sayılmaz.
+_EKSIK_METIN = ("", "?", "NA", "NaN", "nan", "—", "-")
+
+
+def _bos_mu(v) -> bool:
+    """Model bu değeri EKSİK sayıp impute ediyor mu (None · float NaN · boş / yer tutucu metin)."""
+    if v is None:
+        return True
+    if isinstance(v, float) and v != v:
+        return True
+    return isinstance(v, str) and v.strip() in _EKSIK_METIN
+
 
 def ckd_dolu(features: dict) -> list:
-    """DOLU sayılan alanların adları. ⚠️ Boş/boşluklu metin DOLU SAYILMAZ."""
-    return [k for k, v in features.items() if v is not None and not (isinstance(v, str) and not v.strip())]
+    """DOLU sayılan alanların adları. ⚠️ Boş/boşluklu metin DOLU SAYILMAZ; D6.20: modelin eksik saydığı yer tutucular
+    ('?', 'NA', '-', NaN …) da sayılmaz — `filled_fields` modelin GERÇEKTEN kullandığı alan sayısını söyler."""
+    return [k for k, v in features.items() if not _bos_mu(v)]
+
+
+def ckd_gecersiz_kategorik(features: dict) -> dict:
+    """Sözlük DIŞI kategorik değerler → {alan: ham değer (≤ 40 karakter)}; eksik / yer tutucu değer geçersiz SAYILMAZ."""
+    gecersiz = {}
+    for alan, gecerli in CKD_KATEGORIK.items():
+        v = features.get(alan)
+        if _bos_mu(v):
+            continue
+        if str(v).strip().lower() not in gecerli:
+            gecersiz[alan] = str(v)[:40]
+    return gecersiz
 
 
 def ckd_kapisi(features: dict) -> list:
     """Yetersizse `AsgariGirdiYok` fırlatır; yeterliyse DOLU alan listesini döndürür.
 
-    Liste döndürmesi kasıtlı: router yanıtında `filled_fields` şeffaflık alanı için gerekiyor."""
+    Liste döndürmesi kasıtlı: router yanıtında `filled_fields` şeffaflık alanı için gerekiyor.
+    D6.20: sözlük DIŞI kategorik değer ÖNCE reddedilir (`kod="ckd_kategorik"`; iki transport da 422)."""
+    gecersiz = ckd_gecersiz_kategorik(features)
+    if gecersiz:
+        ayrinti = {"alanlar": [{"alan": k, "deger": v, "gecerli": list(CKD_KATEGORIK[k])} for k, v in gecersiz.items()]}
+        raise AsgariGirdiYok(
+            "Geçersiz kategorik değer: "
+            + "; ".join(f"{d['alan']}='{d['deger']}' (geçerli: {', '.join(d['gecerli'])})" for d in ayrinti["alanlar"])
+            + ". Bu alanlar yalnız sözlükteki değerleri kabul eder; model başka bir değeri sessizce ilk kategoriye "
+            "('no', 'notpresent', 'abnormal', 'good') çevirir ve sonucun klinik anlamı tersine dönebilir — "
+            "değeri düzeltip yeniden gönderin.",
+            kod="ckd_kategorik",
+            ayrinti=ayrinti,
+        )
     dolu = ckd_dolu(features)
     cekirdek_dolu = [k for k in CKD_CEKIRDEK if k in dolu]
     if len(dolu) < CKD_MIN_ALAN or not cekirdek_dolu:

@@ -253,6 +253,8 @@
         "sc": "serum creatinine",
         "sg": "urine specific gravity"
       },
+      "kategorikDeger": "{{alan}}='{{deger}}' (valid: {{gecerli}})",
+      "kategorikGecersiz": "Invalid categorical value: {{alanlar}}. These fields accept only the dictionary values; the model silently turns any other value into the first category ('no', 'notpresent', 'abnormal', 'good') and the clinical meaning of the result can be reversed — correct the value and send it again.",
       "kilo": "weight (kg) must be entered in the 0-30 range",
       "nabiz": "pulse (bpm) must be entered (reasonable: ~120-220)",
       "sicaklik": "body temperature (°C) must be entered (reasonable: ~37-39.5)",

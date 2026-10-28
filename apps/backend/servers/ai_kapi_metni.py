@@ -168,4 +168,11 @@ def asgari_metni(ag, dil: str | None = None) -> str:
             "eksik": eksik,
         }
         return ceviri.t("ai.klinik.yetersiz", dil=dil, **ek)
+    if kod == "ckd_kategorik" and isinstance(ayrinti, dict):
+        # D6.20 (B-5.21): sözlük DIŞI kategorik değer — alan kodu + gelen değer + geçerli değerler (kodlar çevrilmez).
+        parca = [(d.get("alan", ""), d.get("deger", ""), ", ".join(d.get("gecerli", []))) for d in ayrinti["alanlar"]]
+        alanlar = "; ".join(
+            ceviri.t("ai.klinik.kategorikDeger", dil=dil, alan=a, deger=v, gecerli=g) for a, v, g in parca
+        )
+        return ceviri.t("ai.klinik.kategorikGecersiz", dil=dil, alanlar=alanlar)
     return ag.user_message()

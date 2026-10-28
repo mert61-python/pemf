@@ -5265,7 +5265,7 @@
    "grup": "sunucu-10c-ai",
    "sira": 10,
    "durum": "tamam",
-   "metin": 10,
+   "metin": 13,
    "kritik": false,
    "muaf": [
     {
@@ -5334,6 +5334,27 @@
     {
      "metin": "Güvenilir bir tahmin için yeterli klinik veri yok ({{deger1}}/{{CKD_TOPLAM_ALAN}} alan dolu; en az {{CKD_MIN_ALAN}} gerekli). Ayrıca böbrek işlevine dair en az bir değer girilmeli — eksik olanlar: {{eksik}}. Boş formla üretilen sonuç, hastanın verisini değil modelin genel ortalamasını yansıtır ve yanıltıcıdır.",
      "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi)",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "Geçersiz kategorik değer:",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi) · D6.20 (B-5.21): sözlük dışı kategorik değer reddi",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "{{deger1}}='{{deger2}}' (geçerli: {{deger3}})",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi) · D6.20 (B-5.21): sözlük dışı kategorik değer reddi",
+     "turler": [
+      "dizgi"
+     ]
+    },
+    {
+     "metin": ". Bu alanlar yalnız sözlükteki değerleri kabul eder; model başka bir değeri sessizce ilk kategoriye ('no', 'notpresent', 'abnormal', 'good') çevirir ve sonucun klinik anlamı tersine dönebilir — değeri düzeltip yeniden gönderin.",
+     "gerekce": "mikroservis ortak yaprak modül (docker/Dockerfile.ai imajına yalnız bu üç utils dosyası girer; katalog / ceviri YOK) — Türkçe kaynak sabit; gömülü yolda backend aynı metni katalogdan istek dilinde üretir (eşlik testi) · D6.20 (B-5.21): sözlük dışı kategorik değer reddi",
      "turler": [
       "cagri"
      ]

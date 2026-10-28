@@ -253,6 +253,8 @@
         "sc": "serum kreatinin",
         "sg": "idrar dansitesi"
       },
+      "kategorikDeger": "{{alan}}='{{deger}}' (geçerli: {{gecerli}})",
+      "kategorikGecersiz": "Geçersiz kategorik değer: {{alanlar}}. Bu alanlar yalnız sözlükteki değerleri kabul eder; model başka bir değeri sessizce ilk kategoriye ('no', 'notpresent', 'abnormal', 'good') çevirir ve sonucun klinik anlamı tersine dönebilir — değeri düzeltip yeniden gönderin.",
       "kilo": "kilo (kg) 0-30 aralığında girilmeli",
       "nabiz": "nabız (bpm) girilmeli (makul: ~120-220)",
       "sicaklik": "vücut sıcaklığı (°C) girilmeli (makul: ~37-39.5)",
