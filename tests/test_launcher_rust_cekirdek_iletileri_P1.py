@@ -75,8 +75,9 @@ ESKI_TR = {
     "rust.giris.cevrimdisi": "İnternet bağlantısı yok — çevrimdışı devam edebilirsiniz",
     "rust.giris.cokDeneme": "Çok fazla deneme yapıldı — birkaç dakika sonra tekrar deneyin",
     "rust.giris.epostaDogrulanmamis": "E-posta adresiniz doğrulanmamış — gelen kutunuzu kontrol edin",
-    "rust.giris.girdiBos": "E-posta ve parola boş bırakılamaz",
-    "rust.giris.kimlikHatali": "E-posta veya parola hatalı",
+    # TR DEĞİŞTİ (Y211 · S-D67.15, 22-SON): "parola" → "şifre" (TR tabanı aynı commit dizisinde güncellendi)
+    "rust.giris.girdiBos": "E-posta ve şifre boş bırakılamaz",
+    "rust.giris.kimlikHatali": "E-posta veya şifre hatalı",
     "rust.giris.oturumGecersiz": "Kayıtlı oturum geçersiz — lütfen tekrar giriş yapın",
     "rust.giris.sunucuHatasi": "Giriş sunucusu hata verdi (HTTP {{kod}})",
     "rust.giris.yanitOkunamadi": "Giriş yanıtı okunamadı",
@@ -179,20 +180,22 @@ def test_thiserror_hata_nesneleri_Display_katalogdan_ve_anahtar_ilk_satirda():
 
 
 def test_arayuz_metne_gore_dallanmalari_IKI_dilde_eslesir():
-    """Rust iletisi dile göre değişir → arayüzün metne göre dallandığı üç yer (DNS · yanlış parola · çevrimdışı) EN iletiyle de eşleşmeli."""
+    """Rust iletisi dile göre değişir → arayüzün metne göre dallandığı yer (DNS) EN iletiyle de eşleşmeli; yanlış şifre / çevrimdışı
+    Y211 · S-D67.15'ten beri makine-okur KODA göre dallanır (dile bağlı değil)."""
     ham = HTML.read_text(encoding="utf-8")
     m = re.search(r"if \((/[^\n]+/i)\.test\(m\)\) return x\.errDns;", ham)
     assert m, "hataCumlesi DNS koşulu bulunamadı"
     dns = re.compile(m.group(1)[1:-2].replace("\\(", r"\(").replace("\\)", r"\)"), re.I)
     for dil, ileti in (("tr", _tr()["rust.ag.dns"]), ("en", _en()["rust.ag.dns"])):
         assert dns.search(ileti.replace("{{hata}}", "x")), f"{dil}: DNS iletisi arayüz koşuluna uymuyor: {ileti}"
-    assert 'm.includes("parola hatalı")' in ham and "incorrect email or password" in ham
-    assert (
-        "parola hatalı" in _tr()["rust.giris.kimlikHatali"]
-        or "parola hatalı" in _tr()["rust.giris.kimlikHatali"].lower()
+    # Y211 · S-D67.15 (22-SON): `auth_login` hatası `GirisHatasi { kod, mesaj }` taşır; arayüz `kod`a bakar (`AuthError::kod` sözleşmesi).
+    assert 'kod === "kimlik_hatali"' in ham and 'kod === "cevrimdisi"' in ham, (
+        "giriş dalları makine-okur koda bağlı değil"
+    )
+    assert 'm.includes("parola hatalı")' not in ham and 'm.includes("İnternet bağlantısı yok")' not in ham, (
+        "metne bağlı giriş dalı geri geldi"
     )
     assert re.search(r"incorrect email or password", _en()["rust.giris.kimlikHatali"], re.I)
-    assert 'm.includes("İnternet bağlantısı yok")' in ham and "no internet connection" in ham
     assert "İnternet bağlantısı yok" in _tr()["rust.giris.cevrimdisi"]
     assert re.search(r"no internet connection", _en()["rust.giris.cevrimdisi"], re.I)
     # diskte yer yok: arayüz `disk` sözcüğüne bakar — iki dilde de var
