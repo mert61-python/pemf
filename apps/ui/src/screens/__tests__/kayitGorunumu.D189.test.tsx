@@ -168,6 +168,7 @@ describe("D1.89 — Seans Detayı (GERÇEK SessionDetailModal)", () => {
     expect(F.detay.sensor_samples.length).toBeGreaterThan(0);
     expect(F.detay.sensor_samples.every((s: any) => s.temperature_c === null)).toBe(true);
     const u = await detay();
-    expect(u.queryByText(/Bu seansta sensör verisi yok/)).not.toBeNull();
+    // D6.24 (B-6.11): bölüm SICAKLIK grafiği — alan / akım örneği olan seansta "sensör verisi yok" da yanlıştı; metin sıcaklığı söyler.
+    expect(u.queryByText(/Bu seansta sıcaklık ölçümü yok/)).not.toBeNull();
   });
 });

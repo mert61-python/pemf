@@ -9,8 +9,10 @@
  *   - Bobin-başına SICAKLIK grafiği (sensor_samples → coil_id'ye göre çizgi)
  * gösterir.
  *
- * NOT: STM bobinleri (1-5) gerçek donanımda sıcaklık/akım/alan SENSÖRÜ içermez;
- * bu değerler 0/boş olabilir — yanıltıcı 0 göstermemek için bilgi notu eklenir.
+ * NOT (D6.24 · B-6.11): 7 bobinin HEPSİ STM'den sürülür; sıcaklık / alan yalnız SENSÖR TAKILI bobinden gelir
+ * (firmware `pemf_sensor.h` `PEMF_SENSOR_BOBIN_IDLERI` — bugün bobin 6). Bobin 1-5'in akım (ACS712) satırı Y154 gereği
+ * hiçbir kayda yazılmaz ve burada gösterilmez. Ölçülmeyen değer boş (—) — tablo altı notu bunu söyler (`seans.detay.stmNotu`).
+ * Eski "STM bobinleri (1-5) sensör içermez" notu bayattı: bobin 6'nın ölçülmüş sıcaklığını gösteren seansta da çıkıyordu.
  */
 import { useEffect, useState } from "react";
 import {

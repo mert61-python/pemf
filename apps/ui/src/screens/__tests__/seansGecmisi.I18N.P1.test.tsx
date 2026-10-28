@@ -357,7 +357,8 @@ describe("SessionDetailModal", () => {
       "2dk 5sn",
       "45sn",
       "ESP (sökülü)",
-      "Not: STM bobinleri (1-5) gerçek donanımda sıcaklık/akım/alan sensörü içermez; bu değerler boş (—) görünebilir.",
+      // D6.24 (B-6.11): bayat "STM bobinleri (1-5) … sensörü içermez" notu gerçeğe indirildi (TR DEĞİŞTİ — RAPOR_C1).
+      "Not: sıcaklık ve alan yalnız sensör takılı bobinlerde ölçülür; ölçülmeyen değerler boş (—) görünür.",
       "* Alan (ölçülen): ×5 düzeltildi. Eski cihaz yazılımı alanı yaklaşık 5 kat büyük ölçüyordu; özgün değer kayıtta saklıdır.",
       "⚠️ Bu seans, sistemden çıkarılmış ESP donanımına ait satırlar içeriyor (bobin 8 dahil). Sistem 7 bobinlidir; o satırlar GEÇMİŞ kayıttır ve gerçekten uygulandıkları doğrulanmamıştır. Yeni seanslarda bu satırlar oluşmaz.",
       "Sıcaklık Grafiği",
@@ -396,7 +397,7 @@ describe("SessionDetailModal", () => {
       "2min 5s",
       "45s",
       "ESP (removed)",
-      "Note: STM coils (1-5) have no temperature/current/field sensor on real hardware; these values may appear empty (—).",
+      "Note: temperature and field are measured only on coils with a sensor attached; values that were not measured appear empty (—).",
       "* Field (measured): ×5 düzeltildi. The old device firmware measured the field about 5 times too large; the original value is kept in the record.",
       "⚠️ This session contains rows belonging to the ESP hardware that was removed from the system (including coil 8). The system has 7 coils; those rows are HISTORICAL records and it has not been verified that they were actually applied. These rows are not created in new sessions.",
       "Temperature Chart",

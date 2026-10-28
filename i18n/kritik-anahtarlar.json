@@ -1953,7 +1953,7 @@
    "anahtar": "seans.detay.stmNotu",
    "tur": "bobin",
    "kaynak": "apps/ui/src/components/domain/SessionDetailModal.tsx",
-   "aciklama": "STM bobinlerinde sıcaklık / akım / alan sensörü yok notu"
+   "aciklama": "sıcaklık / alan yalnız sensör takılı bobinde ölçülür notu (D6.24)"
   },
   {
    "yuzey": "arayuz",
