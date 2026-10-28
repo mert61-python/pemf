@@ -309,3 +309,13 @@ def test_KRITIK_D6_48_bolum9_klemp_formulu_FIRMWARE_ile_ayni():
     assert not re.search(r"§16 reflash", b9), (
         "§9 artık doz kalibrasyonu KALDIRILDI olan §16'ya 'reflash' diye yönlendiriyor (Ö.4-Y5)"
     )
+
+
+def test_D6_48_bolum9_HER_bipolar_klemp_ifadesi_FIRMWARE_ile_ayni():
+    # D67 orkestratör kolu: §9 bipolar klempi İKİ yerde anar; yalnız birini bozan mutant ("in" denetimi) YAŞIYORDU.
+    b9 = _cizgisiz(_bolum(BELGE.read_text(encoding="utf-8"), "## ⏳ 9 — "))
+    bipolar = _bosluksuz(_fix1c_bipolar_klempi())
+    ifadeler = re.findall(r"`([^`]*g_tpp\[i\]\s*/\s*2U[^`]*)`", b9)
+    assert ifadeler, "aparat: §9'da bipolar klemp ifadesi (`… g_tpp[i] / 2U …`) bulunamadı"
+    farkli = [i for i in ifadeler if bipolar not in _bosluksuz(i)]
+    assert not farkli, f"§9'daki bipolar klemp ifadesi firmware [FIX-1c] ile farklı: {farkli} (firmware: {bipolar})"
