@@ -45,12 +45,13 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 |---|---|
 | `setup_services.ps1` | Dağıtılmış yerleşimde üretim kurulumu — `{app}`'ten backend+mosquitto servisleri; `-Mode device\|server\|staging`, `-Uninstall`; Inno `.iss` çağırır |
 | `install_backend_service.ps1` | **İkinci desteklenen kurulum yolu** (A-11; sahadaki yol launcher'dır): `PemfBackend`'i NSSM Windows servisi olarak kurar (frozen EXE'yi tercih eder); servis ortamı `deploy\<Mode>.env` profilinden — `setup_services.ps1` ile aynı ayrıştırma (at-rest şifreleme, veri kökü, STM portu, izinli adlar); profil yoksa servise dokunmadan durur; SCM `depend=` YOK; tünel yalnız `-EnableTunnel` ile |
-| `install_mosquitto.ps1` / `install_mosquitto_service.ps1` | Mosquitto broker kur/yapılandır (gateway) / bağımsız oto-başlar servis (offline) |
+| `install_mosquitto.ps1` | ⛔ **KULLANIMDAN KALKTI** (Y205 · S-D5.15) — eski ağ geçidi broker kurulumu; desteklenen hiçbir yol çağırmaz (D5 H-2 kapısı). Dosya silinmedi; sahada bıraktığı izlerin temizliği sahibin işi |
+| `install_mosquitto_service.ps1` | Mosquitto bağımsız oto-başlar servis (offline) |
 
 ## Gateway / hotspot (LattePanda klinik mini-PC)
 | Script | Görev |
 |---|---|
-| `setup_gateway.ps1` | Boot: Windows Mobile Hotspot'u aç, Mosquitto'yu garanti et, GUI başlat |
+| `setup_gateway.ps1` | ⛔ **KULLANIMDAN KALKTI** (Y205 · S-D5.15) — eski açılış betiği (hotspot + Mosquitto + GUI); desteklenen yol başlatıcıdır. Dosya silinmedi; sahada açılışa bağlanmışsa kaldırılması sahibin işi |
 | `start_hotspot.ps1` | `PEMF-Gateway` Wi-Fi hotspot'unu başlat (mobil istemciler katılır; ESP kartları 2026-09-11'de söküldü); logon Scheduled Task |
 
 ## Kaldırma / teardown (KVKK-farkında)

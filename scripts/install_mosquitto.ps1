@@ -1,6 +1,10 @@
 ﻿# =============================================================================
 # PEMF Gateway — Mosquitto Kurulum ve Yapılandırma Scripti
 # =============================================================================
+# ⛔ KULLANIMDAN KALKTI (Y205 · S-D5.15, 2026-10-28) — eski "ağ geçidi" broker kurulumu. Desteklenen kurulum yolu başlatıcıdır
+#    (launcher; bkz. scripts/README.md "Servis kurulumu"); bu betiği hiçbir desteklenen yol çağırmaz (D5 H-2 kapısı). Dosya SİLİNMEDİ:
+#    sahada eskiden koşturulmuşsa bıraktığı izlerin (ör. uzak adresi Any olan "Mosquitto MQTT" güvenlik duvarı kuralı) temizliği
+#    sahibin işidir. Yeni kurulumda ÇALIŞTIRMAYIN.
 # LattePanda üzerinde Mosquitto MQTT broker'ı kurar ve yapılandırır.
 # Kullanım: PowerShell -ExecutionPolicy Bypass -File install_mosquitto.ps1
 # =============================================================================

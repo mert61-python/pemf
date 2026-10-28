@@ -1,6 +1,9 @@
 ﻿# =============================================================================
 # PEMF Gateway — Windows Mobile Hotspot + Mosquitto + GUI Başlatma
 # =============================================================================
+# ⛔ KULLANIMDAN KALKTI (Y205 · S-D5.15, 2026-10-28) — eski "ağ geçidi" açılış betiği (hotspot + Mosquitto + GUI). Desteklenen
+#    kurulum ve açılış yolu başlatıcıdır (launcher; bkz. scripts/README.md). Dosya SİLİNMEDİ: sahada açılışa (Görev Zamanlayıcı /
+#    shell:startup) bağlanmışsa kaldırılması sahibin işidir. Yeni kurulumda ÇALIŞTIRMAYIN.
 # LattePanda açıldığında bu script çalışır:
 # 1. Windows Mobile Hotspot'u etkinleştirir
 # 2. Mosquitto MQTT broker çalışıyor mu kontrol eder
