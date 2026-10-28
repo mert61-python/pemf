@@ -86,7 +86,7 @@ test("KRİTİK: maskeleme KAPALI + anonimleştirme onaysız — kart 'süresiz s
   const k = await kart();
   expect(k).toMatch(/Maskeleme KAPALI/);
   expect(k).not.toMatch(/süresiz/);
-  expect(k).toMatch(/1825 gün \(5 yıl\) tedavi görmeyen hastaların/);
+  expect(k).toMatch(/1825 gün \(5 yıl\) seans yapılmayan hastaların/);
   expect(k).toMatch(/yalnız onayınızla anonimleştirilir/);
   expect(k).toMatch(/hekim adı kalır/);
 });
@@ -96,7 +96,7 @@ test("KRİTİK: maskeleme KAPALI + anonimleştirme ONAYLI — 'süresiz' yalanı
   (govde.anonymization as Record<string, unknown>).acknowledged = true;
   const k = await kart();
   expect(k).not.toMatch(/süresiz/);
-  expect(k).toMatch(/1825 gün \(5 yıl\) tedavi görmeyen hastaların/);
+  expect(k).toMatch(/1825 gün \(5 yıl\) seans yapılmayan hastaların/);
   expect(k).toMatch(/Anonimleştirme onaylı — 1825 gün/);
 });
 
@@ -104,8 +104,8 @@ test("KRİTİK (D67 orkestratör mutantı: eşik sabit 1825 YAŞADI): eşik YANI
   govde = maskeKapali();
   (govde.anonymization as Record<string, unknown>).days = 2190;
   const k = await kart();
-  expect(k).toMatch(/2190 gün \(5 yıl\) tedavi görmeyen hastaların/);
-  expect(k).not.toMatch(/1825 gün \(5 yıl\) tedavi görmeyen/);
+  expect(k).toMatch(/2190 gün \(5 yıl\) seans yapılmayan hastaların/);
+  expect(k).not.toMatch(/1825 gün \(5 yıl\) seans yapılmayan/);
 });
 
 test("KARŞIT: anonimleştirme alanı olmayan (eski) yanıt — kart çizilir, yer tutucu ham kalmaz, 'süresiz' yine YOK", async () => {
@@ -128,11 +128,11 @@ test("KARŞIT: maskeleme AÇIK (onaylı) — 'Maskeleme KAPALI' cümlesi çizilm
 test("KATALOG: TR birebir, EN dolu ve 'indefinitely' iddiası yok", () => {
   expect(TR["ayarlar.saklama.kapali"]).toBe("Maskeleme KAPALI — seans kayıtlarındaki hasta ve operatör adları süre dolunca maskelenmez.");
   expect(TR["ayarlar.saklama.kapaliAnonim"]).toBe(
-    " {{gun}} gün (5 yıl) tedavi görmeyen hastaların kimlik bilgileri ise yalnız onayınızla anonimleştirilir; hekim adı kalır.",
+    " {{gun}} gün (5 yıl) seans yapılmayan hastaların kimlik bilgileri ise yalnız onayınızla anonimleştirilir; hekim adı kalır.",
   );
   expect(EN["ayarlar.saklama.kapali"]).toBe("Masking OFF — patient and operator names in session records are not masked when a period ends.");
   expect(EN["ayarlar.saklama.kapaliAnonim"]).toBe(
-    " Patients not treated for {{gun}} days (5 years) have their identity details anonymized only with your approval; the veterinarian's name remains.",
+    " Patients with no session for {{gun}} days (5 years) have their identity details anonymized only with your approval; the veterinarian's name remains.",
   );
   expect(`${EN["ayarlar.saklama.kapali"]}${EN["ayarlar.saklama.kapaliAnonim"]}`).not.toMatch(/indefinitely/i);
 });
