@@ -22,6 +22,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parent.parent
@@ -41,9 +42,10 @@ def _iscc():
     return None
 
 
-@pytest.mark.skipif(_iscc() is None, reason="ISCC (Inno Setup) kurulu degil")
 def test_KOD_bolumu_ISCC_ile_DERLENIR():
     """`[Code]` bölümü sözdizimsel olarak geçerli olmalı — yoksa installer HİÇ üretilmez."""
+    if _iscc() is None:  # Y205 · S-D5.20: ISCC yayın makinesi aracı — ZORUNLU kipte DÜŞER
+        capraz.atla("ISCC (Inno Setup) kurulu degil")
     kaynak = ISS.read_text(encoding="utf-8")
     # ⚠️ Basit `split("[Code]")` YANLIŞTIR: dosyada satır 114 civarında bir YORUM da `[Code]`
     # geçiriyor ("[UninstallRun]'dan [Code]'a") → bölme orada olur ve `[Setup]`/`[Files]`/

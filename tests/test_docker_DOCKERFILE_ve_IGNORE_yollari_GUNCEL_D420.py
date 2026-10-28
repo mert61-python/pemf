@@ -19,6 +19,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import capraz
 import pytest
 from test_betikler_ACILIYOR import _compose_contextleri, _takipli
 from test_tasinmis_dizin_calisan_kodda_YOK import TASINMIS
@@ -66,15 +67,16 @@ def _compose_config(dosya: str) -> dict:
             timeout=60,
         )
         if v.returncode != 0:
-            pytest.skip(f"docker compose eklentisi yok: {v.stderr.strip()[:200]}")
+            capraz.atla(f"docker compose eklentisi yok: {v.stderr.strip()[:200]}")
         pytest.fail(f"compose-spec dosyayı REDDETTİ ({dosya}) — imaj derlenemez: {r.stderr.strip()[:300]}")
     return json.loads(r.stdout)
 
 
-@pytest.mark.skipif(DOCKER is None, reason="Docker CLI yok — compose-spec kolu (yalnız `config`, daemon gerekmez)")
 @pytest.mark.parametrize("dosya", ["docker-compose.yml", "docker-compose.micro.yml", "docker-compose.ai.yml"])
 def test_KRITIK_compose_spec_kendi_cozumu_ile_AYNI_ve_dosya_VAR(dosya):
     """Ölçüm aracının (`_compose_contextleri`) compose-spec'le aynı çözdüğü kanıtlanır; çözülen dockerfile diskte ve takipli olmalı."""
+    if DOCKER is None:  # Y205 · S-D5.20: Docker CLI yayın makinesi aracı — ZORUNLU kipte DÜŞER
+        capraz.atla("Docker CLI yok — compose-spec kolu (yalnız `config`, daemon gerekmez)")
     ctx = _compose_contextleri()
     for ad, servis in _compose_config(dosya)["services"].items():
         b = servis.get("build")

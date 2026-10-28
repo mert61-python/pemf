@@ -737,25 +737,9 @@ IZIN: dict[str, tuple[int | None, str]] = {
         1,
         "TASARIM: KARŞIT kol — düz `pytest.importorskip`in ZORUNLU=1'de de ATLADIĞINI ölçer (ölçücünün ayırt ettiği kanıt); istisna `_yakala` içinde yakalanır, test atlanmaz",
     ),
-    'tests/test_compose_cozum_kolu_KIRIK_compose_ta_DURUR_4B214.py': (
-        1,
-        'ARAC: Docker CLI — yayın zincirinin aracı DEĞİL (publish_release / build betikleri istemez); yayın makinesinde zorunlu tutulmaz (K5_F: taşımıyorsa zorunlu yapma)',
-    ),
-    'tests/test_docker_DOCKERFILE_ve_IGNORE_yollari_GUNCEL_D420.py': (
-        2,
-        'ARAC: Docker CLI — yayın zincirinin aracı DEĞİL (publish_release / build betikleri istemez); yayın makinesinde zorunlu tutulmaz (K5_F: taşımıyorsa zorunlu yapma)',
-    ),
-    'tests/test_docker_KALICI_makine_kimligi_D412.py': (
-        4,
-        'ARAC: Docker CLI — yayın zincirinin aracı DEĞİL (publish_release / build betikleri istemez); yayın makinesinde zorunlu tutulmaz (K5_F: taşımıyorsa zorunlu yapma)',
-    ),
     'tests/test_i18n_launcher_altyapi.py': (
         1,
         "TASARIM: asgari NSIS betiğinin Tauri şablonuna özgü sembol sınırı (makensis ÇIKTISINA bağlı); eser yokluğu değil — dönüştürmek ZORUNLU'da sahte kırmızı üretirdi (K5-F P9 --haric)",
-    ),
-    'tests/test_inno_kod_derlenir.py': (
-        1,
-        "ARAC: ISCC (Inno Setup) — 'eser var' kolu gerçek Inno derlemesi ister (ORTAK §1 yasak); dönüşüm + ölçüm ORKESTRATÖRDE",
     ),
     'tests/test_kasa_yalitimi.py': (
         3,

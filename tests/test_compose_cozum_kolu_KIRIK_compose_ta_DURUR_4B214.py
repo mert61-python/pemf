@@ -14,6 +14,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import capraz
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
@@ -39,13 +40,18 @@ def _kirik_ai_compose(tmp_path: Path) -> Path:
     return p
 
 
-@pytest.mark.skipif(d420.DOCKER is None, reason="Docker CLI yok — (a) yalnız CLI kolu için")
 def test_KRITIK_compose_spec_REDDEDINCE_capraz_kol_SKIP_degil_FAIL(tmp_path):
+    if d420.DOCKER is None:  # Y205 · S-D5.20: Docker CLI yayın makinesi aracı — ZORUNLU kipte DÜŞER
+        capraz.atla("Docker CLI yok — (a) yalnız CLI kolu için")
     kirik = _kirik_ai_compose(tmp_path)
     try:
         d420._compose_config(str(kirik))
-    except pytest.fail.Exception:
-        return  # beklenen: compose-spec reddi KIRMIZI
+    except pytest.fail.Exception as e:
+        # beklenen: compose-spec reddi KIRMIZI. ZORUNLU kipte araç / eklenti yokluğu da `pytest.fail` yükseltir (capraz.atla) —
+        # o REDDETME değildir, geçiş sayılmaz (Y205 · S-D5.20).
+        if "REDDETTİ" in str(e):
+            return
+        raise
     except pytest.skip.Exception as e:
         pytest.fail(f"compose-spec dosyayı REDDETTİ ama çapraz kol SKIP etti (sahte yeşil): {str(e)[:200]}")
     pytest.fail("bozuk compose dosyası `docker compose config`'ten geçti — mutant kurulamadı")

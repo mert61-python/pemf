@@ -23,6 +23,7 @@ import shutil
 import subprocess
 from pathlib import Path, PurePosixPath
 
+import capraz
 import pytest
 import yaml
 from test_docker_DOCKERFILE_ve_IGNORE_yollari_GUNCEL_D420 import _desenler, _dislanir_mi
@@ -45,7 +46,7 @@ def _kimlik_yolu() -> str:
 
 def _giris_betigini_kostur(kimlik: Path) -> subprocess.CompletedProcess:
     if SH is None:
-        pytest.skip("sh yok")
+        capraz.atla("sh yok")
     metin = BETIK.read_text(encoding="utf-8").replace("\r\n", "\n")
     yol = _kimlik_yolu()
     assert metin.count(yol) == 1, f"kimlik yolu betikte TEK geçmeli (kopyada değiştirilecek): {metin.count(yol)}"
@@ -118,7 +119,7 @@ def test_KARSIT_kimlik_YOKKEN_fail_closed_KORUNUR(linux_sm, monkeypatch, tmp_pat
 def test_KRITIK_giris_betigi_kimlik_URETEMEZSE_baslatmaz(tmp_path):
     """Rastgele kaynak okunamazsa boş kimlik yazıp CMD'yi koşturmak YOK (sonraki açılışta kimlik değişir → sırlar çözülemez)."""
     if SH is None:
-        pytest.skip("sh yok")
+        capraz.atla("sh yok")
     kimlik = tmp_path / "birim" / "machine-id"
     kimlik.parent.mkdir()
     metin = BETIK.read_text(encoding="utf-8").replace("\r\n", "\n")
@@ -187,9 +188,10 @@ def test_KRITIK_compose_backend_kimlik_dizinine_ADLI_birim_baglar(rel):
     assert bulunan, f"{rel}: backend servisinde {hedef} ADLI birime bağlı değil → kimlik konteynerle birlikte kaybolur"
 
 
-@pytest.mark.skipif(DOCKER is None, reason="Docker CLI yok — compose-spec kolu (yalnız `config`, daemon gerekmez)")
 @pytest.mark.parametrize("rel", COMPOSE_BACKEND)
 def test_KRITIK_compose_spec_cozumunde_kimlik_birimi_ADLI(rel):
+    if DOCKER is None:  # Y205 · S-D5.20: Docker CLI yayın makinesi aracı — ZORUNLU kipte DÜŞER
+        capraz.atla("Docker CLI yok — compose-spec kolu (yalnız `config`, daemon gerekmez)")
     r = subprocess.run(
         [DOCKER, "compose", "-f", Path(rel).name, "config", "--format", "json"],
         cwd=str(KOK / "docker"),
@@ -200,7 +202,7 @@ def test_KRITIK_compose_spec_cozumunde_kimlik_birimi_ADLI(rel):
         timeout=120,
     )
     if r.returncode != 0:
-        pytest.skip(f"docker compose config koşmadı: {r.stderr.strip()[:300]}")
+        capraz.atla(f"docker compose config koşmadı: {r.stderr.strip()[:300]}")
     hedef = str(PurePosixPath(_kimlik_yolu()).parent)
     servisler = json.loads(r.stdout)["services"]
     bagli = [
