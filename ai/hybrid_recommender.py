@@ -176,6 +176,75 @@ CLINICAL_PROTOCOLS = {
 # normalize_anahtar → (ham_anahtar, params). Çakışma yok (foldlanmış anahtarlar benzersiz).
 _CLINICAL_PROTOCOLS_NORM = {clean_treatment_target(_k): (_k, _v) for _k, _v in CLINICAL_PROTOCOLS.items()}
 
+# ── D6.17 (B-5.12): KAYNAK ETİKETİ — 'literature_exact' yalnız gerçekten o hedefin protokolü bulunduğunda ──────────────
+# `find_exact_protocol` tam eşleşme yoksa en-uzun-anahtar ALT-DİZE taraması yapar (DOZ seçimi bu; DEĞİŞMEDİ). Ama bulduğu
+# HER protokol 'literature_exact' etiketleniyordu: 'Kaşıntı' → 'kas', 'Ağrısız' (= ağrısı OLMAYAN) → 'ağrı', 'Kemik Ağrısı'
+# → 'kemik' (ve 'ağrı' — iki ayrı protokol) — arayüz bunlara "Literatür protokolü uygulandı" diyordu. Artık alt-dize
+# dalının AYNI dozu, sözcük düzeyinde TEK protokol doğrulanamıyorsa 'literature_partial' etiketiyle döner.
+#: Türkçe ÇEKİM ekleri, `clean_treatment_target` SONRASI (ASCII katlanmış: ı→i, ü→u, ş→s …) — sözcük eşleşmesinde anahtarın
+#: ARDINDAN gelebilir: 'agri' → 'agrisi' (Eklem Ağrısı), 'spazm' → 'spazmi' / 'spazmlari', 'doku' → 'dokusu'.
+#: ⚠️ BİLEREK YOK: -siz/-suz (yokluk: 'agrisiz' = AĞRISIZ — anlam TERSİNE döner), -li/-lu (sahiplik: 'kasli'),
+#: -lik/-ci, -lanma (yapım: 'sinirlilik', 'yaralanma') — anlamı değiştiren ekler "aynı hedef" sayılmaz. Ünsüz yumuşaması
+#: ('kırık' → 'kırığı') kapsanmaz: o girdi alt-dize dalında kalır (doz AYNI, etiket 'literature_partial').
+_TR_CEKIM_EKLERI = frozenset(
+    {
+        "i", "u", "a", "e", "si", "su", "yi", "yu", "ya", "ye", "in", "un", "nin", "nun",
+        "da", "de", "ta", "te", "dan", "den", "tan", "ten", "la", "le", "yla", "yle",
+        "lar", "ler", "lari", "leri", "larin", "lerin", "larda", "lerde", "lardan", "lerden",
+        "sinda", "sinde", "sunda", "sindan", "sinden", "sina", "sine", "inda", "inde", "unda", "indan", "inden",
+    }
+)  # fmt: skip
+
+
+def _sozcuk_eslesir(anahtar_sozcuk: str, hedef_sozcuk: str) -> bool:
+    """Hedef sözcük anahtar sözcüğün KENDİSİ ya da anahtar + bir Türkçe ÇEKİM eki mi (yapım / yokluk eki DEĞİL)."""
+    if hedef_sozcuk == anahtar_sozcuk:
+        return True
+    return hedef_sozcuk.startswith(anahtar_sozcuk) and hedef_sozcuk[len(anahtar_sozcuk) :] in _TR_CEKIM_EKLERI
+
+
+def _sozcuk_eslesmeleri(target_clean: str) -> list:
+    """Anahtarın sözcükleri hedefte ARDIŞIK sözcüklerle eşleşir (son sözcüğe çekim eki serbest) → [(bas, son, anahtar)].
+    Daha uzun bir eşleşmenin İÇİNDE kalan eşleşme düşer ('bag dokusu' varken 'dokusu'daki 'doku')."""
+    sozcukler = target_clean.split()
+    adaylar = []
+    for anahtar in _CLINICAL_PROTOCOLS_NORM:
+        a = anahtar.split()
+        if not a:
+            continue
+        for i in range(len(sozcukler) - len(a) + 1):
+            if sozcukler[i : i + len(a) - 1] == a[:-1] and _sozcuk_eslesir(a[-1], sozcukler[i + len(a) - 1]):
+                adaylar.append((i, i + len(a), anahtar))
+    return [
+        (b, s, k)
+        for (b, s, k) in adaylar
+        if not any(b2 <= b and s <= s2 and (s2 - b2) > (s - b) for (b2, s2, _k2) in adaylar)
+    ]
+
+
+def literatur_kaynagi(treatment_target: str, protokol: Optional[Dict]) -> str:
+    """Bulunan protokolün KAYNAK ETİKETİ (doz seçimini DEĞİŞTİRMEZ — yalnız etiket).
+
+    'literature_exact': hedef bir anahtarın KENDİSİ ya da sözcük düzeyinde (çekim ekine duyarlı) TEK bir protokolü gösteriyor
+    VE o protokol dönen dozla aynı. 'literature_partial': doz yalnız alt-dize / belirsiz sözcük eşleşmesinden geldi.
+    'default_wellness': protokol yok."""
+    if protokol is None:
+        return 'default_wellness'
+    target_clean = clean_treatment_target(treatment_target)
+    if target_clean in _CLINICAL_PROTOCOLS_NORM:
+        return 'literature_exact'
+    protokoller = {
+        tuple(sorted(_CLINICAL_PROTOCOLS_NORM[k][1].items())) for (_b, _s, k) in _sozcuk_eslesmeleri(target_clean)
+    }
+    if len(protokoller) == 1 and next(iter(protokoller)) == tuple(sorted(protokol.items())):
+        return 'literature_exact'
+    logger.info(
+        "Literatür protokolü KISMİ eşleşmeden: hedef=%r (temiz=%r) → 'literature_partial'",
+        treatment_target,
+        target_clean,
+    )
+    return 'literature_partial'
+
 
 class PatientProfileAdaptor:
     """
@@ -497,7 +566,7 @@ class HybridPEMFRecommender:
 
         if exact_match:
             base_params = exact_match
-            source = 'literature_exact'
+            source = literatur_kaynagi(treatment_target, exact_match)  # D6.17: alt-dize eşleşmesi 'exact' DEĞİL
         else:
             # Aşama 2: Benzer protokolden interpolasyon
             interpolated = self.interpolator.interpolate(treatment_target, top_n=3)
@@ -548,7 +617,9 @@ class HybridPEMFRecommender:
         exact = self.find_exact_protocol(treatment_target)
 
         if exact:
-            return {'found': True, 'type': 'exact', 'params': exact, 'similar_protocols': []}
+            # D6.17: alt-dize / belirsiz eşleşme 'partial' (etiket — params aynı)
+            _tur = 'exact' if literatur_kaynagi(treatment_target, exact) == 'literature_exact' else 'partial'
+            return {'found': True, 'type': _tur, 'params': exact, 'similar_protocols': []}
 
         # Benzer protokolleri bul
         similar = self.interpolator.find_similar_protocols(treatment_target, min_similarity=0.1)
@@ -594,7 +665,7 @@ def get_literature_recommendation(treatment_target: str, app_data_dir: Optional[
 
     protocol = recommender.find_exact_protocol(treatment_target)
     if protocol is not None:
-        source = 'literature_exact'
+        source = literatur_kaynagi(treatment_target, protocol)  # D6.17: 'literature_exact' | 'literature_partial'
     else:
         # Fallback to default wellness when no direct/substring protocol exists.
         # Denetim 2026-08-28 #01: bu dal SESSİZDİ — vet hedefe-özel doz aldığını sanıyordu.
