@@ -1038,21 +1038,53 @@ pub enum YakmaBeklemesi {
     Bilinmiyor,
 }
 
+/// KI G1 (22 A3a G1): kapanışın yakma beklemesi için TEK bütçe. Ana pencere kapanışında iki bekleme ardışıktı (`CloseRequested`
+/// bekleyicisi, sonra `Destroyed` işinin STOP sonrası beklemesi) ve her biri kendi `YAKMA_BEKLEME_AZAMI`sını sayıyordu → yakma takılırsa
+/// toplam ~2 × azami. Bütçe son anı İLK beklemede sabitler; aynı bütçeyi paylaşan (klonlanan — `Arc`) sonraki beklemeler kalan süreyle
+/// sınırlıdır. ACİL DURDUR / STOP bu bütçeye BAĞLI DEĞİLDİR (beklemeden ÖNCE gider — Ö.4-Y8).
+#[derive(Debug, Clone, Default)]
+pub struct YakmaBeklemeSiniri(std::sync::Arc<std::sync::Mutex<Option<Instant>>>);
+
+impl YakmaBeklemeSiniri {
+    /// Bütçenin son anı: ilk çağrıda `simdi + azami` olarak SABİTLENİR; sonrakiler aynı anı döner (bütçe yenilenmez, uzamaz).
+    pub fn son_an(&self, simdi: Instant, azami: Duration) -> Instant {
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        *g.get_or_insert(simdi + azami)
+    }
+}
+
 /// Kapanışta yakmanın bitmesini bekle (bobin STOP'tan SONRA, süreç öldürmeden ÖNCE çağrılır). Y82: "launcher kapanışta yakılıyor
 /// görürse uyarır ve yakmanın bitmesini bekler". ACİL DURDUR / STOP bu beklemeye BAĞLI DEĞİLDİR — STOP önce gider (Ö.4-Y8).
 pub fn yakmanin_bitmesini_bekle(port: u16, azami: Duration, aralik: Duration) -> YakmaBeklemesi {
-    let son = Instant::now() + azami;
+    yakmanin_bitmesini_bekle_sinirla(port, &YakmaBeklemeSiniri::default(), azami, aralik)
+}
+
+/// KI G1: `yakmanin_bitmesini_bekle` + paylaşılan bütçe — son an `sinir`de ilk beklemede sabitlenir (paylaşanların toplamı ≤ `azami`).
+pub fn yakmanin_bitmesini_bekle_sinirla(port: u16, sinir: &YakmaBeklemeSiniri, azami: Duration, aralik: Duration) -> YakmaBeklemesi {
+    let son = sinir.son_an(Instant::now(), azami);
+    yakmanin_bitmesini_bekle_saatle(|| yakma_suruyor_mu(port, Duration::from_secs(2)), son, aralik, Instant::now, std::thread::sleep)
+}
+
+/// Bekleme döngüsünün gövdesi; yoklama, saat ve uyku dışarıdan (testler sahte saatle sürer). Yakma sürdükçe `aralik` uyur; bir sonraki
+/// uyku `son`u aşacaksa `ZamanAsimi` — son an geçmişse HİÇ uyumaz (tek yoklama).
+fn yakmanin_bitmesini_bekle_saatle(
+    mut yokla: impl FnMut() -> Option<bool>,
+    son: Instant,
+    aralik: Duration,
+    mut simdi: impl FnMut() -> Instant,
+    mut uyu: impl FnMut(Duration),
+) -> YakmaBeklemesi {
     let mut bekledi = false;
     loop {
-        match yakma_suruyor_mu(port, Duration::from_secs(2)) {
+        match yokla() {
             Some(false) => return if bekledi { YakmaBeklemesi::Bitti } else { YakmaBeklemesi::Yoktu },
             None => return YakmaBeklemesi::Bilinmiyor,
             Some(true) => {
-                if Instant::now() + aralik > son {
+                if simdi() + aralik > son {
                     return YakmaBeklemesi::ZamanAsimi;
                 }
                 bekledi = true;
-                std::thread::sleep(aralik);
+                uyu(aralik);
             }
         }
     }
@@ -2053,6 +2085,89 @@ mod tests {
             yakmanin_bitmesini_bekle(kapali, Duration::from_secs(5), Duration::from_millis(50)),
             YakmaBeklemesi::Bilinmiyor
         );
+    }
+
+    /// KI G1 · sahte saat + sahte yoklama (yakma hiç bitmiyor): AYNI bütçeyi paylaşan iki ardışık bekleme (kapanış bekleyicisi + `Destroyed`
+    /// işi) toplam en çok `azami` uyur; ikincisi HİÇ uyumadan `ZamanAsimi` döner. KARŞIT: ayrı bütçeyle (eski iki bekleme) toplam azamiyi aşar
+    /// — ölçüt sahte saatte gerçekten koşuyor.
+    #[test]
+    fn KRITIK_KI_G1_paylasilan_butce_TOPLAM_bekleme_tek_sinir_sahte_saat() {
+        use std::cell::Cell;
+        let t0 = Instant::now();
+        let (saat, uyku, yoklama) = (Cell::new(t0), Cell::new(Duration::ZERO), Cell::new(0u32));
+        let (azami, aralik) = (YAKMA_BEKLEME_AZAMI, Duration::from_secs(1));
+        let bekle = |sinir: &YakmaBeklemeSiniri| {
+            let son = sinir.son_an(saat.get(), azami);
+            yakmanin_bitmesini_bekle_saatle(
+                || {
+                    yoklama.set(yoklama.get() + 1);
+                    Some(true)
+                },
+                son,
+                aralik,
+                || saat.get(),
+                |d| {
+                    saat.set(saat.get() + d);
+                    uyku.set(uyku.get() + d);
+                },
+            )
+        };
+        let sinir = YakmaBeklemeSiniri::default();
+        assert_eq!(bekle(&sinir), YakmaBeklemesi::ZamanAsimi);
+        let ilk = uyku.get();
+        assert!(ilk <= azami && ilk + aralik >= azami, "ilk bekleme azamiye kadar sürmedi: {ilk:?}");
+        let y = yoklama.get();
+        assert_eq!(bekle(&sinir.clone()), YakmaBeklemesi::ZamanAsimi, "paylaşılan bütçede ikinci bekleme");
+        assert_eq!(uyku.get(), ilk, "ikinci bekleme YENİDEN uyudu — toplam {:?} > azami {azami:?}", uyku.get());
+        assert_eq!(yoklama.get(), y + 1, "son an geçmişken tek yoklamadan fazlası");
+        assert!(saat.get() - t0 <= azami, "toplam {:?} > azami", saat.get() - t0);
+        assert_eq!(bekle(&YakmaBeklemeSiniri::default()), YakmaBeklemesi::ZamanAsimi);
+        assert!(uyku.get() > azami, "KARŞIT: ayrı bütçe de azamide kaldı — sahte saat ölçmüyor ({:?})", uyku.get());
+    }
+
+    /// KI G1 · bütçe ilk beklemede sabitlenir: sonraki çağrı ne yeniler ne uzatır (daha büyük azamiyle bile); klon AYNI son anı görür.
+    /// Yakma biterse (`Bitti`) paylaşan sonraki bekleme hiç beklemez (`Yoktu`).
+    #[test]
+    fn KRITIK_KI_G1_butce_ILK_beklemede_sabitlenir_uzamaz_klon_paylasir() {
+        use std::cell::Cell;
+        let t0 = Instant::now();
+        let s = YakmaBeklemeSiniri::default();
+        assert_eq!(s.son_an(t0, Duration::from_secs(600)), t0 + Duration::from_secs(600));
+        assert_eq!(s.clone().son_an(t0 + Duration::from_secs(700), Duration::from_secs(900)), t0 + Duration::from_secs(600));
+        assert_eq!(YakmaBeklemeSiniri::default().son_an(t0 + Duration::from_secs(5), Duration::from_secs(600)), t0 + Duration::from_secs(605));
+        let saat = Cell::new(t0);
+        let kalan = Cell::new(3u32);
+        let sinir = YakmaBeklemeSiniri::default();
+        let bekle = |yakiyor: &dyn Fn() -> Option<bool>| {
+            yakmanin_bitmesini_bekle_saatle(yakiyor, sinir.son_an(saat.get(), YAKMA_BEKLEME_AZAMI), Duration::from_secs(1), || saat.get(), |d| saat.set(saat.get() + d))
+        };
+        let surer = || {
+            let k = kalan.get();
+            kalan.set(k.saturating_sub(1));
+            Some(k > 0)
+        };
+        assert_eq!(bekle(&surer), YakmaBeklemesi::Bitti);
+        assert_eq!(saat.get() - t0, Duration::from_secs(3));
+        assert_eq!(bekle(&surer), YakmaBeklemesi::Yoktu, "yakma bitmişken ikinci bekleme");
+        assert_eq!(saat.get() - t0, Duration::from_secs(3));
+    }
+
+    /// KI G1 · sahte süreç (yakma hiç bitmeyen sahte backend, GERÇEK saat, küçük azami): paylaşılan bütçede ikinci bekleme tek yoklamayla
+    /// HEMEN döner; iki beklemenin toplamı azami (+ yoklama payı) içinde kalır.
+    #[test]
+    fn KRITIK_KI_G1_sahte_backend_paylasilan_butce_ikinci_bekleme_BEKLEMEZ() {
+        let suruyor = r#"{"firmwareGuncelleme":{"yakiliyor":true}}"#;
+        let (port, rx) = sahte_backend(vec![Some((200, suruyor)); 60]);
+        let (azami, aralik) = (Duration::from_millis(600), Duration::from_millis(50));
+        let sinir = YakmaBeklemeSiniri::default();
+        let t0 = Instant::now();
+        assert_eq!(yakmanin_bitmesini_bekle_sinirla(port, &sinir, azami, aralik), YakmaBeklemesi::ZamanAsimi);
+        let ilk = istekler(&rx).len();
+        let t1 = Instant::now();
+        assert_eq!(yakmanin_bitmesini_bekle_sinirla(port, &sinir.clone(), azami, aralik), YakmaBeklemesi::ZamanAsimi);
+        assert!(t1.elapsed() < Duration::from_millis(400), "ikinci bekleme yeniden bekledi: {:?}", t1.elapsed());
+        assert_eq!(istekler(&rx).len(), 1, "ikinci beklemede tek yoklama bekleniyordu (ilk: {ilk})");
+        assert!(t0.elapsed() < azami + Duration::from_millis(900), "toplam {:?}", t0.elapsed());
     }
 
     fn istekler(rx: &std::sync::mpsc::Receiver<String>) -> Vec<String> {

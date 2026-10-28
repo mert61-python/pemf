@@ -61,6 +61,9 @@ struct AppState {
     /// LN L3 · Y82: ana pencere kapanışının yakma aşaması — `KAPANIS_NORMAL` · `KAPANIS_YAKMA_BEKLENIYOR` (kapanış ertelendi,
     /// bekleyici çalışıyor) · `KAPANIS_YAKMA_BITTI` (bekleme bitti → sonraki kapanış isteği ertelenmeden geçer).
     kapanis_yakma_beklendi: Arc<AtomicU8>,
+    /// KI G1: ana pencere kapanışının yakma bütçesi — `CloseRequested` bekleyicisi ile `Destroyed` işinin STOP sonrası beklemesi AYNI son
+    /// anı paylaşır (ilk beklemede sabitlenir; toplam ≤ `YAKMA_BEKLEME_AZAMI`). Yalnız ANA pencere (süreç çıkıyor) kullanır.
+    kapanis_yakma_siniri: backend::YakmaBeklemeSiniri,
 }
 
 const KAPANIS_NORMAL: u8 = 0;
@@ -80,6 +83,7 @@ impl Default for AppState {
             session: Arc::new(Mutex::new(None)),
             rotasyon_senkronu_aktif: Arc::new(AtomicBool::new(false)),
             kapanis_yakma_beklendi: Arc::new(AtomicU8::new(KAPANIS_NORMAL)),
+            kapanis_yakma_siniri: backend::YakmaBeklemeSiniri::default(),
         }
     }
 }
@@ -117,10 +121,12 @@ fn stop_backend_for_teardown(
     root: &std::path::Path,
     bellek: Arc<Mutex<Option<auth::Session>>>, // [S4] F5 yakalama belleği de tazeler (thread'e taşınabilir Arc)
 ) {
+    // KI G1: tracked + orphan yakma beklemeleri TEK bütçe (toplam ≤ YAKMA_BEKLEME_AZAMI).
+    let sinir = backend::YakmaBeklemeSiniri::default();
     // 1) Bu oturumun tracked backend'i: E-stop (TIBBİ GÜVENLİK) + [F5] son-yakalama + kill.
     let had_tracked = if let Some((mut child, port)) = tracked {
         backend::safe_stop_coils(port);
-        yakma_bitene_kadar_bekle(port); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ — yakıcı yarıda kesilmesin
+        yakma_bitene_kadar_bekle(port, &sinir); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ — yakıcı yarıda kesilmesin
         son_oturumu_yakala(port, root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ: son jetonu diske işle
         let _ = child.kill();
         let _ = child.wait();
@@ -136,7 +142,7 @@ fn stop_backend_for_teardown(
     if !had_tracked {
         for port in backend::orphan_durdurma_hedefleri(root, install::DEFAULT_PORT) {
             backend::safe_stop_coils(port);
-            yakma_bitene_kadar_bekle(port); // LN L3 · Y82
+            yakma_bitene_kadar_bekle(port, &sinir); // LN L3 · Y82
         }
     }
     backend::kill_stray_backends(root); // LN L5: mosquitto yalnız bu kökten (Y71)
@@ -148,13 +154,25 @@ fn stop_backend_for_teardown(
 /// LN L3 · Y82 (sahip): STOP gönderildikten SONRA, süreç öldürülmeden ÖNCE — backend STM32 firmware'i YAKIYORSA bitmesini bekle
 /// (`STM32_Programmer_CLI` yarıda kesilirse kart yarım yazılmış uygulama alanıyla kalır). STOP bu beklemeye BAĞLI DEĞİL (önce gider —
 /// Ö.4-Y8); azami süre dolarsa yine öldürülür ama yakıcı backend'in AĞACINDA öldürülmez (`backend::ARTAKALAN_SURECLER`).
-fn yakma_bitene_kadar_bekle(port: u16) {
-    match backend::yakmanin_bitmesini_bekle(port, backend::YAKMA_BEKLEME_AZAMI, std::time::Duration::from_secs(1)) {
+/// KI G1: bekleme `sinir` bütçesinden — aynı kapanıştaki önceki bekleme(ler) azamiyi tükettiyse yeniden BEKLENMEZ.
+fn yakma_bitene_kadar_bekle(port: u16, sinir: &backend::YakmaBeklemeSiniri) {
+    match backend::yakmanin_bitmesini_bekle_sinirla(port, sinir, backend::YAKMA_BEKLEME_AZAMI, std::time::Duration::from_secs(1)) {
         backend::YakmaBeklemesi::Yoktu | backend::YakmaBeklemesi::Bilinmiyor => {}
         backend::YakmaBeklemesi::Bitti => eprintln!("[kapanis] STM32 firmware yakmasi bitti — backend simdi durduruluyor"),
         backend::YakmaBeklemesi::ZamanAsimi => {
             eprintln!("[kapanis] STM32 firmware yakmasi azami surede bitmedi — backend durduruluyor (yakici agacta degil, olmez)")
         }
+    }
+}
+
+/// KI G1: pencere `Destroyed` işinin yakma bütçesi. ANA pencere (süreç çıkıyor) `CloseRequested` bekleyicisinin bütçesini PAYLAŞIR → STOP
+/// sonrası bekleme yalnız kalan süre kadar (toplam ≤ `YAKMA_BEKLEME_AZAMI`); "app" penceresinin işi (süreç yaşar, backend yeniden
+/// başlatılabilir) kendi taze bütçesiyle.
+fn kapanis_yakma_siniri(state: &AppState, is_main: bool) -> backend::YakmaBeklemeSiniri {
+    if is_main {
+        state.kapanis_yakma_siniri.clone()
+    } else {
+        backend::YakmaBeklemeSiniri::default()
     }
 }
 
@@ -2696,10 +2714,13 @@ fn main() {
                                 state.kapanis_yakma_beklendi.store(KAPANIS_YAKMA_BEKLENIYOR, Ordering::Release);
                                 let _ = window.emit(OLAY_KAPANIS_YAKMA_BEKLENIYOR, ());
                                 let asama_c = state.kapanis_yakma_beklendi.clone();
+                                // KI G1: Destroyed işinin STOP sonrası beklemesi AYNI bütçeden (ikinci bir azami bekleme YOK).
+                                let sinir = state.kapanis_yakma_siniri.clone();
                                 let w = window.clone();
                                 std::thread::spawn(move || {
-                                    let _ = backend::yakmanin_bitmesini_bekle(
+                                    let _ = backend::yakmanin_bitmesini_bekle_sinirla(
                                         port,
+                                        &sinir,
                                         backend::YAKMA_BEKLEME_AZAMI,
                                         std::time::Duration::from_secs(1),
                                     );
@@ -2746,11 +2767,12 @@ fn main() {
                     if let Some((mut child, port)) = state.proc.lock().unwrap().take() {
                         let root = install::default_install_root(&home_dir());
                         let bellek = state.session.clone(); // [S4] job'a taşınır (F5 belleği de tazeler)
+                        let sinir = kapanis_yakma_siniri(&state, is_main); // KI G1: ana pencerede bekleyicinin bütçesi
                         // `mut`: closure `child`'ı taşır ve üzerinde kill/wait çağırır (FnMut değil,
                         // FnOnce; ama gövde &mut child istediği için binding mutable olmalı).
                         let mut job = move || {
                             backend::safe_stop_coils(port);
-                            yakma_bitene_kadar_bekle(port); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ
+                            yakma_bitene_kadar_bekle(port, &sinir); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ
                             son_oturumu_yakala(port, &root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ
                             let _ = child.kill();
                             let _ = child.wait();
@@ -2876,11 +2898,12 @@ mod tests {
         // kurtarma / kayıt yazma / yarım indirme silme) — `detect_environment`, `check_runtime_update`, `discard_pending` senkrondu.
         // YLI-A3.6: backend'e HTTP isteği atan / bekleyen yardımcılar ve uyku da (LN L3 / L6 / L2 yeni bekleyen çağrıları) — ANLIK
         // listedeki bir komuta eklenirlerse de pencere donar. `open_browser` (beklemeden süreç başlatır) bilinçli olarak YOK.
-        const BEKLEYEN: [&str; 29] = [
+        const BEKLEYEN: [&str; 30] = [
             "gizli_komut(", "durum_icin(", "ps_yukselterek_kos(", "dizin_yazilabilir_mi", "ureq::", "fetch_string",
             "yarim_takasi_kurtar(", "adopt_unknown_models(", "pending_updates(", "clear_partials(", "clear_pending(",
             "remove_dir_all", "fs::remove_file", "fs::rename", "fs::write",
-            "safe_stop_coils(", "yakma_suruyor_mu(", "yakmanin_bitmesini_bekle(", "yakma_bitene_kadar_bekle(", "firmware_kararini_bekle(",
+            "safe_stop_coils(", "yakma_suruyor_mu(", "yakmanin_bitmesini_bekle(", "yakmanin_bitmesini_bekle_sinirla(", // KI G1
+            "yakma_bitene_kadar_bekle(", "firmware_kararini_bekle(",
             "session_active(", "probe_pemf_backend(", "detect_running_backend(", "guncelleme_kapisi_backendi(", "db_hazir_mi(",
             "stop_tracked_backend(", "stop_backend_for_teardown(", "thread::sleep", "fs::read",
         ];
@@ -3451,7 +3474,7 @@ mod tests {
             ("api.prevent_close()", "yakma görülünce kapanış ertelenmiyor"),
             ("window.emit(OLAY_KAPANIS_YAKMA_BEKLENIYOR", "arayüz uyarılmıyor"),
             ("std::thread::spawn(", "bekleme pencere iş parçacığında (donma)"),
-            ("backend::yakmanin_bitmesini_bekle(", "bekleyici yok"),
+            ("backend::yakmanin_bitmesini_bekle_sinirla(", "bekleyici yok"), // KI G1: paylaşılan bütçeyle
             ("w.close()", "bekleme sonrası kapanmıyor"),
         ] {
             i += blok[i..].find(parca).unwrap_or_else(|| panic!("kapanış ertelemesi: {neden} ({parca})"));
@@ -3462,6 +3485,70 @@ mod tests {
             "arayüz yakma uyarısını dinlemiyor / göstermiyor"
         );
         assert_eq!(OLAY_KAPANIS_YAKMA_BEKLENIYOR, "pemf://kapanis-yakma-bekleniyor");
+    }
+
+    /// KI G1 (22 A3a G1): yakma sürerken ANA pencere kapanışında İKİ ayrı azami bekleme vardı — `CloseRequested` bekleyicisi
+    /// (`YAKMA_BEKLEME_AZAMI`, sonra `w.close()`) ve ardından `Destroyed` işinin STOP sonrası beklemesi (yine azami) → yakma takılırsa
+    /// toplam ~1200 sn. Artık ikisi AYNI bütçeyi (`AppState::kapanis_yakma_siniri`, ilk beklemede sabitlenen son an) paylaşır; teardown'da
+    /// (onarım / kaldırma) tracked + orphan beklemeleri de TEK bütçe. STOP sırası DEĞİŞMEZ (bekleme her yerde STOP'tan sonra — L3 kapısı).
+    /// Yorum-soyulmuş kaynakta ölçülür (pencere olayları Tauri çalışma zamanı ister); bütçenin kendisi çekirdekte sahte saatle.
+    #[test]
+    fn KRITIK_KI_G1_kapanis_yakma_beklemesi_TEK_BUTCE_kaynak() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let govde = |imza: &str| -> String {
+            let i = soy.find(imza).unwrap_or_else(|| panic!("{imza} yok"));
+            let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
+            soy[i..son].to_string()
+        };
+        // (a) kapanış bekleyicisi AppState bütçesiyle ve SINIRLI bekler
+        let bas = soy.find(".on_window_event(").expect("pencere olay işleyicisi yok");
+        let dst = bas + soy[bas..].find("if let tauri::WindowEvent::Destroyed = event").expect("Destroyed kolu yok");
+        let kr: String = soy[bas..dst].chars().filter(|c| !c.is_whitespace()).collect(); // çağrı çok satırlı olabilir
+        let mut i = 0;
+        for (parca, neden) in [
+            ("state.kapanis_yakma_siniri.clone()", "bekleyici AppState bütçesini almıyor"),
+            ("std::thread::spawn(", "bekleyici iş parçacığı yok"),
+            ("backend::yakmanin_bitmesini_bekle_sinirla(port,&sinir,", "bekleyici paylaşılan bütçeyle beklemiyor"),
+        ] {
+            i += kr[i..].find(parca).unwrap_or_else(|| panic!("KI G1 bekleyici: {neden} ({parca})"));
+        }
+        assert!(!kr.contains("backend::yakmanin_bitmesini_bekle("), "bekleyicide kendi azamisiyle (bütçesiz) bekleme kaldı");
+        // (b) Destroyed işi: ana pencerede AYNI bütçe, bekleme STOP'tan sonra
+        let ds = &soy[dst..];
+        let job = ds.find("let mut job = move ||").expect("Destroyed job yok");
+        assert!(
+            ds[..job].contains("let sinir = kapanis_yakma_siniri(&state, is_main);"),
+            "Destroyed işi bekleyicinin bütçesini almıyor (ikinci azami bekleme)"
+        );
+        let jg = &ds[job..];
+        let (st, bk) = (
+            jg.find("backend::safe_stop_coils(port);").expect("job STOP yok"),
+            jg.find("yakma_bitene_kadar_bekle(port, &sinir);").expect("job paylaşılan bütçeyle beklemiyor"),
+        );
+        assert!(st < bk, "job'da bekleme STOP'tan ÖNCE");
+        // (c) bekleme yardımcısı bütçeyi kullanır; (d) teardown TEK bütçe
+        let yb = govde("fn yakma_bitene_kadar_bekle(port: u16, sinir: &backend::YakmaBeklemeSiniri)");
+        assert!(yb.contains("backend::yakmanin_bitmesini_bekle_sinirla(port, sinir,") && !yb.contains("backend::yakmanin_bitmesini_bekle("));
+        let td = govde("fn stop_backend_for_teardown(");
+        assert_eq!(td.matches("backend::YakmaBeklemeSiniri::default()").count(), 1, "teardown'da tek bütçe değil");
+        assert!(td.find("backend::YakmaBeklemeSiniri::default()") < td.find("let had_tracked"));
+        assert_eq!(td.matches("yakma_bitene_kadar_bekle(").count(), td.matches("yakma_bitene_kadar_bekle(port, &sinir)").count());
+        assert_eq!(td.matches("yakma_bitene_kadar_bekle(port, &sinir)").count(), 2, "tracked + orphan iki bekleme bekleniyor");
+    }
+
+    /// KI G1 · davranış (sahte anlar): bekleyici (`CloseRequested`) AppState bütçesini t0'da sabitler; ANA pencerenin `Destroyed` işi
+    /// AYNI son anı görür (azamiden sonra kalan 0 — ikinci bekleme yok); "app" penceresinin işi kendi taze bütçesiyle (süreç yaşar).
+    #[test]
+    fn KRITIK_KI_G1_ana_pencere_isi_bekleyiciyle_AYNI_butce_app_penceresi_kendi_butcesi() {
+        let st = AppState::default();
+        let azami = backend::YAKMA_BEKLEME_AZAMI;
+        let t0 = std::time::Instant::now();
+        assert_eq!(st.kapanis_yakma_siniri.clone().son_an(t0, azami), t0 + azami, "bekleyici bütçeyi sabitlemedi");
+        let ana = kapanis_yakma_siniri(&st, true);
+        let t_destroyed = t0 + azami + std::time::Duration::from_secs(3);
+        assert_eq!(ana.son_an(t_destroyed, azami), t0 + azami, "ana pencere işi YENİ bütçe açtı — ikinci azami bekleme");
+        let app = kapanis_yakma_siniri(&st, false);
+        assert_eq!(app.son_an(t_destroyed, azami), t_destroyed + azami, "app penceresi işi ana pencerenin bütçesini tüketti");
     }
 
     /// [F5-SELFUPDATE] (saha bildirimi 2026-09-03): self-update yolu `app.exit(0)` ile çıkar; F5
