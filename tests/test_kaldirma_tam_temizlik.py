@@ -85,6 +85,18 @@ def test_KRITIK_firewall_temizligi_kaldirmayi_DUSURMEZ():
     )
 
 
+def _yorumsuz_rust_satiri(s: str) -> str:
+    """Tur 2 (D67 çürütme): Rust satırından dize DIŞINDAKİ `//` yorumunu atar (çift tırnak sayımı; `\\"` kaçışı atlanır)."""
+    dizede, onceki = False, ""
+    for k, c in enumerate(s):
+        if c == '"' and onceki != "\\":
+            dizede = not dizede
+        elif not dizede and s.startswith("//", k):
+            return s[:k]
+        onceki = c
+    return s
+
+
 def test_KRITIK_firewall_temizligi_CIKIS_KODUNU_gunluge_yazar_DEV_D5b():
     """DEV-D5.b (D5 'SONRAKİ OTURUM'): temizlik eskiden kodsuz sarmalayıcıyla koşuyordu — yükseltilmiş betiğin çıkış kodu OKUNMUYOR,
     yalnız UAC reddi görülüyordu. Artık kodlu sarmalayıcı (`ps_yukselterek_kos_kodlu`, `-PassThru`) koşar; kod günlüğe yazılır ve sonuç
@@ -93,6 +105,8 @@ def test_KRITIK_firewall_temizligi_CIKIS_KODUNU_gunluge_yazar_DEV_D5b():
     i = kaynak.find("async fn uninstall(")
     assert i != -1, "uninstall komutu bulunamadı"
     govde = kaynak[i : i + 4000]
+    # Tur 2 kolu (D67 çürütme, mutant w1): satır yorumları SOYULUR (dize dışındaki `//`) — çağrı yalnız bir yorumda kalırsa SAYILMAZ.
+    govde = "\n".join(_yorumsuz_rust_satiri(s) for s in govde.splitlines())
     j = govde.find("firewall::silme_betigi()")
     assert j != -1, "kaldırma akışı firewall temizliğini çağırmıyor"
     satir = govde[govde.rfind("\n", 0, j) : govde.find("\n", j)]
@@ -100,7 +114,8 @@ def test_KRITIK_firewall_temizligi_CIKIS_KODUNU_gunluge_yazar_DEV_D5b():
         f"temizlik çıkış kodunu okumayan sarmalayıcıyla koşuyor: {satir.strip()}"
     )
     sonra = govde[j : j + 700]
-    assert re.search(r"if let Ok\(kod\)[^\n]*\n[^\n]*eprintln!\([^\n]*\{kod\}", sonra), (
+    # Tur 2 kolu (mutant w3): `{{kod}}` (kaçışlı — DEĞERİ değil "{kod}" yazısını basar) sayılmaz.
+    assert re.search(r"if let Ok\(kod\)[^\n]*\n[^\n]*eprintln!\([^\n]*(?<!\{)\{kod\}(?!\})", sonra), (
         "temizliğin çıkış kodu günlüğe YAZILMIYOR (eprintln … {kod})"
     )
     assert "if let Err(" in sonra and "?;" not in sonra.split("\n", 1)[0], (
