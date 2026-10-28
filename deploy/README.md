@@ -140,7 +140,14 @@ Klinikler farklı WiFi'den bağlanacaksa tünel gerekir; binary repoda yok:
 - [ ] Sunucu public → `PEMF_REQUIRE_AUTH=1` **+** reverse-proxy/TLS **+** CORS daraltma (asla `*`).
 - [ ] `service_role` anahtarı hiçbir yere konmadı (yalnız anon/publishable gömülü).
 - [ ] Klinik tünel açıksa auth **otomatik zorunlu** (installer `-EnableTunnel` bunu yapar).
-- [ ] Klinik MQTT: `allow_anonymous=false` + `PEMF_MQTT_USER/PASS`.
+- [ ] Klinik MQTT (A-04 · D1.104): broker tabanı **anonimdir** (`allow_anonymous true` — `bin\mosquitto\mosquitto.conf`,
+  `setup_services.ps1`, `install_mosquitto_service.ps1`); ESP bugün kapalı. Tabana `allow_anonymous false` **yazmayın**: kimliksiz ESP
+  firmware'i bağlanamaz, bobin 8'in STOP yolu kopar. Kimlik ESP dönüşünde tek adımla gelir — yönetici PowerShell'de
+  `PEMF_Backend.exe --mqtt-kimlik hazirla --firmware <sketch dizini>`: kimlik deposu (`C:\ProgramData\PEMF_System\mqtt_kimlik.json`) +
+  broker parola / yetki dosyaları + anonimi ezen kimlik yönergeleri (servis kipinde yalnız yöneticiye yazılabilir `conf.d\pemf_kimlik.conf`;
+  launcher kurulumunda hesaba özel çalışma kopyasında satır içi — Y203). Sonra ESP'ler bu başlıkla yakılır ve broker yeniden başlatılır
+  (servis kurulumu: `Restart-Service mosquitto`; launcher kurulumu: uygulamayı kapatıp açın). Durum: `PEMF_Backend.exe --mqtt-kimlik durum`.
+  `PEMF_MQTT_USER/PASS` broker'ı kimlikli **YAPMAZ** — yalnız kimlik hazırlanmamışken backend'in gönderdiği operatör kimliğidir.
 - [ ] Hasta verisi (PII) buluta GİTMİYOR (`PEMF_CLOUD_PATIENT_SYNC=0`) — yalnız local şifreli SQLite.
 - [ ] Sunucu: `atRestEncrypted` doğrulandı (sqlcipher binding gömülü mü).
 
