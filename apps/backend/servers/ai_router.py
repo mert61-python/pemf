@@ -3831,6 +3831,29 @@ def _y51_duty_etiketi(model: str, duty_sum, cfg) -> dict:
     return {"dutyEgitimAraligiDisi": True, "dutyEgitimAraligi": [round(aralik[0], 2), round(aralik[1], 2)]}
 
 
+def _kabin_cfg_hafif(model: str):
+    """L1-7.18: mikroservis devrinde etkin varsayılan `duty_sum` için kabin YAML'ı — MODEL YÜKLENMEDEN (yalnız yapılandırma; servis
+    istek değeri yoksa aynı gömülü YAML'ı kullanır)."""
+    if model == "fantom":
+        from ai_hub.inference_em_fantom.phantom_cv_v3 import load_cabin_config
+    else:
+        from ai_hub.inference_petri_dish.petri_cv_v2 import load_cabin_config
+    return load_cabin_config(None)
+
+
+def _y51_devir_etiketi(model: str, yanit, duty_sum):
+    """L1-7.18 · i-15.1 açığı: GPU mikroservisine DEVREDİLEN yanıt da Y51 etiketini taşır (gömülü yolla AYNI yardımcı). Eskiden servis
+    yanıtı geldiği gibi dönüyordu — aynı istek GPU profilinde etiketsizdi. Kabin YAML'ı okunamazsa etiket konmaz (bilinmiyor ≠ dışarıda)."""
+    if not isinstance(yanit, dict):
+        return yanit
+    try:
+        cfg = _kabin_cfg_hafif(model) if duty_sum is None else None
+    except Exception:
+        logger.debug("Y51 devir etiketi: kabin YAML okunamadi (%s)", model, exc_info=True)
+        return yanit
+    return {**yanit, **_y51_duty_etiketi(model, duty_sum, cfg)}
+
+
 @ai_router.post("/api/ai/vision/em_fantom")
 @sonuc_izle  # T3 · Y190e: canlı kipte "tümör / fantom bulunamadı" (no_detection) karesi dakikayı ücretlendirmez
 async def analyze_em_fantom(
@@ -3856,7 +3879,8 @@ async def analyze_em_fantom(
     try:
         if ai_service_enabled():
             # I18NI-A3.2: GPU servisi katalog taşımaz (yaprak modül) → panel adları burada İSTEK dilinde kurulur.
-            return _panel_adlarini_cevir(
+            # L1-7.18: devir yanıtı da Y51 etiketini taşır (gömülü yolla aynı).
+            _devir = _panel_adlarini_cevir(
                 await _kapili_devret(
                     "em_fantom",
                     file=file,
@@ -3873,6 +3897,7 @@ async def analyze_em_fantom(
                 ),
                 _PANEL_ADLARI,
             )
+            return _y51_devir_etiketi("fantom", _devir, duty_sum)
         img = await _decode_image(file, image_base64, label="em_fantom")
 
         # Yükleyici MODÜL SEVİYESİNDE (`_yukle_em_fantom_cv`): araştırma AI Pro fantom sağlayıcısı
@@ -4112,7 +4137,8 @@ async def analyze_em_petri(
             # aksi halde GPU dağıtımında kullanıcı yine sessiz bir "no_detection" görürdü.
             if isinstance(_remote, dict) and _remote.get("error") == _PETRI_NOT_PLATE:
                 raise HTTPException(status_code=422, detail=_petri_reject_message(_remote.get("plausibility")))
-            return _panel_adlarini_cevir(_remote, _PETRI_PANEL_ADLARI)  # I18NI-A3.2
+            # I18NI-A3.2 · L1-7.18 (devir yanıtı da Y51 etiketini taşır)
+            return _y51_devir_etiketi("petri", _panel_adlarini_cevir(_remote, _PETRI_PANEL_ADLARI), duty_sum)
         img = await _decode_image(file, image_base64, label="em_petri")
 
         # Yükleyici MODÜL SEVİYESİNDE (`_yukle_em_petri_cv`): araştırma AI Pro petri sağlayıcısı
