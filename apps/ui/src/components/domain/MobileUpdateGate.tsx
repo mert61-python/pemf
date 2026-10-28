@@ -41,6 +41,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Download } from "lucide-react-native";
 
+import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
+import { LiveDataProvider } from "@/context/LiveDataContext";
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
 import { guncellemeVarMi, guncellemeyiAtla, kurulumunuErtele, surumNotu, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
@@ -135,7 +137,7 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
 
   const indiriliyor = oran !== null;
 
-  return (
+  const ekran = (
     // [S5 adım 8 / kapsam-1] Kök artık kaydırılabilir ve güvenli alanı okuyor. Yatay telefonda
     // (yükseklik 360-430) logo + marka + kart yüksekliği aşıyor, "Şimdilik devam et" ekranın
     // ALTINDA kalıyordu: açılış kapısı ASLA kalıcı kilitlenmemeli ilkesi görsel olarak kırılıyordu.
@@ -223,6 +225,19 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
         </View>
       )}
     </ScrollView>
+  );
+
+  // ⚠️ 22-SON A2.2 (L1-7.11'in ikiz yeri): kapı `PemfApp`'in `LiveDataProvider`'ının DIŞINDA ve AuthGate'ten ÖNCE çizilir —
+  // bobinler çalışırken soğuk açılışta "kontrol" (≤ 7 sn) ve "güncelleme" (süresiz) ekranlarında da ACİL DURDUR olmalı. Kapı kapalıyken
+  // kendi canlı veri sağlayıcısı kurulur (kapı açılınca söker; aynı anda iki sağlayıcı YOK) ve AYNI `GlobalEmergencyStop` çizilir
+  // (görünürlük yalnız donanım durumu; Ö.4-Y8).
+  return (
+    <LiveDataProvider>
+      <View style={styles.rootScroll}>
+        {ekran}
+        <GlobalEmergencyStop />
+      </View>
+    </LiveDataProvider>
   );
 }
 

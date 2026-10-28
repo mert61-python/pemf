@@ -17,7 +17,10 @@ jest.mock("@/services/mobileUpdate", () => {
   const gercek = jest.requireActual("@/services/mobileUpdate");
   return { ...gercek, guncellemeVarMi: jest.fn(), apkIndir: jest.fn(), kurulumuBaslat: jest.fn() };
 });
-jest.mock("@/context/LiveDataContext", () => ({ useLiveData: () => ({ snapshot: {} }) }));
+jest.mock("@/context/LiveDataContext", () => ({
+  useLiveData: () => ({ snapshot: {} }),
+  LiveDataProvider: ({ children }: { children: unknown }) => children, // 22-SON A2.2: kapı kendi sağlayıcısını kurar (ağ yok)
+}));
 
 import React from "react";
 import { render, act, waitFor } from "@testing-library/react-native";

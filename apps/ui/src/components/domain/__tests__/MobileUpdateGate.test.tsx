@@ -25,6 +25,12 @@ jest.mock("expo-file-system/legacy", () => ({
   deleteAsync: jest.fn(),
 }));
 
+// 22-SON A2.2: kapı kapalıyken kendi `LiveDataProvider`'ını kurar (ACİL DURDUR) — burada ağsız geçiş + boşta anlık görüntü.
+jest.mock("@/context/LiveDataContext", () => ({
+  useLiveData: () => ({ snapshot: { coils: [], activeTreatment: { isActive: false } } }),
+  LiveDataProvider: ({ children }: { children: unknown }) => children,
+}));
+
 // ⚠️ `guncellemeyiAtla`/`atlandiMi` GERÇEK bırakılır: kapı→bant susturması gerçekten sınansın
 // (mock'lasaydık "çağrıldı mı" testi olurdu, "işe yarıyor mu" testi değil).
 jest.mock("@/services/mobileUpdate", () => {
