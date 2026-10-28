@@ -21,6 +21,20 @@ from utils.production_config_manager import get_production_config, kayit_reddi_m
 
 # NOT: E-posta (Gmail/SMTP) rapor gönderimi KALDIRILDI — raporlar artık mobil "Paylaş"
 # butonuyla (expo-sharing) paylaşılıyor. Bu router yalnız klinik adı / BLE MAC / MQTT ayarını tutar.
+#
+# ⚠️ D6.16 (B-3.97 · sahip kararı Y15): `mqtt_broker` / `mqtt_port` (`config.json` → `mqtt.broker_url` / `broker_port`)
+# BAĞLANTIYA ETKİSİZDİR — yerel broker istemcisi sabit adrese bağlanır (`api_server._YEREL_BROKER` = 127.0.0.1:1883,
+# `headless_core` `mqtt_port=1883`), ESP yolu kapalı (Y7). Eskiden uç değeri yazıp yalnız "success" diyordu; operatör
+# bağlantının değiştiğini sanıyordu. Değerler aynen okunur / yazılır (fail-closed kayıt DEĞİŞMEZ, kod SİLİNMEZ); GET ve
+# MQTT alanı gönderilen POST yanıtı `mqtt_etkisiz: true` + istek dilinde `mqtt_notu` taşır.
+# Kapı: tests/test_ayar_MQTT_broker_ETKISIZ_D6_16.py (ayarı bağlantıya bağlayan kod eklenirse ölçüm kolu KIRMIZI olur).
+_MQTT_ALANLARI = frozenset({"mqtt_broker", "mqtt_port"})
+
+
+def _mqtt_etkisiz_notu() -> dict:
+    from utils import ceviri
+
+    return {"mqtt_etkisiz": True, "mqtt_notu": ceviri.t("ayarlar.mqtt.etkisiz")}
 
 
 class SettingsModel(BaseModel):
@@ -84,8 +98,8 @@ def save_settings(data: dict):
 
 @router.get("/")
 def get_settings():
-    """Ayarları döndürür (klinik adı / BLE MAC / MQTT)."""
-    return load_settings()
+    """Ayarları döndürür (klinik adı / BLE MAC / MQTT — MQTT bağlantıya ETKİSİZ, D6.16)."""
+    return {**load_settings(), **_mqtt_etkisiz_notu()}
 
 
 @router.post("/")
@@ -102,7 +116,8 @@ def update_settings(payload: SettingsModel):
     # ⚠️ Depoda `Optional[X] = None` + sentinel deseni de var ama burada 4 alan tipini değiştirmek
     # ve OpenAPI varsayılanlarını kaybetmek gerekirdi; `exclude_unset` sıfır model değişikliğiyle
     # aynı semantiği veriyor.
-    data = {**load_settings(), **payload.dict(exclude_unset=True)}
+    gonderilen = payload.dict(exclude_unset=True)
+    data = {**load_settings(), **gonderilen}
     try:
         save_settings(data)
     except Exception as e:
@@ -112,6 +127,9 @@ def update_settings(payload: SettingsModel):
         if kayit_reddi_mi(e):
             raise HTTPException(status_code=503, detail=str(e))
         raise
+    # D6.16 (Y15): MQTT alanı gönderildiyse değer YAZILDI ama bağlantıya etkisiz — yanıt bunu söyler.
+    if _MQTT_ALANLARI & gonderilen.keys():
+        return {"status": "success", **_mqtt_etkisiz_notu()}
     return {"status": "success"}
 
 

@@ -424,6 +424,9 @@
       "taramaCanliAcik": "Canlı kamera açıkken kameralar taranamaz. Canlı kamerayı durdurup yeniden tarayın.",
       "taramaMesgul": "AI Pro kamerayı şu anda kullanıyor. Hazırlığı ya da seansı durdurup kameraları yeniden tarayın.",
       "yazilamadi": "Kamera seçimi kaydedilemedi ({{neden}}). Veri klasörünün yazılabilir olduğunu kontrol edin."
+    },
+    "mqtt": {
+      "etkisiz": "MQTT broker adresi ve portu kaydedildi ama bağlantıya ETKİSİZ: cihaz bu ayarı okumuyor, yerel broker'a sabit adresten bağlanır (ESP yolu kapalı)."
     }
   },
   "bildirim": {

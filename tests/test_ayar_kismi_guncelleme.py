@@ -7,8 +7,10 @@
 
   · **CANLI KAYIP:** `clinic_name`i hiç göndermeyen arayüz (pf `SettingsScreen`in "Kaydet" düğmesi)
     onu HER kayıtta `system_settings.json`dan siliyordu.
-  · Yalnız `clinic_name` gönderen bir istemci MQTT broker ayarını sessizce `localhost:1883`e
-    döndürüyordu — ESP bobinleri (6-8) broker'ı bu ayardan buluyor.
+  · Yalnız `clinic_name` gönderen bir istemci kayıtlı MQTT broker ayarını sessizce `localhost:1883`e
+    döndürüyordu (kayıtlı değer kayboluyordu). ⚠️ D6.16 (Y15): eski "ESP bobinleri (6-8) broker'ı bu ayardan buluyor"
+    gerekçesi YANLIŞTI — ayar bağlantıya ETKİSİZDİR (bağlantı sabit 127.0.0.1:1883; uç bunu `mqtt_etkisiz` ile söyler,
+    kapı: tests/test_ayar_MQTT_broker_ETKISIZ_D6_16.py); gönderilmeyen alanın KORUNMASI yine de doğrudur.
 
 ⚠️ DENETİM RAPORUM BURADA YANILIYORDU: "frontend'de bu POST'un çağrıldığı yer bulunamadı" demiştim.
 Çağıran VAR — `apiClient` `/api` önekini kendisi eklediği ve çağrı `"/settings/"` yazdığı için
@@ -78,7 +80,7 @@ def test_KRITIK_gonderilmeyen_alan_KORUNUR(client):
     son = sr.load_settings()
     assert son.get("clinic_name") == "Yeni Klinik", f"gonderilen alan yazilmadi: {son}"
     assert son.get("mqtt_broker") == "192.168.137.1", (
-        f"MQTT broker sessizce localhost'a dondu -> ESP bobinleri (6-8) broker'i bulamaz: {son}"
+        f"kayitli MQTT broker ayari sessizce localhost'a dondu (gonderilmeyen alan ezildi): {son}"
     )
     assert son.get("mqtt_port") == "1884", f"MQTT portu sessizce degisti: {son}"
 

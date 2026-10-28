@@ -201,8 +201,11 @@ class ProductionConfigManager:
                 # sonraki İLK `save()` kullanıcının override'larını SESSİZCE siliyordu.
                 # Gerçek senaryo: `backend_service` `config.json`u SYSTEM+Admin ACL'ine kilitliyor;
                 # süreç sonradan yetkisiz bir kullanıcıyla koşarsa okuma düşer, ilk kayıt klinik
-                # ayarlarını siler → `mqtt.broker_url` `localhost`a döner → ESP bobinleri (6-8)
-                # broker'ı BULAMAZ. Ölçüldü (bu makinede, kaza eseri): dosya varsayılanlarla ezildi.
+                # ayarlarını (dosyadaki, gömülü varsayılandan farklı HER kullanıcı değeri — şifreli alanlar
+                # dahil) varsayılanlarla siler. Ölçüldü (bu makinede, kaza eseri): dosya varsayılanlarla ezildi.
+                # ⚠️ D6.16 (B-3.97 · Y15): eski gerekçe "`mqtt.broker_url` `localhost`a döner → ESP bobinleri
+                # (6-8) broker'ı bulamaz" YANLIŞTI — o değer bağlantıya ETKİSİZDİR (bağlantı sabit 127.0.0.1:1883;
+                # `/api/settings` bunu söyler). Kapının değeri dosyadaki kullanıcı ayarlarının kendisini korumaktır.
                 # Bu, bozuk `pemf_secrets.json` bulgusunun (yeni SQLCipher anahtarı) AYNI sınıfı.
                 self._user_config_unreadable = str(e)
                 logger.error(
@@ -232,7 +235,7 @@ class ProductionConfigManager:
 
         ⚠️ FAIL-CLOSED KAPISI (denetim 2026-08-17): kullanıcı config'i diskte VAR ama YÜKLENEMEDİYSE
         bellekteki `self._config` yalnızca bundled+template VARSAYILANLARIDIR. Onu diske yazmak,
-        okunamayan dosyadaki gerçek klinik ayarlarını (MQTT broker/port gibi) SESSİZCE SİLER.
+        okunamayan dosyadaki gerçek klinik ayarlarını (gömülü varsayılandan farklı her kullanıcı değeri) SESSİZCE SİLER.
         Yazma reddedilir; operatöre ne yapacağı söylenir.
 
         ⚠️ D2.81 (B-3.41): ret artık SESSİZ DEĞİL — kaydedilmemiş değişiklik varsa `ConfigKaydiReddedildi` yükselir

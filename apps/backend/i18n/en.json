@@ -424,6 +424,9 @@
       "taramaCanliAcik": "Cameras cannot be scanned while the live camera is on. Stop the live camera, then scan again.",
       "taramaMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then scan for cameras again.",
       "yazilamadi": "The camera selection could not be saved ({{neden}}). Check that the data folder is writable."
+    },
+    "mqtt": {
+      "etkisiz": "MQTT broker address and port were saved but have NO EFFECT on the connection: the device does not read this setting and connects to the local broker at a fixed address (ESP path disabled)."
     }
   },
   "bildirim": {

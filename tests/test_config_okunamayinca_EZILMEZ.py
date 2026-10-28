@@ -9,8 +9,11 @@ kullanıcının override'larını SESSİZCE siliyordu.
 
 GERÇEK SENARYO: `backend_service` `config.json`u SYSTEM+Admin ACL'ine kilitliyor. Süreç sonradan
 yetkisiz bir kullanıcıyla koşarsa (servis hesabı değişimi, elle çalıştırma) okuma düşer ve ilk
-kayıt klinik ayarlarını siler → `mqtt.broker_url` `localhost`a döner → **ESP bobinleri (6-8)
-broker'ı bulamaz**, tedavi başlatılamaz.
+kayıt klinik ayarlarını (dosyadaki her kullanıcı değeri, şifreli alanlar dahil) varsayılanlarla siler.
+⚠️ D6.16 (B-3.97 · Y15): eski gerekçe "`mqtt.broker_url` `localhost`a döner → ESP bobinleri (6-8) broker'ı bulamaz,
+tedavi başlatılamaz" YANLIŞTI — `mqtt.broker_url/port` bağlantıya ETKİSİZDİR (bağlantı sabit 127.0.0.1:1883;
+`/api/settings` bunu söyler, kapı: tests/test_ayar_MQTT_broker_ETKISIZ_D6_16.py). Aşağıdaki testler bu değeri yalnız
+"kullanıcı override'ı" örneği olarak kullanır; korunan şey dosyadaki ayarların kendisidir.
 
 ⚠️ BU BULGU KAZA ESERİ ÖLÇÜLDÜ: denetim sırasında pytest DIŞINDA çalıştırılan bir tanı komutu bu
 makinenin gerçek `%APPDATA%\\PEMF_GUI\\config.json` dosyasını tam olarak bu yolla ezdi — "okuyamıyorum"
@@ -77,8 +80,8 @@ def test_KRITIK_okunamayan_config_VARSAYILANLARLA_EZILMEZ(yonetici, tmp_path):
         y.save()
 
     assert hedef.read_bytes() == once, (
-        "okunamayan config.json VARSAYILANLARLA EZILDI -> klinik override'lari (MQTT broker/port) "
-        "sessizce yok oldu; ESP bobinleri (6-8) broker'i bulamaz"
+        "okunamayan config.json VARSAYILANLARLA EZILDI -> dosyadaki klinik override'lari (ornekte MQTT broker/port) "
+        "sessizce yok oldu"
     )
 
 
