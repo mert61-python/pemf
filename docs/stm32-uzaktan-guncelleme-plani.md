@@ -1,7 +1,9 @@
 # STM32 Uzaktan Güncelleme + Firmware/Client Uyumsuzluğu — Plan
 
-**Tarih:** 2026-09-14 · **Durum:** **§1 UYGULANDI (2026-09-18)** · **Faz 2 UYGULANDI (2026-09-22)** · Faz 3-4
-hâlâ plan (yayın donmuş) · Ölçümler bu makinede yapıldı.
+**Tarih:** 2026-09-14 · **Durum:** **§1 UYGULANDI (2026-09-18)** · **Faz 2 UYGULANDI (2026-09-22)** · **Faz 3 UYGULANDI
+(2026-09-22)** — açılış denetimi (`backend_service._donanim_guncellemesi_safe`); otomatik yakma VARSAYILAN KAPALI:
+`PEMF_FW_AUTO_UPDATE` varsayılanı `"0"` (sahip kararı Y1, 2026-09-29 — yalnız açık `=1` yakar, kapalıyken yalnız ölçer) ·
+Faz 4 yayına bağlı (yayın donmuş) · ~~Faz 3-4 hâlâ plan~~ · Ölçümler bu makinede yapıldı.
 
 > ## ✅ §1 UYUM KAPISI YAZILDI — 2026-09-18
 >
@@ -91,7 +93,10 @@ Backend'in paketlediği kanal sayısı ile kartın söylediği kanal sayısı **
 - ama **yeni bir alan**: `stmUyumlu = false` + `stmUyumsuzlukSebebi` = insan dilinde.
 - Seans başlatma bu durumda **reddedilir**, mesajı EYLEM söyler:
   > *"Kart 5 kanallı firmware koşuyor, uygulama 7 kanallı paket gönderiyor. Bobinler
-  > başlamaz. `docs/SAHA-ISLERI-REHBERI.md` B-2 ile STM'i yeniden yakın."*
+  > başlamaz. ~~`docs/SAHA-ISLERI-REHBERI.md` B-2 ile~~ STM'i yeniden yakın."*
+  >
+  > ⚠️ TARİHÇE (öneri metni): `SAHA-ISLERI-REHBERI` B-2 bugün "Doz kalibrasyonu — KALDIRILDI" (Ö.4-Y5); yeniden yakma yolu
+  > Faz 2 `scripts/stm_yak.py` ve Faz 3 açılış denetimi (varsayılan KAPALI — Y1).
 
 ⚠️ **Güvenlik değişmezi:** bu kapı **acil durdurmayı ASLA engellemez.** Uyumsuz firmware'de
 bile STOP yolu açık kalır (depo kuralı: bobinler her şeyden önce durur).
@@ -199,7 +204,7 @@ güncelleme "kimse yokken" yapılacaksa cihazın hastasız olduğundan emin olun
 |---|---|---|---|
 | ~~**1**~~ | ✅ **BİTTİ** — ÖLÇEREK doğrulandı 2026-09-22: `headless_core.stm_uyumlu` (3 durumlu), `system_router` → `stmUyumlu`, uyumsuzda seans **409** (`api_server` + `ai_router`). Kapı: `tests/test_stm_firmware_uyum_kapisi.py` (13) + `tests/test_stm_uyumluluk_denetimi_2026_09_03.py` (5) — 18 yeşil. ⚠️ Bu satır **BEKLEYEN iş olarak duruyordu**; kod çoktan canlıydı — belge durum satırı kanıt değildir | Sessiz uyumsuzluk **bitti** | bitti |
 | ~~**2**~~ | ✅ **BİTTİ 2026-09-22** — `scripts/stm_yak.py`. Kapı: `tests/test_stm_yak_GUVENLIK.py` (15 test, **7 mutasyon 7'si kırmızı**). Ön kontroller DAVRANIŞSAL sınandı (sahte backend'e gerçek HTTP) | Tek komutla güvenli reflash | bitti |
-| ~~**3**~~ | ✅ **BİTTİ 2026-09-22** — sahip (b)'yi seçti: **admin ucu YERİNE AÇILIŞ DENETİMİ**. `servers/firmware_manager` (manifest → `surum_uyumu.plan_yap` → indir → `stm_yakma.yakma_akisi`), `backend_service.main`de client kontrolünden SONRA. Kill-switch `PEMF_FW_AUTO_UPDATE=0`. Kapı: `tests/test_surum_uyumu.py` (20 test, **6 mutasyon 6'sı kırmızı**) + `tests/test_firmware_manager.py` (14 test, **8 mutasyon 8'i kırmızı**) | Cihaz firmware'i KENDİ alır | bitti |
+| ~~**3**~~ | ✅ **BİTTİ 2026-09-22** — sahip (b)'yi seçti: **admin ucu YERİNE AÇILIŞ DENETİMİ**. `servers/firmware_manager` (manifest → `surum_uyumu.plan_yap` → indir → `stm_yakma.yakma_akisi`), `backend_service.main`de client kontrolünden SONRA. ~~Kill-switch `PEMF_FW_AUTO_UPDATE=0`.~~ ⚠️ **Y1 (sahip, 2026-09-29): yakma VARSAYILAN KAPALI** — `PEMF_FW_AUTO_UPDATE` varsayılanı `"0"`; yalnız açık `=1` yakar, kapalıyken açılış denetimi yalnız ölçer (`firmware_manager`: "kart DEĞİŞTİRİLMEDİ"). Kapı: `tests/test_surum_uyumu.py` (20 test, **6 mutasyon 6'sı kırmızı**) + `tests/test_firmware_manager.py` (14 test, **8 mutasyon 8'i kırmızı**) | Cihaz firmware'i KENDİ alır | bitti |
 | **4** | **Uyum varlığı (Y17 · D1.120/D1.121, 1-H 2026-10-06)** — kurallar `exe/latest.json`'a DEĞİL, AYRI yayın varlığına: `https://github.com/mert61-python/pemf-update/releases/download/firmware-uyum/firmware_uyum.json` (`firmware_manager.UYUM_URL`). Biçim: `{"firmware":{"stm32":{"version","url","sha256","previousStable"?}},"uyumluluk":[{"clientMin","clientMax","firmwareMin","firmwareMax"}]}`; `url` aynı depoda bir release varlığı (kaynak pini). Karar STM el sıkışmasından SONRA verilir. Yayınlanmamışsa (404) "kural yok" → EYLEM_YOK — kod güvenle sevk edilebilir. ⚠️ Yayınlamak sahibin "yayınla" kararı (Y17); yakma ayrıca `PEMF_FW_AUTO_UPDATE=1` ister (Y1) ve zincir tezgâhta (Oturum 13) doğrulanmadan açılmaz. `publish_release.ps1` bu varlığı henüz üretmiyor | Sürüm takipli dağıtım | yayına bağlı |
 
 **Faz 1–3 sevk edilebilir durumda.** Kalan tek iş Faz 4 ve o **yayına bağlı** — manifeste girdi yokken akış EYLEM_YOK/BEKLE döndüğü için kod bu haliyle zararsız.

@@ -29,7 +29,7 @@ PEMF Vet projesinin teknik dokümanları. (Kod alt-sistemleri için ilgili klas�
 |---|---|---|
 | [`stm32-pin-haritasi.md`](stm32-pin-haritasi.md) | **TAM pin haritası** (Nucleo-144 F429ZIT6) — ⚠️ `stm32_pemf_unipolar` ayna projesi 2026-09-11'de KALDIRILDI | Donanım |
 | [`stm32-sensor-protokolu.md`](stm32-sensor-protokolu.md) | STM32 **sensör telemetri sözleşmesi** | Donanım/protokol |
-| [`stm32-uzaktan-guncelleme-plani.md`](stm32-uzaktan-guncelleme-plani.md) | Uzaktan firmware güncelleme + firmware↔client uyumsuzluğu — §1 (09-18) ve Faz 2 (09-22) **uygulandı**, Faz 3-4 açık | Donanım/yayın |
+| [`stm32-uzaktan-guncelleme-plani.md`](stm32-uzaktan-guncelleme-plani.md) | Uzaktan firmware güncelleme + firmware↔client uyumsuzluğu — §1 (09-18), Faz 2 ve Faz 3 (09-22) **uygulandı** (Faz 3 = açılış denetimi; otomatik yakma `PEMF_FW_AUTO_UPDATE` varsayılanı `"0"` — KAPALI, Y1) · Faz 4 yayına bağlı | Donanım/yayın |
 | [`stm32-7-bobin-gecisi-plani-2026-09-10.md`](stm32-7-bobin-gecisi-plani-2026-09-10.md) | ESP'leri devre dışı bırak → **7 bobinin tamamını STM32'den sür** | Donanım |
 
 ## Planlar (durum belgelerin kendi başındadır)

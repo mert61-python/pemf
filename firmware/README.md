@@ -184,7 +184,8 @@ düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırak�
   net DC = 0 (ESP S3/8266 ile aynı anlam; duty = yarım-periyot doluluk oranı, tavan ~%50).
   Eski sözleşme (bir bacak hep enerjili) duty≠%50'de `V·(2·duty−1)` DC-bias üretiyordu →
   denetim HG-2. ⚠️ **Aynı sayısal duty'de teslim edilen enerji/alan ESKİ dalgadan FARKLIDIR** —
-  tezgahta doz yeniden kalibre edilmeli (skop + alan probu). Kilit: `tests/test_stm_dalga_sozlesmesi.py`.
+  ~~tezgahta doz yeniden kalibre edilmeli (skop + alan probu).~~ ⛔ Doz kalibrasyonu KALDIRILDI — YAPILMAYACAK (sahip
+  kararı 2026-09-21 · Ö.4-Y5; `docs/VERIFICATION.md` §16). Kilit: `tests/test_stm_dalga_sozlesmesi.py`.
 - Protokol-geçerlilik sınırları ve firmware duty klempi **hasta güvenliğidir** — zayıflatma. Backend'de tedavi duty tavanı YOK (Y9, `STM32_DUTY_MAX_RATIO = None`); frekans (STM 1–25000 Hz, ESP ≤1000 Hz) ve faz (0–360°) backend'de TAŞIYICI olarak normalize edilir; duty üst sınırı firmware'dedir (kip tavanı üstü NACK — `DUTY_MAX_BIPOLAR` 0,5 / `DUTY_MAX_UNIPOLAR` 1,0; ISR bipolar klempi `tpp/2 − DDS_BIPOLAR_GAP_TICKS`). Testler: [`../tests/`](../tests/README.md) `test_stm32_protocol_limits.py` · `test_hc_protokol_siniri_TASIYICI.py` · `test_klemp_anlatimi_UCLU_AYRIM_D6_04.py`.
 
 ---

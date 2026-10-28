@@ -11,7 +11,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 2a | ⚠️ **Anahtar emaneti** | ✅ **EMANET GÜNCEL + TATBİKAT GEÇTİ (2026-09-17)** · ⏳ makine-dışı kopya **sahipte** | ⚠️ Bu satır **"❌ AÇIK (P0)"** yazıyordu — **BAYATTI**: emanet 2026-09-13'te kuruldu. 2026-09-17'de ölçüldü: Vault kopyası güncel **ve** `--tatbikat` gerçek şifreli DB'yi AÇTI. Kalan gerçek açık: kurtarma setinin 3 parçasından 2'si hâlâ **bu makinede** (§2a) |
 | 3 | Supabase RLS canlı | ✅ **DOĞRULANDI (yeniden: 2026-09-13)** | 6 tablonun altısı da anon'a **401/42501**; RPC kapısı çalışıyor |
 | 4 | Cloudflare NAMED tünel | ⏳ **HÂLÂ ÖLÇÜLMEDİ** | ⚠️ 2026-09-13'te elle başlatılan backend'de `tunnelUrl` boştu ama o **launcher koşulu DEĞİL**. Doğru ölçüm: uygulamayı launcher'dan aç → `GET /api/health` → `tunnelUrl`. NAMED için Cloudflare token'ı gerekir (sahipte) |
-| 5 | Bağımlılık CVE | ✅ **düşük-riskli 3'ü YAPILDI** / ⏳ onnx+torch | ölçüldü: cryptography 50.0.0 · multipart 0.0.31 · zeroconf 0.149.0 |
+| 5 | Bağımlılık CVE | ✅ **düşük-riskli 3'ü YAPILDI** / ⛔ onnx+torch YAPILMAYACAK (sahip kararı 2026-09-21 · Ö.4-Y3) | ölçüldü: cryptography 50.0.0 · multipart 0.0.31 · zeroconf 0.149.0 |
 | 6 | AI model bütünlüğü | ✅ **DOĞRULANDI (2026-09-13)** · **otomatik kapı (D3.45, 2026-10-25)** | `scripts/model_butunluk.py` — gömülü paket **56/56 bayt-birebir**. Manifest `release_assets/ai_models_sha256.json` artık SÜRÜMLÜ (Y33); git'te izlenen 10 ağırlık HER test koşusunda ürünün doğrulayıcısıyla denetlenir (`tests/test_D3_45_AI_agirliklari_SURUMLU_SHA_manifesti_KAPISI.py`); takipsiz 46'sı ortamda varsa aynı çağrıda |
 | 6b | AI model **lisansı** | ⛔ YAPILMAYACAK | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Envanter işi kapatıldı; AGPL kalemi `docs/AGPL-KARARI.md`'de duruyor |
 | 7 | Yük/soak | ⚠️ **kısa koşu: RSS/DB temiz · HTTP kaydı yok · WS ÖLÇÜLMEDİ** / ⏳ uzun koşu | 25 dk: RSS +%0,9 (sızıntı YOK), DB sabit. ⚠️ **O koşu WS AÇMIYORDU** (B-9.26; `/ws` istemcisi 2026-09-30'da eklendi): WS kararlılığı o koşuda ÖLÇÜLMEDİ — yeniden koşulmalı. ⚠️ eski betik **MQTT** üzerinden → ESP kapalıyken hiçbir canlı yolu zorlamıyor; yerine `scripts/soak_http_ws.py`. 72 saatlik klinik koşusu sahipte |
@@ -84,10 +84,11 @@ Get-Content "C:\ProgramData\PEMF_System\logs\backend_service.log" | Select-Strin
 - **NAMED** (sabit hostname + `TUNNEL_TOKEN`) = üretim hedefi. Cloudflare token'ı `device.env`'e girilince
   servis oto-NAMED'e geçer (bkz. memory: pemf-connection-audit "KALAN=NAMED tünel").
 
-## ⏳ 5 — CVE upgrade (MAINTAINER)
+## ✅ 5 — CVE upgrade (düşük-riskli 3'ü YAPILDI · ⛔ onnx/torch YAPILMAYACAK)
 
 `pip-audit` 6 CVE saptadı. **Bu ortamda izole-venv uyumluluk testi yapıldı** (aşağıdaki düşük-riskli
-3'ü için — bkz. rapor B-9.3). Kalan (AI-model uyumluluk testi gerektiren) `onnx`/`torch` maintainer'da:
+3'ü için — bkz. rapor B-9.3). ~~Kalan (AI-model uyumluluk testi gerektiren) `onnx`/`torch` maintainer'da:~~
+⛔ Kalan `onnx`/`torch` yükseltmesi YAPILMAYACAK (sahip kararı 2026-09-21 · Ö.4-Y3) — aşağıdaki not tarihsel kayıttır:
 
 ```powershell
 # Düşük-risk (test-doğrulandı): cryptography>=43.0.1, python-multipart>=0.0.31, zeroconf>=0.149.0
@@ -119,7 +120,8 @@ Get-ChildItem "C:\ProgramData\PEMF_GUI\ai_models\*" -Recurse -Include *.onnx,*.p
   ForEach-Object { "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash, $_.Name }
 ```
 
-- Her modelin **lisansı** (ONNX/YOLO/sklearn/librosa türevleri) ticari-kullanıma uygun mu — envanter çıkar.
+- ~~Her modelin **lisansı** (ONNX/YOLO/sklearn/librosa türevleri) ticari-kullanıma uygun mu — envanter çıkar.~~
+  ⛔ YAPILMAYACAK (sahip kararı 2026-09-21 · Ö.4-Y4) — talimat tarihsel kayıttır; AGPL kalemi `docs/AGPL-KARARI.md`'de.
 - Klinik-doğruluk: modellerin validasyon metrikleri (kod denetimi kapsamı DIŞI — klinik ekip).
 
 ## ⏳ 7 — Yük/soak davranışı (CİHAZDA / STAGING)

@@ -159,7 +159,7 @@ Depo içine yazmayı **reddeder** (depo public, dosya düz metin).
 |---|---|---|
 | B4 §1 | Firmware güvenlik satürasyonu | Tezgâh |
 | B4 §4 | NAMED tünel | Cloudflare token'ı sahipte |
-| B4 §5 | `onnx` + `torch` yükseltmesi | 14 modülün çıktısı yeniden doğrulanmalı + EXE rebuild |
+| ~~B4 §5~~ | ~~`onnx` + `torch` yükseltmesi~~ | ⛔ **YAPILMAYACAK — sahip kararı 2026-09-21 (Ö.4-Y3):** ~~14 modülün çıktısı yeniden doğrulanmalı + EXE rebuild~~ — açık iş listelerine KONMAZ (bkz. aşağıda A-1) |
 | B4 §6b | Model **lisans** envanteri | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** AGPL kalemi `docs/AGPL-KARARI.md`'de; envanter işi **açık iş değil** |
 | B4 §7 | Uzun soak | 25 dk koşuldu; 72 saatlik klinik koşusu sahipte |
 | D2 | iOS / EAS | Apple hesabı/EAS koşusu gerekir (C5 ile aynı blok) |
@@ -227,7 +227,7 @@ ve pakette gerçekten ne olduğu `scratchpad/pyz_modul_oku.py` ile PYZ'den okunu
 | # | İş | Durum / ne gerekiyor |
 |---|---|---|
 | ~~**A-1**~~ | ~~**`onnx 1.15` + `torch 2.1.2` CVE yükseltmesi**~~ | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Gerekçe: risk profili DÜŞÜK ölçüldü (model klasörü yerel, ağdan girdi almıyor); yükseltme 16 AI modülünün çıktısını yeniden doğrulamayı + EXE yeniden derlemeyi isterdi. **Açık iş listelerine KONMAZ** |
-| **A-2** | **Model *lisans* envanteri** | Ağırlıkların lisansları listelenmemiş. AGPL kalemi senin hariç tuttuğun A1'e bağlı; geri kalanı çıkarılabilir |
+| ~~**A-2**~~ | ~~**Model *lisans* envanteri**~~ | ⛔ **YAPILMAYACAK — sahip kararı 2026-09-21 (Ö.4-Y4).** ~~Ağırlıkların lisansları listelenmemiş. AGPL kalemi senin hariç tuttuğun A1'e bağlı; geri kalanı çıkarılabilir~~ — AGPL kalemi `docs/AGPL-KARARI.md`'de; Python paket lisans tablosu ayrı iştir (`scripts/lisans_envanteri_uret.py`) |
 
 ## B · SENDE — bende yapılacak bir şey yok
 

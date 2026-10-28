@@ -177,3 +177,83 @@ def test_KARSIT_KANIT_karma_durum_YANLIS_ALARM_vermiyor():
     tablo, basliklar = _tablo_durumlari(sahte), _baslik_durumlari(sahte)
     t, b = _isaretler(tablo["5"]), _isaretler(basliklar["5"])
     assert t & b, "karma durum yanlis alarm uretiyor — kapi fazla siki"
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# D6.39 (B-11.10 · B-11.22) — sahip kararıyla KAPATILAN işler (Ö.4-Y3 onnx/torch yükseltmesi · Ö.4-Y4 AI model lisans envanteri ·
+# Ö.4-Y5 doz kalibrasyonu) belgede AÇIK iş gibi durmaz; STM uzaktan güncelleme planının başlığı faz tablosuyla ve kodla aynı.
+# ÖLÇÜLEN (HEAD ebf1c3fe): `acik-isler:162` "B4 §5 onnx + torch yükseltmesi" (Hâlâ açık tablosu), `:230` "A-2 Model lisans envanteri …
+# çıkarılabilir"; VERIFICATION `:14` "⏳ onnx+torch", `:90` "onnx/torch maintainer'da", `:122` "lisansı … envanter çıkar";
+# `firmware/README` "tezgahta doz yeniden kalibre edilmeli"; `stm32-uzaktan-guncelleme-plani.md:3` "Faz 3-4 hâlâ plan" ↔ aynı belgenin
+# faz tablosu "Faz 3 ✅ BİTTİ"; `docs/README.md:32` "Faz 3-4 açık"; Faz 3 açılış denetimi `backend_service.py` — varsayılan KAPALI (Y1).
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+import ast as _ast
+
+_KAPANAN_BELGELER = ("docs/acik-isler-2026-09-12.md", "docs/VERIFICATION.md", "firmware/README.md")
+_KAPANAN_KONULAR = {
+    "onnx/torch yükseltmesi (Ö.4-Y3)": re.compile(
+        r"(onnx|torch)[^\n]*(⏳|yükselt|upgrade|maintainer)|(⏳|yükselt|upgrade)[^\n]{0,40}(onnx|torch)", re.I
+    ),
+    "AI model lisans envanteri (Ö.4-Y4)": re.compile(r"lisans\w*\**[^\n]{0,80}envanter", re.I),
+    "doz kalibrasyonu (Ö.4-Y5)": re.compile(r"doz\w*\s+(yeniden\s+)?kalibr|kalibre\s+edilmeli", re.I),
+}
+_KAPALI_ISARET = ("⛔", "YAPILMAYACAK", "KALDIRILDI", "KAPANDI")
+
+
+def _cizgisiz(md: str) -> str:
+    return re.sub(r"~~.*?~~", " ", md, flags=re.S)
+
+
+def test_KRITIK_D6_39_kapanan_isler_ACIK_is_gibi_durmaz():
+    ihlal = []
+    for yol in _KAPANAN_BELGELER:
+        for no, satir in enumerate(_cizgisiz((KOK / yol).read_text(encoding="utf-8")).splitlines(), 1):
+            for konu, desen in _KAPANAN_KONULAR.items():
+                if desen.search(satir) and not any(i in satir for i in _KAPALI_ISARET):
+                    ihlal.append(f"{yol}:{no} [{konu}] {satir.strip()[:110]}")
+    assert not ihlal, (
+        "sahip kararıyla KAPATILAN iş belgede açık / yapılabilir gibi duruyor — ⛔ YAPILMAYACAK işaretleyin ya da üstünü çizin "
+        "(SİLMEYİN, tarih kaydı):\n  " + "\n  ".join(ihlal)
+    )
+
+
+def _fw_oto_varsayilan() -> str:
+    """`backend_service.py`deki `PEMF_FW_AUTO_UPDATE` varsayılanı — AST'den (sabit kopya DEĞİL; Y1 değişirse belge de değişmeli)."""
+    agac = _ast.parse((KOK / "apps" / "backend" / "backend_service.py").read_text(encoding="utf-8"))
+    degerler = {
+        d.args[1].value
+        for d in _ast.walk(agac)
+        if isinstance(d, _ast.Call)
+        and len(d.args) == 2
+        and isinstance(d.args[0], _ast.Constant)
+        and d.args[0].value == "PEMF_FW_AUTO_UPDATE"
+        and isinstance(d.args[1], _ast.Constant)
+    }
+    assert len(degerler) == 1, f"PEMF_FW_AUTO_UPDATE varsayılanı tek olmalı: {degerler}"
+    return degerler.pop()
+
+
+def test_KRITIK_D6_39_stm_guncelleme_plani_basligi_FAZ_tablosuyla_ve_KODLA_ayni():
+    plan = (KOK / "docs" / "stm32-uzaktan-guncelleme-plani.md").read_text(encoding="utf-8")
+    biten = sorted(set(re.findall(r"^\|\s*~~\*\*(\d)\*\*~~\s*\|\s*✅\s*\*\*BİTTİ", plan, re.M)))
+    assert "3" in biten, f"aparat: faz tablosu Faz 3'ü BİTTİ göstermeli (bulunan: {biten})"
+    baslik = plan.split("\n\n", 2)[1]  # başlıktan sonraki ilk paragraf = **Tarih:** · **Durum:**
+    assert "**Durum:**" in baslik, "aparat: durum paragrafı bulunamadı"
+    for n in biten:
+        assert not re.search(r"Faz [\d\s,–-]*" + n + r"[\d\s,–-]*\s+hâlâ plan", _cizgisiz(baslik)), (
+            f"plan başlığı Faz {n}'i 'hâlâ plan' diyor ama faz tablosu ✅ BİTTİ diyor"
+        )
+    v = _fw_oto_varsayilan()
+    assert f'varsayılanı `"{v}"`' in baslik, (
+        f"plan başlığı otomatik yakma varsayılanını koddan farklı / hiç söylemiyor (kod: \"{v}\")"
+    )
+    satir = [
+        s
+        for s in (KOK / "docs" / "README.md").read_text(encoding="utf-8").splitlines()
+        if "stm32-uzaktan-guncelleme-plani.md" in s
+    ]
+    assert len(satir) == 1 and not re.search(r"Faz 3-4 açık", satir[0]), f"docs/README dizin satırı bayat: {satir}"
+    assert f'varsayılanı `"{v}"`' in satir[0], (
+        "docs/README dizin satırı otomatik yakma varsayılanını koddan farklı söylüyor"
+    )
