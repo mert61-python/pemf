@@ -112,3 +112,41 @@ it("KRİTİK EN: aynı bant İngilizce", async () => {
   expect(u.queryByText(EN_UZAK)).not.toBeNull();
   expect(u.queryByText(/outside a session context/)).toBeNull();
 });
+
+// TUR 2 (çürütücü kolu): tek bobin enerjiliyken katalog `_one` biçimini kullanır — TR / EN `_one` değeri ayrı bir girdidir; yalnız 2 bobinli
+// senaryo onu hiç çizmiyordu (mutant `cur1710_n2`: TR `_one`'a eski "seans bağlamı dışında" metni YAŞIYORDU).
+async function ekranTekBobin() {
+  mockSnap = {
+    gateway: "devre_disi", mqtt: "devre_disi", stm: "online",
+    patient: { name: "", species: "", breed: "", owner: "" },
+    activeTreatment: F.canliElle,
+    notifications: [],
+    coils: [1, 2, 3, 4, 5, 6, 7].map((id) => ({ id, connected: true, running: id === 1 })),
+  };
+  const u = render(<ControlScreen />);
+  await act(async () => {});
+  await act(async () => {});
+  return u;
+}
+
+it("KRİTİK TR + EN (tek bobin — `_one` biçimi): WS'te AKTİF seans varken bant AKTİF SEANS'ı söyler, 'seans bağlamı dışında' DEMEZ", async () => {
+  const tr = await ekranTekBobin();
+  expect(
+    tr.queryByText(
+      "⚠️ AKTİF SEANS sürüyor — bu kartın dışında başlatıldı (başka istemci ya da AI Pro); 1 bobin enerjili. Aşağıdaki ACİL DURDUR ile durdurabilirsiniz.",
+    ),
+  ).not.toBeNull();
+  expect(tr.queryByText(/seans bağlamı dışında/)).toBeNull();
+  tr.unmount();
+  __bayrakTestiAyarla(true);
+  await act(async () => {
+    await dilSec("en", depo);
+  });
+  const en = await ekranTekBobin();
+  expect(
+    en.queryByText(
+      "⚠️ ACTIVE SESSION running — started outside this card (another client or AI Pro); 1 coil energized. You can stop it with EMERGENCY STOP below.",
+    ),
+  ).not.toBeNull();
+  expect(en.queryByText(/outside a session context/)).toBeNull();
+});
