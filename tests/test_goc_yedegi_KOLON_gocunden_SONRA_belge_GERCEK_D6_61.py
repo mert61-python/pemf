@@ -27,7 +27,14 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 SEMA = KOK / "apps" / "backend" / "database" / "thdb_sema.py"
 README = KOK / "apps" / "backend" / "database" / "README.md"
-_YASAK = re.compile(r"her\s+goc\s+adimini\s+GERI\s+ALINABILIR|rollback'li açılış göçleri", re.I)
+#: Tur 2 (çürütücü): eski iki kalıp yalnız birebir sözü yakalıyordu ("tum goc adimlari GERI ALINABILIR", "göçler rollback'li"
+#: kaçıyordu) → her "geri alınabilir" iddiası (ASCII / Türkçe, büyük-küçük) ve göçü niteleyen her "rollback'li" yasak.
+_YASAK = re.compile(
+    r"her\s+goc\s+adimini\s+GERI\s+ALINABILIR|rollback'li açılış göçleri"
+    r"|ger[iİıI]\s+al[ıiIİ]nab[iİıI]l"
+    r"|rollback'?l[iİıI]\s+(?:açılış\s+|acilis\s+)?g[öo][çc]|g[öo][çc]\w*\s+(?:\(\s*)?(?:\w+\s+)?rollback'?l[iİıI]",
+    re.I,
+)
 
 
 @pytest.fixture
