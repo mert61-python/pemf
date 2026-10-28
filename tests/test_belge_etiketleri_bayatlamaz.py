@@ -139,3 +139,65 @@ def test_KARSIT_KANIT_RUNBOOK_ESPyi_SILMIYOR():
     """
     metin = _RUNBOOK.read_text(encoding="utf-8")
     assert "ESP" in metin, "RUNBOOK'tan ESP tamamen cikarilmis -> geri acildiginda defter eksik"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# D6.46 (B-11.x) — "Belgeler" tablosundaki belge BUGÜNÜN topolojisiyle çelişiyorsa başında TARİHÇE bandı taşır
+# ÖLÇÜLEN (HEAD ebf1c3fe): `docs/README.md:12` PEMF_SISTEM_RAPORU'nu (1 Mart 2026) güncel "Belgeler" tablosunda "kapsamlı tam
+# sistem raporu" diye sunuyordu; raporun ilk 15 satırında bant YOK, gövdesi "ESP32-S3 Cihazları (×8)" / "Python GUI (PyQt6)"
+# diyor ↔ `servers/live_state.py` `STM_COIL_IDS = set(range(1, 8))`, `ESP_COIL_IDS = {8}`; PyQt GUI kaldırıldı.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+import ast as _ast
+
+_LIVE_STATE = KOK / "apps" / "backend" / "servers" / "live_state.py"
+#: Eski topoloji imzası: 8 ESP32-S3 bobini ya da PyQt6 GUI.
+_ESKI_TOPOLOJI = re.compile(r"ESP32-S3[^\n]{0,30}\([×x]\s*8\)|PyQt6")
+_BANT = re.compile(r"TARİHÇE|TARİHLİ KAYIT")
+
+
+def _canli_esp_sayisi() -> int:
+    for d in _ast.walk(_ast.parse(_LIVE_STATE.read_text(encoding="utf-8"))):
+        if isinstance(d, _ast.Assign) and any(getattr(t, "id", "") == "ESP_COIL_IDS" for t in d.targets):
+            return len(_ast.literal_eval(d.value))
+    raise AssertionError("live_state.ESP_COIL_IDS bulunamadı")
+
+
+def _belgeler_tablosu() -> list[str]:
+    m = _INDEKS.read_text(encoding="utf-8")
+    bas = m.index("## Belgeler")
+    son = m.index("\n## ", bas + 5)
+    return re.findall(r"^\|\s*\[`([^`]+\.md)`\]\(([^)]+)\)", m[bas:son], re.M)
+
+
+def test_KRITIK_D6_46_Belgeler_tablosu_eski_topolojiyi_BANTSIZ_sunmaz():
+    assert _canli_esp_sayisi() != 8, (
+        "aparat: ESP bobin sayısı 8 olmuş — eski topoloji imzası artık çelişki değil, kapıyı güncelleyin"
+    )
+    ihlal = []
+    for ad, hedef in _belgeler_tablosu():
+        p = (KOK / "docs" / hedef).resolve()
+        metin = p.read_text(encoding="utf-8")
+        ilk15 = "\n".join(metin.splitlines()[:15])
+        if _ESKI_TOPOLOJI.search(metin) and not _BANT.search(ilk15):
+            ihlal.append(ad)
+        elif _BANT.search(ilk15):
+            # başında TARİHÇE bandı taşıyan belge GÜNCEL tabloda durmaz (mutant m2 yaşadı → kol eklendi)
+            ihlal.append(f"{ad} (TARİHÇE bantlı belge güncel tabloda)")
+    assert not ihlal, (
+        f"'Belgeler' (güncel) tablosundaki belge eski topolojiyi (ESP32-S3 ×8 / PyQt6) ilk 15 satırda TARİHÇE bandı olmadan "
+        f"anlatıyor: {ihlal} — 'TARİHLİ KAYIT' bölümüne alın ve başına bant koyun"
+    )
+
+
+def test_KRITIK_D6_46_sistem_raporu_TARIHLI_KAYIT_bolumunde_ve_BANTLI():
+    m = _INDEKS.read_text(encoding="utf-8")
+    bas = m.index("## Denetim raporları — ⚠️ TARİHLİ KAYIT")
+    son = m.index("\n## ", bas + 5)
+    assert re.search(r"^\|\s*\[`PEMF_SISTEM_RAPORU\.md`\]", m[bas:son], re.M), (
+        "PEMF_SISTEM_RAPORU 'TARİHLİ KAYIT' bölümünde değil"
+    )
+    ilk15 = "\n".join((KOK / "docs" / "PEMF_SISTEM_RAPORU.md").read_text(encoding="utf-8").splitlines()[:15])
+    assert _BANT.search(ilk15) and "ARCHITECTURE.md" in ilk15, (
+        "PEMF_SISTEM_RAPORU başında belge-geneli TARİHÇE bandı yok"
+    )

@@ -9,7 +9,6 @@ PEMF Vet projesinin teknik dokümanları. (Kod alt-sistemleri için ilgili klas�
 | [`LAUNCHER_SPEC.md`](LAUNCHER_SPEC.md) | Launcher (PEMF Vet Client) sözleşmesi — Windows/macOS/Linux, tek kaynak, geriye-uyum | Launcher üzerinde çalışan |
 | [`RUNBOOK.md`](RUNBOOK.md) | Saha **operasyon / olay-müdahale** rehberi (klinik PC, `PemfBackend` NSSM servisi, hızlı komutlar) | Saha/destek |
 | [`VERIFICATION.md`](VERIFICATION.md) | Üretim **doğrulama checklist'i** (çalıştırılabilir adımlar; cihaz/panel gerektirenler işaretli) | Sürüm-öncesi doğrulama |
-| [`PEMF_SISTEM_RAPORU.md`](PEMF_SISTEM_RAPORU.md) | Kapsamlı **tam sistem raporu** — üst-düzey genel bakış | Yönetici/genel |
 | [`TEMIZ-MAKINE.md`](TEMIZ-MAKINE.md) | **Temiz makinede sıfırdan** — kur-kullan (Yol A) ve build/yayın (Yol B, sır geri-yükleme) akışlarını ayrık anlatır | Yeni makine / build |
 | [`JETON-SISTEMI.md`](JETON-SISTEMI.md) | **Jeton (token) ücretlendirme** sistemi — sahip kararı; ⚠️ `PEMF_TIER_ENFORCED` varsayılan **KAPALI** (bugün üretimde koşmuyor) | Ürün/ücretlendirme |
 | [`AGPL-KARARI.md`](AGPL-KARARI.md) | Ultralytics **AGPL-3.0** durum tespiti + karar notu (**AÇIK**; `tests/test_license_surface.py` yüzey kapısı) | Sahip/hukuk |
@@ -54,6 +53,7 @@ PEMF Vet projesinin teknik dokümanları. (Kod alt-sistemleri için ilgili klas�
 | [`denetim-guncelleme-altyapisi-2026-08-23.md`](denetim-guncelleme-altyapisi-2026-08-23.md) | Güncelleme altyapısı denetimi — client + mobil | Mühendislik |
 | [`sahip-istekleri-2026-09-12.md`](sahip-istekleri-2026-09-12.md) | Sahip istekleri — kod + kapı testleri + mutasyon kanıtı tamam; ⚠️ **yayın YAPILMADI** | Sahip |
 | [`react_installer_gap_report.md`](react_installer_gap_report.md) | ⚠️ **TARİHÇE** (2026-06-04) — ana bulgu KAPANDI | — |
+| [`PEMF_SISTEM_RAPORU.md`](PEMF_SISTEM_RAPORU.md) | ⚠️ **TARİHÇE** — kapsamlı tam sistem raporu (tarihi belgenin kendisinde); o günün topolojisini anlatır (ESP32-S3 ×8 bobin, PyQt6 GUI). Başındaki bant bugünü söyler; güncel mimari [`ARCHITECTURE.md`](ARCHITECTURE.md) | Yönetici/genel |
 
 ## Nereden başlamalı
 1. **Kod tabanını tanı:** [`../README.md`](../README.md) dizin haritası → alt-klasör README'leri.

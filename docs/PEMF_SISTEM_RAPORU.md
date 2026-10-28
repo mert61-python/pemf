@@ -1,5 +1,11 @@
 # PEMF VETERİNER TEDAVİ SİSTEMİ — TAM SİSTEM RAPORU
 
+> ⚠️ **TARİHÇE — belge-geneli bant (D6.46, 2026-10-28).** Bu rapor **1 Mart 2026** tarihlidir ve o günün mimarisini anlatır
+> (ESP32-S3 ×8 bobin, PyQt6 GUI, ayrı MQTT köprüsü). **Bugünün kaynağı DEĞİLDİR:** bugün bobin 1–7 STM32'den seri hatla sürülür
+> (`apps/backend/servers/live_state.py` `STM_COIL_IDS`), bobin 8 ESP8266 / MQTT'dir (`ESP_COIL_IDS = {8}`; ESP bugün kapalı —
+> `PEMF_ESP_ENABLED`, kod silinmedi); PyQt GUI kaldırıldı (headless backend + launcher + React arayüz). Güncel mimari:
+> [`ARCHITECTURE.md`](ARCHITECTURE.md). Gövdedeki tek tek "BAYAT" notları yerinde kalır.
+
 **Hazırlayan:** GitHub Copilot
 **Tarih:** 1 Mart 2026
 **Versiyon:** 1.0
