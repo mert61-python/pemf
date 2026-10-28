@@ -53,6 +53,11 @@ const STATUS_ANAHTARLARI: Record<string, string> = {
   error: "seans.durum.error",
   failed: "seans.durum.failed",
   success: "seans.durum.success",
+  // ⚠️ SON-O.1 (22-SON inceleme): üretimde YAZILAN üç durum bu haritada yoktu (geçmiş ekranında vardı) → "Durum" satırında ham
+  // "Emergency_stopped" görünüyordu. Kapı: tests/test_seans_durum_etiketi.py (modal haritası = Python `DURUM_ETIKETLERI`).
+  emergency_stopped: "seans.durum.emergency_stopped",
+  aborted_due_to_power: "seans.durum.aborted_due_to_power",
+  hardware_rejected: "seans.durum.hardware_rejected",
 };
 
 function statusEtiketi(status?: string): string {

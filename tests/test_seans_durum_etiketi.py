@@ -34,6 +34,9 @@ if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
 _TS = KOK / "apps" / "ui" / "src" / "screens" / "TreatmentHistoryScreen.tsx"
+#: SON-O.1 (22-SON inceleme): seans detay modalının KENDİ haritası var — bu kapı yalnız geçmiş ekranını taradığı için modal üç üretim
+#: durumunu (EMERGENCY_STOPPED / ABORTED_DUE_TO_POWER / HARDWARE_REJECTED) çeviremiyor, ham "Emergency_stopped" gösteriyordu.
+_TS_MODAL = KOK / "apps" / "ui" / "src" / "components" / "domain" / "SessionDetailModal.tsx"
 
 
 @pytest.fixture
@@ -113,13 +116,13 @@ def test_KRITIK_HAM_deger_API_yanitinda_DEGISMEDI(istemci, dolu_db):
 # ============================================================================
 
 
-def _ts_haritasi() -> dict[str, str]:
+def _ts_haritasi(ts_yolu: Path = _TS) -> dict[str, str]:
     """`STATUS_ANAHTARLARI` gövdesini TS kaynağından ayıklar (yorumlar sökülür). I18N: değerler katalog ANAHTARIDIR → TR değeri katalogdan çözülür
     (ölçüt YER DEĞİŞTİRDİ, gevşemedi: ekrandaki Türkçe etiket ↔ Python `DURUM_ETIKETLERI`); EN değeri de dolu olmalı."""
     import i18n_yardimci as iy
     from c_soyucu import c_soy
 
-    src = c_soy(_TS.read_text(encoding="utf-8"))
+    src = c_soy(ts_yolu.read_text(encoding="utf-8"))
     m = re.search(r"STATUS_ANAHTARLARI:\s*Record<string,\s*string>\s*=\s*\{(.*?)\};", src, re.S)
     assert m, "STATUS_ANAHTARLARI govdesi bulunamadi -> capa bayatladi"
     cift = dict(re.findall(r'(\w+)\s*:\s*"([^"]*)"', m.group(1)))
@@ -156,6 +159,25 @@ def test_KRITIK_python_ve_TS_sozlukleri_AYNI():
     for k, anahtar in DURUM_ETIKETLERI.items():
         assert str(sv_en.get(anahtar, "")).strip(), f"{anahtar} EN degeri BOS"
         assert sv_en[anahtar] == ui_en.get(f"seans.durum.{k}"), f"{k}: EN sunucu ≠ arayuz"
+
+
+def test_KRITIK_SEANS_DETAY_MODALI_haritasi_da_python_ile_AYNI_SON_O1():
+    """SON-O.1 (22-SON inceleme): seans detay modalının (`SessionDetailModal.tsx`) KENDİ `STATUS_ANAHTARLARI` haritası var; yukarıdaki kapı
+    yalnız geçmiş ekranını taradığı için modal EMERGENCY_STOPPED / ABORTED_DUE_TO_POWER / HARDWARE_REJECTED'i çeviremiyor, "Durum" satırında
+    ham "Emergency_stopped" gösteriyordu (2026-09-12 hatasının ikizi — iki dilde de).
+
+    MUTASYON: modal haritasından bir anahtar sil → KIRMIZI."""
+    from utils.seans_durum import DURUM_ETIKETLERI
+
+    gecmis, modal = _ts_haritasi(_TS), _ts_haritasi(_TS_MODAL)
+    assert modal, "modal haritasi bos ayiklandi -> capa bayatladi"
+    assert set(modal) == set(DURUM_ETIKETLERI), (
+        f"seans detay modali haritasi AYRISTI. yalniz modal: {sorted(set(modal) - set(DURUM_ETIKETLERI))}, "
+        f"modalda EKSIK: {sorted(set(DURUM_ETIKETLERI) - set(modal))}"
+    )
+    assert modal == gecmis, (
+        f"modal ile gecmis ekrani ayni durumu FARKLI etikete ceviriyor: {set(modal.items()) ^ set(gecmis.items())}"
+    )
 
 
 def test_KRITIK_URETIMDE_yazilan_her_durum_cevrilebiliyor():
