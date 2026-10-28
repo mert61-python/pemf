@@ -257,3 +257,55 @@ def test_KRITIK_D6_39_stm_guncelleme_plani_basligi_FAZ_tablosuyla_ve_KODLA_ayni(
     assert f'varsayılanı `"{v}"`' in satir[0], (
         "docs/README dizin satırı otomatik yakma varsayılanını koddan farklı söylüyor"
     )
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# D6.48 (B-10.61 · B-10.62) — VERIFICATION gövdesi §9'u "koşuldu / teyit" diye anmaz; §9 klemp formülü FIRMWARE KAYNAĞIYLA aynı.
+# ÖLÇÜLEN (HEAD ebf1c3fe): §14 "**Bağlam:** §9-13 tezgâhı 2026-08-20'de sahip tarafından koşuldu (sorunsuz)" (bfbcf78 kalıntısı —
+# başlık kapısı gövdeyi görmüyordu); §9 "`g_tpp - 1 - DDS_DEAD_TIME_TICKS` ile klempliyor" ve Ölçüm 3 "klemp `g_tpp - 1`'e dayanıyor"
+# ↔ `main.c` `[FIX-1c]` `max_d_now = g_unipolar[i] ? (g_tpp[i] - 1) : ((g_tpp[i] / 2U) - DDS_BIPOLAR_GAP_TICKS)` (HG-2);
+# §9 "§16 reflash'ı ile aynı tezgâh oturumunda" ↔ §16 = DOZ KALİBRASYONU KALDIRILDI (Ö.4-Y5 — geri EKLENMEZ).
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+_MAIN_C = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
+_S9_YAPILDI = re.compile(r"§\s*9(?:\s*[-–]\s*\d+)?\b[^\n]{0,80}(koşuldu|teyit|DOĞRULANDI|sorunsuz)", re.I)
+
+
+def _bolum(metin: str, baslik_basi: str) -> str:
+    bas = metin.index(baslik_basi)
+    son = metin.find("\n## ", bas + 5)
+    return metin[bas : son if son > 0 else len(metin)]
+
+
+def _bosluksuz(s: str) -> str:
+    return re.sub(r"\s+", "", s)
+
+
+def _fix1c_bipolar_klempi() -> str:
+    import sys as _sys
+
+    _sys.path.insert(0, str(KOK / "tests"))
+    from c_soyucu import c_soy
+
+    kod = c_soy(_MAIN_C.read_text(encoding="utf-8"))
+    m = re.search(r"max_d_now\s*=\s*g_unipolar\[i\]\s*\?\s*(\(.*?\))\s*:\s*(\(.*?\));", kod, re.S)
+    assert m, "aparat: main.c [FIX-1c] max_d_now klempi bulunamadı"
+    return m.group(2)
+
+
+def test_KRITIK_D6_48_govde_9u_KOSULDU_diye_ANMAZ():
+    metin = _cizgisiz(BELGE.read_text(encoding="utf-8"))
+    govde = [s for s in metin.splitlines() if not s.startswith("## ")]
+    ihlal = [s.strip()[:120] for s in govde if _S9_YAPILDI.search(s) and not re.search(r"ÖLÇÜLMEDİ|YANLIŞ", s)]
+    assert not ihlal, "VERIFICATION gövdesi §9 (STM [FIX-1c]) tezgâhını yapılmış gösteriyor:\n  " + "\n  ".join(ihlal)
+
+
+def test_KRITIK_D6_48_bolum9_klemp_formulu_FIRMWARE_ile_ayni():
+    b9 = _cizgisiz(_bolum(BELGE.read_text(encoding="utf-8"), "## ⏳ 9 — "))
+    bipolar = _fix1c_bipolar_klempi()
+    assert _bosluksuz(bipolar) in _bosluksuz(b9), f"§9 firmware bipolar klempini ({bipolar}) aynen anmalı"
+    assert "g_tpp - 1 - DDS_DEAD_TIME_TICKS" not in b9, "§9 HG-2 öncesi klemp formülünü anlatıyor"
+    assert not re.search(r"klemp `g_tpp - 1`'e dayanıyor", b9), "§9 Ölçüm 3 eski tavanı (tpp−1) anlatıyor"
+    assert not re.search(r"§16 reflash", b9), (
+        "§9 artık doz kalibrasyonu KALDIRILDI olan §16'ya 'reflash' diye yönlendiriyor (Ö.4-Y5)"
+    )

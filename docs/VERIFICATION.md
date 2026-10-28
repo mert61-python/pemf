@@ -186,10 +186,11 @@ D1.101 · Y20), ISR bipolar darbeyi `tpp/2 − DDS_BIPOLAR_GAP_TICKS` ile kıst�
 > *yapılmış sayar*. Bu madde, frekans **artırıldığında** duty tick'inin bayat kalıp istenen
 > dozun **4,78 katına** kadar on-time üretebilmesiyle ilgili.
 >
-> ⚠️ **Üstelik artık iki kat gerekli:** §16'da STM sürüş dalgası `356d576` ile **asimetrik
-> DC-bias'lıdan simetrik bipolara** çevrildi. Eski bir STM tezgâhı yapılmış olsaydı bile o
-> ölçüm **geçersiz** olurdu — `[FIX-1c]` doğrulaması **yeni firmware üzerinde** yapılmalı.
-> Pratikte: §16 reflash'ı ile **aynı tezgâh oturumunda** ölçün.
+> ⚠️ **Üstelik artık iki kat gerekli:** STM sürüş dalgası HG-2 (`356d576`) ile **asimetrik
+> DC-bias'lıdan simetrik bipolara** çevrildi (bkz. `firmware/README.md` "DALGA SÖZLEŞMESİ DEĞİŞTİ"). Eski bir STM tezgâhı
+> yapılmış olsaydı bile o ölçüm **geçersiz** olurdu — `[FIX-1c]` doğrulaması **yeni firmware üzerinde** yapılmalı.
+> Pratikte: güncel firmware karta yakıldıktan sonra (Faz 2 `scripts/stm_yak.py`) **aynı tezgâh oturumunda** ölçün.
+> ~~§16 reflash'ı ile~~ — §16'daki elle reflash + doz kalibrasyonu KALDIRILDI (Ö.4-Y5; geri EKLENMEZ).
 >
 > Özet tablosundaki `⏳ … YAYIN ÖNCESİ ZORUNLU` satırı **doğruydu**; yanlış olan bu başlıktı.
 
@@ -197,7 +198,9 @@ D1.101 · Y20), ISR bipolar darbeyi `tpp/2 − DDS_BIPOLAR_GAP_TICKS` ile kıst�
 duty tick'inin bayat kaldığını buldu: `g_tpp` yeni (küçük) periyoda göre yazılıyor ama
 `g_duty_ticks` eski (büyük) periyottan kalıyor → ~1 sn tek-polarite ve istenen dozun 4,78×'ine
 kadar on-time. Düzeltme `firmware/stm32_pemf/Core/Src/main.c` içindeki `[FIX-1c]` bloğu: duty tick'i eski/yeni periyot
-ORANIYLA yeniden ölçekliyor ve `g_tpp - 1 - DDS_DEAD_TIME_TICKS` ile klempliyor.
+ORANIYLA yeniden ölçekliyor ve kip başına klempliyor (`max_d_now`): bipolar bobinde
+`((int32_t)(g_tpp[i] / 2U) - DDS_BIPOLAR_GAP_TICKS)` (yarım periyot − yapısal boşluk, HG-2), tek-bacak (unipolar) bobinde
+`((int32_t)g_tpp[i] - 1)`; ~~`g_tpp - 1 - DDS_DEAD_TIME_TICKS`~~ HG-2 öncesi formüldü (`DDS_DEAD_TIME_TICKS` KULLANIM DIŞI, 0).
 
 ⚠️ **BU DÜZELTME TEZGÂHTA ÖLÇÜLMEDİ.** Koşan şey C kodu değil, ISR'ın Python modelidir
 (`tests/test_firmware_frekans_artisi_duty.py`) — deponun kendi `test_firmware_stop_latency.py`
@@ -236,10 +239,13 @@ yayınlanmasını önermiyorum.
 
 ### Ölçüm 3 — klemp sınırı
 
-1. `{"freq":1,"duty":95,...}` → oturt, sonra `{"freq":25000,"duty":95,...}`.
+1. `{"freq":1,"duty":50,...}` → oturt, sonra `{"freq":25000,"duty":50,...}` (bipolar tavana EŞİT istek kabul edilir;
+   ~~`"duty":95`~~ bugün kart tarafından NACK'lenir — `DUTY_MAX_BIPOLAR` 0,5, D1.101 · Y20).
 2. **KABUL ÖLÇÜTÜ:** ölü-zaman ihlali YOK (iki faz aynı anda AKTİF OLMAMALI, tek örnek bile).
-   `DDS_DEAD_TIME_TICKS` şu an 0 olduğu için klemp `g_tpp - 1`'e dayanıyor; donanımda ölü-zaman
-   sürücü tarafından sağlanıyorsa bunu da yaz.
+   Klemp bipolar bobinde `((int32_t)(g_tpp[i] / 2U) - DDS_BIPOLAR_GAP_TICKS)` yapısal boşluğuna + açılıştaki NOP
+   dead-time'a dayanır; ~~`DDS_DEAD_TIME_TICKS` şu an 0 olduğu için klemp `g_tpp - 1`'e dayanıyor~~ (HG-2 öncesi).
+   Donanımda ölü-zaman sürücü tarafından da sağlanıyorsa bunu da yaz.
+3. **Karşıt-kanıt:** `{"freq":1,"duty":95,...}` → kart NACK'lemeli (`kip=` gerekçesi), bobin sürülmemeli.
 
 ### Kayıt
 
@@ -353,7 +359,8 @@ karşıt-kanıtlar; 4/4 mutasyonla doğrulandı). Koşan şey C değil — tezg�
 
 ## ⏳ 14 — İKİNCİ REFLASH DELTASI: crash-loop ikizi + ölü-yüzey kaldırma + LWT + tek-atımlık olaylar (DONANIM BENCH · S3+8266 REFLASH — STM DEĞİŞMEDİ)
 
-**Bağlam:** §9-13 tezgâhı 2026-08-20'de sahip tarafından koşuldu (sorunsuz). AYNI GÜN sahip
+**Bağlam:** ~~§9-13 tezgâhı~~ §11-13 (ESP) tezgâhı 2026-08-20'de sahip tarafından koşuldu (sorunsuz) — ⚠️ §9 (STM
+`[FIX-1c]`) o oturumda ÖLÇÜLMEDİ (bkz. §9 düzeltme bloğu, D6.48). AYNI GÜN sahip
 onayıyla firmware'e dört değişiklik daha girdi (12/15/16. partiler) → S3+8266 için YENİ bir
 reflash gerekir; STM32'ye dokunulmadı.
 
