@@ -222,3 +222,57 @@ def test_yeni_metin_TR_bayt_bayt_ve_EN_katalogda():
 
     assert ceviri.t("donanim.hata.gondericiCalismiyor", dil="tr") == _GONDERICI_TR
     assert ceviri.t("donanim.hata.gondericiCalismiyor", dil="en") == _GONDERICI_EN
+
+
+# ── TUR 2 kolları (çürütücü, hat D) ─────────────────────────────────────────────────────────────────────────────────────
+#: `stm_red_mesaji()` TR metni — sebep bildirmeyen donanım + STM BAĞLI kolunun (üçüncü sıra) beklenen nedeni (testte pinli).
+_KART_REDDI_TR = (
+    "Cihaz kartı komutları reddediyor — kartın yazılımı bu uygulama sürümüyle uyumsuz; bobinler çalışmaz. Teknik desteği "
+    "arayın (kod: FW-PAKET)."
+)
+
+
+def test_sebepsiz_red_kopuk_STMde_baglanti_eylemi_EN(ortam, monkeypatch):
+    """Tur 2 kolu: sebep bildirmeyen donanım + kopuk STM kolu da İSTEK DİLİNDE (`X-PEMF-Dil: en`) — TR'ye sabitlenmiş
+    `stmBagliDegil` İngilizce ekranda Türkçe eylem gösterirdi."""
+    sahte = _SebepsizRed()
+    monkeypatch.setattr(ortam.api.state, "hardware", sahte)
+    with _stm_durumu("warning"):
+        y = _baslat(ortam.c, "en")
+    assert y.status_code == 503 and sahte.cagrilar, f"ön koşul: {y.status_code} {sahte.cagrilar}"
+    assert _detay(y) == _SABLON_EN + _BAGLI_DEGIL_EN, f"sebepsiz red + kopuk STM (en): {_detay(y)!r}"
+
+
+def test_sebepsiz_red_BAGLI_STMde_baglanti_eylemi_SOYLENMEZ(ortam, monkeypatch):
+    """Tur 2 kolu (karşıt): STM BAĞLIYKEN sebep bildirmeyen red "STM32 bağlı değil / kabloyu takın" DEMEZ (yanlış eylem);
+    üçüncü sıra — eski kart-reddi metni — kalır. Ön-denetimi (`stm_surus_hazir`) atlayan sıralama burada yakalanır."""
+    sahte = _SebepsizRed()
+    monkeypatch.setattr(ortam.api.state, "hardware", sahte)
+    with _stm_durumu("online"):
+        y = _baslat(ortam.c)
+    assert y.status_code == 503 and sahte.cagrilar, f"ön koşul: {y.status_code} {sahte.cagrilar}"
+    d = _detay(y)
+    assert "bağlı değil" not in d and "USB (ST-Link)" not in d, (
+        f"STM BAĞLIYKEN 'bağlı değil / kabloyu takın' deniyor: {d!r}"
+    )
+    assert d == _SABLON_TR + _KART_REDDI_TR, f"bağlı STM + sebepsiz red nedeni değişti: {d!r}"
+
+
+def test_kilit_alti_engel_de_SEBEBINI_tasir():
+    """Tur 2 kolu: kilit ALTINDAKİ ikinci START engeli (E-stop mandalı / BAYAT sürüş nesli / gözlem / yakma penceresi) da red
+    sebebini taşır — çıplak `False` dönerse seans ucu (STM bağlı) "kartın yazılımı uyumsuz (FW-PAKET)" der. Bayat nesil
+    küresel mandalı KURMADAN aynı satırı koşturur (mandal durumu değişmez)."""
+    from kayitci_donanim import gercek_hc
+    from utils import estop_mandali
+
+    with gercek_hc(stm_cevrimici=True) as hc, _stm_durumu("online"):
+        mandal_once = estop_mandali.mandalli_mi()
+        bayat = estop_mandali.nesil() - 1
+        assert hc.update_coil(1, 50.0, 25.0, 0.0, 10, start=True, nesil=bayat) is False
+        sebep = hc.son_baslatma_reddi()
+        assert sebep, "kilit altındaki engel (bayat nesil) red SEBEBİ bildirmiyor (çıplak False)"
+        assert sebep == estop_mandali.nesil_mesaji(), f"bayat nesil red sebebi: {sebep!r}"
+        assert "FW-PAKET" not in sebep
+        assert not hc.coils_state[1]["is_running"], "bayat nesilli START bobini sürdü"
+        assert estop_mandali.mandalli_mi() == mandal_once, "kapı küresel mandal durumunu değiştirdi"
+        hc.stop_all_coils()
