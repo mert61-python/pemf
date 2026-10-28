@@ -584,7 +584,8 @@ class HardwareController:
                 self.coils_state[i]["duration"] = dur_min
                 self._coil_deadline[i] = deadline
 
-            self.logger.info(f"Tüm bobinler (1-5) başlatıldı. Freq={freq}, Duty={duty}")
+            # D6.01 (B-1.35): aralık döngünün kendi üst sınırından — sabit "(1-5)" faz 4'ten (1-7) beri yanlıştı.
+            self.logger.info(f"Tüm bobinler (1-{STM_BOBIN_SAYISI}) başlatıldı. Freq={freq}, Duty={duty}")
             self._send_stm_manual_update()
         return True
 
@@ -619,7 +620,7 @@ class HardwareController:
             # (`HeadlessCore.hw_stop_yazildi_bekle`).
             kuyruga_verildi = self._send_stm_manual_update()
             if kuyruga_verildi:
-                self.logger.info("Tüm bobinler (1-5) durduruldu.")
+                self.logger.info(f"Tüm bobinler (1-{STM_BOBIN_SAYISI}) durduruldu.")  # D6.01 — bkz. start_all_coils
             else:
                 self.logger.error("ACİL: STOP paketi STM kuyruğuna VERİLEMEDİ — bobinler durmamış olabilir!")
         return kuyruga_verildi
