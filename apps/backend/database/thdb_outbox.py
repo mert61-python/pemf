@@ -59,10 +59,16 @@ class OutboxKarisimi:
                 )
                 removed = int(cursor.rowcount)
                 conn.commit()
-                return removed
         except Exception as e:
             self.logger.warning(f"Dead outbox retention temizleme uyarısı: {e}")
             return 0
+        # Y204 (S-D5.5): geri dönüşsüz ölü-outbox silmesi denetim izine TEK satır — yalnız sayı + süre, YÜK (içerik) YOK; yalnız silinen
+        # turda. İz `with` DIŞINDA (`denetim_yaz` kilidi alır, istisna atmaz). Kapı: tests/test_saklama_SENSOR_ve_OLU_OUTBOX_silmesi_IZ_birakir_Y204.py
+        if removed:
+            self.denetim_yaz(
+                "retention.olu_outbox_silindi", scope="otomatik", item_count=removed, detail={"gun": int(retain_days)}
+            )
+        return removed
 
     def enqueue_outbox_message(
         self,

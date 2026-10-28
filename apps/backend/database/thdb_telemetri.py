@@ -109,10 +109,17 @@ class TelemetriKarisimi:
                 cursor.execute('DELETE FROM sensor_samples WHERE sample_ts < ?', (cutoff_ts,))
                 removed = int(cursor.rowcount)
                 conn.commit()
-                return removed
         except Exception as e:
             self.logger.warning(f"Sensor retention temizleme uyarısı: {e}")
             return 0
+        # Y204 (S-D5.5): geri dönüşsüz sensör silmesi denetim izine TEK satır — yalnız sayı + süre, İÇERİK YOK; yalnız silinen turda.
+        # İz `with` DIŞINDA (purge_old_coil_runs gerekçesi: `denetim_yaz` kilidi alır, istisna atmaz).
+        # Kapı: tests/test_saklama_SENSOR_ve_OLU_OUTBOX_silmesi_IZ_birakir_Y204.py
+        if removed:
+            self.denetim_yaz(
+                "retention.sensor_silindi", scope="otomatik", item_count=removed, detail={"gun": int(retain_days)}
+            )
+        return removed
 
     def purge_old_coil_runs(self, retain_days: int = 3650) -> int:
         """P2 audit 2026-06-28: retention suresini asan per-bobin run kayitlarini (session_coil_runs
