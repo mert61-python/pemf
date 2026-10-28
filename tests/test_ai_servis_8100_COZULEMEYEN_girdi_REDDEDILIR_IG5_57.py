@@ -172,3 +172,22 @@ def test_KARSIT_KANIT_cv2_OKUDUGU_ayni_gorsel_MODALITEYLE_reddedilir(sv):
     r = client.post("/infer/histopath", files={"file": ("kesit.png", veri, "image/png")})
     assert r.status_code == 422 and r.json().get("domain_mismatch") is True, f"{r.status_code} {r.text[:200]}"
     assert not cagrilar
+
+
+def test_cozucunun_KENDI_istisnasi_da_ret_BOS_girdi(app_modulu, monkeypatch):
+    """Tur 2 kolu (çürütücü — istisna türü daraltma): kapının çözücüsü yalnız `ValueError` ("çözülemedi") değil, cv2'nin
+    KENDİ istisnasını da (boş tampon → `cv2.error`) fırlatabilir; kurallı etikette bu da A-24 reddidir (422,
+    `domain_check_error`) — istisna kapıdan sızıp ucu 500'e ya da modele düşürmemeli."""
+    monkeypatch.delenv("PEMF_AI_DOMAIN_GUARD", raising=False)
+    import cv2
+
+    with pytest.raises(cv2.error):
+        app_modulu._read_bgr(b"")  # kurulum: boş tampon cv2'nin kendi istisnasını fırlatır (ValueError DEĞİL)
+    try:
+        yanit = app_modulu._kapi(b"", "histopath")
+    except Exception as e:  # noqa: BLE001 — sızan istisna kırmızının NEDENİ olarak raporlanır
+        raise AssertionError(f"boş girdide çözücü istisnası kapıdan SIZDI: {type(e).__name__}: {e}") from e
+    assert yanit is not None and yanit.status_code == 422, (
+        f"boş girdide çözücü istisnası kapıdan sızdı / geçti: {getattr(yanit, 'status_code', yanit)!r}"
+    )
+    assert b'"domain_check_error":true' in yanit.body, f"ret nedeni işaretlenmedi: {yanit.body[:200]!r}"
