@@ -83,3 +83,42 @@ def test_KRITIK_explain_haritasi_ORIJINAL_konuma_esler(ad):
     assert kenar < 0.1, (
         f"{ad}: siyah tuvalin kenar bandında ısı {kenar:.3f} (dolgu gri düzeyi 114/255 ≈ 0,45) — dolgu sızıyor"
     )
+
+
+class _OlcekliSahteCAM(_SahteCAM):
+    """Tur 2: harita = R kanalı × `kat` — CAM'in tepesi dolguda kalıp kırpılınca (ya da kütüphane [0, 1] vermeyince) kırpıntının
+    maksimumu 1'den küçüktür; ürün `explain` haritayı YENİDEN [0, 1]'e normalize etmelidir."""
+
+    def __init__(self, kat: float):
+        self.kat = kat
+
+    def __call__(self, input_tensor, targets):
+        return [input_tensor[0, 0].detach().cpu().numpy().astype(np.float32) * self.kat]
+
+
+def test_explain_KIRPINTIYI_yeniden_normalize_eder():
+    """Tur 2 kolu (çürütücü — tanım değeri): kırpıntı maksimumu 1 değilken (`kat`=0,5) çıkış yine maks 1 — normalizasyon
+    adımı silinse ana kol yakalamıyordu (sahte CAM'in tepesi zaten 1'di)."""
+    import cv2
+
+    W, H, cx, cy, r = TUVALLER["yatay_1280x720"]
+    tuval = np.zeros((H, W, 3), np.uint8)
+    cv2.circle(tuval, (cx, cy), r, (255, 255, 255), -1)
+    cam = _aciklayici()
+    cam._cam = _OlcekliSahteCAM(0.5)
+    h = cam.explain(tuval)
+    assert float(h.max()) == pytest.approx(1.0, abs=1e-6), (
+        f"kırpıntı [0, 1]'e yeniden normalize edilmiyor (maks {h.max()})"
+    )
+
+
+def test_explain_SIFIR_haritada_SONLU_kalir():
+    """Tur 2 kolu (eşik): CAM her yerde 0 (hedef tespit yok) → çıkış sıfır ve SONLU — 0'a bölünüp NaN harita overlay'i
+    bozmaz."""
+    W, H = 640, 360
+    cam = _aciklayici()
+    cam._cam = _OlcekliSahteCAM(0.0)
+    h = cam.explain(np.zeros((H, W, 3), np.uint8))
+    assert h.shape == (H, W)
+    assert np.isfinite(h).all(), "sıfır CAM'de harita sonlu değil (0'a bölme)"
+    assert float(np.abs(h).max()) == 0.0
