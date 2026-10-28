@@ -54,6 +54,26 @@ def _sql_export_cagiran_islevler(p: Path) -> list[str]:
     return bulunan
 
 
+def _sql_export_dizgeleri(p: Path) -> list[str]:
+    """Tur 2 (çürütücü): `sqlcipher_export` taşıyan HER dizge sabiti (docstring HARİÇ) — SQL önce bir değişkene / f-dizgeye
+    konup sonra `execute(degisken)` ile koşulursa `_sql_export_cagiran_islevler` onu görmüyordu."""
+    agac = _agac(p)
+    belge = set()
+    for d in ast.walk(agac):
+        if isinstance(d, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and d.body:
+            ilk = d.body[0]
+            if isinstance(ilk, ast.Expr) and isinstance(ilk.value, ast.Constant) and isinstance(ilk.value.value, str):
+                belge.add(id(ilk.value))
+    return [
+        f"{p.name}:{d.lineno}"
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Constant)
+        and isinstance(d.value, str)
+        and "sqlcipher_export" in d.value
+        and id(d) not in belge
+    ]
+
+
 def _tedavi_modulleri() -> list[Path]:
     return [DB / "treatment_history_db.py", *sorted(DB.glob("thdb_*.py"))]
 
@@ -69,6 +89,10 @@ def _delege_eden_metot() -> ast.FunctionDef:
 def test_tedavi_DB_goc_govdesini_KOPYALAMAZ_ortak_govdeye_delege_eder():
     kopya = [k for p in _tedavi_modulleri() for k in _sql_export_cagiran_islevler(p)]
     assert not kopya, f"tedavi DB modüllerinde sqlcipher_export çağrısı var (göç gövdesi kopyası?): {kopya}"
+    kopya = [k for p in _tedavi_modulleri() for k in _sql_export_dizgeleri(p)]
+    assert not kopya, (
+        f"tedavi DB modüllerinde sqlcipher_export SQL dizgesi var (değişkenle koşulan kopya gövde?): {kopya}"
+    )
     m = _delege_eden_metot()
     importlar = {(d.module, a.name) for d in ast.walk(m) if isinstance(d, ast.ImportFrom) for a in d.names}
     assert ("database.sqlcipher_util", "migrate_to_encrypted_if_needed") in importlar, (
@@ -90,6 +114,11 @@ def test_sqlcipher_util_modul_basligi_INLINE_KOPYA_iddiasi_tasimaz_delegasyonu_s
         "modül başlığı tedavi DB'sinin ortak gövdeye delege ettiğini söylemiyor"
     )
     assert "yedek_dosyasi" in doc, "modül başlığı meşru ikinci sqlcipher_export çağıranını (yedek_dosyasi) anmıyor"
+    # Tur 2 (çürütücü, ölçüm bağı): başlığın "yedek_dosyasi meşru ikinci çağıran" olgusu ÖLÇÜLÜR — yedek yolu
+    # sqlcipher_export'u bırakırsa başlık yanlış olur (eskiden yalnız adın geçmesi aranıyordu).
+    assert _sql_export_cagiran_islevler(DB / "yedek_dosyasi.py"), (
+        "modül başlığı yedek_dosyasi'ni ikinci sqlcipher_export çağıranı sayıyor ama yedek_dosyasi artık çağırmıyor"
+    )
 
 
 def test_karantina_kapisinin_gerekcesi_bakim_dongusunu_KOPYALAYICI_diye_suclamaz():
