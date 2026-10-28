@@ -92,8 +92,18 @@ export function ControlScreen() {
     // satırının hemen ardından bu render'ın closure'ında HENÜZ güncel değildi → uyarı kutusu
     // bir ÖNCEKİ hatayı (ilk denemede de null) gösteriyordu.
     loading, starting, sessionStopping, stopping, lastError, startSession, stopSession, emergencyStop,
-    dbSessionId,
+    dbSessionId, benimse,
   } = useSessionControl();
+
+  // Y212 · S-D67.11 (sahip): açılıştan SONRA başka istemcide / AI Pro'da başlatılan seans (WS'te seans YOK → VAR geçişi) kart
+  // boştayken BENİMSENİR. Açılıştaki durum `/session/active`ten gelir (geçiş sayılmaz); yerel başlatma / durdurma / ACİL DURDUR
+  // sürerken benimsenmez (geç gelen tik durdurulan seansı geri getirmesin). Durdur / ACİL DURDUR yolları AYNI.
+  const wsSeansVardiRef = useRef(wsSeans !== null);
+  useEffect(() => {
+    const gecis = wsSeans !== null && !wsSeansVardiRef.current;
+    wsSeansVardiRef.current = wsSeans !== null;
+    if (gecis && wsSeans && !isActive && !loading && !stopping) benimse(wsSeans);
+  }, [wsSeans, isActive, loading, stopping, benimse]);
 
   const [activeTab, setActiveTab] = useState<TabKey>("manual");
   // AI Pro hedef modelleri PROFİLE göre — tek kaynak `aiProProfilleri.MODELLER_PROFILE_GORE`

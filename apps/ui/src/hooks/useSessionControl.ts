@@ -52,6 +52,9 @@ export interface SessionControlResult {
   /** ⚠️ D1.66 (B-1.2): son seansın DB satır kimliği — seans BİTİNCE de korunur (gözlem notu bitişten SONRA yazılır).
    *  Not `/api/session/notes`'a bununla gider; sunucu YALNIZ o satıra yazar. Bilinmiyorsa null (eski sunucu). */
   dbSessionId: number | null;
+  /** Y212 · S-D67.11: başka istemcide / AI Pro'da başlatılan seansı WS `activeTreatment`ten benimser (yeni ağ trafiği yok; mutabakat
+   *  döngüsü `isActive` ile kurulur, backend seansı bitirince kartı kapatır). Durdur / ACİL DURDUR yolları AYNI. */
+  benimse: (ws: ActiveTreatment) => void;
 }
 
 // Backend yanıt sözleşmeleri (audit B-10.1: apiPost/apiGet<any> yerine) — alanlar opsiyonel.
@@ -179,6 +182,16 @@ export function useSessionControl(): SessionControlResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Y212 · S-D67.11 (sahip): başka istemcide / AI Pro'da başlatılan seansı BENİMSE — kart "Seans Bekleniyor" derken bobinler enerjili
+  // kalmasın. Değerler WS `activeTreatment`ten (yeni istek yok); `isActive` mutabakat döngüsünü kurar.
+  const benimse = useCallback((ws: ActiveTreatment) => {
+    const totalSec = Math.max(0, Number(ws.durationSec) || 0);
+    const elapsed = Math.max(0, Number(ws.elapsedSec) || 0);
+    setIsActive(true);
+    setTreatment({ ...ws, isActive: true });
+    startTimer(totalSec, elapsed);
+  }, [startTimer]);
+
   // Backend ile periyodik mutabakat: timer drift'ini (arka plan/yeniden bağlanma) düzeltir
   // ve seans backend'de bittiyse (süre dolması / başka istemci durdurması) UI'ı kapatır.
   useEffect(() => {
@@ -188,6 +201,8 @@ export function useSessionControl(): SessionControlResult {
       const sess = await apiGet<SessionActiveResponse | null>("/session/active", null, { silent: true }).catch(() => null);
       if (cancelled) return; // unmount sonrası setState'i önle
       if (!sess) return; // bağlantı yok — yerel timer devam etsin
+      // Y212 · S-D67.11: benimsenen (WS'ten gelen) seansın DB satırı mutabakattan öğrenilir — gözlem notu o satıra yazılır (D1.66).
+      if (sess.is_active && typeof sess.db_session_id === "number") setDbSessionId(sess.db_session_id);
       if (!sess.is_active) {
         stopTimer();
         setIsActive(false);
@@ -385,5 +400,6 @@ export function useSessionControl(): SessionControlResult {
     stopSession,
     emergencyStop,
     dbSessionId,
+    benimse,
   };
 }
