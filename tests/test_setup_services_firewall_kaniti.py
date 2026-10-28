@@ -74,7 +74,8 @@ def _esp_bobin_numarasi() -> str:
 
 
 # "ESP bobin 8", "ESP bobini (8)", "ESP bobinleri 6-8", "ESP 6-8" … — betikteki HER ESP bobin numarası (yorum dahil: aynı iddia).
-_ESP_NUMARA_RE = re.compile(r"ESP(?:[ \t]+bobin\w*)?[ \t]*\(?[ \t]*(\d+(?:[ \t]*-[ \t]*\d+)?)(?![\d.])")
+# Tur 2 kolu (D67 çürütme, mutantlar a1 / a2): "ESP (bobin 6-8)", "ESP bobinleri: 6-8" ve uzun tire ("6–8") biçimleri de yakalanır.
+_ESP_NUMARA_RE = re.compile(r"ESP(?:[ \t]*\(?[ \t]*bobin\w*)?[ \t]*[:(]?[ \t]*(\d+(?:[ \t]*[-–][ \t]*\d+)?)(?![\d.])")
 
 
 def _ps_lit(s: str | Path) -> str:
