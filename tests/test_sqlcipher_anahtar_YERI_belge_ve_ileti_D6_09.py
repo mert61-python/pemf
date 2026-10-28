@@ -109,7 +109,13 @@ def test_secrets_manager_basligindaki_SIRLAR_kayitta_VAR_ve_DPAPI_listesi_TAM_D6
     # (a) sır adı biçimindeki her ad (dosya adı `.x_key` ve işlev çağrısı hariç) gerçek kayıtta olmalı.
     adlar = {
         m.group(0)
-        for m in re.finditer(r"(?<![\w.\\/])[a-z][a-z0-9]*(?:_[a-z0-9]+)*_(?:key|code|token|pass)\b(?!\()", baslik)
+        for m in re.finditer(
+            r"(?<![\w.\\/])[a-z][a-z0-9]*(?:_[a-z0-9]+)*_(?:key|code|token|pass|password|secret)\b(?!\()", baslik
+        )
+        # Tur 2 (çürütücü): `_secret` / `_password` sonekli adlar da sır adıdır (kayıtta `master_secret`,
+        # `device_registry_secret`) — uydurma `x_secret` eskiden kaçıyordu. Modülün KENDİ işlevleri (`get_secret`,
+        # `set_secret` — "Kullanım" bölümü) sır adı değildir.
+        if not callable(getattr(sm, m.group(0), None))
     }
     assert adlar, "aparat: başlıkta sır adı bulunamadı"
     olmayan = sorted(adlar - set(kayit))
