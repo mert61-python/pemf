@@ -80,6 +80,10 @@ FIKSTUR = {
         uzun=910,
     ),
     "pi_heif-1.4.0": _meta("pi-heif", "1.4.0", ["BSD-3-Clause"], ["GNU Lesser General Public License v3 (LGPLv3)"]),
+    # D67 orkestratör kolu: aile adı TAŞIYAN copyright satırı da lisans ADI değildir ("copyright" dışlaması mutantı YAŞIYORDU).
+    "ornek_bsd-1.0": _meta(
+        "ornek-bsd", "1.0", ["Copyright (c) 2020 Ornek Ltd. — BSD-style license"], ["BSD License"], uzun=20
+    ),
 }
 
 
