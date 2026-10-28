@@ -9449,6 +9449,27 @@
      "turler": [
       "istisna"
      ]
+    },
+    {
+     "metin": "kaynak okunamadi",
+     "gerekce": "Y200 iç göç engeli nedeni — `_GOC_ENGELI` → `EskiKokGocuBekliyorHatasi` iletisi / günlük; operatöre YALNIZ tür (`sistem.db.eskiKokGocu` katalog iletisi) gider",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
+     "metin": "at-rest / alan anahtari hedefte FARKLI",
+     "gerekce": "Y200 iç göç engeli nedeni — `_GOC_ENGELI` → `EskiKokGocuBekliyorHatasi` iletisi / günlük; operatöre YALNIZ tür (`sistem.db.eskiKokGocu` katalog iletisi) gider",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
+     "metin": "eski kok gocu atlandi:",
+     "gerekce": "Y200 iç göç engeli nedeni öneki — `_GOC_ENGELI` → `EskiKokGocuBekliyorHatasi` iletisi / günlük; operatöre YALNIZ tür (`sistem.db.eskiKokGocu` katalog iletisi) gider",
+     "turler": [
+      "sabit"
+     ]
     }
    ],
    "birlesikIstisna": [],

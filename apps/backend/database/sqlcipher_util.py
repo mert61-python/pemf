@@ -288,6 +288,13 @@ class GocBekliyorHatasi(RuntimeError):
     """
 
 
+class EskiKokGocuBekliyorHatasi(GocBekliyorHatasi):
+    """Y200 (sahip · S-D3I.1) / D3.37 · Y10: ESKI KOK gocu (`%APPDATA%\\PEMF_GUI` → `PEMF_DATA_DIR`) bu DB'yi tasiyamadi ya da
+    dogrulayamadi (`utils.path_utils.goc_engelini_denetle`) — hedefte BOS DB KURULMAZ. `GocBekliyorHatasi` turevi: ayni kisitli kip
+    (ACIL DURDUR + STOP calisir), ayni yakalayicilar; yalniz operator iletisi (`headless_core.db_acilis_metni` "eskiKok") at-rest
+    gocunun degil eski kok gocunun cikis yolunu soyler."""
+
+
 #: SQLite dosya basligi. SQLCipher ile sifrelenmis dosyada BU BULUNMAZ (ilk sayfa da sifrelidir).
 _SQLITE_BASLIK = b"SQLite format 3\x00"
 

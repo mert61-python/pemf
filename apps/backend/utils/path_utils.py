@@ -289,7 +289,8 @@ _GOC_YAPILDI: set = set()
 
 #: D3.37 · Y10 (sahip): bu süreçte DOĞRULANAMAYAN veri göçü (hedef DB yolu → neden). DB kurucuları bu dosyayı AÇMAZ — boş DB kurup
 #: "boş klinik" göstermek yerine backend kısıtlı kipte (Y9) açılır, neden `/api/health`e gider ("göç bekliyor"); kaynak eski kökte
-#: DEĞİŞMEDEN durur, sonraki açılışta göç yeniden denenir.
+#: DEĞİŞMEDEN durur, sonraki açılışta göç yeniden denenir. Y200 (sahip · S-D3I.1): taşınamadığı için ATLANAN şifreli / hasta DB'si
+#: (hedefte farklı at-rest / alan anahtarı, kaynak okunamıyor) da buraya yazılır.
 _GOC_ENGELI: dict[str, str] = {}
 
 
@@ -303,12 +304,13 @@ def goc_engeli(db_yolu) -> str | None:
 
 
 def goc_engelini_denetle(db_yolu) -> None:
-    """D3.37 · Y10: göçü bu süreçte doğrulanamayan DB AÇILMAZ — `GocBekliyorHatasi` (açılış: DB'siz kısıtlı kip + "göç bekliyor")."""
+    """D3.37 · Y10: göçü bu süreçte doğrulanamayan DB AÇILMAZ — `GocBekliyorHatasi` (açılış: DB'siz kısıtlı kip + "göç bekliyor").
+    Y200: alt sınıf `EskiKokGocuBekliyorHatasi` — operatör iletisi at-rest göçünün değil ESKİ KÖK göçünün çıkış yolunu söyler."""
     sebep = goc_engeli(db_yolu)
     if sebep:
-        from database.sqlcipher_util import GocBekliyorHatasi
+        from database.sqlcipher_util import EskiKokGocuBekliyorHatasi
 
-        raise GocBekliyorHatasi(
+        raise EskiKokGocuBekliyorHatasi(
             f"Veri gocu dogrulanamadi ({sebep}); eski kok DEGISTIRILMEDI, sonraki acilista yeniden denenir."
         )
 
@@ -371,11 +373,85 @@ def _kopyala_dogrula(kaynak: Path, varis: Path) -> str | None:
         return f"{type(e).__name__}: {e}"
 
 
-def _dosyalari_gocur(eski: Path, hedef: Path, adlar) -> None:
-    """`adlar`daki DB dosyalarını eski kökten hedefe göç ettir (D3.37 · Y10 kuralları). `_kullanicidan_makineye_gocur` (açılışta bir
-    kez, tüm liste) ve D3I-A2.3 `goc_engelini_yeniden_dene` (Y43 / Y61 arka plan yeniden açması — YALNIZ engelli dosya) çağırır."""
+#: Y200 (sahip · S-D3I.6): eski kök göçünün KALICI "tamamlandı" işareti (hedef kökte). Bir eski kökün göçü HİÇ ATLAMASIZ biterse (her
+#: dosya ya taşındı + doğrulandı, ya kaynakta yok, ya hedefte zaten var) o kökün ÖZETİ (normcase mutlak yolun SHA-256'sı — yol / kullanıcı
+#: adı / SIR YAZILMAZ) ve zamanı buraya eklenir; işaret o kökü listeledikçe göç o kökten bir daha KOŞMAZ → hedefteki DB sonradan yok olsa
+#: da (artık bırakmayan pencere, elle silme) eski kökün BAYAT kopyası geri GETİRİLMEZ (A2.6 artık denetiminin genişletmesi; onu
+#: ZAYIFLATMAZ). Kök başına: Y182 ikinci Windows hesabının kendi `%APPDATA%\PEMF_GUI`ı kendi tek seferlik göçünü yine yapar. Atlama /
+#: engel varken işaret YAZILMAZ (Y10: sonraki açılış yeniden dener). Okunamayan / bozuk işaret YOK sayılır (göç bugünkü kurallarla koşar);
+#: yazılamazsa göç başarısı bozulmaz (günlükte uyarı, sonraki açılış yeniden yazar).
+_GOC_TAMAM_ISARETI = ".eski_kok_gocu_tamam"
+
+
+def _kaynak_ozeti(eski: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(_goc_anahtari(eski).encode("utf-8")).hexdigest()
+
+
+def _goc_tamam_mi(hedef: Path, eski: Path) -> bool:
+    """Y200: `eski` kökün göçü bu hedefe daha önce ATLAMASIZ tamamlandı mı (kalıcı işaret)? Saf dosya okuması — sır katmanı YOK."""
+    import json
     import logging
 
+    isaret = hedef / _GOC_TAMAM_ISARETI
+    if not isaret.exists():
+        return False
+    try:
+        return _kaynak_ozeti(eski) in (json.loads(isaret.read_text(encoding="utf-8")).get("kaynaklar") or {})
+    except (OSError, ValueError, AttributeError, TypeError):
+        logging.getLogger(__name__).warning(
+            "VERİ GÖÇÜ: kalıcı 'tamamlandı' işareti okunamadı (%s) — YOK sayıldı, göç kurallarıyla koşar.",
+            isaret,
+            exc_info=True,
+        )
+        return False
+
+
+def _goc_tamam_yaz(hedef: Path, eski: Path) -> None:
+    """Y200: işarete bu eski kökün özetini + zamanı ekle (atomik). Yazılamazsa göç başarısı BOZULMAZ — günlükte uyarı."""
+    import json
+    import logging
+    from datetime import datetime, timezone
+
+    isaret = hedef / _GOC_TAMAM_ISARETI
+    try:
+        kaynaklar: dict = {}
+        if isaret.is_file():
+            try:
+                kaynaklar = dict(json.loads(isaret.read_text(encoding="utf-8")).get("kaynaklar") or {})
+            except (ValueError, AttributeError, TypeError):
+                kaynaklar = {}  # bozuk işaret: yeniden kurulur (içindeki kökler zaten okunamıyordu)
+        kaynaklar[_kaynak_ozeti(eski)] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        gecici = isaret.with_name(isaret.name + ".tmp")
+        gecici.write_text(json.dumps({"surum": 1, "kaynaklar": kaynaklar}, indent=1), encoding="utf-8")
+        os.replace(gecici, isaret)
+    except Exception:  # noqa: BLE001 — işaret bir KORUMADIR, göçün kendisi değil: yazılamazsa göç başarılı kalır
+        logging.getLogger(__name__).warning(
+            "VERİ GÖÇÜ: kalıcı 'tamamlandı' işareti yazılamadı (%s) — göç başarılı; işaret sonraki açılışta yeniden yazılır.",
+            isaret,
+            exc_info=True,
+        )
+
+
+def _okunamiyor_mu(dosya: Path) -> bool:
+    """Y200: kaynak şu an okunamıyor mu (paylaşım kilidi / erişim)? YALNIZ engel / günlük NEDENİ içindir — taşıma kararı `_tasinabilir_mi`."""
+    try:
+        with open(dosya, "rb") as fh:
+            fh.read(1)
+        return False
+    except OSError:
+        return True
+
+
+def _dosyalari_gocur(eski: Path, hedef: Path, adlar) -> list[str]:
+    """`adlar`daki DB dosyalarını eski kökten hedefe göç ettir (D3.37 · Y10 kuralları). `_kullanicidan_makineye_gocur` (açılışta bir
+    kez, tüm liste) ve D3I-A2.3 `goc_engelini_yeniden_dene` (Y43 / Y61 arka plan yeniden açması — YALNIZ engelli dosya) çağırır.
+
+    Döner (Y200): bu çağrıda ATLANAN ya da göçü DOĞRULANAMAYAN dosyaların adları — boşsa bu liste için göç TAMAMDIR (kalıcı işaret)."""
+    import logging
+
+    atlanan: list[str] = []
     for ad in adlar:
         kaynak, varis = eski / ad, hedef / ad
         if not kaynak.is_file() or varis.exists():
@@ -391,20 +467,34 @@ def _dosyalari_gocur(eski: Path, hedef: Path, adlar) -> None:
                 artik,
                 kaynak,
             )
+            # Y200: güncel veri artıkta (toparlanır) — bu turda işaret YAZILMAZ, sonraki açılış hedefte DB'yi görür
+            atlanan.append(ad)
             continue
         # ⚠️ Ham anahtarlar UYUŞMUYORSA KOPYALAMA (bkz. `_tasinabilir_mi`). Kopyalanan DB
         # hedefte okunamaz olur; DB açılışındaki karantina zarfı onu kenara alır ve cihaz
         # temiz bir DB ile çalışmaya devam eder — ama ESKİ KAYIT ERİŞİLEMEZ kalır.
         # (Eski yorum "kenara alma bile kurtarmaz" diyordu; 2026-08-14'te kurtarma zarfı
         # düzeltildikten sonra bu artık DOĞRU DEĞİL.)
+        # ⚠️ Y200 (sahip · S-D3I.1): ATLANAN DB için hedefte BOŞ DB KURULMAZ — engel yazılır, kurucu (`goc_engelini_denetle`) AÇMAZ →
+        # backend "göç bekliyor" kısıtlı kipte (Y9: ACİL DURDUR + STOP çalışır); taşıma arka planda (Y43 / Y61 `goc_engelini_yeniden_dene`)
+        # ve her açılışta yeniden denenir. Eskiden yalnız ERROR yazılıyor, kurucu BOŞ DB kuruyor ve göç bir daha HİÇ denenmiyordu (hedefte
+        # dosya var → atla). Okunamayan kaynak (`_sifreli_mi` onu ŞİFRELİ sayar → anahtarsız kurulumda taşınamaz) AYNI dala düşer; günlük
+        # nedeni ayırır (eskiden okunamayan düz-metin kaynak için de "anahtar FARKLI" yazıyordu).
         if ad in _GOC_SIFRELI and not _tasinabilir_mi(kaynak, eski, hedef):
+            neden = "kaynak okunamadi" if _okunamiyor_mu(kaynak) else "at-rest / alan anahtari hedefte FARKLI"
+            _GOC_ENGELI[_goc_anahtari(varis)] = "eski kok gocu atlandi: " + neden
             logging.getLogger(__name__).error(
-                "VERİ GÖÇÜ ATLANDI: %s ŞİFRELİ ve hedefin at-rest / alan anahtarı FARKLI "
-                "(hedefin kendi anahtarı var, ezilmedi). Kopyalansaydı hedefte okunamaz "
-                "olur ve cihaz her açılışta kırılırdı. Kaynak eski konumda DURUYOR: %s",
+                "VERİ GÖÇÜ ATLANDI: %s eski kökten taşınamadı (%s). Hedefe kopyalanmadı (okunamaz kopya olurdu) ve BOŞ DB "
+                "KURULMAZ: bu DB açılmaz (kısıtlı kip: ACİL DURDUR ve STOP çalışır), taşıma arka planda ve her açılışta yeniden "
+                "denenir. Eski dosyayı SİLMEYİN — kaynak DEĞİŞMEDİ: %s. Kurtarma: kaynak kilitliyse açık tutan programı (virüs "
+                "tarayıcı / yedekleyici) kapatıp cihazı yeniden başlatın; anahtar farklıysa (hedefin kendi anahtarı var, ezilmedi) "
+                "teknik destek eski kaydı elle kurtarır — eski kayıtlar GEREKMİYORSA eski dosyayı silmeden başka bir klasöre "
+                "taşıyıp cihazı yeniden başlatın.",
                 ad,
+                neden,
                 kaynak,
             )
+            atlanan.append(ad)
             continue
         # D3.37 · Y10: KOPYALA → SHA-256 ile DOĞRULA → kaynak SİLİNMEZ. WAL ÖNCE taşınır (kaynakta henüz DB'ye işlenmemiş
         # kayıtlar oradadır; eskiden yalnız .db kopyalanıyor, son işlemler kayboluyordu); DB yerleşmezse kopyalanan WAL da
@@ -432,6 +522,7 @@ def _dosyalari_gocur(eski: Path, hedef: Path, adlar) -> None:
             )
         else:
             _GOC_ENGELI[_goc_anahtari(varis)] = sebep
+            atlanan.append(ad)
             logging.getLogger(__name__).error(
                 "VERİ GÖÇÜ DOĞRULANAMADI: %s (%s) — hedefe YERLEŞTİRİLMEDİ, eski kök DEĞİŞMEDİ (%s). Bu açılışta bu DB "
                 "AÇILMAZ (kısıtlı kip: ACİL DURDUR ve STOP çalışır); sonraki açılışta yeniden denenir.",
@@ -439,6 +530,7 @@ def _dosyalari_gocur(eski: Path, hedef: Path, adlar) -> None:
                 sebep,
                 kaynak,
             )
+    return atlanan
 
 
 def _kullanicidan_makineye_gocur(hedef: Path) -> None:
@@ -455,6 +547,8 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         operatörün bilinçli kararına bırakılır.
       * Tek bir dosya kopyalanamazsa diğerleri denenir ve durum loglanır; göç YARIM kalabilir
         ama hiçbir veri KAYBOLMAZ.
+      * Y200: taşınamayan / doğrulanamayan DB için hedefte BOŞ DB KURULMAZ (`_GOC_ENGELI` → kısıtlı kip, her açılışta yeniden
+        denenir); göç ATLAMASIZ bitince kalıcı işaret (`_GOC_TAMAM_ISARETI`) yazılır ve o eski kök bir daha okunmaz.
     """
     try:
         if platform.system() != "Windows":
@@ -471,6 +565,10 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         eski = Path(eski_kok) / "PEMF_GUI"
         if not eski.is_dir() or eski.resolve() == hedef.resolve():
             return
+        # Y200 (sahip · S-D3I.6): bu eski kökün göçü daha önce ATLAMASIZ tamamlandıysa (kalıcı işaret) o kök bir daha OKUNMAZ — anahtar
+        # da DB de getirilmez (hedefteki DB sonradan yok olsa da bayat kopya gelmez). Başka bir eski kök (Y182 ikinci hesap) etkilenmez.
+        if _goc_tamam_mi(hedef, eski):
+            return
         # ⚠️ SIRA: anahtar ÖNCE taşınır. Aksi hâlde aşağıdaki `_tasinabilir_mi`
         # kontrolü şifreli DB'leri reddeder ve şifreli kurulumlarda göç HİÇ çalışmaz
         # (vardiyalı klinikte "boş klinik" devam ederdi). Anahtar yalnız hedefte HİÇ yoksa
@@ -478,7 +576,8 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         for _ad in _GOC_ANAHTARLARI:
             _sqlcipher_anahtarini_gocur(eski, hedef, _ad)
 
-        _dosyalari_gocur(eski, hedef, _GOC_DOSYALARI)
+        if not _dosyalari_gocur(eski, hedef, _GOC_DOSYALARI):
+            _goc_tamam_yaz(hedef, eski)  # Y200: atlama / engel YOKSA — varsa sonraki açılış yeniden dener
     except Exception:
         # Göç bir KOLAYLIKtır; başarısız olması backend'i başlatmamalı.
         pass

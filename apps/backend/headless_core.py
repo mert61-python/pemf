@@ -187,12 +187,15 @@ def _tum_duty_sifir_mi(stm_msg: Any) -> bool:
 
 
 def db_acilis_metni(tur: str, ad: str, hata: str = "", dil: str | None = None) -> str:
-    """DB açılamama nedeninin operatör metni (yol / istisna AYRINTISI içermez — `/api/health` auth-muaf): `tur` = "goc" | "acilamadi"."""
+    """DB açılamama nedeninin operatör metni (yol / istisna AYRINTISI içermez — `/api/health` auth-muaf): `tur` = "goc" | "eskiKok" |
+    "acilamadi". Y200: "eskiKok" = eski kök göçü taşıyamadı / doğrulayamadı (boş DB kurulmadı) — eylem: eski dosyayı silme, kilidi kaldır."""
     adi = (
         ceviri.t("sistem.db.hasta", dil=dil)
         if ad == "hasta"
         else (ceviri.t("sistem.db.tedavi", dil=dil) if ad == "tedavi" else ad)
     )
+    if tur == "eskiKok":
+        return ceviri.t("sistem.db.eskiKokGocu", dil=dil, ad=adi)
     if tur == "goc":
         return ceviri.t("sistem.db.goc", dil=dil, ad=adi)
     return ceviri.t("sistem.db.acilamadi", dil=dil, ad=adi, hata=hata)
@@ -507,9 +510,12 @@ class HeadlessCore:
         except Exception as exc:  # noqa: BLE001 — GENEL (C1-7): göç, Karar-6 fail-closed, bozuk dosya
             from database import patient_database as _pdb
             from database import treatment_history_db as _thdb
-            from database.sqlcipher_util import GocBekliyorHatasi
+            from database.sqlcipher_util import EskiKokGocuBekliyorHatasi, GocBekliyorHatasi
 
-            tur = "goc" if isinstance(exc, GocBekliyorHatasi) else "acilamadi"
+            if isinstance(exc, EskiKokGocuBekliyorHatasi):
+                tur = "eskiKok"  # Y200: eski kök göçü bekliyor (boş DB kurulmadı)
+            else:
+                tur = "goc" if isinstance(exc, GocBekliyorHatasi) else "acilamadi"
             sebep = db_acilis_metni(
                 tur, ad, type(exc).__name__, "tr"
             )  # durum / günlük Türkçe; operatöre istek dilinde (`api_server._db_acilis_hatasi`)
