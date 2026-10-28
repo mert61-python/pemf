@@ -139,3 +139,42 @@ def test_KRITIK_router_ve_8100_mutlak_olcuyu_YANITA_tasir():
         i = src.index(isaret)
         govde = src[i : i + 5000]
         assert '"xai_disagreement_max"' in govde, f"{yol.name}: histopath yanıtı mutlak kararsızlık ölçüsünü taşımıyor"
+
+
+# ── TUR 2 kolları (çürütücü, hat D) ─────────────────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("n", [2, 3, 4])
+@pytest.mark.parametrize("kip", ["std", "var", "ptp"])
+def test_kuramsal_EN_BUYUK_ayrisma_HER_kipte_ve_HER_n_de_1(kip, n):
+    """Tur 2 kolu (ikiz kip / tanım değeri): [0, 1]'de en büyük ayrışma (yarısı 0, kalanı 1) mutlak ölçekte HER kipte (std / var /
+    ptp) ve her model sayısında TAM 1'e eşlenir — tavanı yanlış bir kipte (ör. var için karesiz) harita en büyük ayrışmayı <1 gösterir."""
+    from ai_hub.xai_utils.disagreement import ensemble_disagreement_map
+
+    k = n // 2
+    cams = [np.zeros((8, 8), np.float32)] * k + [np.ones((8, 8), np.float32)] * (n - k)
+    d = ensemble_disagreement_map(cams, mode=kip)
+    assert d.shape == (8, 8)
+    assert np.allclose(d, 1.0, atol=1e-5), (
+        f"en büyük ayrışma {kip} / n={n} kipinde {float(d.min()):.4f}–{float(d.max()):.4f} (1 bekleniyordu)"
+    )
+    uyum = ensemble_disagreement_map([np.full((8, 8), 0.4, np.float32)] * n, mode=kip)
+    assert np.allclose(uyum, 0.0, atol=1e-6), f"tam uyum {kip} / n={n} kipinde sıfır değil: {float(uyum.max()):.4f}"
+
+
+def test_TEK_CAM_haritasi_SONLU_ve_SIFIR():
+    """Tur 2 kolu (tek öğe): tek CAM'de ayrışma tanımsız değil SIFIRDIR — harita NaN / sonsuz taşımaz (0'a bölme yok)."""
+    from ai_hub.xai_utils.disagreement import ensemble_disagreement_map
+
+    d = ensemble_disagreement_map([np.linspace(0, 1, 64, dtype=np.float32).reshape(8, 8)], mode="std")
+    assert np.isfinite(d).all(), f"tek CAM'de harita sonlu değil: {d.ravel()[:4]}"
+    assert float(np.abs(d).max()) == 0.0, f"tek CAM'de ayrışma sıfır değil: {float(np.abs(d).max())}"
+
+
+def test_yanit_OLCUSU_haritanin_MAKSIMUMU(monkeypatch, tmp_path):
+    """Tur 2 kolu (ikiz çağrı yeri — yanıt alanı): `xai_disagreement_max` gösterilen haritanın MAKSİMUMUDUR (ad + docstring) —
+    ham std maksimumu / kuramsal tavan (testte bağımsız hesap); ortalama ya da başka bir istatistik uyumlu/ayrışan oranını korusa da YANLIŞ."""
+    for uyumlu in (True, False):
+        r = _zincir(monkeypatch, tmp_path, uyumlu=uyumlu)
+        beklenen = float(np.stack(_cams(uyumlu)).std(axis=0).max()) / TAVAN3
+        assert r["xai_disagreement_max"] == pytest.approx(beklenen, abs=2e-3), (
+            f"{'uyumlu' if uyumlu else 'ayrışan'}: yanıt ölçüsü {r['xai_disagreement_max']} ≠ harita maksimumu {beklenen:.4f}"
+        )
