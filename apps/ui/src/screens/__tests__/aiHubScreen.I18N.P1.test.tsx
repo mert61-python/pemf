@@ -1348,8 +1348,9 @@ describe("bölüm 10 — Yara Kapanma (Scratch) ve Kedi Organ modülleri", () =>
     expect(tr.getByText(/2 organ bulundu · en güvenilir: Kalp \(%80\)$/)).toBeTruthy();
     expect(tr.getByText("Teknik: poz epnp · PnP 1.2px")).toBeTruthy();
     expect(tr.getByText("Organlar (3B konum · güven)")).toBeTruthy();
-    expect(tr.getByText("Kalp (1.0, 2.0, 3.0) cm")).toBeTruthy();
-    expect(tr.getByText("Akciğer (sağ) (4.0, 5.0, 6.0) cm")).toBeTruthy();
+    // L1-7.6: konum satırı çerçeveyi + kalibrasyon durumunu söyler (fikstürde `calibrated` alanı YOK → "kalibre" iddia edilmez).
+    expect(tr.getByText("Kalp (1.0, 2.0, 3.0) cm · kabin konumu — kalibrasyon doğrulanmadı")).toBeTruthy();
+    expect(tr.getByText("Akciğer (sağ) (4.0, 5.0, 6.0) cm · kedinin gövdesine göre — kalibrasyonsuz (kabin konumu değil)")).toBeTruthy();
     expect(tr.getByText("%80")).toBeTruthy();
     expect(tr.getByText("%30")).toBeTruthy();
     const trKayit = logKayitlari();
@@ -1365,8 +1366,8 @@ describe("bölüm 10 — Yara Kapanma (Scratch) ve Kedi Organ modülleri", () =>
     expect(en.getByText(/2 organs found · most reliable: Heart \(80%\)$/)).toBeTruthy();
     expect(en.getByText("Technical: pose epnp · PnP 1.2px")).toBeTruthy();
     expect(en.getByText("Organs (3D position · confidence)")).toBeTruthy();
-    expect(en.getByText("Heart (1.0, 2.0, 3.0) cm")).toBeTruthy();
-    expect(en.getByText("Lung (right) (4.0, 5.0, 6.0) cm")).toBeTruthy();
+    expect(en.getByText("Heart (1.0, 2.0, 3.0) cm · cabin position — calibration not verified")).toBeTruthy();
+    expect(en.getByText("Lung (right) (4.0, 5.0, 6.0) cm · relative to the cat's body — uncalibrated (not a cabin position)")).toBeTruthy();
     expect(en.getByText("80%")).toBeTruthy();
     expect(en.getByText("30%")).toBeTruthy();
     const enKayit = logKayitlari();

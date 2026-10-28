@@ -213,7 +213,20 @@ interface AiWell { area_mm2?: number | null; area_px?: number; centroid_cabin_mm
 interface AiPrediction { confidence?: number; patient_id?: string; prediction?: string; [k: `prob_${string}`]: number | undefined; }
 interface AiTopK { class: string; prob: number; }
 interface AiDetection { class_name: string; conf?: number; bbox_xyxy?: number[]; index?: number; }
-interface AiOrgan { name: string; coord_cabin_cm?: number[]; coord_3d_cm?: number[]; reliability?: number; }
+interface AiOrgan { name: string; coord_cabin_cm?: number[]; coord_3d_cm?: number[]; reliability?: number; calibrated?: boolean; }
+
+/** L1-7.6: organ satırının konum metni KOORDİNATIN ÇERÇEVESİNİ ve kalibrasyon durumunu söyler. Değer AYNI kaynaktan (kabin varsa kabin,
+ *  yoksa gövde-göreli `coord_3d_cm`); ArUco'suz karede gövde-göreli sayı "kabin konumu" sanılmasın. Koordinat yoksa 0 UYDURULMAZ (Y6). */
+function organKonumMetni(o: AiOrgan): string {
+  const uc = (v?: number[]) => (Array.isArray(v) && v.length >= 3 ? v : null);
+  const kabin = uc(o.coord_cabin_cm);
+  const c = kabin ?? uc(o.coord_3d_cm);
+  if (!c) return i18n.t("ai.organ.konumYok");
+  const xyz = { x: (+c[0]).toFixed(1), y: (+c[1]).toFixed(1), z: (+c[2]).toFixed(1) };
+  if (!kabin) return i18n.t("ai.organ.konumGovde", xyz);
+  // "Kalibre" iddiası YALNIZ backend `calibrated === true` derse (alan yoksa — eski yanıt — iddia edilmez).
+  return o.calibrated === true ? i18n.t("ai.organ.konumKabin", xyz) : i18n.t("ai.organ.konumKabinDogrulanmadi", xyz);
+}
 interface DiseasePrediction { disease: string; probability: number; }
 interface ThermalPrediction { label?: string; confidence?: number; }
 interface FgsRaw {
@@ -4859,12 +4872,11 @@ function CatOrganModule({ patientName }: { patientName: string }) {
           </Text>
           <Text style={styles.ctSubLabel}>{t("ai.organ.organlar")}</Text>
           {(result.organs || []).map((o: AiOrgan, i: number) => {
-            const c = o.coord_cabin_cm || o.coord_3d_cm || [0, 0, 0];
             const rel = Math.max(0, Math.min(1, o.reliability || 0));
             const pct = Math.round(rel * 100);
             return (
               <View key={i} style={{ marginTop: spacing.xs }}>
-                <Text style={styles.resultText}>{organAdi(o.name)} <Text style={{ color: colors.textMuted, fontSize: typography.small }}>({(+c[0]).toFixed(1)}, {(+c[1]).toFixed(1)}, {(+c[2]).toFixed(1)}) cm</Text></Text>
+                <Text style={styles.resultText}>{organAdi(o.name)} <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{organKonumMetni(o)}</Text></Text>
                 <View style={styles.soundBarRow}>
                   <View style={styles.soundBarTrack}>
                     <View style={[styles.soundBarFill, { width: (`${Math.max(2, pct)}%` as any), backgroundColor: relColor(rel) }]} />
