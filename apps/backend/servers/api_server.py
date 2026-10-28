@@ -5818,6 +5818,8 @@ def _start_background_threads() -> None:
         _ef.start_loop(
             read_coils=lambda: _build_ws_snapshot().get("coils", []),
             is_session_active=lambda: bool(_active_session.get("is_active")),
+            # Y212 · S-D67.13: WS bağlıyken de akar (istemci yoklamayı atlar); periyodik tür → baskıda ilk o düşer.
+            yayinla=lambda deger: _ws_broadcast_sync({"type": "efield_update", "data": deger}),
         )
     except Exception:
         logging.getLogger(__name__).warning("Canlı E-alanı döngüsü başlatılamadı", exc_info=True)

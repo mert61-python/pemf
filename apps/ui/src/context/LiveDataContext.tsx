@@ -382,6 +382,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         break;
       }
 
+      // Y212 · S-D67.13: canlı E-alanı (2 Hz, yalnız seans + analiz bağlamı varken; hesap bitince null → bar gizlenir). WS
+      // ayaktayken HTTP yoklaması koşmadığı için değer eskiden yalnız ilk tam snapshot'la geliyor, bar 5 sn sonra "duraklandı"
+      // diyordu. Telemetri SAYILMAZ (türetilmiş değer — sensör akışı ölünce tazelik damgası atmamalı).
+      case "efield_update": {
+        updateSnapshot({ eField: (msg.data ?? null) as DashboardSnapshot["eField"] });
+        break;
+      }
+
       // -- AI Vision Data --
       case "ai_vision": {
         aiVisionTsRef.current = Date.now();

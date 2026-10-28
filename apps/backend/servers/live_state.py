@@ -67,7 +67,11 @@ _WS_MAX_PENDING_BROADCASTS = 64
 #: DUSURULMEZ (yeni bir tek-seferlik tur sessizce dusmesin diye varsayilan guvenli taraftadir).
 #: ⚠️ 1-E incelemesi (i-4.2): `snapshot` periyodik DEGIL — yalniz geciste yayinlanir (seans bitisi "Aktif hasta yok",
 #: `set_live_patient`); dusen anlik goruntunun yerine yenisi gelmez (olculdu: Hasta Ozeti biten seansin hastasinda kaldi).
-_WS_PERIYODIK_TURLER = frozenset({"sensor_data", "coil_status", "stm_coil_update", "ai_vision", "gateway_status"})
+#: Y212 · S-D67.13: `efield_update` 2 Hz akar → periyodik (baskıda ilk o düşer; bitişteki tek `null` düşerse bar 5 sn sonra
+#: "duraklandı" der — ACİL DURDUR / geçiş iletileri düşürülemez kalır).
+_WS_PERIYODIK_TURLER = frozenset(
+    {"sensor_data", "coil_status", "stm_coil_update", "ai_vision", "gateway_status", "efield_update"}
+)
 _ws_pending = 0
 _ws_pending_lock = threading.Lock()
 _ws_dropped_total = 0

@@ -22,6 +22,7 @@ export type WsMessageType =
   | "estop_mandali" // D1.81 · Y4: acil durdurma mandalı kuruldu/sıfırlandı — data=EstopMandali
   | "estop_teyit" // D1.E04: son acil durdurmanın teyit durumu — data=EstopTeyit
   | "stm_uyum" // TD1: kart ↔ uygulama paket uyumu kararı — data=StmUyum
+  | "efield_update" // Y212 · S-D67.13: canlı E-alanı (2 Hz; hesap bitince null) — data=EFieldLive | null
   | "pong";  // heartbeat yanıtı (backend ping'e döner)
 
 export interface WsMessage {

@@ -335,20 +335,29 @@ def _set_live(v: dict | None) -> None:
         _live = v
 
 
-def start_loop(read_coils, is_session_active) -> threading.Thread:
+def start_loop(read_coils, is_session_active, yayinla=None) -> threading.Thread:
     """2 Hz arka plan döngüsü. `read_coils()` canlı bobin listesi, `is_session_active()` bool.
 
     Yalnız AKTİF seansta hesaplar — boştayken ONNX çağırmak anlamsız CPU yakar ve
     bar'da eski değeri canlıymış gibi göstermek YANILTICI olur (o durumda None yazılır).
+
+    `yayinla(deger)` (Y212 · S-D67.13): her yeni hesap istemcilere iletilir; hesap bitince BİR KEZ None (bar gizlenir). WS
+    bağlıyken istemci HTTP yoklamasını atlar — değer yalnız ilk tam snapshot'la gidiyor, seans boyunca bar 5 sn sonra
+    "duraklandı" diyordu.
     """
 
     def _loop():
+        yayinda = False
         while True:
             try:
                 if is_session_active() and get_context():
-                    _set_live(compute(read_coils()))
+                    deger = compute(read_coils())
                 else:
-                    _set_live(None)
+                    deger = None
+                _set_live(deger)
+                if yayinla is not None and (deger is not None or yayinda):
+                    yayinda = deger is not None
+                    yayinla(deger)
             except Exception:
                 dongu_hatasini_bildir("E-alanı döngü hatası", logger=logger, seviye=logging.DEBUG)
             time.sleep(TICK_S)
