@@ -3,8 +3,8 @@
 > Denetim: [`DEPO-DENETIMI-2026-09-15.md`](DEPO-DENETIMI-2026-09-15.md)
 > Bu belge **kısmen UYGULANDI**: F1 (`apps/web` + `apps/ui`) ve F4 (`apps/backend`)
 > 2026-09-18'de, `bootstrap.ps1` taşıması 2026-09-19'da yapıldı.
-> **KALAN:** F2 (`apps/launcher/`) · F3 (`ai/hub` + `ai/service`) · F5 (`tools/` üçe
-> bölünmesi) · `libs/` (paylaşılan göç + cv_ortak) · derleme çıktılarının ağaç dışına
+> **KALAN:** F2 (`apps/launcher/`) · F3 (`ai/hub` + `ai/service`) · ~~F5 (`tools/` üçe
+> bölünmesi)~~ ⛔ İPTAL (sahip kararı Y27 — klasör taşıma riski) · `libs/` (paylaşılan göç + cv_ortak) · derleme çıktılarının ağaç dışına
 > alınması. (Ölçüldü 2026-09-22: `launcher/`, `ai_hub/`, `ai_service/`, `build_tools/`
 > hâlâ kökte; `libs/` yok.)
 
@@ -87,11 +87,11 @@ guii/
 | ~~`bootstrap.ps1`~~ | ✅ **`scripts/bootstrap.ps1` — TAŞINDI 2026-09-19** | ⚠️ **DİZİN taşımasından FARKLI bir sınıf:** betiğin KENDİ konum mantığı bir kademe yanlışa düştü. `$GuiRoot = $ScriptDir` artık `scripts/`i gösteriyordu → `$EmbRoot` = depo kökü → `python.exe` BULUNAMAZ → adım 5/5b/5c (**pre-commit hook + skip-worktree sır koruması**) `if (Test-Path $embPy)` yüzünden **sessizce atlanır**, betik yine `exit 0` döner. Yani yeni makinede sır koruması kurulmamış olurdu ve tablo "TÜM ARAÇ ZİNCİRİ HAZIR" derdi. Düzeltme: `Split-Path -Parent $ScriptDir` + 5 `$PSScriptRoot` → `$GuiRoot`. Doğrulama: `-VerifyOnly` yeni konumdan koştu, 5b/5c **gerçekten çalıştı** (hook kurulu + 4 sır dosyasına skip-worktree). Kapı: `tests/test_bootstrap_konumu.py` — beklenen `Split-Path` adımı dosyanın **gerçek derinliğinden türetilir**, sabit sayı yok · **7 mutasyon** |
 | `launcher/` | `apps/launcher/` | |
 | `ai_hub/` `ai_service/` | `ai/hub/` `ai/service/` | |
-| `build_tools/` `scripts/` `tools/` | `tools/build` `tools/gates` `tools/ops` | Bugün üçü karışık: derleme kapıları `scripts/`te, operasyon aracı `build_tools/`ta |
+| `build_tools/` `scripts/` `tools/` | ~~`tools/build` `tools/gates` `tools/ops`~~ ⛔ **İPTAL (F5 · Y27)** — üç dizin yerinde kalır | Bugün üçü karışık: derleme kapıları `scripts/`te, operasyon aracı `build_tools/`ta (bilinçli kabul — taşıma riski kazançtan büyük) |
 | `PEMF_BUILD/` `firmware_cikti/` `offline dağıtım/` | **ağaç dışı** → `../pemf-build/` | Derleme çıktısı kaynakla aynı yerde durmamalı |
 | `pemf-app-packages/` `release_assets/*.exe` | **ağaç dışı** → `../pemf-dist/` | Dağıtım artefaktı; GitHub Releases zaten arşiv |
 | `training_archive/` | **ayrı depo** ya da Git LFS | 297 MB, 434 takipli dosya; her klon indiriyor |
-| `bin/` | `tools/build/bin/` + LFS | 60 MB üçüncü-parti ikili (cloudflared 52 MB) |
+| `bin/` | ~~`tools/build/bin/`~~ (F5 İPTAL — Y27; `bin/` yerinde) + LFS | 60 MB üçüncü-parti ikili (cloudflared 52 MB) |
 
 > ## ⚠️ TAŞIMA DERSİ — dizin adı BEŞ biçime girer (2026-09-18 ölçüldü)
 >
@@ -172,7 +172,7 @@ Her faz tek başına doğrulanır ve **yeşil bitmeden sonrakine geçilmez.**
 | **F2** | `apps/launcher` | `cargo test --workspace --locked` yeşil |
 | **F3** | `ai/hub` + `ai/service` | `/api/ai/hazirlik?derin=1` → 16/16 modül |
 | **F4** | `apps/backend` (en riskli — spec + import kökü) | **tam süit 2979** + `urun_dogrula.py` |
-| **F5** | `tools/` üçe bölünmesi | CI'ya bağlı 3 betik yolu güncel, `lint.yml` yeşil |
+| ~~**F5**~~ | ~~`tools/` üçe bölünmesi~~ ⛔ **İPTAL — sahip kararı Y27** (klasör taşıma riski) | ~~CI'ya bağlı 3 betik yolu güncel, `lint.yml` yeşil~~ — yapılmayacak |
 | **F6** | Derleme çıktıları ağaç dışına | `build_backend_exe.ps1` baştan sona yeşil + EXE ürün doğrulaması |
 
 **Her fazda güncellenmesi gerekenler** (unutulursa sessizce kırılır):
