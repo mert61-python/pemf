@@ -656,12 +656,15 @@ def test_KRITIK_O71_YABANCI_servisin_2xxi_GONDERILDI_sayilmaz_tarama_SURER(tmp_p
     bu yola 2xx dönerse gerçek backend (8001) ACİL DURDUR almıyordu. Yanıt PEMF yanıtı olmalı: `status` ∈ success/partial/
     error (`_emergency_stop_all`'ın değerleri); HTML ya da başka `status` değeri 'gönderildi' sayılmaz, tarama SÜRER.
     O-13.1 (1-G inceleme → 1-H): `status` DEĞERİNİ taklit eden yabancı servis de ('success' / 'partial') PEMF sayılmaz —
-    imza `stmStopped` VE `mqttResults` alanlarını da ister (gönderim AZALMAZ: istek zaten gitmiştir, yalnız tarama sürer)."""
+    imza `stmStopped` VE `mqttResults` alanlarını da ister (gönderim AZALMAZ: istek zaten gitmiştir, yalnız tarama sürer).
+    KI G3: kapanış ucunun imzasız 2xx'inde AYNI porta ACİL DURDUR ucu da denenir (launcher / NSIS ile aynı — gönderim yalnız ARTAR);
+    yabancı servis onu da imzasız yanıtlar → yine 'gönderildi' SAYILMAZ, tarama 8001'e SÜRER."""
     s = _kos(tmp_path, senaryo)
     k = s["kayit"]
     http = [x for x in k if x.startswith("HTTP ")]
     assert http == [
         "HTTP Post http://127.0.0.1:8000/api/hardware/kapanis_durdur",
+        "HTTP Post http://127.0.0.1:8000/api/hardware/emergency_stop",
         "HTTP Post http://127.0.0.1:8001/api/hardware/kapanis_durdur",
     ], (
         f"{senaryo}: 8000'deki YABANCI servisin 2xx'i 'gönderildi' sayıldı, tarama durdu — backend (8001) E-stop almadı: {http}"

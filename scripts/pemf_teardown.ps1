@@ -101,13 +101,20 @@ function Invoke-PemfAcilDurdurIstegi([int]$Port) {
     $t0 = Get-Date
     try {
         $govde = @{ onay = $true } | ConvertTo-Json -Compress
-        return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/kapanis_durdur" -Method Post -ContentType 'application/json' -Body $govde -TimeoutSec 10
+        $r = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/kapanis_durdur" -Method Post -ContentType 'application/json' -Body $govde -TimeoutSec 10
     } catch {
         # D3I-A1.4 (18K K2 ikizi — launcher `durdur_iste` / NSIS ile AYNI): YANITLI HTTP hatası (405 / 5xx; PS 5.1 WebException,
         # pwsh 7 HttpResponseException `.Response` dolu) süreden bağımsız "uç yok" → ACİL DURDUR; 2 sn eşiği yalnız YANITSIZ hataya.
         if (-not $_.Exception.Response -and ((Get-Date) - $t0).TotalSeconds -ge 2) { throw }
         return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 10
     }
+    # KI G3 (Ö.4-Y8 "gönderim yalnız artar" — launcher `durdur_yanitini_yorumla` → `UcYok` ve NSIS YLI-A3.3 ile AYNI): kapanış ucunun 2xx
+    # yanıtı PEMF İMZASI taşımıyorsa (HTML, yabancı JSON, `status` taklidi) uç bu porttaki backend'de YOK sayılır → AYNI porta ACİL DURDUR.
+    # Eskiden imzasız yanıt çağırana dönüyor, `Send-PemfAcilDurdur` "PEMF değil" deyip SONRAKİ porta geçiyordu. Ölçüt çağıranınkiyle AYNI.
+    $imzali = $null -ne $r -and -not ($r -is [string]) -and @('success', 'partial', 'error') -contains [string]$r.status -and
+        $r.PSObject.Properties['stmStopped'] -and $r.PSObject.Properties['mqttResults']
+    if ($imzali) { return $r }
+    return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/hardware/emergency_stop" -Method Post -TimeoutSec 10
 }
 
 # @return gönderilen ACİL DURDUR sayısı (yalnız RAPOR — çağıran buna göre kill'i ATLAMAZ).
