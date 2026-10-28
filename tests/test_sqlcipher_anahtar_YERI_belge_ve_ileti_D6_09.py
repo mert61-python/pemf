@@ -227,3 +227,19 @@ def test_KRITIK_database_README_anahtar_satirlari_BIRINCIL_yeri_soyler_D6_37(olc
     _birincil_yer_dogru(satirlar[0], olculen_yer, f"database/README {isaret!r} satırı")
     if "Tüm-DB" in isaret:
         _makine_disi_zarf(satirlar[0], "database/README şifreleme modeli satırı")
+
+
+def test_RUNBOOK_ve_database_README_HER_satirda_eski_kaynak_YALNIZ_eski_diye_anilir_D6_37():
+    """Tur 2 (çürütücü): yukarıdaki kapılar yalnız işaretli satırlara bakıyordu — aynı belgelere BAŞKA bir satırla eklenen
+    "anahtar kimlik kasasında / `.sqlcipher_key`de" iddiası kaçıyordu. Her satırda eski kaynak (keyring / kimlik kasası /
+    `.sqlcipher_key`) ya "eski" diye anılan cümlede geçer ya da satır o dosyaların BULUNMADIĞINI söyler (destek paketi
+    "İçinde **YOK**" listesi)."""
+    kotu = []
+    for belge in (RUNBOOK, README_DB):
+        for no, satir in enumerate(belge.read_text(encoding="utf-8").splitlines(), 1):
+            for m in _ESKI_KAYNAK.finditer(satir):
+                cumle = re.split(r"(?<=[.;—])\s", satir[: m.start()])[-1] + satir[m.start() : m.end() + 60]
+                if "eski" in cumle.casefold() or "eskİ" in cumle or "**YOK**" in satir:
+                    continue
+                kotu.append(f"{belge.name}:{no}: …{cumle}…")
+    assert not kotu, f"eski anahtar kaynağı 'eski' denmeden anılıyor (anahtar orada DEĞİL): {kotu}"
