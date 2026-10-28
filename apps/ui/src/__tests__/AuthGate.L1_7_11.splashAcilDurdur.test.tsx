@@ -80,6 +80,22 @@ it("KRİTİK: splash'teki ACİL DURDUR'a basınca STOP istekleri GİDER (bridge 
   expect(komut[1]).toEqual({ command: "stop_all_coils", params: {} });
 });
 
+it("KRİTİK (web — masaüstü arayüzü): splash'teki ACİL DURDUR platforma bağlı DEĞİL", async () => {
+  // D67 orkestratör kolu: jest ön ayarı Platform.OS = "ios" → GES'i yalnız web'de gizleyen mutant YAŞIYORDU (masaüstü = web).
+  const { Platform } = require("react-native");
+  const eski = Platform.OS;
+  Object.defineProperty(Platform, "OS", { value: "web", configurable: true, writable: true });
+  try {
+    mockSnap = calisan;
+    const u = render(<AuthGate />);
+    await act(async () => {});
+    expect(u.queryByText("giris-ekrani")).toBeNull();
+    expect(u.queryByLabelText("Acil durdur")).not.toBeNull();
+  } finally {
+    Object.defineProperty(Platform, "OS", { value: eski, configurable: true, writable: true });
+  }
+});
+
 it("KARŞIT: splash'te hiçbir şey çalışmıyorken düğme YOK (gürültü yok)", async () => {
   mockSnap = bosta;
   const u = render(<AuthGate />);
