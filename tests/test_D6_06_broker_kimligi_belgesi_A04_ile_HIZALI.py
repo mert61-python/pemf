@@ -69,7 +69,8 @@ def test_KRITIK_deploy_belgeleri_tabana_allow_anonymous_false_TALIMATI_vermez():
     yasak = re.compile(r"allow_anonymous\s*=\s*false", re.I)
     bulunan = [
         f"{p.relative_to(KOK).as_posix()}:{i}: {s.strip()}"
-        for p in [KOK / "deploy" / "README.md"]
+        for p in sorted((KOK / "deploy").iterdir())  # D6.34: profil (.env) yorumları da talimattır
+        if p.is_file() and p.suffix in (".md", ".env", ".txt")
         for i, s in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1)
         if yasak.search(s)
     ]
@@ -92,3 +93,22 @@ def test_KRITIK_README_MQTT_maddesi_A04_GERCEGINI_soyler():
     assert re.search(r"allow_anonymous false`?\s*\*{0,2}yazmayın", satir, re.I), (
         f"'allow_anonymous false' yasağı yok: {satir}"
     )
+
+
+def test_KRITIK_device_env_MQTT_blogu_A04_GERCEGINI_soyler():
+    """D6.34: profil `PEMF_MQTT_USER/PASS` satırlarının hemen üstündeki açıklama bloğu (yorum = talimat) A-04 gerçeğini söyler."""
+    satirlar = (KOK / "deploy" / "device.env").read_text(encoding="utf-8").splitlines()
+    i = next((n for n, s in enumerate(satirlar) if re.match(r"#?\s*PEMF_MQTT_USER=", s.strip())), None)
+    assert i is not None, "aparat: device.env'de PEMF_MQTT_USER satırı yok"
+    blok = []
+    for s in reversed(satirlar[:i]):
+        if not s.strip().startswith("#"):
+            break
+        blok.insert(0, s.strip().lstrip("#").strip())
+    metin = " ".join(blok)
+    for gerekli, neden in (
+        ("ANONİM", "tabanın anonim olduğu söylenmiyor"),
+        ("--mqtt-kimlik hazirla", "kimliği getiren adım yok"),
+        ("YAPMAZ", "PEMF_MQTT_USER/PASS'ın broker'ı kimlikli YAPMADIĞI söylenmiyor"),
+    ):
+        assert gerekli in metin, f"device.env MQTT bloğu: {neden}: {metin!r}"
