@@ -5,7 +5,7 @@
   "butunluk": " The integrity of the downloaded files is verified automatically during installation",
   "gereksinim": {
     "baslik": "System requirements",
-    "disk": "• 3–5 GB free disk space — the exact size depends on the number of profiles you select",
+    "disk": "• 4–12 GB free disk space — the exact size depends on the number of profiles you select",
     "internet": "• Internet connection for the first installation",
     "ram": "• 8 GB RAM (16 GB recommended for AI models)"
   },

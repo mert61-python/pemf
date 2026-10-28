@@ -108,7 +108,7 @@ const HOME: Cift[] = [
   ['PEMF Vet’i indirin', 'Download PEMF Vet'],
   ['— uygulama, cihaz yazılımı ve yapay zekâ modelleri sizin için kurulur, güncellemeler kendiliğinden gelir.', '— the app, device software and AI models are installed for you, and updates arrive on their own.'],
   ['macOS · Linux yakında', 'macOS · Linux coming soon'],
-  [`Sürüm ${CLIENT.version} · ${CLIENT.sizeMB} MB kurulum`, `Version ${CLIENT.version} · ${CLIENT.sizeMB} MB installer`],
+  [`Sürüm ${CLIENT.version} · ${CLIENT.downloads.windows.sizeMB} MB kurulum`, `Version ${CLIENT.version} · ${CLIENT.downloads.windows.sizeMB} MB installer`],
   ['Nasıl çalışır', 'How it works'],
   ['Tek indirme, gerisi otomatik', 'One download, the rest is automatic'],
   ['Küçük bir kurulum dosyası indirirsiniz; uygulamayı, modelleri ve güncellemeleri o getirir.', 'You download a small installer; it fetches the app, the models and the updates.'],

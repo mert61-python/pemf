@@ -46,7 +46,7 @@ export default function Home() {
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.windows.os}</span>
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.android.os}</span>
               <span className="inline-flex items-center gap-1.5 text-muted/70">{t('ana.platformYakinda')}</span>
-              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {t('ana.surumBilgisi', { surum: CLIENT.version, boyut: CLIENT.sizeMB })}</span>
+              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {t('ana.surumBilgisi', { surum: CLIENT.version, boyut: CLIENT.downloads.windows.sizeMB })}</span>
             </p>
           </div>
 

@@ -188,7 +188,8 @@ export const CLIENT = {
   // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
   version: '1.9.51',
   get channel() { return i18n.t('icerik.indir.kanal') },
-  sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner). ⚠️ Windows 1.9.43'ten beri ~252 MB (WebView2 offline installer gömülü); mac/linux hâlâ küçük. Kart tek sizeMB gösteriyor — Windows'a özel boyut ayrı iş.
+  // D6.42 + D6.66: platformdan bağımsız `sizeMB: 3` ("NSIS launcher ~2.9 MB") KALDIRILDI — Windows kurulum dosyası 1.9.43'ten beri
+  // WebView2 çevrimdışı kurucusunu gömer; boyut Windows'a özel alanda (`downloads.windows.sizeMB`), macOS / Linux boyutu ölçülmedi (Yakında).
   get releaseDate() { return i18n.t('icerik.indir.surumTarihi') },
   ready: DOWNLOAD_HOST.ready,
   downloads: {
@@ -203,6 +204,9 @@ export const CLIENT = {
       // ("Sürüm 1.9.30") yazarken 2.3.x APK indiriyordu. Aynı yanılgıyı `windowsTag`
       // için config yorumu zaten "kullanıcıyı yanıltır" diye tarif ediyor.
       version: `${DOWNLOAD_HOST.windowsTag.replace(/^launcher-v/, '')}`,
+      // Kurulum dosyası boyutu (MB; Windows Gezgini'nin gösterdiği 1024 tabanı) — `pemf-app-packages/manifest.json` `launcher.size`
+      // 265.032.239 B ≈ 253 MiB (launcher 1.9.51). Kapı: `tests/test_site_paket_boyutlari.py` (±%10, tek kaynak manifest).
+      sizeMB: 253,
     },
     macos: {
       key: 'macos' as const,
@@ -314,8 +318,9 @@ export const MODULES: Module[] = [
     get tagline() {
       return FREE_MODE ? i18n.t('icerik.profil.arastirma.taglineUcretsiz') : i18n.t('icerik.profil.arastirma.taglineEklenti')
     },
-    // manifest profiles.research = 1,46 GB.
-    sizeGB: 1.5,
+    // D6.66 (B-7.14): profil paketi (`profiles.research` 1,50 GiB) + AYRI model parçası (`model_parts.research` research-2.zip 1,69 GiB)
+    // birlikte iner → 3,19 GiB (3,43 GB). Eskiden yalnız profil paketi yazılıyordu (1.5). Kapı: tests/test_site_paket_boyutlari.py.
+    sizeGB: 3.2,
     included: FREE_MODE,
     addonMonthly: FREE_MODE ? 0 : 390,
     get includes() {

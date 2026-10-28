@@ -20,6 +20,7 @@ function PlatformCard({
   alt2Label,
   primary,
   version,
+  sizeMB,
 }: {
   Icon: FC<{ className?: string }>
   label: string
@@ -34,6 +35,8 @@ function PlatformCard({
   primary?: boolean
   /** Bu HEDEFİN sürümü — `CLIENT.version` DEĞİL (Android kartı 1.9.x yazıp 2.3.x APK veriyordu). */
   version: string
+  /** D6.42: bu HEDEFİN kurulum dosyası boyutu (MB). Yalnız ölçülmüş hedefte verilir (Windows); yoksa boyut satırı ÇİZİLMEZ — uydurma sayı yok. */
+  sizeMB?: number
 }) {
   const { t } = useTranslation()
   const { loading, gated, download } = useDownloadGate()
@@ -111,15 +114,17 @@ function PlatformCard({
       <div className="mt-4 space-y-1.5 text-xs text-muted">
         <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {t('indirme.surumTarih', { surum: version, tarih: CLIENT.releaseDate })}</div>
         {/* İNDİRME BOYUTU (metin denetimi 2026-08-20): dört kartın hiçbirinde boyut yoktu;
-            kullanıcı ne indireceğini bilmiyordu. Masaüstünde inen dosya KÜÇÜKTÜR (kurulum
-            dosyası); asıl uygulama sonra iner — ikisi ayrı ayrı söylenir ki ne 3 MB'lık dosya
-            "her şey bu" sanılsın ne de kullanıcı gereksiz yere ~5 GB'tan korksun. */}
-        <div className="inline-flex items-center gap-1.5">
-          <Check className="h-3.5 w-3.5 text-primary" />
-          {target === 'android'
-            ? t('indirme.telefonaTekDosya')
-            : t('indirme.kurulumDosyasi', { sizeMB: CLIENT.sizeMB })}
-        </div>
+            kullanıcı ne indireceğini bilmiyordu. Kurulum dosyası ile asıl uygulama + modeller ayrı
+            ayrı söylenir (asıl uygulama kurulum sırasında iner). D6.42: boyut HEDEFE özel (Windows
+            ≈253 MB — WebView2 gömülü); ölçülmemiş hedefte (macOS / Linux, Yakında) satır çizilmez. */}
+        {(target === 'android' || sizeMB) && (
+          <div className="inline-flex items-center gap-1.5">
+            <Check className="h-3.5 w-3.5 text-primary" />
+            {target === 'android'
+              ? t('indirme.telefonaTekDosya')
+              : t('indirme.kurulumDosyasi', { sizeMB })}
+          </div>
+        )}
         {/* İki kart iki farklı sürüm gösteriyordu (1.9.32 ↔ 2.3.18) ve sebebi yazmıyordu;
             ayrıca telefon uygulamasının masaüstünün yanında mı çalıştığı hiç yazmıyordu. */}
         {target === 'android' && (
@@ -167,7 +172,7 @@ export default function DownloadPage() {
           <DownloadStats />
 
           <div className="mx-auto mt-10 grid max-w-5xl gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <PlatformCard Icon={Windows} label="Windows" os={CLIENT.downloads.windows.os} target="windows" ready={CLIENT.downloads.windows.ready} version={CLIENT.downloads.windows.version} primary />
+            <PlatformCard Icon={Windows} label="Windows" os={CLIENT.downloads.windows.os} target="windows" ready={CLIENT.downloads.windows.ready} version={CLIENT.downloads.windows.version} sizeMB={CLIENT.downloads.windows.sizeMB} primary />
             <PlatformCard Icon={Android} label="Android" os={CLIENT.downloads.android.os} target="android" ready={CLIENT.downloads.android.ready} version={CLIENT.downloads.android.version} />
             <PlatformCard Icon={Linux} label="Linux" os={CLIENT.downloads.linux.os} target="linux" ready={CLIENT.downloads.linux.ready} altTarget={CLIENT.downloads.linux.appImageReady ? 'linux-appimage' : undefined} altLabel={t('indirme.appImage')} alt2Target={CLIENT.downloads.linux.rpmReady ? 'linux-rpm' : undefined} alt2Label=".rpm (Fedora / RHEL)" version={CLIENT.downloads.linux.version} />
             <PlatformCard Icon={Apple} label="macOS" os={CLIENT.downloads.macos.os} target="macos" ready={CLIENT.downloads.macos.ready} version={CLIENT.downloads.macos.version} />

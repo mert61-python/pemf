@@ -5,7 +5,7 @@
   "butunluk": " İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır",
   "gereksinim": {
     "baslik": "Sistem gereksinimleri",
-    "disk": "• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir",
+    "disk": "• 4–12 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir",
     "internet": "• İlk kurulum için internet bağlantısı",
     "ram": "• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)"
   },

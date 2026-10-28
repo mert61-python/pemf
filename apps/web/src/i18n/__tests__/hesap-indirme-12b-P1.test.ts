@@ -160,7 +160,7 @@ const ALTIN: Record<string, string> = {
   "indirme.baslaticiAciklama": "İndirdiğiniz küçük başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.",
   "indirme.butunluk": " İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır",
   "indirme.gereksinim.baslik": "Sistem gereksinimleri",
-  "indirme.gereksinim.disk": "• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir",
+  "indirme.gereksinim.disk": "• 4–12 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir", // D6.66: başlatıcının disk kuralı (2 × indirme + %10) — TR DEĞİŞTİ
   "indirme.gereksinim.internet": "• İlk kurulum için internet bağlantısı",
   "indirme.gereksinim.ram": "• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)",
   "indirme.girisYapVeIndir": "Giriş yap ve indir",
@@ -293,7 +293,7 @@ const SAYFALAR: [ad: string, oturumlu: boolean, cizici: () => string, ciftler: (
       ['PEMF Vet’i indirin', 'Download PEMF Vet'],
       [` Sürüm ${CLIENT.downloads.windows.version} · ${CLIENT.releaseDate}`.trim(), `Version ${CLIENT.downloads.windows.version} · ${CLIENT.releaseDate}`],
       [' İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır', ' The integrity of the downloaded files is verified automatically during installation'],
-      [`İndirilen kurulum dosyası ≈ ${CLIENT.sizeMB} MB · uygulama kurulum sırasında iner`, `The installer you download is ≈ ${CLIENT.sizeMB} MB · the app is downloaded during installation`],
+      [`İndirilen kurulum dosyası ≈ ${CLIENT.downloads.windows.sizeMB} MB · uygulama kurulum sırasında iner`, `The installer you download is ≈ ${CLIENT.downloads.windows.sizeMB} MB · the app is downloaded during installation`],
       ['Telefona tek dosya olarak iner', 'Downloads to your phone as a single file'],
       ['Giriş yap ve indir', 'Sign in and download'],
       ['Kurulumda profilinizi seçin', 'Choose your profile during installation'],
@@ -311,7 +311,7 @@ const SAYFALAR: [ad: string, oturumlu: boolean, cizici: () => string, ciftler: (
       ['Kurulumdan sonra', 'After installation'],
       ['Sistem gereksinimleri', 'System requirements'],
       ['• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)', '• 8 GB RAM (16 GB recommended for AI models)'],
-      ['• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir', '• 3–5 GB free disk space — the exact size depends on the number of profiles you select'],
+      ['• 4–12 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir', '• 4–12 GB free disk space — the exact size depends on the number of profiles you select'],
       ['• İlk kurulum için internet bağlantısı', '• Internet connection for the first installation'],
       ...(CLIENT.downloads.linux.appImageReady ? ([['.AppImage (tüm dağıtımlar)', '.AppImage (all distributions)']] as Cift[]) : []),
       ...(platformlar.some((d) => !d.ready)

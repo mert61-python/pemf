@@ -20,7 +20,7 @@ import RESET_SRC from '../pages/ResetPassword.tsx?raw'
 import ERRBOUND_SRC from '../components/ErrorBoundary.tsx?raw'
 import CONFIG_SRC from '../config.ts?raw'
 
-import { DOWNLOAD_HOST, FAQ, CLIENT } from '../config'
+import { DOWNLOAD_HOST, FAQ, CLIENT, CLIENT_BASE_MB } from '../config'
 
 // ─────────────────────────── 1) SSS: satın alma sorularının cevabı ───────────────────────────
 
@@ -147,11 +147,16 @@ describe('4) indirme sayfası kararı', () => {
     expect(TR['indirme.gereksinim.disk']).toMatch(/seçtiğiniz profil|profil sayısına|değişir/i)
   })
 
-  it('KARŞIT-KANIT: kurulum dosyası boyutu (küçük) ile toplam indirme AYRI AYRI anlatılır', () => {
-    // Aşırı-düzeltme yönü: tek bir sayı yazmak ("5 GB indirilecek") kurulum dosyasının 3 MB
-    // olduğu gerçeğini gizler ve kullanıcıyı gereksiz korkutur.
-    expect(CLIENT.sizeMB).toBeLessThan(50)
-    expect(soy(DOWNLOAD_SRC)).toMatch(/CLIENT\.sizeMB/)
+  it('KARŞIT-KANIT: kurulum dosyası boyutu ile toplam indirme AYRI AYRI anlatılır', () => {
+    // Aşırı-düzeltme yönü: tek bir sayı yazmak ("5 GB indirilecek") kurulum dosyasını asıl indirmeyle
+    // karıştırır ve kullanıcıyı gereksiz korkutur. D6.42 + D6.66: eski "sizeMB < 50" kilidi YANLIŞ değeri
+    // (≈3 MB; gerçek Windows kurulum dosyası ≈253 MB — WebView2 gömülü) kilitliyordu. Kesin değer manifestle
+    // TEK eşikte `tests/test_site_paket_boyutlari.py`de; burada AYRIM korunur: kurulum dosyası, profil
+    // seçiminden bağımsız inen taban paketinden (CLIENT_BASE_MB) KÜÇÜK ve kart Windows'a özel alanı okur.
+    expect(CLIENT.downloads.windows.sizeMB).toBeGreaterThan(0)
+    expect(CLIENT.downloads.windows.sizeMB).toBeLessThan(CLIENT_BASE_MB)
+    expect(soy(DOWNLOAD_SRC)).toMatch(/sizeMB=\{CLIENT\.downloads\.windows\.sizeMB\}/)
+    expect(soy(DOWNLOAD_SRC)).not.toMatch(/CLIENT\.sizeMB/)
   })
 })
 
