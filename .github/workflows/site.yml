@@ -87,9 +87,9 @@ jobs:
       # `min-w-0` sinifi kaynakta VAR ama baska bir kural tasmayi geri getirebilir.
       #
       # ⚠️ ORTAM: betik CI bayragi degil TARAYICI YETENEGI arar (memory: kapi-ortam-varsayimi).
-      # ubuntu-latest'te Edge/Chrome yok -> `--zorunlu` ile exit 2 verir; bu yuzden tarayici
-      # actions/setup-chrome ile kurulur. Kurulum basarisiz olursa kapi ATLANIR (exit 3) ve
-      # is akisi kirmizi olmaz; kapinin kendisi bunu raporlar.
+      # Runner'daki hazir tarayiciya guvenilmez (Edge CDP portunu acamiyor — asagidaki not); bu yuzden
+      # Chrome actions/setup-chrome ile kurulur. Kurulum basarisiz olursa kapi ATLANMAZ: `--zorunlu`
+      # tarayicisiz ortamda 3 yerine 2 dondurur ve adim KIRMIZI biter (bilincli — CI'da kapi SART).
       - name: Tarayici (headless olcum icin)
         id: tarayici
         uses: browser-actions/setup-chrome@v1
@@ -100,16 +100,14 @@ jobs:
       # Runner imaji artik Edge de tasidigi icin betik, BU ADIMDA KURULAN Chrome'u yok sayip
       # Edge'i seciyordu; o Edge de CDP portunu acamiyor (D-Bus) -> kapi kirmizi.
       # Adimin CIKTISI dogrudan betige verilir; tahmin listesi devreye HIC girmez.
+      # D6.56 (B-10.184): `--zorunlu` altinda betik 3 DONDURMEZ (scripts/responsive_kapisi.py) -> eski
+      # "3 ise uyarip atla" dali ULASILAMAZDI ve kaldirildi; her sifir-disi kod adimi KIRMIZI yapar.
       - name: Gorunum alani + dokunma hedefi kapisi
         working-directory: .
         env:
           PEMF_TARAYICI: ${{ steps.tarayici.outputs.chrome-path }}
         run: |
           python3 scripts/responsive_kapisi.py --hedef site --zorunlu --png-yok             --site-dist apps/web/dist --cikti /tmp/responsive-site || KOD=$?
-          if [ "${KOD:-0}" = "3" ]; then
-            echo "::warning::Tarayici bulunamadi, gorunum alani kapisi ATLANDI."
-            exit 0
-          fi
           exit "${KOD:-0}"
 
       - name: Olcum raporu (bulgu varsa)

@@ -82,15 +82,29 @@ def test_KRITIK_workflow_KURULAN_tarayiciyi_BETIGE_veriyor():
 def test_KARSIT_KANIT_kapi_ORTAM_YOK_yolunu_KAPATMIYOR():
     """⚠️ Duzeltme, kapiyi susturmaya DONUSMEMELI.
 
-    Tarayici HIC kurulamadiginda `--zorunlu` olmadan cikis 3 ("ORTAM YOK") donmeli ve
-    workflow bunu uyariyla atlamali. Var olan ama calismayan tarayici ise KIRMIZI kalmali —
-    betigin kendi hata metni bunu soyluyor.
+    Tarayici HIC yokken betik `--zorunlu` OLMADAN 3 ("ORTAM YOK") doner (yerel kosu). CI adimi `--zorunlu` ile cagirir →
+    2 ve adim KIRMIZI. D6.56 (B-10.184): workflow'daki "3 ise atla" dali `--zorunlu` altinda ULASILAMAZDI ve "kurulum
+    basarisizsa is akisi kirmizi olmaz" yorumu yanlisti — dal ve yorum kaldirildi; bu kapi ikisinin GERI gelmesini reddeder.
+    Var olan ama calismayan tarayici da KIRMIZI kalir (betigin kendi hata metni).
     """
     metin = BETIK.read_text(encoding="utf-8")
     assert "return 2 if a.zorunlu else 3" in metin, (
-        "ORTAM YOK (cikis 3) yolu kaybolmus -> tarayicisiz ortamda kapi kirmizi olur"
+        "ORTAM YOK (cikis 3) yolu kaybolmus -> yerel tarayicisiz kosu kirmizi olur"
     )
     wf = WF.read_text(encoding="utf-8")
-    assert '"${KOD:-0}" = "3"' in wf, "workflow cikis 3'u ATLAMA olarak ele almiyor"
-    # ⚠️ "her hatada atla" olmamali: yalniz 3 atlanir, digerleri kirmizi kalir.
-    assert 'exit "${KOD:-0}"' in wf, "workflow diger hata kodlarini YUTUYOR olabilir"
+    i = wf.find("- name: Gorunum alani + dokunma hedefi kapisi")
+    assert i != -1, "site.yml'de responsive kapi adimi yok"
+    j = wf.find("- name:", i + 10)
+    adim = wf[i : j if j != -1 else len(wf)]
+    # CI'da kapi SART (betik basligi + `--zorunlu` yardimi): tarayicisiz runner'da adim KIRMIZI biter, sessizce atlanmaz.
+    assert "--zorunlu" in adim, (
+        "CI responsive kapisi `--zorunlu` olmadan cagriliyor — tarayicisiz runner'da kapi sessizce atlanir"
+    )
+    assert not re.search(r'"\$\{KOD:-0\}"\s*=\s*"3"', adim), (
+        "--zorunlu altinda betik 3 DONMEZ — workflow'daki '3 ise atla' dali OLU ve yaniltici (D6.56)"
+    )
+    assert not re.search(r"ATLANIR \(exit 3\)|is akisi kirmizi olmaz", wf), (
+        "site.yml yorumu tarayici kurulamazsa kapinin ATLANDIGINI soyluyor — --zorunlu ile adim KIRMIZI biter (D6.56)"
+    )
+    # ⚠️ "her hatada atla" olmamali: sifir-disi her kod adimi kirmizi yapar.
+    assert 'exit "${KOD:-0}"' in adim, "workflow diger hata kodlarini YUTUYOR olabilir"

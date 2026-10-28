@@ -4,8 +4,9 @@ name: security-audit
 # ortam üzerinden — torch+cpu/UTF-8 çözümleme sorunlarını atlar) OSV/PyPI advisory DB'ye karşı taranır.
 # BLOKLAYICI DEĞİL (continue-on-error): web/crypto CVE'leri YAMALI (cryptography 43.0.1,
 # starlette 1.3.1, python-multipart 0.0.31 — 2026-07 fix'leri). Kalan bilinen-CVE yalnız AI-çekirdeği
-# (onnx 1.15 / torch 2.1.2) — numpy<2 cascade'i yüzünden BİLİNÇLİ pinli (Dependabot izler).
-# Kapsamlı tarama (torch/onnx dahil TÜM ağaç) Dependabot ile (.github/dependabot.yml) yürür.
+# (onnx 1.15 / torch 2.1.2) — numpy<2 cascade'i yüzünden BİLİNÇLİ pinli (Y3).
+# torch/onnx CVE GÖRÜNÜRLÜĞÜ GitHub güvenlik uyarılarına bırakıldı (A-42: sahip GitHub ayarlarından açar);
+# `.github/dependabot.yml` SÜRÜM güncellemelerinde torch / torchvision / onnx Y3 gereği DIŞLI (PR açılmaz).
 
 on:
   # ⚠️ 2026-08-09 (Tier 1): tetikleyici yalnız `main, master` idi ve geliştirme AKTİF DALDA
@@ -44,11 +45,12 @@ jobs:
           pip install pip-audit
 
       - name: pip-audit — çekirdek + SHIPPED AI ağacı (bilgi amaçlı, bloklamaz)
-        # Audit P2: shiplenen AI yığını (torch 2.1.2 / onnx 1.15 / ultralytics / xgboost / librosa...) da
-        # TARANSIN — eskiden yalnız requirements-test.txt kuruluyordu → AI-CVE'leri (CVE-2025-32434 dahil)
-        # HİÇ görünmüyordu. requirement-file modu kurulum gerektirmez. Bilinen-ertelenen (torch→2.6.0
-        # ayrı görev) DIŞINDA yeni CVE'ler burada GÖRÜNÜR. Bloklayıcı yapmak için known-CVE'leri
-        # --ignore-vuln <ID> ile allowlist'le + continue-on-error'ı kaldır (sahip: exact ID gerekir).
+        # Audit P2: shiplenen AI yığını (onnx 1.15 / ultralytics / xgboost / librosa...) da taransın — eskiden yalnız
+        # requirements-test.txt kuruluyordu. ⚠️ D6.56 (B-10.212): torch==2.1.2+cpu ve torchvision==0.16.2+cpu
+        # (requirements.txt, ek index) PyPI'da BULUNMADIĞI için pip-audit bunları "Dependency not found on PyPI and
+        # could not be audited" diye ATLAR → torch CVE'leri (CVE-2025-32434 dahil) bu adımda GÖRÜNMEZ (başlıktaki
+        # GitHub uyarıları yolu). Bloklayıcı yapmak (sahip kararı: YAPILMAZ) continue-on-error'ı kaldırmakla OLMAZ:
+        # her pip-audit satırındaki `|| true` da kaldırılmalı + bilinen CVE'ler --ignore-vuln <ID> ile allowlist'lenmeli.
         continue-on-error: true
         run: |
           echo "== kurulu çekirdek ortam (web/crypto) =="

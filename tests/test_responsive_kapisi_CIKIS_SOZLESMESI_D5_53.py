@@ -3,15 +3,16 @@
 """D5.53 (B-10.96 · B-10.165 · B-10.166) — responsive kapısının ÇIKIŞ KODU SÖZLEŞMESİ davranışla ölçülür.
 
 Sözleşme (`scripts/responsive_kapisi.py` başlığı): 0 temiz · 1 YENİ bulgu · 2 kullanım/altyapı hatası · 3 ORTAM YOK (tarayıcı ya da
-derleme çıktısı yok; `--zorunlu` ile 2'ye döner). `.github/workflows/site.yml` adımı bunu `… || KOD=$?` ile yakalar: yalnız 3 ATLANIR
-(uyarı + 0), diğer her kod adımı KIRMIZI yapar.
+derleme çıktısı yok; `--zorunlu` ile 2'ye döner). `.github/workflows/site.yml` adımı bunu `… || KOD=$?` ile yakalar ve AYNEN çıkar:
+sıfır-dışı her kod adımı KIRMIZI yapar (D6.56 · B-10.184: adım `--zorunlu` taşıdığı için 3 ULAŞILAMAZDI — eski "3 → uyarı + 0"
+dalı ölüydü, kaldırıldı).
 
 ARIZA (kör kapı, ölçüldü): sözleşmeyi koruyan tek test (`test_tarayici_secimi_ACIK_beyan.py`) METİN arıyordu: `|| KOD=$?` → `|| true`
 yapılınca (betik ne döndürürse dönsün adım YEŞİL) ve betikte `return 2 if a.zorunlu else 3` → `return 3` yapılınca kapı yeşil kalıyordu.
 
 ÖLÇÜM:
   (a) site.yml'deki adımın `run:` betiği YAML'dan GERÇEK metniyle alınır; `python3` çağrısı kabuk işleviyle sahtelenir (çıkış 0/1/2/3)
-      ve GitHub'ın varsayılan kabuğu gibi `bash -e -o pipefail` altında koşulur → 0→0, 1→1, 2→2, 3→0 (atla).
+      ve GitHub'ın varsayılan kabuğu gibi `bash -e -o pipefail` altında koşulur → 0→0, 1→1, 2→2, 3→3 (D6.56: atlama yok).
   (b) GERÇEK `main()`: `tarayici_bul` None döndürürken `--zorunlu` → 2, zorunsuz → 3. Tarayıcı BAŞLATILAMAZ: `tarayici_baslat` ve
       modülün `subprocess.Popen`'ı reddeden sahtelerle değişir (gerçek Edge/Chrome bu makinede olsa bile açılmaz).
   (c) launcher / pf hedeflerinin CI işine bağlanması ENGELLİ (A-40 / A-43: itme yok) — bu dosyada YOK.
@@ -58,8 +59,8 @@ def _adim_betigi() -> str:
     raise AssertionError(f"site.yml'de '{ADIM}' adımı yok — kapı bayat")
 
 
-@pytest.mark.parametrize("betik_kodu,beklenen", [(0, 0), (1, 1), (2, 2), (3, 0)])
-def test_KRITIK_site_yml_adimi_cikis_kodunu_YUTMAZ_yalniz_3_ATLAR(tmp_path, betik_kodu, beklenen):
+@pytest.mark.parametrize("betik_kodu,beklenen", [(0, 0), (1, 1), (2, 2), (3, 3)])
+def test_KRITIK_site_yml_adimi_cikis_kodunu_YUTMAZ_D6_56(tmp_path, betik_kodu, beklenen):
     bash = _git_bash()
     if not bash:
         import capraz
@@ -74,7 +75,8 @@ def test_KRITIK_site_yml_adimi_cikis_kodunu_YUTMAZ_yalniz_3_ATLAR(tmp_path, beti
     r = subprocess.run([bash, "-e", "-o", "pipefail", str(betik)], capture_output=True, text=True, timeout=60)
     assert r.returncode == beklenen, (
         f"responsive_kapisi {betik_kodu} döndürünce site.yml adımı {r.returncode} ile bitti (beklenen {beklenen}): "
-        "sözleşme 1/2 → KIRMIZI, yalnız 3 → atla (D5.53). Çıktı: " + (r.stdout + r.stderr)[-400:]
+        "sözleşme: sıfır-dışı her kod → KIRMIZI (D5.53 · D6.56 — --zorunlu altında 3 atlanmaz). Çıktı: "
+        + (r.stdout + r.stderr)[-400:]
     )
 
 
