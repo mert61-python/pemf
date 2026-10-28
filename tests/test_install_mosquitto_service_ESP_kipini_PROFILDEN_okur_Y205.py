@@ -52,14 +52,14 @@ def test_KRITIK_ESP_kipi_PROFIL_makine_ortamina_USTUN(tmp_path, profil, makine, 
         tmp_path / "r", "Read-PemfProfilEnv", MOSQ, ("Get-Content",), ("Trim", "StartsWith", "Contains", "Split")
     )
     karar = betik_fonksiyonu(tmp_path / "t", "Test-PemfEspEtkin", MOSQ, (), ("Contains", "Trim"))
-    pf = tmp_path / "device.env"
+    profil_dosyasi = tmp_path / "device.env"
     if profil is not None:
-        pf.write_text(profil, encoding="utf-8")
+        profil_dosyasi.write_text(profil, encoding="utf-8")
     govde = (
         oku
         + "\n"
         + karar
-        + f"\n$p = if (Test-Path {_ps_lit(pf)}) {{ Read-PemfProfilEnv {_ps_lit(pf)} }} else {{ $null }}\n"
+        + f"\n$p = if (Test-Path {_ps_lit(profil_dosyasi)}) {{ Read-PemfProfilEnv {_ps_lit(profil_dosyasi)} }} else {{ $null }}\n"
         + f"Write-Output (\"SONUC=\" + (Test-PemfEspEtkin $p '{makine}'))\n"
     )
     r = _pwsh_file(tmp_path, "karar.ps1", govde)
