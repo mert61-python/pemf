@@ -136,3 +136,13 @@ test("KATALOG: TR birebir, EN dolu ve 'indefinitely' iddiası yok", () => {
   );
   expect(`${EN["ayarlar.saklama.kapali"]}${EN["ayarlar.saklama.kapaliAnonim"]}`).not.toMatch(/indefinitely/i);
 });
+
+// TUR 2 (çürütücü kolu): eşik gün sayısı TEK KAYNAKTAN (yanıtın `anonymization.days` = backend `kvkk_anonimlestirme.ESIK_GUN`) gelir.
+// Sabit 1825 yazan mutant (`cur608_n1`) yukarıdaki testlerde YAŞIYORDU — gerçek fikstür de 1825 taşıdığından ayırt edilemiyordu.
+test("TEK KAYNAK (tur 2): eşik gün sayısı YANITTAN gelir — ekranda sabit 1825 yazılmaz", async () => {
+  govde = maskeKapali();
+  (govde.anonymization as Record<string, unknown>).days = 1826;
+  const k = await kart();
+  expect(k).toMatch(/1826 gün/);
+  expect(k).not.toMatch(/1825 gün/);
+});
