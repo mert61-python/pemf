@@ -221,8 +221,8 @@
     }
   },
   "surum": {
-    "n1": "Güvenlik ve kayıt doğruluğu sürümü: bobin bir komutu reddederse artık ekranda sebebiyle görünür ve tedavi geçmişine hiç çalışmamış bobin yazılmaz.",
-    "n2": "Acil durdurmanın bulut yedeği ve kapanan seans kayıtları arka planda sağlamlaştırıldı; telefon ile bilgisayar sürümü farklıysa uygulama bunu artık açıkça söyler."
+    "n1": "Başlatıcı düzeltmesi: kurulabilir paket varken “paket henüz yayınlanmadı” denip kurulumun ve güncellemenin kilitlenmesi bir daha olmaz.",
+    "n2": "Klinik tarafında görünür bir değişiklik yok; 1.9.47 ve sonrası kurulu cihazlar bu sürüme kendiliğinden geçer."
   },
   "uyari": {
     "tibbi": "PEMF Vet, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış klinik destek yazılımıdır. Akıllı teşhis ve AI analiz çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve tedavisinin yerine geçmez. Otonom seans (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır."

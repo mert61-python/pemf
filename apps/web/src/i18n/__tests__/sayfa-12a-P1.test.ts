@@ -74,7 +74,7 @@ const SHOTS: Cift[] = [
   ['AI Pro · Otomatik Seans', 'AI Pro · Automatic Session'],
   ['Ölçümlere göre kendini ayarlayan seans', 'A session that adjusts itself to the measurements'],
   ['Cihaz Kontrolü', 'Device Control'],
-  ['8 bobin, frekans ve süre ayarı', '8 coils, frequency and duration settings'],
+  ['7 bobin, frekans ve süre ayarı', '7 coils, frequency and duration settings'], // D6.65: STM 7 bobin (ESP kapalı, Y37) — TR DEĞİŞTİ
   ['Canlı İzleme Paneli', 'Live Monitoring Panel'],
   ['Seans ve sensör ölçümleri', 'Session and sensor measurements'],
   ['Hasta Veritabanı', 'Patient Database'],

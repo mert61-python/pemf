@@ -221,8 +221,8 @@
     }
   },
   "surum": {
-    "n1": "Safety and record accuracy release: if a coil rejects a command, it now appears on screen with the reason, and a coil that never ran is no longer written to the treatment history.",
-    "n2": "The emergency stop’s cloud backup and closed session records were hardened in the background; if the phone and computer versions differ, the app now says so explicitly."
+    "n1": "Launcher fix: installation and updates are no longer locked with “package not published yet” while an installable package exists.",
+    "n2": "No visible change on the clinic side; devices with 1.9.47 or later installed move to this version automatically."
   },
   "uyari": {
     "tibbi": "PEMF Vet is clinical support software designed to be used under the supervision of a veterinarian. Smart diagnosis and AI analysis outputs are for information only; they do not replace the veterinarian’s medical diagnosis, decisions and treatment. Autonomous session (AI Pro) features are used under the veterinarian’s responsibility."

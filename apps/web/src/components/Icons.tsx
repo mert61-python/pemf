@@ -50,6 +50,10 @@ export const Android = ({ className }: P) => (
 export const Bluetooth = ({ className }: P) => (
   <svg {...base(className)}><path d="m7 8 10 8-5 4V4l5 4L7 16" /></svg>
 )
+/** D6.65 (B-7.17): "Otomatik cihaz bağlantısı" kartı (`FEATURES` f1, `icon: 'wifi'`) bu simgeyi ister — eskiden `ICONS`ta yoktu, kart simgesiz çiziliyordu. */
+export const Wifi = ({ className }: P) => (
+  <svg {...base(className)}><path d="M2 8.8a15 15 0 0 1 20 0M5 12.3a10 10 0 0 1 14 0M8.5 15.8a5 5 0 0 1 7 0" /><circle cx="12" cy="19" r="1" /></svg>
+)
 export const Database = ({ className }: P) => (
   <svg {...base(className)}><ellipse cx="12" cy="5.5" rx="7" ry="3" /><path d="M5 5.5v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6M5 11.5v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" /></svg>
 )
@@ -78,5 +82,5 @@ export const Close = ({ className }: P) => (
   <svg {...base(className)}><path d="M6 6l12 12M18 6 6 18" /></svg>
 )
 
-export const ICONS = { bluetooth: Bluetooth, database: Database, refresh: Refresh, brain: Brain, shield: Shield, monitor: Monitor }
+export const ICONS = { bluetooth: Bluetooth, wifi: Wifi, database: Database, refresh: Refresh, brain: Brain, shield: Shield, monitor: Monitor }
 export type IconName = keyof typeof ICONS

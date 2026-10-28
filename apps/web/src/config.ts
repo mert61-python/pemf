@@ -566,6 +566,8 @@ export const FEATURES = [
 
 // Sürüm notları CLIENT.version ile HİZALI olmalı: burası 1.2.4/12 Haz 2026'da donmuştu ve
 // üründe olmayan "Bluetooth"tan bahsediyordu — site 1.9.8 dağıtırken eski sürüm notu gösteriyordu.
+// D6.65 (B-7.31): notlar CHANGELOG.md'nin `## launcher <CLIENT.version>` bölümünden gelir — "Son güncelleme · v1.9.51" altında
+// app 1.9.19 / mobil 2.3.20 notları duruyordu. Kapı: `src/__tests__/tanitim-dogrulugu.D6_65.test.ts`.
 export const PATCH = {
   version: CLIENT.version,
   get date() { return CLIENT.releaseDate },

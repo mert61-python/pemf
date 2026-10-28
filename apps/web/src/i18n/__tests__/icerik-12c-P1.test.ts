@@ -244,8 +244,8 @@ const ALTIN: Record<string, unknown> = {
  "PATCH": {
   "date": "10 Eyl 2026",
   "notes": [
-   "Güvenlik ve kayıt doğruluğu sürümü: bobin bir komutu reddederse artık ekranda sebebiyle görünür ve tedavi geçmişine hiç çalışmamış bobin yazılmaz.",
-   "Acil durdurmanın bulut yedeği ve kapanan seans kayıtları arka planda sağlamlaştırıldı; telefon ile bilgisayar sürümü farklıysa uygulama bunu artık açıkça söyler."
+   "Başlatıcı düzeltmesi: kurulabilir paket varken “paket henüz yayınlanmadı” denip kurulumun ve güncellemenin kilitlenmesi bir daha olmaz.",
+   "Klinik tarafında görünür bir değişiklik yok; 1.9.47 ve sonrası kurulu cihazlar bu sürüme kendiliğinden geçer."
   ]
  },
  "COMPARE": [
