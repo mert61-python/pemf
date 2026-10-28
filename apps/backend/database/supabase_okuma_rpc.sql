@@ -27,7 +27,7 @@
 -- rollerine AYRICA execute verir. Roller tek tek yazılır (2026-08-21'de `jeton_donem_yenile`
 -- tam bu yüzden anon'a açık kalmıştı — sınırsız jeton yazma deliği).
 --
--- Çalıştırma:  python scripts/supabase_sql.py --dosya database/supabase_okuma_rpc.sql --yaz
+-- Çalıştırma (depo kökünden):  python scripts/supabase_sql.py --dosya apps/backend/database/supabase_okuma_rpc.sql --yaz
 -- Doğrulama :  python scripts/supabase_sql.py --denetim
 
 -- ── 1) ABONELİK — servers/entitlement.py okur ────────────────────────────────────

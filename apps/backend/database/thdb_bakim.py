@@ -18,8 +18,9 @@ kalir, disa aktarma OPERATORUN acik eylemidir).
 
 ⚠️ GOVDELER DEGISTIRILMEDI — AST ile bayt bayt tasindi.
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`,
-`db_path`, `app_data_dir`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `MIN_FREE_DISK_MB`, `_DOGAL_ANAHTAR`, `_ILISKILER`,
+`_TASINAN_TABLOLAR`, `_disk_usage_provider`, `_get_connection`, `_get_sqlcipher_key`, `_import_sqlcipher`, `db_path`,
+`logger`.
 """
 
 from __future__ import annotations

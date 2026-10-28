@@ -15,7 +15,7 @@ Katlamayi KENDINIZ yazmayin — `I/i` cifti Turkce'de `lower()` ile YANLIS esles
 
 ⚠️ GOVDELER DEGISTIRILMEDI — bayt bayt tasindi.
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_ensure_write_guardrail`, `_get_connection`, `logger`.
 """
 
 from __future__ import annotations

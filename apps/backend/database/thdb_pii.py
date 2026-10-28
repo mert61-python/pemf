@@ -17,8 +17,8 @@ DOKUNULMAZ). ⚠️ `tests/test_kvkk_anonymization.py` bu metodu KOSTURMAZ — o
 
 ⚠️ GOVDELER DEGISTIRILMEDI — bayt bayt tasindi.
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`,
-`_get_system_setting` / `_set_system_setting`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `PII_ONAY_ANAHTARI`, `PII_SURE_ANAHTARI`, `_PII_PARAM_NAMES`,
+`_PII_REDACTION`, `_get_connection`, `logger`.
 """
 
 from __future__ import annotations

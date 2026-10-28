@@ -34,7 +34,7 @@
 -- GERİ ALMA: bu dosya bir sertleştirmedir; geri almak gerekirse ilgili `grant` verilir. Ancak
 -- geri vermeden ÖNCE "hangi istemci hangi tabloya doğrudan gidiyor?" sorusu cevaplanmalıdır.
 --
--- Çalıştırma:  python scripts/supabase_sql.py --dosya database/supabase_sertlestirme.sql --yaz
+-- Çalıştırma (depo kökünden):  python scripts/supabase_sql.py --dosya apps/backend/database/supabase_sertlestirme.sql --yaz
 -- Doğrulama :  python scripts/supabase_sql.py --denetim
 
 -- ── 1) YALNIZ RPC ile erişilen tablolar: doğrudan yetki KALMASIN ─────────────────
@@ -74,7 +74,7 @@ revoke all on function public._pemf_verify_device(text, text) from anon, authent
 -- "politikası var ama okunamıyor" durumuna düşürürdü — üstelik hata mesajı bunu söylemeden.
 --
 -- Sahip kararıyla desen değişti: okumalar SECURITY DEFINER RPC'lere taşındı
--- (`database/supabase_okuma_rpc.sql` → `abonelik_getir` / `jeton_bakiyem` / `jeton_defterim`).
+-- (`apps/backend/database/supabase_okuma_rpc.sql` → `abonelik_getir` / `jeton_bakiyem` / `jeton_defterim`).
 -- Hiçbir tablonun rol yetkisine ihtiyacı kalmadığı için varsayılan da orada kapatıldı:
 --
 --     alter default privileges in schema public revoke all on tables from anon, authenticated;

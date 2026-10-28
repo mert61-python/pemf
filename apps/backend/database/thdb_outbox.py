@@ -17,10 +17,14 @@ ayni nesne, ayni metot adlari, ayni `self`. Bolme mekanik ve geri-alinabilir kal
 ⚠️ GOVDELER DEGISTIRILMEDI. Metotlar bayt bayt tasindi; tek fark hangi sinifta durduklari.
 Bu dosya hasta gecmisini bir kez kaybettiren kod yolunda — davranis degisikligi AYRI commit'e.
 
-⚠️ OUTBOX "DRAIN-ONLY"DIR (sahip karari, bellek `pemf-dead-code-2026-07-12`): kuyruk
-bosaltilir ama MEKANIZMA SILINMEZ. Bu modulu "kullanilmiyor" diye kaldirmayin.
+⚠️ OUTBOX "DRAIN-ONLY"DIR (sahip karari, bellek `pemf-dead-code-2026-07-12`): MEKANIZMA SILINMEZ.
+Bu modulu "kullanilmiyor" diye kaldirmayin. ⚠️ D6.60 (B-3.82, olculdu): bugun uretimde enqueue cagirani YOK
+(tek cagiran `SessionManager.start_session` / `end_session`; `SessionManager` ornegi kullanilmiyor) ve bosaltici
+(`get_pending_outbox_messages`) da cagrilmiyor — yalniz sayim ve olu-ileti budamasi (`thdb_bakim`) kosar.
+Kapi: tests/test_database_README_ve_karisim_basliklari_GERCEK_D6_60.py (README satiri AST olcumune uyar).
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_ensure_write_guardrail`, `_get_connection`,
+`_retry_backoff_seconds`, `logger`.
 """
 
 from __future__ import annotations

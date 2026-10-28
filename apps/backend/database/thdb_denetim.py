@@ -14,7 +14,7 @@ verinin ikinci bir kopyasi OLAMAZ — bu yuzden hasta ADI yazilmaz, yalniz kimli
 (`get_app_version`, `get_build_id`, `dict_satir_fabrikasi`) FONKSIYON ICINDE import
 ediliyor, yani govdelerle birlikte geldi; modul duzeyinde ek import gerekmiyor.
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `_lock`, `logger`.
 """
 
 from __future__ import annotations

@@ -21,8 +21,8 @@ paylastigi icin cagri degismedi.
 
 ⚠️ GOVDELER DEGISTIRILMEDI — AST ile bayt bayt tasindi.
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`,
-`_ensure_write_guardrail`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `TOPLU_SILME_AZAMI`, `_PII_PARAM_NAMES`,
+`_ensure_write_guardrail`, `_get_connection`, `logger`.
 """
 
 from __future__ import annotations

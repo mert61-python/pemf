@@ -6,7 +6,7 @@ bulut (Supabase) yalnız cihaz-registry + opsiyonel şifreli PII içindir (bkz. 
 ## Dosyalar
 | Dosya | Görev |
 |---|---|
-| `treatment_history_db.py` | **`TreatmentHistoryDB`** — `thdb_*` karışımlarını birleştiren ana sınıf (**karışım/mixin**, işbirlikçi nesne DEĞİL: `get_treatment_db(...)` ürünün her yerinden alınıp metotlar DOĞRUDAN çağrıldığı için genel API birebir korunur). Bağlantı/kilit yönetimi, `recover_stale_active_sessions` ve SQLCipher-veya-düz-metin farkındalığı burada kalır |
+| `treatment_history_db.py` | **`TreatmentHistoryDB`** — `thdb_*` karışımlarını birleştiren ana sınıf (**karışım/mixin**, işbirlikçi nesne DEĞİL: `get_treatment_db(...)` ürünün her yerinden alınıp metotlar DOĞRUDAN çağrıldığı için genel API birebir korunur). Bağlantı havuzu / kilit yönetimi (`_get_connection`, `close_connections`), SQLCipher-veya-düz-metin farkındalığı ve karışımların paylaştığı sınıf sabitleri burada kalır; açılış kurtarması dahil seans yaşam döngüsü `thdb_seans`tadır (her karışımın ana sınıftan kullandığı üyeler kendi başlığında, AST kapısıyla: `tests/test_database_README_ve_karisim_basliklari_GERCEK_D6_60.py`) |
 | `thdb_seans.py` | **`SeansKarisimi`** — seans yaşam döngüsü: `treatment_sessions` · `session_parameters` · `session_events` + `upsert_patient` tedavi aynası. ⚠️ Tıbbi kaydın mühürlendiği yer (`end_session` → PDF/KPI/geçmişte GERÇEK DOZ) |
 | `thdb_telemetri.py` | **`TelemetriKarisimi`** — bobin koşusu + sensör telemetrisi: `session_coil_runs` · `sensor_samples` · `sensor_run_summary`. ⚠️ Sensör örnekleri **dakika-ortalamasıdır** (`sample_count`), ham akış değil |
 | `thdb_outbox.py` | **`OutboxKarisimi`** — dayanıklı MQTT outbox (`outbox_messages`): enqueue / inflight / retry-backoff |
@@ -68,7 +68,8 @@ DEĞİL, **depo kökündeki** `supabase/` dizinindedir (buradan `../../../supaba
 ### Jeton ücretlendirme + canlı-şema sertleştirme
 
 Bu `.sql` dosyaları da bu dizindedir ama yukarıdaki v1→v2 sırasından **bağımsızdır**; canlıya
-`python scripts/supabase_sql.py --dosya database/<dosya>.sql --yaz` (ya da SQL Editor) ile uygulanır.
+depo kökünden `python scripts/supabase_sql.py --dosya apps/backend/database/<dosya>.sql --yaz` (ya da SQL Editor) ile
+uygulanır (betik kökte, SQL bu dizinde — F4 taşımasından beri; D6.60).
 
 | Dosya | Ne yapar | Zorunlu mu |
 |---|---|---|
@@ -94,7 +95,7 @@ hazırlığında, sahiple** uygulanır. ⚠️ Ön koşul (dosyanın başındaki
 
 ## ⚠️ Dikkat
 - **PII maskeleme VARSAYILAN KAPALI** (bilinçli sahip kararı) — tedavi geçmişi gerçek isim gösterir; `PEMF_MASK_HISTORY_PII=1` ile açılır. Geri maskeleme ekleme.
-- `outbox` **DRAIN-only bir tablo değildir**; enqueue tarafı canlıdır — silme/temizleme yapma.
+- `outbox` mekanizması (tablo + `enqueue_outbox_message` / boşaltma yöntemleri) **SİLİNMEZ** (sahip kararı, drain-only). ⚠️ Bugün üretimde enqueue çağıranı YOK: tek çağıranı `SessionManager.start_session` / `end_session`, `SessionManager` örneği (`headless_core.session_manager`) ise hiçbir yerde kullanılmıyor; boşaltıcı (`get_pending_outbox_messages`) da çağrılmıyor — üretim kodunda yalnız sayım (`get_outbox_status_counts`) ve ölü-ileti budaması (`purge_old_dead_outbox`) çağrılır. Yeni bir enqueue çağıranı eklenirse boşaltıcı da gerekir; silme/temizleme yapma (kapı: AST ölçümü, D6.60).
 - Gerçek DB dosyaları burada değil, app-data'dadır (`~/.pemf_gui` / `PEMF_DATA_DIR`, tipik `C:\ProgramData\PEMF_System\PEMF_GUI`).
 
 ---
@@ -113,7 +114,7 @@ düşürür, `psql` kalan ifadeleri çalıştırmaya DEVAM EDER ve kapı hiçbir
 Doğru kullanım:
 
 ```bash
-psql -v ON_ERROR_STOP=1 -f database/supabase_devices.sql "$DATABASE_URL"
+psql -v ON_ERROR_STOP=1 -f apps/backend/database/supabase_devices.sql "$DATABASE_URL"   # depo kökünden
 ```
 
 Supabase **SQL Editor**'da yapıştırıp çalıştırmak güvenlidir (tek transaction, ilk hata tüm

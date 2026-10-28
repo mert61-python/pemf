@@ -31,8 +31,8 @@ kipte acilir (D1.37 / Y43: ACIL DURDUR ve STOP calisir, DB arka planda yeniden a
 
 ⚠️ GOVDELER DEGISTIRILMEDI — AST ile bayt bayt tasindi.
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`,
-`db_path`, `app_data_dir`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `TARGET_SCHEMA_VERSION`, `_get_connection`, `app_data_dir`,
+`close_connections`, `db_path`, `logger`.
 """
 
 from __future__ import annotations

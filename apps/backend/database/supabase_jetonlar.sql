@@ -53,7 +53,7 @@ alter table public.token_balances enable row level security;
 -- ⚠️ ÖLÇÜLDÜ (2026-08-21, canlı): bu satırın ilk hâli yalnız insert/update/delete alıyordu; oysa
 -- Supabase yeni tabloya SELECT + REFERENCES + TRIGGER + TRUNCATE de veriyor.
 -- ⚠️ SONRA SAHİP KARARI GELDİ ("okumaları RPC'ye taşı"): bakiye artık `jeton_bakiyem()` SECURITY
--- DEFINER fonksiyonundan okunuyor (bkz. database/supabase_okuma_rpc.sql), yani `authenticated`
+-- DEFINER fonksiyonundan okunuyor (bkz. apps/backend/database/supabase_okuma_rpc.sql), yani `authenticated`
 -- rolünün tabloda SELECT yetkisine de İHTİYACI YOK. Hepsi geri alınır.
 revoke all on public.token_balances from anon, authenticated;
 

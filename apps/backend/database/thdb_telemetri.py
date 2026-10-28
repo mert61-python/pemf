@@ -15,7 +15,7 @@ SINIFTA kaldi: "bu seans gercekten yasiyor mu" sorusunun kaniti TELEMETRIDEN gel
 
 ⚠️ GOVDELER DEGISTIRILMEDI — bayt bayt tasindi.
 
-`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_get_connection`, `logger`.
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_ensure_write_guardrail`, `_get_connection`, `logger`.
 """
 
 from __future__ import annotations
