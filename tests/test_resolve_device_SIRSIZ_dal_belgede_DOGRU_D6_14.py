@@ -29,6 +29,14 @@ SQL_DOSYALARI = sorted(
 V2 = KOK / "apps" / "backend" / "database" / "supabase_secure_v2.sql"
 SIRSIZ_DAL = re.compile(r"p_device_id\s+is\s+not\s+null\s+and\s+d\.device_id\s*=\s*p_device_id")
 GATE_IDDIASI = re.compile(r"pairing[\s_-]*kodu[\s_-]*gate", re.I)
+#: Tur 2 (çürütücü): aynı iddianın eş anlamlıları ("yalnız eşleştirme koduyla", "pairing koduyla kapılı") — birebir kalıp
+#: kaçırıyordu. Olumsuz kullanım ("pairing koduyla KAPILI DEĞİLDİR") EŞLEŞMEZ.
+GATE_ESANLAM = re.compile(
+    r"(?:yalnız|yalniz|sadece|only)[^\n]{0,30}(?:pairing|eşleştirme|eslestirme)[\s_-]*(?:kod|code)"
+    r"|(?:pairing|eşleştirme|eslestirme)[\s_-]*(?:kodu|koduyla|code)[^\n]{0,15}(?:kapılı|kapili|gate)(?!\w*\s*DE[ĞG][İI]L)",
+    re.I,
+)
+UI_KAYIT = KOK / "apps" / "ui" / "src" / "services" / "deviceRegistry.ts"
 
 
 def _yorumsuz(sql: str) -> str:
@@ -59,7 +67,7 @@ def test_KRITIK_sirsiz_device_id_dali_varken_hicbir_SQL_notu_pairing_kodu_GATE_d
     bulunan = []
     for p in SQL_DOSYALARI:
         for no, satir in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
-            if GATE_IDDIASI.search(satir):
+            if GATE_IDDIASI.search(satir) or GATE_ESANLAM.search(satir):
                 bulunan.append(f"{p.relative_to(KOK).as_posix()}:{no}: {satir.strip()}")
     assert not bulunan, (
         "resolve_device'in device_id dalı SIRSIZ (pairing kodu istemez) ama not tünel-URL okumasının "
@@ -86,4 +94,12 @@ def test_secure_v2_notu_SIRSIZ_device_id_dalini_ve_gerekcesini_soyler():
     assert "KAPILI DEĞİL" in blok, f"secure_v2 notu tünel-URL okumasının kodla KAPILI OLMADIĞINI söylemiyor:\n{blok}"
     assert "uzakCihaziKimlikleCoz" in blok, (
         "secure_v2 notu dalın neden korunduğunu (eşleşmiş istemcinin yeniden bağlanması) söylemiyor"
+    )
+    # Tur 2 (çürütücü, ölçüm bağı): gerekçe olarak anılan istemci işlevi GERÇEKTEN var ve device_id dalıyla çözüyor — eskiden
+    # yalnız adın notta geçmesi aranıyordu (işlev kaldırılsa / yeniden adlandırılsa gerekçe bayatlar, kapı yeşil kalırdı).
+    ui = UI_KAYIT.read_text(encoding="utf-8")
+    m = re.search(r"export\s+(?:async\s+)?function\s+uzakCihaziKimlikleCoz\b(.*?)\n}", ui, re.S)
+    assert m and "p_device_id" in m.group(1), (
+        f"notun gerekçesi `uzakCihaziKimlikleCoz` {UI_KAYIT.relative_to(KOK).as_posix()}'te yok ya da device_id dalıyla "
+        "çözmüyor — notu yeniden ölçün"
     )
