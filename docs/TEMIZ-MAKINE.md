@@ -21,7 +21,12 @@ Hiçbir toolchain, repo, sır, komut satırı **gerekmez**. Cihaz yazılımı ke
 2. **Windows İçin İndir** → `PEMFVetClient-Setup-*.exe` iner → çalıştır.
    - Kurulum ~11 MB'lık launcher'ı yazar; **runtime + AI profilleri kurulum sırasında iner**
      (internet gerekir, ilk sefer birkaç GB — sabırlı olun, ilerleme çubuğu var).
-   - Yayımcı: **IBIA Teknoloji Ltd. Şti.** (UAC uyarısında bu görünmeli).
+   - ~~Yayımcı: **IBIA Teknoloji Ltd. Şti.** (UAC uyarısında bu görünmeli).~~ ⚠️ Kurulum dosyası **Authenticode ile
+     İMZALI DEĞİLDİR** (sahip kararı Y28 — kod imzası şimdilik alınmıyor): UAC / SmartScreen **"Bilinmeyen yayımcı"**
+     gösterir. Çalıştırmadan önce dosyayı SHA256 ile doğrulayın:
+     `Get-FileHash .\PEMFVetClient-Setup-*.exe -Algorithm SHA256` → değer yayın manifestindeki `launcher.sha256` ile
+     AYNI olmalı (farklıysa ÇALIŞTIRMAYIN). Programlar listesinde görünen "İBİA Teknoloji Ltd. Şti." yalnız paket
+     bilgisidir (`launcher/app/tauri.conf.json` `bundle.publisher`), imza değildir.
 3. Profil seç (Ev Sahibi / Veteriner / Araştırma) → **Başlat**.
 4. Bitti. Cihaz açılışta manifest'e bakıp yeni sürüm varsa **sessizce günceller** (süren seans
    asla kesilmez; kurulum kapat-aç anında olur). Klinik hiçbir şey yapmaz.
