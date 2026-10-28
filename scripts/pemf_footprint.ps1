@@ -79,8 +79,9 @@ function Get-PemfFootprint {
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\mqtt_kimlik.json';    Owner = 'shared'; Kvkk = $true }
         # D2.74: staging profili bulut kimliğini AYRI tutar (deploy/staging.env PEMF_DEVICE_IDENTITY_DIR=C:\ProgramData\PEMF_Staging).
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\device_identity.json'; Owner = 'shared'; Kvkk = $true }
-        # ⚠️ Y85 (İG-9.88 · D2.E04): faturalanmamış AI tüketim defteri (`servers/jeton.py` → `<PEMF_DATA_DIR>\jeton_bekleyen.json`;
-        # PEMF_DATA_DIR yoksa `~\.pemf`). Hasta verisi DEĞİL ama cihaz kimliği taşır → yalnız -IncludePatientData siler; sıradan
+        # ⚠️ Y85 (İG-9.88 · D2.E04): faturalanmamış AI tüketim defteri (`servers/jeton.py` → `<PEMF_DATA_DIR>\PEMF_GUI\jeton_bekleyen.json`
+        # — Y202: yukarıdaki KVKK `PEMF_GUI` satırlarıyla silinir; aşağıdaki kök yolları taşınmamış ESKİ konumdur; PEMF_DATA_DIR yoksa
+        # `~\.pemf`). Hasta verisi DEĞİL ama cihaz kimliği taşır → yalnız -IncludePatientData siler; sıradan
         # kaldır-kur KORUR (silinseydi çevrimdışı birikmiş tüketim hiç faturalanmazdı). Eskiden hiçbir kaldırma dokunmuyordu.
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\jeton_bekleyen.json';  Owner = 'shared'; Kvkk = $true }
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\jeton_bekleyen.json'; Owner = 'shared'; Kvkk = $true }

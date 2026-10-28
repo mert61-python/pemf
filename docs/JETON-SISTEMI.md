@@ -84,7 +84,8 @@ tavana (`PEMF_JETON_OFFLINE_TAVAN`, 50) kadar izin alıp deftere yazılıyordu; 
 kapalıyken davranış değişmedi (internetsiz analiz serbest).
 
 **Yolda kalan ödeme ("Bir süre yeniden dene"):** analiz çevrimiçi karar aldı ve teslim edildi ama düşüm tam o an
-gönderilemediyse kayıt `PEMF_DATA_DIR/jeton_bekleyen.json` defterine yazılır ve `bekleyenleri_uzlastir()` ile yeniden
+gönderilemediyse kayıt `PEMF_DATA_DIR/PEMF_GUI/jeton_bekleyen.json` defterine yazılır (Y202: hasta veri dizininde — paylaşılan
+kökteki eski defter ilk açılışta bir kez, ezmeden taşınır; `PEMF_DATA_DIR` yoksa `~/.pemf/`) ve `bekleyenleri_uzlastir()` ile yeniden
 gönderilir — tetik: sahibin bir bakiye okuması (`/api/jeton/bakiye`) ya da analiz isteği Supabase'e ULAŞTIĞINDA, o isteğin
 kimliğiyle; arka planda ve tek uçuşla (istek beklemez, aynı kayıt iki kez gönderilmez). Gönderilene dek kayıt sahibin
 sonraki kararlarında bakiyeden düşülmüş (kullandıkça öde: borca eklenmiş) sayılır → aynı jeton ikinci analize verilmez,

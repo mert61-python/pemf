@@ -17,7 +17,8 @@ JETON = KOK / "apps" / "backend" / "servers" / "jeton.py"
 def _karantina_adi() -> str:
     kaynak = JETON.read_text(encoding="utf-8")
     ek = re.search(r'^DEFTER_KARANTINA_EKI = "([^"]+)"', kaynak, re.M).group(1)
-    defter = re.search(r'Path\(kok\) / "([^"]+)"', kaynak).group(1)
+    # Y202: ad sabitte (yol `<kök>/PEMF_GUI/<ad>`)
+    defter = re.search(r'^DEFTER_ADI = "([^"]+)"', kaynak, re.M).group(1)
     return defter + ek
 
 

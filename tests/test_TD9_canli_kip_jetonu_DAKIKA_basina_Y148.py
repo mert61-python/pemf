@@ -90,8 +90,9 @@ def ortam(tmp_path, monkeypatch):
     monkeypatch.delenv("PEMF_AI_DOMAIN_GUARD", raising=False)
     client = TestClient(api_server.app, client=("127.0.0.1", 51235))
     yield SimpleNamespace(
-        client=client, j=j, bakiye=bakiye, giden=giden, saat=saat, seg=seg, defter=tmp_path / "jeton_bekleyen.json"
-    )
+        client=client, j=j, bakiye=bakiye, giden=giden, saat=saat, seg=seg,
+        defter=tmp_path / "PEMF_GUI" / "jeton_bekleyen.json",  # Y202: defter `<PEMF_DATA_DIR>/PEMF_GUI/` altında
+    )  # fmt: skip
     t = getattr(j, "_son_uzlastirma", None)
     if t is not None:
         t.join(timeout=10)

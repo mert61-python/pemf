@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""4B-1.4 — çevrimdışı jeton defteri (`PEMF_DATA_DIR/jeton_bekleyen.json`) yazım ortasında süreç ölürse BEKLEYEN TÜKETİM KAYBOLUR.
+"""4B-1.4 — çevrimdışı jeton defteri (`PEMF_DATA_DIR/PEMF_GUI/jeton_bekleyen.json` — Y202; eskiden `PEMF_DATA_DIR/`) yazım ortasında süreç
+ölürse BEKLEYEN TÜKETİM KAYBOLUR.
 
 `JetonYoneticisi._defteri_yaz` dosyayı YERİNDE yazıyordu (`Path.write_text` = önce kesip boşaltır, sonra yazar). D4.23 uzlaştırmayı
 arka plandaki DAEMON iş parçacığına taşıdı (süreç kapanışında yarıda öldürülür; NSIS `taskkill /F` da aynı). Yarım kalan defter
@@ -35,7 +36,8 @@ _COCUK = textwrap.dedent(
     y = j._defter_yoneticisi(sahip="s")
     N = int(sys.argv[3])
     y._defteri_yaz([{"istek_id": f"i{n}", "miktar": 1, "tur": "analiz", "detay": "goruntu", "cihaz_id": None, "sahip": "s"} for n in range(N)])
-    dizin = os.path.normcase(os.path.abspath(sys.argv[2]))
+    dizin = os.path.normcase(os.path.dirname(os.path.abspath(str(y._defter))))  # Y202: defterin KENDİ dizini (`<kök>/PEMF_GUI`)
+    assert os.path.basename(dizin) == os.path.normcase("PEMF_GUI"), dizin
 
     def _kanca(frame, olay, arg):
         # Defter dizinindeki HERHANGİ bir dosya nesnesine (defterin kendisi ya da geçici dosya) ilk `write` çağrısında,
@@ -104,7 +106,7 @@ def test_KRITIK_yazim_ortasinda_surec_olurse_bekleyen_tuketim_KAYBOLMAZ(tmp_path
     r = _cokme(veri)
     assert r.returncode in (0, 9), f"çocuk süreç beklenmedik biçimde bitti (rc={r.returncode}):\n{r.stderr[-1500:]}"
     okunan = j.JetonYoneticisi(
-        bakiye_okuyucu=lambda: 0, tuketim_gonderici=lambda **k: False, defter_yolu=veri / DEFTER, sahip="s"
+        bakiye_okuyucu=lambda: 0, tuketim_gonderici=lambda **k: False, defter_yolu=veri / "PEMF_GUI" / DEFTER, sahip="s"
     )._defteri_oku()
     assert len(okunan) >= N, (
         f"yazım ortasında süreç öldü (rc={r.returncode}) ve defterde {len(okunan)}/{N} kayıt kaldı — "
@@ -139,8 +141,11 @@ def test_KRITIK_urunun_biraktigi_artik_dosyalar_KVKK_tam_temizlik_izinde(tmp_pat
     j = _jeton(tmp_path, monkeypatch)
     _cokme(tmp_path / "cokme")
     yol, _ = _yarim_defter(j)
-    artiklar = {p.name for p in (tmp_path / "cokme").iterdir() if p.name != DEFTER}
+    # Y202: defter (ve artıkları) `<kök>/PEMF_GUI` altında; kökte artık dosya KALMAZ.
+    assert [p.name for p in (tmp_path / "cokme").iterdir()] == ["PEMF_GUI"], list((tmp_path / "cokme").iterdir())
+    artiklar = {p.name for p in (tmp_path / "cokme" / "PEMF_GUI").iterdir() if p.name != DEFTER}
     artiklar |= {p.name for p in yol.parent.iterdir() if p.is_file() and p.name != DEFTER}
+    assert artiklar, "çıpa: çökme / bozuk defter hiçbir artık bırakmadı — ölçüm kör"
     surucu = tmp_path / "fp.ps1"
     surucu.write_text(
         "param([string]$F)\n. $F\n(Get-PemfFootprint).Paths | ForEach-Object { \"$($_.Kind)|$($_.Path)|$($_.Kvkk)\" }\n",
@@ -157,6 +162,12 @@ def test_KRITIK_urunun_biraktigi_artik_dosyalar_KVKK_tam_temizlik_izinde(tmp_pat
     assert len(defter_konumlari) == 3, (
         f"çıpa: footprint'te defterin 3 konumu yok: {defter_konumlari}\n{r.stderr[-600:]}"
     )
+    # Y202 (S-D3I.5): `PEMF_DATA_DIR` köklerinde defter artık `<kök>\PEMF_GUI` altında — o dizin KVKK satırıyla (yalnız tam temizlik)
+    # BÜTÜN silinir; eski kök satırları (taşınmamış makineler) yukarıda.
+    kokler = sorted(onek for k, onek, kv in defter_konumlari if k == "Abs")
+    assert len(kokler) == 2, kokler
+    yok = [onek + "PEMF_GUI" for onek in kokler if ["Abs", onek + "PEMF_GUI", "True"] not in satirlar]
+    assert not yok, f"yeni defter dizini KVKK tam temizlik izinde YOK (cihazda kalır): {yok}"
     eksik = sorted(
         f"{k}:{onek}{ad}" for ad in artiklar for (k, onek, kv) in defter_konumlari if [k, onek + ad, kv] not in satirlar
     )

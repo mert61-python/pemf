@@ -375,13 +375,94 @@ TUKETIM_REDDEDILDI = _KesinRed()
 #: (`scripts/pemf_footprint.ps1`) defterle BİRLİKTE bunları da siler — ek değişirse orası da güncellenmeli.
 DEFTER_GECICI_EKI = ".tmp"
 DEFTER_KARANTINA_EKI = ".bozuk"
+#: Defterin dosya adı (KVKK tam temizliği ve RUNBOOK karantina satırı bu adı anar).
+DEFTER_ADI = "jeton_bekleyen.json"
+
+#: Y202 (S-D3I.5, sahip): eski konumdan taşıma SÜREÇ BAŞINA bir kez denenir (eski yol → kullanılacak defter yolu).
+_DEFTER_GOCU: dict[str, Path] = {}
+_DEFTER_GOC_KILIT = threading.Lock()
 
 
 def _defter_yolu() -> Path:
-    kok = os.getenv("PEMF_DATA_DIR") or str(Path.home() / ".pemf")
-    p = Path(kok) / "jeton_bekleyen.json"
+    """Defterin yolu. Y202 (S-D3I.5): `PEMF_DATA_DIR` varken HASTA VERİ DİZİNİNDE, `<PEMF_DATA_DIR>/PEMF_GUI/` altında
+    (`utils.path_utils.get_app_data_directory` ile aynı dizin). Eskiden paylaşılan kökteydi (`<PEMF_DATA_DIR>/`): launcher köke grup hakkı
+    vermediği için (Y96 · Y202) ikinci Windows hesabı ilk hesabın defterini GÜNCELLEYEMEZDİ. Eski konumdaki defter ilk açılışta BİR KEZ
+    taşınır (`_eski_defteri_tasi`). `PEMF_DATA_DIR` yoksa bugünkü gibi hesaba özel `~/.pemf/`."""
+    kok = os.getenv("PEMF_DATA_DIR")
+    if not kok:
+        p = Path.home() / ".pemf" / DEFTER_ADI
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    p = Path(kok) / "PEMF_GUI" / DEFTER_ADI
     p.parent.mkdir(parents=True, exist_ok=True)
-    return p
+    return _eski_defteri_tasi(Path(kok) / DEFTER_ADI, p)
+
+
+def _eski_defteri_tasi(eski: Path, yeni: Path) -> Path:
+    """Y202 (S-D3I.5): paylaşılan kökteki eski defteri `PEMF_GUI` altına BİR KEZ, ATOMİK, EZMEDEN taşır; kullanılacak yolu döndürür.
+
+    Taşıma `os.link` (aynı birim: içerik KOPYALANMAZ, aynı dosyaya ikinci ad; hedef varsa `FileExistsError` — EZMEZ) + eski adın
+    silinmesidir: hangi adımda ölünse ölünsün iki konumdan birinde TAM içerik kalır.
+      · Hedefte defter VARSA: aynı dosya / aynı içerikse (önceki taşıma eski adı silmeden kesilmiş) eski ad silinir; farklıysa eskiye
+        DOKUNULMAZ, uyarı (süreç başına bir kez) günlüğe, yeni defter kullanılır.
+      · Taşıma düşerse eski konum kullanılmaya devam eder (bugünkü davranış) ve bir sonraki açılışta yeniden denenir — kayıt kaybolmaz.
+    Jeton KOD düzeyinde kapalıdır (Y194): bu yol yalnız defter açılınca koşar, ücretlendirmeyi AÇMAZ."""
+    with _DEFTER_GOC_KILIT:
+        anahtar = os.path.normcase(os.path.abspath(eski))
+        if anahtar not in _DEFTER_GOCU:
+            _DEFTER_GOCU[anahtar] = _eski_defteri_tasi_bir_kez(eski, yeni)
+        return _DEFTER_GOCU[anahtar]
+
+
+def _eski_defteri_tasi_bir_kez(eski: Path, yeni: Path) -> Path:
+    if os.path.normcase(os.path.abspath(eski)) == os.path.normcase(os.path.abspath(yeni)) or not eski.is_file():
+        return yeni  # taşınacak eski defter yok (yeni kurulum ya da zaten taşındı)
+    if yeni.exists():
+        if _ayni_defter(eski, yeni):
+            _eski_defter_adini_sil(eski)
+        else:
+            logger.warning(
+                "jeton: bekleyen tüketim defteri İKİ konumda — yeni konumdaki kullanılıyor (%s); eski (%s) EZİLMEDİ, silinmedi: elle inceleyin",
+                yeni,
+                eski,
+            )
+        return yeni
+    try:
+        os.link(eski, yeni)
+    except FileExistsError:
+        logger.warning(
+            "jeton: defter taşınırken yeni konumda başka bir defter belirdi (%s) — eski (%s) EZİLMEDİ: elle inceleyin",
+            yeni,
+            eski,
+        )
+        return yeni
+    except OSError:
+        logger.warning(
+            "jeton: bekleyen tüketim defteri %s altına taşınamadı — eski konum kullanılıyor, sonraki açılışta yeniden denenir",
+            yeni.parent,
+            exc_info=True,
+        )
+        return eski
+    _eski_defter_adini_sil(eski)
+    return yeni
+
+
+def _ayni_defter(a: Path, b: Path) -> bool:
+    try:
+        return os.path.samefile(a, b) or a.read_bytes() == b.read_bytes()
+    except OSError:
+        return False
+
+
+def _eski_defter_adini_sil(eski: Path) -> None:
+    try:
+        eski.unlink(missing_ok=True)
+    except OSError:
+        logger.warning(
+            "jeton: taşınan defterin eski adı silinemedi (%s) — içerik yeni konumda; sonraki açılışta yeniden denenir",
+            eski,
+            exc_info=True,
+        )
 
 
 def _jwt_sahip(token: str) -> str | None:

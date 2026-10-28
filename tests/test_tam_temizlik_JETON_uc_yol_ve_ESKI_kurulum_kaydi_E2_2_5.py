@@ -31,13 +31,18 @@ _JETONLAR = (
     Path("C/Users/denetim/.pemf/jeton_bekleyen.json"),
     Path("C/Windows/System32/config/systemprofile/.pemf/jeton_bekleyen.json"),
 )
+#: Y202 (S-D3I.5): `PEMF_DATA_DIR` varken defterin YENİ yeri `<kök>\PEMF_GUI\` (eski kök yolları taşınmamış makineler için yukarıda).
+_JETONLAR_PEMF_GUI = (
+    Path("C/ProgramData/PEMF_System/PEMF_GUI/jeton_bekleyen.json"),
+    Path("C/ProgramData/PEMF_Staging/PEMF_GUI/jeton_bekleyen.json"),
+)
 _ESKI_KURULUM = Path("C/Users/denetim/AppData/Local/PEMFVetClient")
 
 
 def _kos(tmp_path: Path, hasta: bool) -> dict:
     kok = tmp_path / "kok"
     _agac(kok)
-    for j in _JETONLAR:
+    for j in _JETONLAR + _JETONLAR_PEMF_GUI:
         (kok / j).parent.mkdir(parents=True, exist_ok=True)
         (kok / j).write_bytes(b'{"bekleyen": []}')
     eski_hedef = kok / "H" / "Yedek_eski_kurulum"
@@ -77,6 +82,23 @@ def test_KRITIK_Y85_jeton_defteri_UC_yolun_HEPSINDE_yalniz_tam_temizlikte_silini
             )
         else:
             assert yol.exists(), f"sıradan kaldırma faturalanmamış tüketim defterini SİLDİ (Y85): {j}"
+
+
+@pytest.mark.parametrize("hasta", [True, False], ids=["tam", "sade"])
+def test_KRITIK_Y202b_PEMF_GUI_altindaki_jeton_defteri_yalniz_tam_temizlikte_silinir(tmp_path, hasta):
+    """Y202 (S-D3I.5): taşınan defter `<kök>\\PEMF_GUI\\` altında — KVKK `PEMF_GUI` satırıyla (dizin BÜTÜN) yalnız tam temizlikte silinir,
+    sıradan kaldırma KORUR (Y85)."""
+    s = _kos(tmp_path, hasta)
+    assert not s["engel"], s["engel"]
+    for j in _JETONLAR_PEMF_GUI:
+        yol = s["kok"] / j
+        if hasta:
+            assert not yol.exists(), f"tam temizlik PEMF_GUI altındaki jeton defterini bıraktı (Y85 · Y202): {j}"
+            assert [ln for ln in s["log"] if "silindi (HASTA-VERİSİ)" in ln and ln.endswith(str(yol.parent))], (
+                f"defterin dizininin (PEMF_GUI) silindiği DOĞRULANARAK raporlanmadı: {j}\n" + "\n".join(s["log"])
+            )
+        else:
+            assert yol.exists(), f"sıradan kaldırma PEMF_GUI altındaki tüketim defterini SİLDİ (Y85): {j}"
 
 
 @pytest.mark.parametrize("hasta", [True, False], ids=["tam", "sade"])
