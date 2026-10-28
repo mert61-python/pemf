@@ -179,6 +179,13 @@ class MosquittoSupervisor:
         r"C:\Program Files (x86)\mosquitto\mosquitto.exe",
         r"C:\mosquitto\mosquitto.exe",
     ]
+    #: D7.01 (B-4.20): pahalı (alt süreç) yoklamaların TTL'i — `NetworkStatusService._EXPENSIVE_POLL_TTL_S` deseni (izleme döngüsü 10 sn'de
+    #: bir turda 2-3 süreç başlatıyordu: günde 17 280–25 920). Önbelleğe girenler: sürüm (`mosquitto -h`; anahtar ikilinin yolu + boyutu +
+    #: mtime'ı), Windows servisinin YOKLUĞU (`sc query` başarısız) + yalnız gösterilen süreç kimliği (`tasklist`), Linux systemd birim
+    #: TANIMI (`is-enabled`). ⚠️ KAYITLI servisin ÇALIŞMA durumu (`sc query` RUNNING / `is-active`) her turda TAZE: Windows'ta otoriter
+    #: `running` odur — önbelleklenseydi çöken broker'ın yeniden başlatılması TTL kadar gecikir (ESP STOP yolu), `net start` sonrası
+    #: teyit eski değeri okurdu. Durum değiştiren eylemden (`net start`, broker süreci başlatma) sonra önbellek boşaltılır.
+    _PAHALI_YOKLAMA_TTL_S = 60.0
 
     def __init__(
         self,
@@ -194,6 +201,8 @@ class MosquittoSupervisor:
         self.ensure_running = bool(ensure_running)
         self.start_mdns = bool(start_mdns)
         self.event_bus = event_bus or get_event_bus()
+        self._saat = time.monotonic  # D7.01: enjekte edilebilir saat (TTL)
+        self._yoklama_onbellegi: dict[str, tuple[float, Any, Any]] = {}
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._mdns_service = None
@@ -264,7 +273,7 @@ class MosquittoSupervisor:
             "installed": installed,
             "running": running,
             "service_exists": bool(service.get("service_exists")),
-            "version": self._read_version(exe_path) if exe_path else "",
+            "version": self._surum(exe_path) if exe_path else "",
             "port": self.port,
             "port_open": port_open,
             "pid": service.get("pid"),
@@ -299,6 +308,7 @@ class MosquittoSupervisor:
             result = _run_command(["net", "start", self.MOSQUITTO_SERVICE_NAME], timeout=15)
             if result.returncode == 0:
                 time.sleep(1)
+                self._onbellegi_bosalt()  # D7.01: durum değişti
                 self.check_once()
                 return True
             logger.warning("Mosquitto service start failed: %s", result.stderr.strip())
@@ -351,6 +361,7 @@ class MosquittoSupervisor:
         try:
             subprocess.Popen(args, **self._broker_popen_kwargs())
             time.sleep(1)
+            self._onbellegi_bosalt()  # D7.01: durum değişti (yeni süreç kimliği)
             self.check_once()
             return True
         except Exception as exc:
@@ -594,11 +605,44 @@ class MosquittoSupervisor:
             pass
         return ""
 
+    def _onbellekli(self, ad: str, anahtar: Any, uretici, sakla=lambda _deger: True):
+        """D7.01: `uretici()` sonucunu (`ad`, `anahtar`) için `_PAHALI_YOKLAMA_TTL_S` boyunca önbellekle; `sakla(deger)` False ise
+        sonuç önbelleğe GİRMEZ (her çağrıda taze). Üretici fırlatırsa önbellek değişmez, istisna çağırana gider (bugünkü yutma yerleri)."""
+        simdi = getattr(self, "_saat", time.monotonic)()
+        onbellek = self.__dict__.setdefault("_yoklama_onbellegi", {})
+        kayit = onbellek.get(ad)
+        if kayit is not None and kayit[1] == anahtar and (simdi - kayit[0]) < self._PAHALI_YOKLAMA_TTL_S:
+            return kayit[2]
+        deger = uretici()
+        if sakla(deger):
+            onbellek[ad] = (simdi, anahtar, deger)
+        else:
+            onbellek.pop(ad, None)
+        return deger
+
+    def _onbellegi_bosalt(self) -> None:
+        self.__dict__.get("_yoklama_onbellegi", {}).clear()
+
+    def _surum(self, exe_path: Path) -> str:
+        """D7.01: `_read_version` (alt süreç `mosquitto -h`) — ikili (yol + boyut + mtime) değişmedikçe TTL boyunca önbellekten."""
+        try:
+            st = Path(exe_path).stat()
+            anahtar = (str(exe_path), st.st_size, st.st_mtime_ns)
+        except OSError:
+            anahtar = (str(exe_path), None, None)
+        return self._onbellekli("surum", anahtar, lambda: self._read_version(exe_path))
+
     def _check_service_status(self) -> dict[str, Any]:
         data = {"service_exists": False, "running": False, "pid": None}
         if platform.system() == "Windows":
             try:
-                result = _run_command(["sc", "query", self.MOSQUITTO_SERVICE_NAME], timeout=5)
+                # D7.01: YALNIZ servisin YOKLUĞU (başarısız sorgu) önbelleğe girer; KAYITLI servisin durumu her turda TAZE (otoriter `running`).
+                result = self._onbellekli(
+                    "sc_query",
+                    None,
+                    lambda: _run_command(["sc", "query", self.MOSQUITTO_SERVICE_NAME], timeout=5),
+                    sakla=lambda r: r.returncode != 0,
+                )
                 if result.returncode == 0:
                     data["service_exists"] = True
                     data["running"] = "RUNNING" in result.stdout
@@ -608,7 +652,12 @@ class MosquittoSupervisor:
 
         if platform.system() == "Windows":
             try:
-                result = _run_command(["tasklist", "/FI", "IMAGENAME eq mosquitto.exe", "/NH"], timeout=5)
+                # D7.01: servis yokken `running` porttan okunur (`check_once`); bu sorgu yalnız gösterilen süreç kimliğini verir → TTL.
+                result = self._onbellekli(
+                    "tasklist",
+                    None,
+                    lambda: _run_command(["tasklist", "/FI", "IMAGENAME eq mosquitto.exe", "/NH"], timeout=5),
+                )
                 if "mosquitto.exe" in result.stdout:
                     data["running"] = True
                     parts = result.stdout.strip().split()
@@ -625,7 +674,12 @@ class MosquittoSupervisor:
         # HİÇ set edilmiyordu → running=yalnız-port-open; loopback-broker'ı 'sağlıklı' sanıp config'i yüklemiyordu).
         if platform.system() != "Windows":
             try:
-                enabled = _run_command(["systemctl", "is-enabled", self.MOSQUITTO_SERVICE_NAME], timeout=5)
+                # D7.01: birim TANIMI TTL ile önbellekte; `is-active` (çalışma durumu) her turda TAZE.
+                enabled = self._onbellekli(
+                    "systemd_tanim",
+                    None,
+                    lambda: _run_command(["systemctl", "is-enabled", self.MOSQUITTO_SERVICE_NAME], timeout=5),
+                )
                 en = (enabled.stdout or "").strip().lower()
                 if en in ("enabled", "disabled", "static", "masked", "indirect", "enabled-runtime"):
                     data["service_exists"] = True  # systemd unit TANIMLI
