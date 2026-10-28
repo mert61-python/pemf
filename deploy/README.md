@@ -57,7 +57,7 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
 3. Installer `setup_services.ps1 -AppDir {app} -Mode device` çağırır:
    - Bundled **mosquitto** → Windows servisi (1883).
    - **PemfBackend** servisi (NSSM) + `deploy\device.env` env'leri.
-   - Firewall: TCP 8000, TCP 1883, UDP 5051.
+   - Firewall: TCP 8000 (API — `PEMF_API_PORT`), TCP 1883 YALNIZ hotspot alt ağından (192.168.137.0/24 — ESP bobin 8; ESP kapalıyken de kurulur), UDP 5051 (keşif).
 4. **STM portu OTOMATİK** bulunur (ST-Link USB VID). Tutmazsa `device.env`'e `PEMF_STM_PORT=COMx` yaz.
 5. **Uzaktan erişim** `device.env`'de açık (`PEMF_ENABLE_TUNNEL=1` + `PEMF_REQUIRE_AUTH=1`). cloudflared gerekir (§4).
 6. Doğrula: `http://localhost:8000/api/health` → STM connected, **7 bobin** (slot 8 ESP'ydi, sökülü). Mobil aynı WiFi → mDNS ile bağlanır.
