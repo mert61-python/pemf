@@ -340,7 +340,7 @@ class SeansKarisimi:
                 # AKTİFKEN buluta push edilmiş olabilir (worker 60 sn interval → 1 dk'dan uzun her
                 # seansta sync_status=1 olur); kapanış bayrağı 0'a çekmezse bir sonraki PUSH
                 # ('WHERE sync_status=0') kapanışı HİÇ görmez → bulut kopyası sonsuza dek 'active'
-                # kalır (end_time/duration bulutta hiç oluşmaz). Kilit: test_sync_pull_bayat_active.
+                # kalır (end_time/duration bulutta hiç oluşmaz). Kilit: tests/test_sync_pull_bayat_active.py
                 update_query = '''
                     UPDATE treatment_sessions
                     SET end_time = ?, duration_minutes = ?, session_status = ?,

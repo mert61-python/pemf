@@ -368,7 +368,7 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
     # kendisi degil SESSIZLIGI: `_copy_offsite` kararini yalniz `.exists()`'ten verip operatore
     # "KURTARMA KODU ile baska makinede geri yuklenebilir" diye YANLIS GUVENCE logluyordu.
     #
-    # "Degismediyse yeniden yazma" davranisi KASITLI ve testle kilitli (test_backup_recovery:
+    # "Degismediyse yeniden yazma" davranisi KASITLI ve testle kilitli (tests/test_backup_recovery.py:
     # "Operatorun dogruladigi zarf her gun degisip suphe uyandirmasin") → KORUNUR. Degisen tek sey:
     # "var mi?" yerine "GERCEKTEN ACILIYOR MU?" sorulmasi.
     # Kilit: tests/test_kurtarma_zarfi_saglamlik.py
