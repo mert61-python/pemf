@@ -29,6 +29,7 @@ KOK = kaynak_kokunu_bul(__file__)
 
 README_LER = ("apps/ui/README.md", "apps/web/README.md")
 _ONEKLER = ("../", "apps/")
+_NOKTA = "./"
 _KOD = re.compile(r"`([^`\s]+)`")
 
 
@@ -55,9 +56,16 @@ def cozulmeyen_kod_yollari(kok: Path = KOK, readme_ler: tuple[str, ...] = README
         for no, satir in enumerate(metin.splitlines(), 1):
             for m in _KOD.finditer(satir):
                 yol = m.group(1)
-                if not yol.replace("\\", "/").startswith(_ONEKLER):
+                duz = yol.replace("\\", "/")
+                if duz.startswith(_ONEKLER):
+                    tamam = _coz(kok, rel, yol)
+                elif duz.startswith(_NOKTA) and len(duz) > len(_NOKTA):
+                    # TUR 2 (çürütücü kolu): `./x` / `.\x` — README'nin dizininden YA DA depo kökünden ("guii kökünden" komutu) çözülür.
+                    # D6.28'in düzelttiği `.\build_tools\build_apk.ps1` tam bu biçimde; kol yokken bozulması (`cur628_n1`) YAŞIYORDU.
+                    tamam = _coz(kok, rel, yol) or _coz(kok, "", yol)
+                else:
                     continue
-                if not _coz(kok, rel, yol):
+                if not tamam:
                     bulgular.append((rel, no, yol))
     return bulgular
 
@@ -104,3 +112,15 @@ def test_KRITIK_ui_ve_site_README_kod_yollari_COZULUR():
         + "\n  ".join(f"{d}:{n} -> {y}" for d, n, y in kirik)
         + "\nYolu depodaki gerçek konuma göre yeniden hesaplayın; dosya gerçekten yoksa yolu kaldırıp gerçeği yazın."
     )
+
+
+def test_KARSIT_KANIT_nokta_onekli_yol_README_dizininden_ya_da_KOKTEN_cozulur(tmp_path):
+    """TUR 2: `./x` / `.\\x` kod yolu README dizininden ya da depo kökünden çözülür; ikisinde de yoksa KIRIK; tek başına `./` yol değildir."""
+    readme = "`.\\build_tools\\b.ps1` `./src/a.ts` `.\\build_tools\\yok.ps1` `./`"
+    kok = _sahte_depo(
+        tmp_path / "depo",
+        {"apps/x/README.md": readme, "apps/x/src/a.ts": "a", "build_tools/b.ps1": "b"},
+        {},
+        gitignore=b"dist/\r\n",
+    )
+    assert cozulmeyen_kod_yollari(kok, ("apps/x/README.md",)) == [("apps/x/README.md", 1, ".\\build_tools\\yok.ps1")]
