@@ -61,7 +61,7 @@ pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.
 | `contourpy` | 1.3.2 | BSD 3-Clause License |
 | `cryptography` | 50.0.0 | Apache-2.0 OR BSD-3-Clause |
 | `curl-cffi` | 0.15.0 | MIT |
-| `cycler` | 0.12.1 | Copyright (c) 2015, matplotlib project |
+| `cycler` | 0.12.1 | BSD License |
 | `decorator` | 5.3.1 | BSD-2-Clause |
 | `exceptiongroup` | 1.3.1 | MIT License |
 | `fastapi` | — | MIT |
@@ -84,27 +84,27 @@ pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.
 | `jinja2` | 3.1.6 | BSD License |
 | `joblib` | 1.5.3 | BSD-3-Clause |
 | `keyring` | 25.7.0 | MIT |
-| `kiwisolver` | 1.5.0 | ========================= |
+| `kiwisolver` | 1.5.0 | BSD License |
 | `lazy-loader` | 0.5 | BSD-3-Clause |
 | `librosa` | 0.11.0 | ISC |
 | `lightning-utilities` | 0.15.3 | Apache-2.0 |
 | `llvmlite` | 0.44.0 | BSD |
 | `markdown-it-py` | 4.2.0 | MIT License |
 | `markupsafe` | 3.0.3 | BSD-3-Clause |
-| `matplotlib` | 3.10.9 | License agreement for matplotlib versions 1.3.0 and later |
+| `matplotlib` | 3.10.9 | Python Software Foundation License |
 | `mdurl` | 0.1.2 | MIT License |
 | `mpmath` | 1.3.0 | BSD |
 | `msgpack` | 1.1.2 | Apache-2.0 |
 | `networkx` | 3.4.2 | BSD License |
 | `numba` | 0.61.2 | BSD |
-| `numpy` | 1.26.4 | Copyright (c) 2005-2023, NumPy Developers. |
+| `numpy` | 1.26.4 | BSD License |
 | `onnx` | 1.15.0 | Apache License v2.0 |
 | `onnxruntime` | 1.19.2 | MIT License |
 | `opencv-python` | — | Apache-2.0 |
 | `packaging` | 26.2 | Apache-2.0 OR BSD-2-Clause |
 | `paho-mqtt` | — | EPL-2.0 / EDL-1.0 |
 | `pandas` | 2.3.3 | BSD 3-Clause License |
-| `pi-heif` | 1.4.0 | BSD-3-Clause |
+| `pi-heif` | 1.4.0 | BSD-3-Clause (sınıflandırıcı: GNU Lesser General Public License v3 (LGPLv3)) |
 | `pillow` | 12.3.0 | MIT-CMU |
 | `platformdirs` | 4.10.0 | MIT |
 | `pooch` | 1.9.0 | BSD-3-Clause |
@@ -115,7 +115,7 @@ pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.
 | `pyparsing` | 3.3.2 | MIT |
 | `pyreadline3` | 3.5.4 | BSD |
 | `pyserial` | — | BSD-3-Clause |
-| `python-dateutil` | 2.9.0.post0 | Dual License |
+| `python-dateutil` | 2.9.0.post0 | BSD License / Apache Software License |
 | `python-multipart` | — | Apache-2.0 |
 | `pytorch-lightning` | 2.6.5 | Apache-2.0 |
 | `pytz` | 2026.2 | MIT |
@@ -124,9 +124,9 @@ pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.
 | `requests` | 2.33.1 | Apache-2.0 |
 | `rich` | 15.0.0 | MIT |
 | `safetensors` | 0.8.0 | Apache Software License |
-| `scikit-image` | 0.25.2 | Files: * |
+| `scikit-image` | 0.25.2 | BSD License |
 | `scikit-learn` | 1.7.2 | BSD-3-Clause |
-| `scipy` | 1.15.3 | Copyright (c) 2001-2002 Enthought, Inc. 2003-2024, SciPy Developers. |
+| `scipy` | 1.15.3 | BSD License |
 | `sentry-sdk` | — | MIT |
 | `shap` | 0.49.1 | MIT License |
 | `shellingham` | 1.5.4 | ISC License |

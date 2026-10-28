@@ -13,7 +13,7 @@
 
 | # | İş | Durum | Kaynak |
 |---|---|---|---|
-| A1 | **Ultralytics AGPL-3.0** — ürün kapalı kaynak + ücretli, `ultralytics` AGPL. Üretim yolunda **iki** modül hâlâ `.pt` (petri, kidney_ct) | AÇIK — karar sırası: **önce hukuk**, sonra bütçe | `AGPL-KARARI.md` |
+| A1 | **Ultralytics AGPL-3.0** — ürün kapalı kaynak + ücretli, `ultralytics` AGPL. ~~Üretim yolunda **iki** modül hâlâ `.pt` (petri, kidney_ct)~~ ultralytics'i içe aktaran **7** `ai_hub` modülü var (AST ölçümü, D6.43 — `AGPL-KARARI.md` §3) | AÇIK — karar sırası: **önce hukuk**, sonra bütçe | `AGPL-KARARI.md` |
 | A1a | ⚠️ A1'in asıl sorusu: modeller Ultralytics'in **önceden eğitilmiş ağırlıklarından** mı türedi? Türediyse ONNX'e taşımak sorunu ÇÖZMEZ | Avukata sorulmadı | aynı |
 | A2 | `.iss` **MyAppVersion == VERSION** kapısı — çıplak `iscc.exe` koridoru yanlış etiketli kurulum üretebiliyor | Sahip teyidi bekliyor ([BLD-6]) | `denetim-bulgular-3.md` |
 | A3 | Ödeme/jeton yolu — `FREE_MODE=true`, `PEMF_TIER_ENFORCED=0`, `ENTITLEMENT_ENFORCED=false` | **Üretimde hiç koşmadı.** İlk gerçek müşteride görünür olacak bulgular var | `JETON-SISTEMI.md`, `denetim-bulgular.md` 5. tur |

@@ -129,16 +129,75 @@ def metadata_lisansi(meta: str) -> str:
     ⚠️ TEK KAYNAK: `tests/test_license_surface.py` bu fonksiyonu IMPORT eder, kendi
     kopyasini yazmaz. (Bu depo 2026-09-15'te "ayni kural iki yerde -> sessizce ayristi"
     arizasini UC ayri noktada yasadi.)
+
+    ⚠️ D6.43 (B-11.15, 2026-10-28): oncelik `License-Expression` > LISANS ADI olan `License:` > TUM `Classifier: License ::`
+    > ham `License:`. Eskiden `License:` alaninin ILK SATIRI siniflandiricidan once geliyordu ve baslik yalniz ilk 80
+    satirda taraniyordu → lisans METNINI `License:` alanina koyan paketlerde (numpy, scipy, matplotlib, kiwisolver,
+    scikit-image: siniflandirici 82.–981. satirda) NOTICE hucresi "Copyright (c) …" / "=====" / "Files: *" /
+    "Dual License" oluyordu (7 satir, olculdu). `License:` bir lisans adiysa ve siniflandirici FARKLI bir aile
+    soyluyorsa ikisi de yazilir (pi-heif: `BSD-3-Clause` + LGPLv3 siniflandiricisi — paket kendi icinde celisir; hangisinin
+    baglayici oldugu hukuki sorudur, belge ikisini de gosterir). Kapi: tests/test_notice_lisans_hucresi_LISANS_ADI_D6_43.py
     """
-    ifade = klasik = siniflandirici = ""
-    for satir in meta.splitlines()[:80]:
+    ifade = klasik = ""
+    siniflar: list[str] = []
+    for satir in _metadata_basligi(meta):
         if satir.startswith("License-Expression:"):
             ifade = satir.split(":", 1)[1].strip()
         elif satir.startswith("License:"):
             klasik = klasik or satir.split(":", 1)[1].strip()
         elif satir.startswith("Classifier: License ::"):
-            siniflandirici = siniflandirici or satir.split("::")[-1].strip()
-    return ifade or klasik or siniflandirici
+            s = satir.split("::")[-1].strip()
+            if s and s not in siniflar:
+                siniflar.append(s)
+    if ifade:
+        return ifade
+    if lisans_adi_mi(klasik):
+        farkli = [s for s in siniflar if not (_aileler(s) & _aileler(klasik))]
+        return f"{klasik} (sınıflandırıcı: {' / '.join(farkli)})" if farkli else klasik
+    return " / ".join(siniflar) or klasik
+
+
+def _metadata_basligi(meta: str) -> list[str]:
+    """METADATA BASLIK satirlari: ilk BOS satira kadar (sonrasi README govdesi). ⚠️ D6.43: eski `[:80]` siniri, `License:`
+    alanina cok satirli lisans metni koyan paketlerin siniflandiricisini kesiyordu (numpy: 981. satir)."""
+    out = []
+    for satir in meta.splitlines():
+        if (
+            satir == ""
+        ):  # ⚠️ YALNIZ tam boş satır: çok satırlı `License:` metnindeki boşluklu satırlar ("        ") başlıktır
+            break
+        out.append(satir)
+    return out
+
+
+#: Lisans AILESI imzalari (`lisans_adi_mi` ve aile karsilastirmasi). Sira onemli: LGPL / AGPL, GPL'den ONCE.
+_AILELER = (
+    ("LGPL", re.compile(r"LGPL|LESSER\s+GENERAL\s+PUBLIC")),
+    ("AGPL", re.compile(r"AGPL|AFFERO")),
+    ("GPL", re.compile(r"(?<![LA])GPL|(?<!LESSER )GENERAL\s+PUBLIC\s+LICEN[CS]E")),
+    ("BSD", re.compile(r"BSD")),
+    ("MIT", re.compile(r"\bMIT\b")),
+    ("APACHE", re.compile(r"APACHE")),
+    ("MPL", re.compile(r"\bMPL\b|MOZILLA")),
+    ("ISC", re.compile(r"\bISC\b")),
+    ("PSF", re.compile(r"\bPSF\b|PYTHON\s+SOFTWARE\s+FOUNDATION")),
+    ("EPL", re.compile(r"\bEPL\b|\bEDL\b|ECLIPSE")),
+    ("HPND", re.compile(r"\bHPND\b|HISTORICAL\s+PERMISSION")),
+    ("UNLICENSE", re.compile(r"UNLICENSE|PUBLIC\s+DOMAIN|\bCC0\b")),
+    ("ZLIB", re.compile(r"\bZLIB\b")),
+)
+
+
+def _aileler(lisans: str) -> set[str]:
+    u = (lisans or "").upper()
+    return {ad for ad, desen in _AILELER if desen.search(u)}
+
+
+def lisans_adi_mi(lisans: str) -> bool:
+    """Hucre bir LISANS ADI / SPDX kimligi mi (bilinen bir aile imzasi tasiyan kisa metin) — yoksa lisans metninin ilk
+    satiri mi ("Copyright (c) …", "=====", "Files: *", "Dual License", "License agreement for …")?"""
+    s = (lisans or "").strip()
+    return bool(s) and len(s) <= 120 and not s.lower().startswith("copyright") and bool(_aileler(s))
 
 
 #: LGPL biçimleri — KASITLI muaf (dinamik bağlamada kapalı kaynak ürünle dağıtılabilir; bu projede öyle kullanılır).
@@ -193,8 +252,10 @@ def kopyleft_metadata_mu(meta: str) -> bool:
     ⚠️ 4A-3.7 (A3 incelemesi): kopyleft kapısı lisansı `metadata_lisansi`nin TEK alanından (NOTICE tablosunun gösterdiği
     değer: License-Expression > License > İLK sınıflandırıcı) okuyordu → `License: UNKNOWN`, serbest metin (`Dual License`,
     `Copyright (c) …`) ya da ilk sınıflandırıcısı MIT olan bir paketin GPL sınıflandırıcısı kapıya GÖRÜNMEZDİ. NOTICE metni
-    değişmez (o hâlâ `metadata_lisansi`); yalnız kopyleft KARARI tüm alanlardan verilir."""
-    for satir in meta.splitlines()[:80]:
+    değişmez (o hâlâ `metadata_lisansi`); yalnız kopyleft KARARI tüm alanlardan verilir.
+    ⚠️ D6.43: başlık TAMAMI taranır (eski `[:80]` sınırı uzun `License:` metninin ardındaki sınıflandırıcıyı — numpy'de
+    981. satır — kopyleft kapısına da GÖRÜNMEZ yapıyordu)."""
+    for satir in _metadata_basligi(meta):
         if satir.startswith(("License-Expression:", "License:")) and kopyleft_mu(satir.split(":", 1)[1]):
             return True
         if satir.startswith("Classifier: License ::") and kopyleft_mu(satir.split("::", 1)[1]):
