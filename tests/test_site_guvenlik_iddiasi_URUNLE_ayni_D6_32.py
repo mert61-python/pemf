@@ -41,11 +41,16 @@ BOLGE_KILIDI_EN = re.compile(
     re.I,
 )
 #: (b) termal kesme iddiası (TR, EN) — KOŞULSUZ yasak.
+# TUR 2 (çürütücü kolu): eş anlamlılar — "sıcaklık koruması", "ısı koruması", "aşırı ısınma kesmesi", "48 derece" / "overheat shutdown",
+# "temperature protection", "heat protection", "48 degrees" A-47'nin yasakladığı AYNI iddia; eski desen bunları görmüyordu (mutantlar
+# `cur632_n1` kılavuza "sıcaklık koruması … 48 derecede durur", `cur632_n2` EN karta "overheat shutdown" YAŞIYORDU).
 TERMAL_TR = re.compile(
-    r"sıcaklık\s+kesme|termal\s+(?:koruma|kesme)|aşırı\s+ısınma\s+koruma|ısı\s+kesme|48\s*°\s*C", re.I
+    r"sıcaklık\s+(?:kesme|koruma)|termal\s+(?:koruma|kesme)|aşırı\s+ısınma\s+(?:koruma|kesme)|ısı\s+(?:kesme|koruma)|48\s*°\s*C|48\s*derece",
+    re.I,
 )
 TERMAL_EN = re.compile(
-    r"temperature\s+cut-?\s?off|thermal\s+(?:protection|cut-?\s?off|shutdown)|overheat(?:ing)?\s+protection|48\s*°\s*C",
+    r"temperature\s+(?:cut-?\s?off|protection)|thermal\s+(?:protection|cut-?\s?off|shutdown)|overheat(?:ing)?\s+(?:protection|shutdown|cut-?\s?off)"
+    r"|heat\s+protection|48\s*°\s*C|48\s*degrees",
     re.I,
 )
 
@@ -192,6 +197,13 @@ def test_KARSIT_KANIT_bolge_deseni_AYIRIYOR(dil, metin, beklenen):
         ("tr", "acil durdurma, süre sınırı ve sıcaklık kesmesi her koşulda önceliklidir", True),
         ("tr", "termal koruma cihazda gömülü", True),
         ("en", "the temperature cut-off always takes priority", True),
+        # TUR 2: eş anlamlılar da yakalanır.
+        ("tr", "Cihazda sıcaklık koruması vardır; bobin 48 derecede kendiliğinden durur.", True),
+        ("tr", "aşırı ısınma kesmesi her koşulda devrededir", True),
+        ("en", "with automatic overheat shutdown", True),
+        ("en", "built-in temperature protection stops the coil at 48 degrees", True),
+        ("tr", "Sıcaklığa bağlı otomatik durdurma iddia EDİLMEZ — cihaz bunu yapmaz (A-47).", False),
+        ("tr", "Bobin 48,5 mT alan üretti; ortam 24 °C.", False),
         ("tr", "Canlı sensör ekranı (alan şiddeti mT · sıcaklık °C)", False),
         ("en", "Live sensor screen (field strength mT · temperature °C)", False),
     ],
