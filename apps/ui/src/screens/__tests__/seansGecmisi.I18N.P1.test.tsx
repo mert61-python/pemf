@@ -415,11 +415,12 @@ describe("SessionDetailModal", () => {
     u = render(<SessionDetailModal visible sessionId={7} onClose={() => {}} />);
     await waitFor(() => expect(metin(u)).toContain("Quantum_flux"));
     u.unmount();
-    // [İNCELE] göç öncesi davranış: detay modalının tablosu 13 durumlu (liste ekranında 16); acil durdurma / elektrik kesintisi / donanım reddi
-    // modalda ham (ilk harf büyük) görünür — TR birebir kuralı bunu DONDURUR (düzeltme ayrı karar).
+    // SON-O.1 (22-SON): detay modalı da üç üretim durumunu (acil durdurma / elektrik kesintisi / donanım reddi) liste ekranıyla AYNI
+    // etiketle çevirir — eskiden burada dondurulan ham "Emergency_stopped" görünümü kalktı (eşlik kapısı tests/test_seans_durum_etiketi.py).
     mockDetay = DETAY({ session_status: "emergency_stopped" });
     u = render(<SessionDetailModal visible sessionId={7} onClose={() => {}} />);
-    await waitFor(() => expect(metin(u)).toContain("Emergency_stopped"));
+    await waitFor(() => expect(metin(u)).toContain("Acil Durduruldu"));
+    expect(metin(u)).not.toContain("Emergency_stopped");
     u.unmount();
     await enYap();
     mockDetay = null;
