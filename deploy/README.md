@@ -157,3 +157,22 @@ Klinikler farklı WiFi'den bağlanacaksa tünel gerekir; binary repoda yok:
 
 `build_tools\PEMF_Backend_onedir.spec` artık `deploy/` (env profilleri) ve (varsa) `bin/cloudflared`'ı
 da bundle eder. Build: `scripts\build_backend_exe.ps1` → `<BuildRoot>\dist\PEMF_Backend\` (varsayılan `guii\PEMF_BUILD\dist\PEMF_Backend\`; derin hedefte MAX_PATH için `-BuildRoot C:\PEMF_BUILD`).
+
+---
+
+## 8) Çok hesaplı klinik — ikinci Windows hesabı (Y96 · Y182 · S-LN.5)
+
+Saha kurulumu launcher'dır. Hasta veri dizini `C:\ProgramData\PEMF_System\PEMF_GUI` onu ilk kuran Windows hesabına kilitlidir
+(backend `apps/backend/utils/file_acl.py`). Aynı bilgisayarda İKİNCİ bir Windows hesabı launcher'ı açarsa uygulama hasta kayıtlarını
+açamaz (görünür arıza, veri bölünmez) ve launcher **Paylaşımı kur (yönetici)** düğmesini gösterir. Elle grup / ortam değişkeni adımı GEREKMEZ:
+
+1. Düğme tek seferlik yönetici izniyle (UAC) `PEMF Data Users` yerel grubunu kurar (yoksa), bu hesabı ve veriyi kuran hesabı gruba ekler ve
+   gruba YALNIZ `PEMF_GUI` ağacında `Değiştir` hakkı verir; kök `PEMF_System` (broker yapılandırması, kimlik depoları) gruba AÇILMAZ (Y202).
+   Users / Authenticated Users / Everyone'a hak verilmez (Y96).
+2. Hasta verisi bu bilgisayarda gruptaki Windows hesapları arasında **PAYLAŞILIR** (KVKK açısından sahibin bilinçli kararı, Y182).
+3. Grup üyeliği Windows oturumu yeniden açılınca geçerli olur: **bu hesapta VE veriyi kuran hesapta** oturumu kapatıp açın, sonra uygulamayı
+   başlatın.
+4. Ağaçta bağlantı noktası / sembolik bağ / sabit bağ varsa adım hiçbir hak yazmadan durur; UAC reddedilirse hiçbir şey değişmez.
+
+Launcher grubu ADIYLA bulur ve backend'e `PEMF_DATA_GROUP_SID` ortam değişkeniyle verir (`launcher/core/src/install.rs`); backend kilitleri o
+grubu korur. Değişken makinede elle tanımlanmışsa yalnız bu makinenin yerel grubu (`S-1-5-21-…`) kabul edilir.
