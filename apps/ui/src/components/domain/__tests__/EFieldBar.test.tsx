@@ -9,7 +9,7 @@
  *   * bobin durmuşsa bunu açıkça söyler.
  */
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { act, render } from "@testing-library/react-native";
 
 const mockLive: { snapshot: any } = { snapshot: null };
 jest.mock("@/context/LiveDataContext", () => ({
@@ -63,10 +63,19 @@ describe("EFieldBar", () => {
   });
 
   it("BAYAT veride 'canlı' DEMEZ — donmuş sayı canlı sanılmasın", () => {
-    mockLive.snapshot = { eField: efield({ ts: Date.now() / 1000 - 30 }) };
-    const { getByText, queryByText } = render(<EFieldBar />);
-    expect(getByText("duraklandı")).toBeTruthy();
-    expect(queryByText("● canlı")).toBeNull();
+    // D6.25 (B-6.16): yaş verinin ALINIŞINDAN ölçülür (sunucu damgası yerel saatle karşılaştırılmaz) → "bayat" = 30 sn boyunca YENİ
+    // hesap gelmedi. Kapı: EFieldBar.D6_25.alinisTazeligi.test.tsx (GERÇEK LiveDataProvider + saat kayması).
+    jest.useFakeTimers();
+    try {
+      mockLive.snapshot = { eField: efield() };
+      const { getByText, queryByText } = render(<EFieldBar />);
+      expect(getByText("● canlı")).toBeTruthy(); // ARA: alındığı an canlı
+      act(() => { jest.advanceTimersByTime(30_000); });
+      expect(getByText("duraklandı")).toBeTruthy();
+      expect(queryByText("● canlı")).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("bobinler durunca bunu AÇIKÇA yazar", () => {

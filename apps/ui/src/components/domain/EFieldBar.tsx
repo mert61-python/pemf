@@ -10,7 +10,8 @@
  * GÖSTERİLMEME KURALLARI (kasıtlı — yanlış güvence vermemek için):
  *   * `eField` yoksa (analiz yapılmamış / seans pasif) bileşen HİÇ render olmaz.
  *     Uydurma ya da bayat bir değeri "canlı" diye göstermek operatörü yanıltır.
- *   * Veri ≥5 sn eskiyse "duraklandı" rozeti çıkar (bar donmuş sayıyı canlı sanmasın).
+ *   * 5 sn'den uzun süredir YENİ hesap ALINMADIYSA "duraklandı" rozeti çıkar (bar donmuş sayıyı canlı sanmasın).
+ *     Yaş, verinin bu istemciye ALINIŞ zamanından ölçülür (D6.25) — sunucu damgası yerel saatle karşılaştırılmaz.
  *   * `activeCoils === 0` iken değerler sıfırdır ve bunu açıkça yazar.
  */
 import { useEffect, useRef, useState } from "react";
@@ -49,10 +50,21 @@ export function EFieldBar() {
     const zamanlayici = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(zamanlayici);
   }, []);
+  // ⚠️ D6.25 (B-6.16): yaş = son YENİ hesabın bu istemciye ALINIŞINDAN beri geçen süre (yerel saat). Eskiden `now / 1000 - e.ts`
+  // sunucu damgasını (efield_live `time.time()`) istemci saatiyle karşılaştırıyordu: saat kayınca (ayrı makinedeki LAN istemcisi)
+  // sunucu GERİDE → az önce gelen veri "duraklandı", İLERİDE → donmuş veri süresiz "canlı". Yeni hesap = damga DEĞİŞTİ (damgasız
+  // eski backend'de nesne değişti); aynı damgalı yeniden yayın (başka bir olayla gelen tam snapshot) veriyi TAZELEMEZ.
+  const anahtar: unknown = e ? (Number.isFinite(e.ts) && e.ts > 0 ? e.ts : e) : null;
+  const sonAnahtarRef = useRef<unknown>(null);
+  const alinisRef = useRef(0);
+  if (anahtar !== null && anahtar !== sonAnahtarRef.current) {
+    sonAnahtarRef.current = anahtar;
+    alinisRef.current = Date.now();
+  }
 
   if (!e) return null; // ← bağlam/seans yok: bar HİÇ çıkmaz
 
-  const stale = e.ts > 0 && now / 1000 - e.ts > 5;
+  const stale = now - alinisRef.current > 5000;
   const peak = peakRef.current || 1;
   const pct = (v: number | null) => (v === null ? 0 : Math.max(0, Math.min(100, (v / peak) * 100)));
   const fmt = (v: number | null) => (v === null ? "—" : v >= 1 ? v.toFixed(3) : v.toFixed(4));
