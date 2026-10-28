@@ -123,3 +123,32 @@ def test_KRITIK_ckd_xai_ESZAMANLI_isteklerde_DETERMINISTIK():
     assert _durum_esit(once, sonra), (
         "eşzamanlı isteklerden sonra küresel np.random durumu çağrı öncesine dönmedi (geri yükleme yarışı)"
     )
+
+
+@gercek_model_gerekir
+def test_HATA_yolunda_da_KURESEL_durum_geri_yuklenir_ve_kilit_BIRAKILIR(monkeypatch):
+    """Tur 2 kolu (çürütücü — koruyucu hata yolu): açıklayıcı kritik bölgede İSTİSNA fırlatırsa (bozuk arka plan, shap
+    yükseltmesi, bellek) küresel np.random durumu YİNE çağrı öncesine döner (`finally`) ve kilit bırakılır — aksi hâlde tek
+    bir hatalı istek sürecin geri kalanındaki RNG akışını seed(0)'da bırakır ya da sonraki tüm CKD açıklamalarını kilitler."""
+    import shap
+
+    from ai_hub.inference_human_kidney_disease import inference_human_kidney_disease as ihd
+    from ai_hub.inference_human_kidney_disease import xai_top_features
+
+    class _SahteHata(RuntimeError):
+        pass
+
+    def _patlayan(*_a, **_k):
+        np.random.random(5)  # seed(0) sonrası akışı ilerlet — geri yüklenmezse durum kirli kalır
+        raise _SahteHata("sahte KernelExplainer hatası (İG-5.30 tur 2 kolu)")
+
+    monkeypatch.setattr(shap, "KernelExplainer", _patlayan)
+    np.random.seed(777)
+    once = np.random.get_state()
+    with pytest.raises(_SahteHata):
+        xai_top_features(_HASTA, top_n=7)
+    assert _durum_esit(once, np.random.get_state()), (
+        "açıklayıcı hata verdiğinde küresel np.random durumu çağrı öncesine DÖNMEDİ (hata yolunda set_state yok)"
+    )
+    assert ihd._SHAP_RNG_KILIDI.acquire(timeout=2), "açıklayıcı hata verdiğinde kilit BIRAKILMADI"
+    ihd._SHAP_RNG_KILIDI.release()
