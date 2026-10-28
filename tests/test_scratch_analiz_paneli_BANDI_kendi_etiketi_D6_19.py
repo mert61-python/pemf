@@ -94,3 +94,24 @@ def test_yorum_GERCEGI_soyler_ayni_bant_iddiasi_YOK():
     kaynak = MODUL_YOLU.read_text(encoding="utf-8")
     sabit = [ln for ln in kaynak.splitlines() if ln.startswith("HALF_BAND_RATIO =")]
     assert len(sabit) == 1 and "Analiz paneli" in sabit[0], f"HALF_BAND_RATIO satır yorumu kapsamı söylemiyor: {sabit}"
+
+
+def test_yanlis_ayni_bant_iddiasi_MODULUN_HICBIR_yerinde_canli_degil():
+    """Tur 2 kolu (çürütücü — yorum içine taşıma / ikiz satır): yanlış "closure metrikleri de aynı bandı kullanır" iddiası
+    yalnız `draw_analysis` docstring'inde değil, modülün HİÇBİR yorumunda / dizesinde canlı durmaz (tek izinli geçiş: tırnak
+    içinde "… cumlesi YANLISTI" tarihçesi). `SCRATCH_ROI_RATIO` satır yorumu da kapsamını söyler (closure; Analiz paneli DEĞİL)."""
+    import re
+
+    kaynak = MODUL_YOLU.read_text(encoding="utf-8")
+    duz = " ".join(kaynak.replace("#", " ").split())
+    iddia = "closure metrikleri de ayni bandi kullanir"
+    canli = [
+        duz[max(0, m.start() - 60) : m.end() + 30]
+        for m in re.finditer(re.escape(iddia), duz)
+        if not duz[m.end() :].startswith('" cumlesi YANLISTI')
+    ]
+    assert not canli, f"yanlış 'aynı bant' iddiası modülde canlı: {canli}"
+    roi = [ln for ln in kaynak.splitlines() if ln.startswith("SCRATCH_ROI_RATIO =")]
+    assert len(roi) == 1 and "closure" in roi[0] and "Analiz paneli DEGIL" in roi[0], (
+        f"SCRATCH_ROI_RATIO satır yorumu kapsamını (closure; Analiz paneli DEĞİL) söylemiyor: {roi}"
+    )
