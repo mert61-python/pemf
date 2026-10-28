@@ -385,3 +385,34 @@ def test_KRITIK_tools_README_paket_boyutu_KAYNAKLA_UYUSUR():
         f"tools/README.md {yanlis} bayt diyor, kaynak {gercek}. STM paket biçimi değişince "
         "belge de değişmeli (2026-09-10'da 5→7 bobin taşımasında bu kaçtı)."
     )
+
+
+# ── D6.52 (B-10.192) — tests/README sayı / marker / komut iddiaları KAYNAKLA aynı ────────────────────────────────────────
+# ÖLÇÜLEN (HEAD ebf1c3fe): `tests/README.md:22` "236 `test_*.py` · ~2225 test" (git ls-files → 1000+; toplanan ~10 bin),
+# `:20` "Özel marker yok" (pyproject `markers`: entegrasyon, operator_sizintisi_beklenir), `:17` çıplak `pytest` (PATH'te yok).
+# Sayı belgede TUTULMAZ (elle yazılan sayı bayatlıyordu) — yalnız sayım KOMUTU durur.
+
+
+def test_D6_52_tests_README_SAYI_tutmaz_MARKERlari_pyprojectle_ayni():
+    metin = re.sub(r"~~.*?~~", " ", (KOK / "tests" / "README.md").read_text(encoding="utf-8"), flags=re.S)
+    kapsam = [s for s in metin.splitlines() if s.startswith("## Kapsam")]
+    assert len(kapsam) == 1, "tests/README '## Kapsam' başlığı tek olmalı"
+    assert not re.search(r"\d", kapsam[0]), f"tests/README Kapsam başlığı elle sayı taşıyor (bayatlar): {kapsam[0]!r}"
+    assert not re.search(r"\b\d{2,5}\s*`test_\*\.py`|~\s*\d{3,5}\s*test\b", metin), (
+        "tests/README elle yazılmış dosya / test sayısı taşıyor"
+    )
+    assert "git ls-files 'tests/test_*.py'" in metin and "--collect-only" in metin, (
+        "tests/README sayım KOMUTUNU vermeli"
+    )
+    # marker'lar pyproject'ten (sabit kopya değil)
+    py = (KOK / "pyproject.toml").read_text(encoding="utf-8")
+    blok = re.search(r"^markers\s*=\s*\[(.*?)^\]", py, re.S | re.M)
+    assert blok, "aparat: pyproject markers bloğu bulunamadı"
+    markerlar = set(re.findall(r'"([A-Za-z_]+):', blok.group(1)))
+    assert markerlar, "aparat: pyproject'te marker yok"
+    for m in markerlar:
+        assert f"`{m}`" in metin, f"tests/README kayıtlı marker `{m}`'i anmalı (pyproject)"
+    assert "Özel marker yok" not in metin, "tests/README 'Özel marker yok' diyor — pyproject'te kayıtlı marker var"
+    assert re.search(r"python\.exe -m pytest tests", metin), (
+        "tests/README çalıştırma komutu gömülü yorumlayıcıyla olmalı"
+    )

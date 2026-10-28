@@ -460,8 +460,8 @@ def test_KRITIK_CIHAZ_BAZINDA_VARLIK_TESPITI():
             continue  # sifirlama (kurulum) mesru
         assert "cihaz_var" in atama, (
             f"`sicaklik_adres` YOKLAMASIZ atanmis: {atama.strip()!r} — cihaz hep 'var' "
-            "sayilir, erken-cikis hic tetiklenmez ve yok olan sensorun NACK'i 5 turda bir "
-            "hat kurtarma tetikleyip AYNI bus'taki manyetik sensoru sakatlar"
+            "sayilir, erken-cikis hic tetiklenmez: her turda bosa I2C islemi + `i2c_hata` sayaci takili "
+            "olmayan cihaz icin sonsuza dek artar (tezgah kabul olcutu 'sayac 0' bozulur)"
         )
     # Yok olan cihaz her iki sicaklik durumunda da ERKEN CIKMALI (hata sayilmadan)
     for durum in ("S_TOBJ", "S_TA"):
@@ -470,7 +470,8 @@ def test_KRITIK_CIHAZ_BAZINDA_VARLIK_TESPITI():
         pencere = kod[i : i + 400]
         assert "sicaklik_adres == 0U" in pencere, (
             f"{durum} yok olan sicaklik sensorunu ATLAMIYOR -> her turda hata sayilir -> "
-            "5 turda bir hat kurtarma AYNI bus'taki manyetik sensoru sakatlar"
+            "`i2c_hata` teshis sayaci gercek ariza gostergesi olmaktan cikar (calisan manyetik sensor "
+            "sayaci sifirladigi icin hat kurtarma TETIKLENMEZ — eski 'sakatlar' iddiasi geri cekildi)"
         )
         # Erken cikis, hata isletmeden ONCE olmali
         atla = pencere.find("sicaklik_adres == 0U")

@@ -157,8 +157,10 @@ def test_KRITIK_a_tek_hatta_SICAKLIK_ve_MANYETIK():
 def test_KRITIK_b_hatta_YALNIZ_MANYETIK():
     """(b) Sahip kablolaması: I2C2'de yalnız manyetik sensör.
 
-    MUTASYON (kaynakta): `S_TOBJ`taki `sicaklik_adres == 0U` erken-çıkışını sil →
-    aşağıdaki `kurtarma_sayisi == 0` iddiası KIRMIZI olur (20 turda 4 kurtarma).
+    ⚠️ D6.52 (B-10.196): bu test C kaynağını OKUMAZ — yalnız `HatModeli`ni koşturur. Eskiden burada "kaynakta `S_TOBJ`
+    erken-çıkışını sil → KIRMIZI (20 turda 4 kurtarma)" yazıyordu: SAHTE tarifti (ölçüldü: o mutantta bu test YEŞİL kalır;
+    model mutantı da 0 kurtarma verir, '4' boş hat senaryosunun sayısıdır). Kaynaktaki erken-çıkışı koruyan GERÇEK kapı:
+    `tests/test_stm_sensor_firmware.py::test_KRITIK_CIHAZ_BAZINDA_VARLIK_TESPITI` (o mutantta KIRMIZI).
     """
     h = HatModeli(sicaklik_var=False, alan_var=True)
     h.tur_kos(20)

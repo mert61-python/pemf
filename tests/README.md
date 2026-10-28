@@ -14,15 +14,22 @@ Backend'in otomatik testleri. Her push/PR'da CI çalıştırır ([`../.github/`]
 
 ## Çalıştırma
 ```bash
-pytest tests -v --cov            # guii kökünden (embedded python ile)
+..\python.exe -m pytest tests -q -rfEs   # guii kökünden, gömülü build Python'ıyla (çıplak `pytest` PATH'te YOK)
+# CI: pytest tests -v -rfEs --no-header [--cov ...]   (.github/workflows/tests.yml)
 ```
-- `conftest.py`: `guii` kökünü `sys.path`'e ekler; **`temp_app_data`** fixture'ı `%APPDATA%`'yı izole eder (gerçek veriye dokunmaz).
-- Özel marker yok; düz fonksiyon testleri (`pytest.ini` yok).
+- `conftest.py`: `guii` kökünü VE `apps/backend`'i `sys.path`'e ekler. **Asıl izolasyon MODÜL düzeyindedir** (toplama ÖNCESİ,
+  hiçbir fixture çalışmadan): oturum için `PEMF_DATA_DIR` + `APPDATA` geçici dizine ezilir (`conftest.py` "TOPLAMA-ZAMANI
+  KORUMASI"); üstüne autouse bekçiler (simülatör / E-stop mandalı / operatör / ortam sızıntısı) ve ağ kafesi. **`temp_app_data`**
+  test başına ayrı geçici kök verir — autouse DEĞİL, isteyen test alır. ~~`temp_app_data` fixture'ı `%APPDATA%`'yı izole eder~~
+  (tek izolasyon o değil).
+- Kayıtlı marker'lar `pyproject.toml` `[tool.pytest.ini_options]`'ta: `entegrasyon` (gerçek model ağırlıkları; yoksa
+  `tests/capraz.py` ile ATLANIR — `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1` atlamayı hataya çevirir) ve `operator_sizintisi_beklenir`.
+  ~~Özel marker yok~~; `pytest.ini` yok.
 
-## Kapsam (236 `test_*.py` · ~2225 test + conftest)
+## Kapsam (sayı bu belgede TUTULMAZ — elle yazılan sayı bayatlıyordu)
 
-> Sayım anlık görüntüdür (bu tazeleme 2026-08-30). Aşağıdaki tablo TAM LİSTE değil,
-> alan başına **seçkidir**; güncel sayım: `ls tests/test_*.py | wc -l`.
+> Güncel sayım KOMUTLA: dosya `git ls-files 'tests/test_*.py' | wc -l` · toplanan test
+> `..\python.exe -m pytest tests --collect-only -q | tail -1`. Aşağıdaki tablo TAM LİSTE değil, alan başına **seçkidir**.
 | Alan | Örnek dosyalar |
 |---|---|
 | Firmware/protokol güvenliği | `test_stm32_protocol_limits.py` (NaN/inf clamp, `FREQ_MAX`, `AI_PRO_DUTY_MAX`), `test_hardware_controller_safety.py` (deadline auto-stop, watchdog, reconnect re-fire), `test_coil_transport.py`, `test_session_watchdog.py` |
