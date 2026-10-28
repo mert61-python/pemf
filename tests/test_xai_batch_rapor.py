@@ -90,6 +90,10 @@ def test_KRITIK_tarama_cikti_icine_cozumlenen_yollari_ATLAR(cli, tmp_path):
             _winapi.CreateJunction(str(cikti), str(link))
         except (ImportError, AttributeError, OSError) as e:
             capraz.atla(f"bu ortamda symlink izni yok ve dizin bağlantısı (junction) kurulamadı ({type(e).__name__})")
+    # D67 (D5 devri) VAKUM BEKÇİSİ: bağlantı türü (symlink / junction) ne olursa olsun HAM tarama bağlantının İÇİNE İNİYOR mu?
+    # İnmiyorsa aşağıdaki iddia ürünün bekçisinden bağımsız YEŞİL kalırdı (delik bu ortamda yok → kapı vakumda).
+    ham = [p.name for p in girdi.rglob("*.jpg")]
+    assert "eski_xai.jpg" in ham, f"aparat: ham tarama bağlantının içine inmiyor ({ham}) — kapı bu ortamda vakumda"
     dosyalar = cli._dosyalari_tara(girdi, cikti, {".jpg"}, None)
     adlar = [p.name for p in dosyalar]
     assert "a.jpg" in adlar and "eski_xai.jpg" not in adlar, adlar
