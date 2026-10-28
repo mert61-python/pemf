@@ -4740,6 +4740,8 @@ async def analyze_histopath(
                     _x = await asyncio.to_thread(_irh.xai_histopat_isi_haritasi, tmp.name)
                     _xai_alanlari["xai_image_base64"] = _x["xai_image_base64"]
                     _xai_alanlari["xai_disagreement_base64"] = _x["xai_disagreement_base64"]
+                    # D6.64: kararsızlığın MUTLAK ölçüsü (0 = üç model aynı, 1 = kuramsal en büyük ayrışma)
+                    _xai_alanlari["xai_disagreement_max"] = _x.get("xai_disagreement_max")
                     _xai_alanlari["xai_method"] = _x.get("method")
                 except Exception as xe:
                     logger.warning("Histopat XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)

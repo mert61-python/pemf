@@ -303,8 +303,11 @@ def xai_histopat_isi_haritasi(image_path: str, pt_path: str | None = None,
     """Histopat kesiti icin ensemble HiRes-CAM — bellek-ici base64.
 
     Doner: {"xai_image_base64": ensemble-MEAN overlay (modelin dayandigi bolgeler),
-            "xai_disagreement_base64": std overlay 'hot' (modellerin AYRISTIGI bolgeler),
+            "xai_disagreement_base64": std overlay 'hot' (modellerin AYRISTIGI bolgeler; MUTLAK olcek),
+            "xai_disagreement_max": haritanin maksimumu, 0-1 (0 = uc model ayni, 1 = kuramsal en buyuk ayrisma),
             "method": "hirescam-ensemble"}.
+    D6.64: kararsizlik haritasi goruntu basina min-max ile GERILMEZ (eskiden uc model neredeyse ayniyken de en
+    parlak bolge 1,0'di) — bkz. `xai_utils/disagreement.py` (CAM basina min-max'i pytorch-grad-cam zaten yapar).
     TEK-KAYNAK: router + ai_service ayni fonksiyon (kapi-paritesi dersi).
     ⚠️ CPU'da 3 backbone backward DAKIKA mertebesine uzayabilir (GPU'da ~sn) — cagiran
     async/thread kullanir; kilit ayni anda tek istegi isler.
@@ -348,7 +351,7 @@ def xai_histopat_isi_haritasi(image_path: str, pt_path: str | None = None,
             cams.append(expl.explain(x_t, class_idx=top1_idx))
 
     avg = mean_cam(cams)
-    dis = ensemble_disagreement_map(cams, mode="std")
+    dis = ensemble_disagreement_map(cams, mode="std", olcek="mutlak")
 
     def _jpg64(rgb_overlay):
         ok, buf = cv2.imencode(".jpg", cv2.cvtColor(rgb_overlay, cv2.COLOR_RGB2BGR),
@@ -360,6 +363,7 @@ def xai_histopat_isi_haritasi(image_path: str, pt_path: str | None = None,
     return {
         "xai_image_base64": _jpg64(blend_to_array(img_np, avg, alpha=alpha)),
         "xai_disagreement_base64": _jpg64(blend_to_array(img_np, dis, alpha=0.5, colormap="hot")),
+        "xai_disagreement_max": round(float(dis.max()), 4),
         "method": "hirescam-ensemble",
     }
 

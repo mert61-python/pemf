@@ -411,6 +411,7 @@ def infer_histopath(file: UploadFile = File(...), explain: str = Form(None)):
                 _x = _irh.xai_histopat_isi_haritasi(tmp)
                 yanit["xai_image_base64"] = _x["xai_image_base64"]
                 yanit["xai_disagreement_base64"] = _x["xai_disagreement_base64"]
+                yanit["xai_disagreement_max"] = _x.get("xai_disagreement_max")  # D6.64: mutlak kararsızlık ölçüsü
                 yanit["xai_method"] = _x.get("method")
             except Exception as xe:
                 import logging as _lg
