@@ -917,6 +917,11 @@ export function SettingsScreen() {
                 ? t("ayarlar.saklama.maskelenir", { gun: retention.days })
                 : t("ayarlar.saklama.onayBekliyor", { gun: retention.days })
               : t("ayarlar.saklama.kapali")}
+            {/* D6.08 (B-3.2 · A-06): maskeleme kapalı ≠ "adlar süresiz saklanır" — 5 yıl inaktif hasta anonimleştirmesi (operatör
+                onayıyla, eşik backend'in `kvkk_anonimlestirme.ESIK_GUN`'u) maskelemeden AYRI işler; eşik yanıttan söylenir. */}
+            {retention.days > 0 || !retention.anonymization
+              ? null
+              : t("ayarlar.saklama.kapaliAnonim", { gun: retention.anonymization.days })}
           </Text>
 
           {/* F2-1.2 · A-73: saat ileri sıçradıysa ya da geride kaldıysa geri dönüşsüz adımlar operatör saati onaylayana dek bekler. */}
