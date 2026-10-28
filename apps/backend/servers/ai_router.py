@@ -501,8 +501,8 @@ async def analyze_landmark(
         raise HTTPException(status_code=428, detail=otonom_fgs_onay_mesaji())
     try:
         if ai_service_enabled():
-            # NOT: auto_adjust (donanım biofeedback) mikroservis modunda çekirdekte kalır;
-            # AI servisi yalnız analiz döner. Sunucu/donanımsız profilde auto_adjust yok.
+            # NOT (D1.88): `auto_adjust` yukarıda 428 ile reddedildi — buraya yalnız SALT ANALİZ gelir; AI servisi de
+            # yalnız analiz döner. Donanım biofeedback'i (eski "AI (Auto)" sürüşü) hiçbir profilde YOK.
             return await _kapili_devret("landmark", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="landmark")
 
@@ -696,7 +696,8 @@ _ai_organ_id = 0
 _ai_duration_min = 20
 _ai_started_at = 0.0
 # Klinik güvenlik: AI Pro seans süresi üst sınırı (Audit P1). Uzaktan {duration_minutes: 999999}
-# ile günlerce/gözetimsiz PEMF sürüşünü engeller. (freq/duty/48°C safety-limit'lerine DOKUNMAZ.)
+# ile günlerce/gözetimsiz PEMF sürüşünü engeller. (freq/duty güvenlik sınırı EKLEMEZ — sahip kararıyla kaldırıldılar;
+# 48 °C termal kesme / interlock hiçbir katmanda YOK, A-47.)
 _AI_PRO_MAX_DURATION_MIN = 120
 # AI Pro freq sabit 1 Hz (eski PyQt DDS varsayılanı). Sabit; backend'de limit/clamp EKLEME.
 _AI_PRO_FREQ_HZ = 1.0

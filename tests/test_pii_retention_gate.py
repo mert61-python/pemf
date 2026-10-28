@@ -194,8 +194,9 @@ def test_KRITIK_LANdan_kimliksiz_REDDEDILIR(api):
 # ── TERMAL KORUMA DÜRÜSTLÜĞÜ (2026-08-09 denetimi, Tier 2) ──────────────────
 # `firmware/README.md` "termal koruma sensör/ESP tarafındadır" diyordu. Bu ifade 1-5 numaralı
 # bobinler için DOĞRU DEĞİLDİ: STM protokolünde sıcaklık alanı YOK, o bobinlerden hiç ölçüm
-# gelmiyor ve tek kesme mantığı (`objectTemp > 48`) hiçbir zaman tetiklenemiyor. Yani 8 bobinin
-# 5'i hastanın üzerinde hiçbir sıcaklık koruması olmadan enerjileniyor.
+# gelmiyor ve tek kesme mantığı (`objectTemp > 48`) hiçbir zaman tetiklenemiyordu (o tarihte 8 bobinin 5'i).
+# ⚠️ GÜNCEL (L1-7.2 · i2-F-9; sahip kararı A-47): termal kesme / 48 °C interlock HİÇBİR bobinde YOK — bobin 1-7 STM'de
+# (sıcaklık alanı yok), ESP yolu (bobin 8) kapalı. Bu dosyadaki kapılar "koruma var" iddiasının geri gelmesini engeller.
 # Yanlış güvence korumasızlıktan tehlikelidir: koruma var sanılınca donanım önlemi ertelenir.
 
 

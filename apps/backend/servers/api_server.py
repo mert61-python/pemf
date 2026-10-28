@@ -3352,7 +3352,8 @@ async def auto_preset(payload: AutoPresetPayload):
         duration = float(rec.get("duration", 20.0))
 
         # GÜVENLİK: auto_preset SADECE parametre ÖNERİSİ döndürür — donanımı BAŞLATMAZ.
-        # Fiziksel başlatma yalnız /api/session/start üzerinden (clamp + seans + interlock).
+        # Fiziksel başlatma yalnız /api/session/start üzerinden (seans + kayıt + E-stop mandalı / STM başlatma kapıları;
+        # tedavi clamp'i YOK — Y9 · termal interlock YOK — A-47).
         # (Eskiden burada start_all_coils yan-etkisi vardı → chip'e dokununca bobinler ateşleniyordu.)
         return {
             "status": "success",
@@ -4844,8 +4845,9 @@ def start_ai_session(
     import time as _t
 
     def _devam_mi(onceki: dict) -> bool:
-        # Devam (aynı seans satırı/başlangıcı) YALNIZ AI (Auto)'nun KENDİ tekrarlı çağrısında (landmark her istekte
-        # çağırır). AI Pro her başlatmada YENİ mühürlü seanstır: önceki AI (Auto) seansının başlangıcını/satırını
+        # Devam (aynı seans satırı/başlangıcı) YALNIZ AI (Auto)'nun KENDİ tekrarlı çağrısında (D1.88'e kadar landmark her
+        # istekte çağırıyordu; bugün tek çağıran AI Pro — `tur="ai_pro"`, bu dal ürün kodundan ERİŞİLMEZ). AI Pro her
+        # başlatmada YENİ mühürlü seanstır: önceki AI (Auto) seansının başlangıcını/satırını
         # devralsaydı mühürdeki süre (başlangıç + onaylanan dk) yanlış hesaplanırdı. Türü olmayan eski kayıt AI
         # (Auto) sayılır (yalnız kayıt sürekliliği — yetki değil).
         return (
@@ -4936,8 +4938,8 @@ def start_ai_session(
                 # DENETIM P1: bu iki alan HIC kurulmuyordu → _flush_sensor_buffer_if_active
                 # `if not _db_sid: return` ile TUM dakika-ortalamalarini atiyordu ve otonom
                 # tedavinin DB'de seans satiri OLUSMUYORDU (doz/sicaklik kaydi kalici kayip).
-                # cont=True (ayni AI seansinin tekrarli cagrisi, or. landmark auto_adjust her
-                # istekte cagirir) → MEVCUT satiri koru, YENI satir acma. Y65: yeni satır YUKARIDA açıldı.
+                # cont=True (ayni AI seansinin tekrarli cagrisi; D1.88'e kadar landmark auto_adjust her
+                # istekte cagiriyordu — bugun erisilmez) → MEVCUT satiri koru, YENI satir acma. Y65: yeni satır YUKARIDA açıldı.
                 "db_session_id": prev.get("db_session_id") if cont else _ai_sid,
                 "db_patient_id": prev.get("db_patient_id") if cont else _ai_pid,
                 "started_epoch": prev.get("started_epoch") if cont else _t.time(),
@@ -4952,7 +4954,7 @@ def start_ai_session(
         # DENETIM (2026-08-05, dogrulama turunda bulundu): yukarida `coil_ids` KOSULSUZ
         # yeniden yaziliyor (satir "coil_ids": list(coil_ids)). Yeni seans ONCEKINDEN DAR bir
         # kume sahiplenirse aradaki bobinler SESSIZCE sahipsiz kalir — donanima STOP gitmez.
-        #   Somut yol: `AI (Auto)` landmark surusu bobin 1-8'i 30 dk enerjiler → operator
+        #   Somut yol (D1.88'e kadar): `AI (Auto)` landmark surusu bobin 1-8'i 30 dk enerjilerdi → operator
         #   `AI Pro` baslatir (yalniz 1-7). Bobin 8'i artik ne AI Pro dongusunun hedef-kayip
         #   STOP'u (range(1,8)) ne sure-watchdog (sess["coil_ids"]=1-7) ne de teardown kapsar;
         #   ESP kendi 30 dk suresi dolana kadar CANLI HAYVAN uzerinde surer.
@@ -5033,7 +5035,7 @@ def start_ai_session(
     # (a) DB satiri hic acilmamis seans (finalize ilk satirda doner) ve (b) hic aktif seans olmayan
     # ama buffer'da artik kalan durum icin. Finalize yazimi basarisiz olup ornekleri buffer'a GERI
     # koyduysa da temizlenirler: veri kaybi, YANLIS HASTAYA yazmaktan iyidir (manuel yolun karari).
-    # ⚠️ `cont=True` (ayni AI seansinin tekrarli cagrisi — landmark auto_adjust her istekte cagirir)
+    # ⚠️ `cont=True` (ayni AI seansinin tekrarli cagrisi — D1.88'e kadar landmark auto_adjust her istekte cagiriyordu)
     # yolunda TEMIZLENMEZ; aksi halde suren seansin kendi telemetrisi her istekte silinirdi.
     if not cont:
         with _minute_acc_lock:
@@ -5059,7 +5061,8 @@ def start_ai_session(
                     _db.set_session_parameter(_ai_sid, "patient_owner_email", _sahip_epostasi, "")
         except Exception:
             logging.getLogger(__name__).debug("AI set_session_meta hatasi", exc_info=True)
-    # 1-C inceleme i1-F3: çağıran (AI (Auto) landmark) geri almayı bu kimliğe bağlar (`_seansi_geri_al(..., kimlik)`).
+    # 1-C inceleme i1-F3: çağıran geri almayı bu kimliğe bağlar (`_seansi_geri_al(..., kimlik)`; bugün AI Pro `/start`,
+    # D1.88'e kadar AI (Auto) landmark).
     return _new_session_id
 
 
