@@ -7,7 +7,7 @@ tüm build/dağıtım zinciri — hepsi **tek klasörde**.
 > **Yeni geliştiriciysen buradan başla.** Aşağıdaki **dizin haritası** her üst-klasörün kendi `README.md`'sine
 > link verir; oradan alt-sisteme inersin. Build için → [`BUILD.md`](BUILD.md). Mimari için → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Önemli:** AI modelleri EXE'ye **gömülüdür** (offline, self-contained). **İstisna (2026-08-26):** iki büyük `.pt` (renal XAI ~858 MB + scratch CPN ~872 MB) 2 GiB release sınırı yüzünden profil zip'lerine girmez — GPU mikroservis/mount'ta tam çalışır, klinikte zarif düşüş. **Hugging Face indirme kaldırıldı** — runtime internet gerektirmez.
+> **Önemli:** AI modelleri EXE'ye **gömülüdür** (offline, self-contained). **İstisna (2026-08-26, Faz 4.5):** iki büyük `.pt` (renal XAI ~858 MB + scratch CPN ~872 MB) 2 GiB release sınırı yüzünden ana profil zip'ine sığmaz → ayrı parça `research-2.zip` olarak manifest `model_parts.research` ile iner (launcher ≥1.9.39, yalnız Araştırma profili; `build_tools/make_model_zip.py` `PARCALAR`). Parçası olmayan kurulumda XAI zarif düşer ("Açıklama üretilemedi"). **Hugging Face indirme kaldırıldı** — runtime internet gerektirmez.
 
 ---
 

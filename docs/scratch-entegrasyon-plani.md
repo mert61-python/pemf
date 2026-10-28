@@ -13,7 +13,9 @@
 > launcher 1.9.39 çoklu-model-zip** (`model_parts`; cargo 223 `--locked`; research-2.zip
 > **1.81 GB, sha 10e177b8…** üretildi; make_manifest + BUILD.md runbook AYNI commit'te).
 > İki düşman-doğrulama turu 10+ hakem-onaylı bulguyu yayına çıkmadan kapattı.
-> **Kalan tek iş:** bir sonraki yayında research-2.zip asset yüklemesi (BUILD.md §6 kuralı).
+> ~~**Kalan tek iş:** bir sonraki yayında research-2.zip asset yüklemesi (BUILD.md §6 kuralı).~~ ✅ **YAPILDI:** `pemf-app-packages/manifest.json`
+> `model_parts.research` → `client-app-v1.9.27/research-2.zip` (1.814.085.825 B, sha `10e177b8…`); launcher ≥1.9.39 araştırma
+> profilinde indirir, `scripts/restore_assets.ps1` de getirir (D4.16).
 **Keşif:** 5 paralel okuyucu · **Denetim:** 5 bağımsız denetçi (v1'de 18 eksik bulundu, bu sürümde kapatıldı)
 
 ---

@@ -279,3 +279,101 @@ def test_KARSIT_KANIT_modul_basi_taramasi_bu_importu_KACIRIR():
             "bu kapinin aciliyeti dustu (ama korumasi durmali)"
         )
     assert girintili, "beklenmeyen dal"
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# D6.38 (B-11.9 · B-11.16) — DEPO-DENETIMI'nin "ölü dizinleri kaldır" tavsiyesi ve "research-2.zip yetim" hükmü CANLI metinde kalmaz;
+# iki büyük `.pt`'nin `model_parts.research` (research-2.zip) ile indiği README / TEMIZ-MAKINE / scratch planında yazar.
+# ÖLÇÜLEN (HEAD ebf1c3fe): DEPO-DENETIMI §5 madde 11 "Ölü dizinleri kaldır: `ai/config.py` (arşive taşı), `website/`, `web_static/` …
+# `pemf_gui/` → `config/` olarak yeniden adlandır" ve §0 "research-2.zip … **Yetim** — manifestte hiç geçmiyor" — bu dosyanın kendi
+# kapıları dördünü de CANLI ölçer (web_static spec'te, website kararlı, ai/config yüklenir, `pemf_gui.config` backend_service'te);
+# `pemf-app-packages/manifest.json` `model_parts.research[0].url` → `…/research-2.zip`.
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+_DEPO = KOK / "docs" / "DEPO-DENETIMI-2026-09-15.md"
+_MANIFEST = KOK / "pemf-app-packages" / "manifest.json"
+#: Canlılığı bu dosyada / backend_service'te ölçülen adlar.
+_CANLI_ADLAR = ("ai/config.py", "website/", "web_static/", "pemf_gui/")
+_KALDIR_FIILI = re.compile(r"(kaldır|silin(ir|meli|ecek)|arşive taşı|yeniden adlandır)", re.I)
+_YETIM = re.compile(r"(yetim|manifestte\s+(hiç\s+)?geçmiyor)", re.I)
+
+
+def _cizgisiz(md: str) -> str:
+    return re.sub(r"~~.*?~~", " ", md, flags=re.S)
+
+
+def _birimler(md: str) -> list[str]:
+    """Paragraf birimleri; tablo paragrafında her satır ayrı birimdir (komşu satırın adı karışmasın)."""
+    out: list[str] = []
+    for par in re.split(r"\n[ \t>]*\n", md):
+        satirlar = [s for s in par.splitlines() if s.strip()]
+        if satirlar and all(s.lstrip("> ").startswith("|") for s in satirlar):
+            out.extend(satirlar)
+        elif satirlar:
+            out.append(" ".join(satirlar))
+    return out
+
+
+def _manifest_paket_adlari() -> set[str]:
+    import json
+
+    m = json.loads(_MANIFEST.read_text(encoding="utf-8"))
+    adlar: set[str] = set()
+
+    def gez(x):
+        if isinstance(x, dict):
+            for v in x.values():
+                gez(v)
+        elif isinstance(x, list):
+            for v in x:
+                gez(v)
+        elif isinstance(x, str) and x.startswith("http") and x.endswith(".zip"):
+            ad = x.rsplit("/", 1)[-1]
+            adlar.update({ad, ad[: -len(".zip")]})
+
+    gez(m)
+    return adlar
+
+
+def test_D6_38_DEPO_DENETIMI_canli_dizini_KALDIR_diye_ONERMEZ():
+    ihlal = [
+        b[:140]
+        for b in _birimler(_cizgisiz(_DEPO.read_text(encoding="utf-8")))
+        # fiil KOD DIŞINDA aranır (`tests/test_silinecek_…py` gibi dosya adı fiil sayılmaz); ad ters tırnak içinde aranır
+        if _KALDIR_FIILI.search(re.sub(r"`[^`]*`", " ", b)) and any(f"`{ad}" in b for ad in _CANLI_ADLAR)
+    ]
+    assert not ihlal, (
+        "DEPO-DENETIMI canlı dizini kaldır/sil/yeniden adlandır diye ÖNERİYOR (üstü çizilmeden) — bu dosyanın kapıları onları CANLI "
+        f"ölçer; biri uygularsa ürün kırılır: {ihlal}"
+    )
+
+
+def test_D6_38_manifestte_OLAN_paket_YETIM_denmez():
+    adlar = _manifest_paket_adlari()
+    assert "research-2.zip" in adlar, "aparat: manifest model_parts.research → research-2.zip bekleniyordu"
+    ihlal = [
+        b[:140]
+        for b in _birimler(_cizgisiz(_DEPO.read_text(encoding="utf-8")))
+        if _YETIM.search(b) and any(ad in b for ad in adlar)
+    ]
+    assert not ihlal, f"DEPO-DENETIMI manifestte OLAN paketi 'yetim / manifestte geçmiyor' diyor: {ihlal}"
+
+
+@pytest.mark.parametrize(
+    "yol,yasak",
+    [
+        ("README.md", re.compile(r"profil zip'lerine girmez", re.I)),
+        ("docs/TEMIZ-MAKINE.md", re.compile(r"Releases zip'lerinde de YOK", re.I)),
+        (
+            "docs/scratch-entegrasyon-plani.md",
+            re.compile(r"Kalan tek iş:\*\*\s*bir sonraki yayında research-2\.zip", re.I),
+        ),
+    ],
+    ids=["kok-README", "TEMIZ-MAKINE", "scratch-plani"],
+)
+def test_D6_38_iki_buyuk_PT_model_parts_research_ile_iner(yol, yasak):
+    m = _cizgisiz((KOK / yol).read_text(encoding="utf-8"))
+    assert not yasak.search(m), (
+        f"{yol}: iki büyük .pt Faz 4.5'ten beri research-2.zip (model_parts.research) ile iner — bayat iddia"
+    )
+    assert "model_parts" in m and "research-2.zip" in m, f"{yol}: `model_parts` / `research-2.zip` anılmalı"

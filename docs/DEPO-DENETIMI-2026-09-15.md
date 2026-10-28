@@ -35,7 +35,7 @@ olduğu için indirme gerektiren hiçbir şeye dokunulmadı.
 | `build_tools/Output/` | 3,49 GB | `offline dağıtım/` ile **SHA256 birebir aynı** |
 | `pf/android/app/build` | 2,86 GB | Gradle çıktısı |
 | `release_assets/` eski kurulumlar (1.9.43–1.9.50) | 2,03 GB | Sekizi de GitHub Releases'te |
-| `pemf-app-packages/research-2.zip` | 1,73 GB | **Yetim** — manifestte hiç geçmiyor |
+| `pemf-app-packages/research-2.zip` | 1,73 GB | ~~**Yetim** — manifestte hiç geçmiyor~~ ⛔ **YANLIŞTI (D6.38 · B-11.16):** dosya `pemf-app-packages/manifest.json` → `model_parts.research` parçasıdır (iki büyük `.pt`; launcher ≥1.9.39 araştırma profilinde indirir). Yerel kopyayı silmek yine zararsızdı — Releases'te duruyor, `scripts/restore_assets.ps1` geri getirir |
 | `git gc --prune=now` | 0,01 GB | 1453 gevşek nesne paketlendi |
 
 **Bilerek dokunulmayanlar:** `pemf-app-packages/` kalan zip'leri (3,42 GB) ve `node_modules`
@@ -50,8 +50,8 @@ Silme kararı sende.
 2. **Aynı artefakt birden fazla yerde.** 3,5 GB'lık v1.9.20 offline kurulumu iki yerde
    bayt-bayt aynıydı.
 3. **Her sürümün kurulumu sonsuza kadar saklanıyor.** 18 kurulum EXE'si, 2,55 GB.
-4. **Dağıtım önbellekleri temizlenmiyor.** `pemf-app-packages` 5,1 GB — biri (research-2)
-   hiçbir manifestte geçmiyordu.
+4. **Dağıtım önbellekleri temizlenmiyor.** `pemf-app-packages` 5,1 GB — ~~biri (research-2)
+   hiçbir manifestte geçmiyordu~~ (YANLIŞ — o dosya `model_parts.research` parçasıdır; bkz. §0 tablosu, D6.38).
 5. **Yoksayma listesi bazı üretilmiş dizinleri kaçırıyor** — `firmware_cikti/` hâlâ
    yoksayılmıyor, `pf/android` de yoksayılmıyordu.
 
@@ -257,10 +257,12 @@ doğrudan risk — bkz. [`AGPL-KARARI.md`](AGPL-KARARI.md).
 | `pemf-vet-web/` | 99 | 2026-09-11 | Canlı (pazarlama sitesi) |
 | `frontend/` | 0 | — | Yalnız üretilen `dist` aynası |
 | `pemf_gui/` | 48 | 2026-08-10 | **Adı ölü** (Qt sıfır) ama `config.py` canlı backend yolunda |
-| `pemf_vet_landing/` · `web_static/` · `website/` | 13 · 3 · 3 | 2026-08-10 | Donmuş |
+| `pemf_vet_landing/` · `web_static/` · `website/` | 13 · 3 · 3 | 2026-08-10 | ~~Donmuş~~ ⛔ YANLIŞ — `web_static/` spec'le EXE'ye girer (CANLI); `website/` kendi README'si "silme, bırak" der; `pemf_vet_landing/` referanslı (bkz. §3 başındaki ⛔ düzeltme) |
 
 Benzer durum AI tarafında: `ai/` · `ai_hub/` · `ai_service/` + `servers/ai_router.py`.
-`ai/config.py` (349 satır) üretimde **hiç** import edilmiyor — tek tüketicisi donmuş arşiv.
+~~`ai/config.py` (349 satır) üretimde **hiç** import edilmiyor — tek tüketicisi donmuş arşiv.~~ ⛔ YANLIŞ
+(ölçüldü 2026-09-19): dosya 376 satır; `ai/__init__.py` `from . import config` ile YÜKLENİR ve `ai/hybrid_recommender`
+`apps/backend/servers/api_server.py`'den çağrılır — kapı `tests/test_silinecek_sanilan_dizinler_CANLI.py::test_KRITIK_ai_paketi_URETIM_yolunda`.
 
 ### 3.2 `scripts/` — 23 betiğin 20'si CI dışı
 
@@ -440,8 +442,11 @@ Bunlar bakıldı ve **temiz** çıktı; bir daha uğraşılmasın:
 10. ~~`coord_transform.py` + `mqtt_publish.py` + `cabin_config.py` kopyalarını ortak bir
     `ai_hub/cv_ortak/` paketine al.~~ ✅ **KAPANDI 2026-09-19** — kapı:
     `tests/test_cv_ortak_tek_uygulama.py`.
-11. Ölü dizinleri kaldır: `ai/config.py` (arşive taşı), `website/`, `web_static/`,
-    `pemf_vet_landing/` (donmuş), `pemf_gui/` → `config/` olarak yeniden adlandır.
+11. ~~Ölü dizinleri kaldır: `ai/config.py` (arşive taşı), `website/`, `web_static/`,
+    `pemf_vet_landing/` (donmuş), `pemf_gui/` → `config/` olarak yeniden adlandır.~~ ⛔ **YAPILMAYACAK — tavsiye
+    YANLIŞTI (D6.38 · B-11.9):** dördü de CANLI ölçüldü — `web_static/` spec'le EXE'ye girer, `website/` kendi README'siyle
+    "silme, bırak" kararı taşır, `ai/config.py` `ai/__init__.py`'den yüklenir, `pemf_gui.config` `backend_service.py`'den
+    import edilir (ad değişirse Supabase çözümlemesi kırılır). Kapı: `tests/test_silinecek_sanilan_dizinler_CANLI.py`.
 12. `training_archive/` için Git LFS ya da ayrı depo.
 13. `api_server.py` bölünmeli — **açık** (ölçüldü 2026-09-22:
     `apps/backend/servers/api_server.py` **5.208** satır).
