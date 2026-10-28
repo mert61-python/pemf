@@ -127,3 +127,25 @@ it("KRİTİK EN: aynı dört durum İngilizce (çeviri anlamı birebir: uncalibr
   expect(u.getByText("Liver (7.0, 8.0, 9.0) cm · cabin position — calibration not verified")).toBeTruthy();
   expect(u.getByText("Bladder no position")).toBeTruthy();
 });
+
+// TUR 2 (çürütücü kolu): (a) `calibrated` alanı YOK (eski / devredilen yanıt) → kabin konumu "kalibre" İDDİA EDİLMEZ; (b) BOŞ / eksik kabin
+// dizisi koordinat DEĞİLDİR → gövde-göreli değere düşer, "(NaN, NaN, NaN) cm · kabin konumu" çizilmez. Mutant `cur176_n2` (`uc` uzunluk
+// denetimi silinir) bu dosyada ve aiHubScreen.I18N.P1'de YAŞIYORDU.
+it("SINIR TR (tur 2): alan YOK → 'doğrulanmadı'; boş kabin dizisi → gövde-göreli (NaN yok)", async () => {
+  const asil = YANIT.organs;
+  (YANIT as { organs: unknown[] }).organs = [
+    { name: "kalp", coord_3d_cm: [9, 9, 9], coord_cabin_cm: [1, 2.2, -3], reliability: 0.8 },
+    { name: "dalak", coord_3d_cm: [-2, 2.5, 3], coord_cabin_cm: [], reliability: 0.7, calibrated: false },
+    { name: "bobrek", coord_3d_cm: [4, 5, 6], coord_cabin_cm: [7, 8], reliability: 0.25, calibrated: true },
+    { name: "mide", reliability: 0.2, calibrated: false },
+  ];
+  try {
+    const u = await analiz(/Kedi Organ/i, "Galeriden Seç", "Organ Analizini Başlat", /4 organ bulundu/);
+    expect(u.getByText("Kalp (1.0, 2.2, -3.0) cm · kabin konumu — kalibrasyon doğrulanmadı")).toBeTruthy();
+    expect(u.getByText("Dalak (-2.0, 2.5, 3.0) cm · kedinin gövdesine göre — kalibrasyonsuz (kabin konumu değil)")).toBeTruthy();
+    expect(u.getByText("Böbrek (4.0, 5.0, 6.0) cm · kedinin gövdesine göre — kalibrasyonsuz (kabin konumu değil)")).toBeTruthy();
+    expect(u.queryAllByText(/NaN/)).toHaveLength(0);
+  } finally {
+    (YANIT as { organs: unknown[] }).organs = asil;
+  }
+});
