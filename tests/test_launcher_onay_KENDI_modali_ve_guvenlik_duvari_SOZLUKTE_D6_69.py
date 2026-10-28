@@ -64,6 +64,12 @@ def test_KRITIK_indirme_iptali_KENDI_modaliyla_ve_GUVENLI_dugmelerle_sorulur_D6_
     # İptalin YAN ETKİSİ yalnız onay geri çağrısının İÇİNDE (onaysız yolda cancel_install çağrılmaz)
     j = govde.find("askConfirm(")
     assert j != -1 and govde.find('invoke("cancel_install")') > j, "cancel_install onay geri çağrısının DIŞINDA"
+    # Tur 2 kolu (D67 çürütme, mutant t1): onaydan ÖNCE hiçbir durum değişmez — bayraklar / düğme yazımı da geri çağrının İÇİNDE
+    # (kullanıcı "İndirmeye devam et" dese de indirme iptal edilmiş sayılmasın).
+    yan = [
+        s for s in ("prefetchIptalEdildi", "prefetchDuraklatildi", "cancel_install", "bgButonlariYaz") if s in govde[:j]
+    ]
+    assert not yan, f"İptal işleyicisi onaydan ÖNCE durum değiştiriyor (onay reddedilse de iptal sayılır): {yan}"
     for dil in ("tr", "en"):
         for k in ("bgCancelTitle", "bgCancelYes", "bgCancelNo", "bgCancelConfirm"):
             assert ui(dil).get(k), f"ui.{k} ({dil}) boş — düğme / başlık undefined görünür"
