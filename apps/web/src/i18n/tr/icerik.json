@@ -76,7 +76,7 @@
       "aciklama": "Kamerayla desteklenen teşhis: yüz ifadesinden ağrı skoru, organların üç boyutlu konumu ve AI Pro — sensörden gelen ölçümlere göre seansı kendi kendine ayarlayan otomatik mod."
     },
     "f5": {
-      "aciklama": "Acil durdurma düğmesi, otomatik süre sınırı ve hedef kontrolü: seans, uygulanacak bölge güvenle tespit edilmeden başlamaz.",
+      "aciklama": "Acil durdurma düğmesi ve otomatik süre sınırı: seans her an durdurulabilir ve ayarlanan süre dolunca sona erer.",
       "baslik": "Klinik Güvenlik"
     },
     "f6": {

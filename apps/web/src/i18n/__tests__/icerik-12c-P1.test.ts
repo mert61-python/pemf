@@ -233,7 +233,7 @@ const ALTIN: Record<string, unknown> = {
   {
    "n": "05",
    "title": "Klinik Güvenlik",
-   "desc": "Acil durdurma düğmesi, otomatik süre sınırı ve hedef kontrolü: seans, uygulanacak bölge güvenle tespit edilmeden başlamaz."
+   "desc": "Acil durdurma düğmesi ve otomatik süre sınırı: seans her an durdurulabilir ve ayarlanan süre dolunca sona erer."
   },
   {
    "n": "06",
