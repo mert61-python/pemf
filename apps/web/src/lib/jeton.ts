@@ -32,6 +32,8 @@ export async function jetonBakiyesiniOku(): Promise<JetonBakiyesi | null> {
     const j = (await r.json()) as {
       kalan?: number; aylik_hak?: number; satin_alinan?: number; donem_sonu?: string | null
     }
+    // D6.29: `kalan` alanı olmayan / sayı olmayan yanıt bakiye DEĞİLDİR — eksik alan "0" diye uydurulmaz.
+    if (typeof j?.kalan !== 'number' || !Number.isFinite(j.kalan)) return null
     return {
       kalan: Number(j.kalan ?? 0),
       aylikHak: Number(j.aylik_hak ?? 0),

@@ -29,7 +29,11 @@ type Bakiye = {
   donem_sonu: string | null
 }
 
-async function bakiyeOku(token: string): Promise<Bakiye | null> {
+/** D6.29 (B-7.9): "satır yok" ile "OKUNAMADI" AYRI — eskiden RPC hatası da `null` (satır yok) sayılıyor ve 200 {kalan: 0}
+ *  dönüyordu; site hesap menüsü Supabase kesintisinde uydurma "Kalan jeton 0" çiziyordu. */
+type BakiyeOkumasi = { durum: 'var'; satir: Bakiye } | { durum: 'yok' } | { durum: 'okunamadi'; kod: number }
+
+async function bakiyeOku(token: string): Promise<BakiyeOkumasi> {
   // ⚠️ RPC ÜZERİNDEN (sahip kararı 2026-08-21): eskiden doğrudan `/rest/v1/token_balances`
   // okunuyordu ve bu, `authenticated` rolüne tabloda SELECT yetkisi BIRAKILMASINI zorunlu
   // kılıyordu (Postgres'te RLS politikası tek başına yetmez). O yetki, Supabase'in yeni tabloya
@@ -45,9 +49,10 @@ async function bakiyeOku(token: string): Promise<Bakiye | null> {
     },
     body: '{}',
   })
-  if (!r.ok) return null
+  if (!r.ok) return { durum: 'okunamadi', kod: r.status }
   const satirlar = (await r.json()) as Bakiye[]
-  return Array.isArray(satirlar) ? satirlar[0] ?? null : null
+  if (!Array.isArray(satirlar)) return { durum: 'okunamadi', kod: r.status }
+  return satirlar[0] ? { durum: 'var', satir: satirlar[0] } : { durum: 'yok' }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -61,15 +66,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── BAKİYE ────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-      const b = await bakiyeOku(token)
-      if (!b) {
-        // Satırı olmayan kullanıcı: henüz jeton yüklenmemiş. Sıfır dönmek, istemcinin
-        // "deneme hakkı" varsayılanını uygulamasına izin verir (bkz. servers/jeton.py).
+      const okuma = await bakiyeOku(token)
+      if (okuma.durum === 'okunamadi') {
+        // Bakiye BİLİNMİYOR: sıfır diye sunulmaz (istemci okunamayan bakiyeyi hiç göstermez — src/lib/jeton.ts).
+        console.error('[jeton] bakiye RPC hatası:', okuma.kod)
+        return res.status(502).json({ error: 'altyapi', message: 'Jeton işlemi tamamlanamadı.' })
+      }
+      if (okuma.durum === 'yok') {
+        // Satırı olmayan kullanıcı: henüz jeton yüklenmemiş — gerçek okuma, bakiye sıfır (cihaz
+        // `servers/jeton.py::_bakiye_satiri_oku` aynı anlamı kullanır).
         return res.status(200).json({
           kalan: 0, aylik_hak: 0, satin_alinan: 0, odeme_modeli: 'on_odemeli', kullandikca_borc: 0,
           kayit_yok: true,
         })
       }
+      const b = okuma.satir
       return res.status(200).json({
         kalan: b.aylik_hak + b.satin_alinan,
         aylik_hak: b.aylik_hak,
