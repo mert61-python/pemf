@@ -112,3 +112,7 @@ def test_KRITIK_device_env_MQTT_blogu_A04_GERCEGINI_soyler():
         ("YAPMAZ", "PEMF_MQTT_USER/PASS'ın broker'ı kimlikli YAPMADIĞI söylenmiyor"),
     ):
         assert gerekli in metin, f"device.env MQTT bloğu: {neden}: {metin!r}"
+    # Tur 2 kolu (D67 çürütme, mutant x3 "YAZMAYIN" → "YAZIN"): yasak yönergeyle birlikte AÇIKÇA söylenir (README §6 koluyla aynı).
+    assert re.search(r"allow_anonymous false\s+YAZMAYIN", metin), (
+        f"device.env MQTT bloğu: tabana 'allow_anonymous false' yazmayın uyarısı yok / ters: {metin!r}"
+    )
