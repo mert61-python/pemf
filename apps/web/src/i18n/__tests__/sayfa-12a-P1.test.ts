@@ -96,7 +96,7 @@ const MAKET: Cift[] = [
   ['Hazır!', 'Ready!'],
   ['PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.', 'PEMF Vet is installed. Start the app or update your profiles.'],
   ['Evcil Hayvan Sahibi', 'Pet Owner'],
-  ['Araştırma Modu', 'Research Mode'],
+  ['Araştırma', 'Research'],
   ['Veteriner Hekim', 'Veterinarian'],
   ['Başlat', 'Start'],
   [' Profilleri değiştir', ' Change profiles'],
