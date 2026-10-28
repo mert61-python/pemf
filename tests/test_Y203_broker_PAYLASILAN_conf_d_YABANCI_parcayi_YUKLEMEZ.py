@@ -197,6 +197,22 @@ def test_KRITIK_yonergeler_TEK_kaynaktan_parca_ile_AYNI_ve_cift_password_file_YO
     )
 
 
+@pytest.mark.parametrize("eksik", ["passwd", "acl"])
+def test_KRITIK_parola_ya_da_yetki_dosyasi_EKSIKKEN_calisma_kopyasi_OLMAYAN_dosyaya_isaret_ETMEZ(mk, tmp_path, eksik):
+    """Tur 2 kolu (D67 çürütme, mutant q1 — yetki dosyası ön-denetimi düşer): kimlik deposu VAR ama broker parola ya da yetki
+    dosyası YOK (Y71 onarımı yazamadı) → broker yapılandırması olmayan dosyaya `password_file` / `acl_file` ile işaret etmez:
+    mosquitto eksik dosyada AÇILMAZ → tüm ESP STOP yolu kesilir (Ö.4-Y8)."""
+    taban = _taban(tmp_path)
+    mk.hazirla()
+    bd = mk.varsayilan_broker_dizini()
+    (bd / (mk.PASSWD_ADI if eksik == "passwd" else mk.ACL_ADI)).unlink()
+    etkin = _etkin(_sup()._kimlik_dahil_conf(taban))
+    olmayan = [d for a, d, _ in etkin if a in ("password_file", "acl_file") and not Path(d).is_file()]
+    assert not olmayan, (
+        f"broker yapılandırması OLMAYAN dosyaya işaret ediyor — mosquitto AÇILMAZ (ESP STOP yolu): {olmayan}"
+    )
+
+
 # ── servis kipi (yönetici kurulumu; gerçek ACL ölçümü YASAK → betik metni) ───────────────────────────────────────────────────
 def _kod(metin: str) -> str:
     """PowerShell yorum satırlarını ve satır sonu yorumlarını at (aranan çağrı yalnız yorumda kalırsa SAYILMAZ)."""
