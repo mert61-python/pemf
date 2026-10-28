@@ -69,8 +69,15 @@ Hiçbir hata mesajı üretmiyordu; arıza bu yüzden "sensör bozuk" gibi görü
 Düzeltme kontrolcü yazılımının **kaynağına** kondu (derleme ayarına değil), böylece
 başka bir bilgisayarda ya da ayar sıfırlandığında geri gelemez.
 
-⚠️ Bu süre boyunca yan bobinlerdeki tek otomatik sıcaklık koruması da (arayüzdeki 48 °C
-eşiği) ölçüm ulaşmadığı için **çalışamıyordu**.
+⚠️ Bu yüzden 1.9.48–1.9.50'de arayüzdeki 48 °C otomatik durdurması da yan bobinlerde hiç
+devreye giremedi. Bu sürümde o durdurma **tümden kaldırıldı** (aşağıda).
+
+**🌡️ 48 °C'de bobini otomatik durdurma KALDIRILDI (sahip kararı).** 1.9.50'ye kadar
+arayüz, ölçülen bobin sıcaklığı 48 °C'yi geçince o bobini kendiliğinden durduruyordu.
+Bu sürümde bobin 1–7 için hiçbir katmanda (uygulama, kontrolcü yazılımı) otomatik
+sıcaklık durdurması **yoktur**: sıcaklık ölçülür, gösterilir ve kaydedilir; 48 °C'nin
+üstünde **yalnız uyarı** çıkar ("otomatik durdurma yok; bobini kontrol edin, gerekirse
+⏹ Durdur."). Seans durdurulmaz — bobini izlemek ve gerekirse durdurmak operatördedir.
 
 **Seans kartı artık ANLIK yoğunluğu gösteriyor.** Eskiden yalnız seans boyu en yüksek
 değer yazıyordu; tepe değer düşmediği için operatör frekansı/şiddeti değiştirdiğinde
