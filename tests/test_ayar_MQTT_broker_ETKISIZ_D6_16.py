@@ -53,7 +53,14 @@ def test_KRITIK_uretimde_broker_AYARINI_okuyan_baglanti_YOK_D6_16():
         except (SyntaxError, UnicodeDecodeError):
             continue
         for d in ast.walk(agac):
-            if isinstance(d, ast.Constant) and d.value in ("mqtt.broker_url", "mqtt.broker_port"):
+            # Tur 2 (çürütücü): iç içe erişim (`cfg.get("mqtt")["broker_url"]`) de okuma sayılır — eskiden yalnız noktalı
+            # anahtar aranıyordu, bağlantıyı iç içe okumayla ayara bağlayan kod KAÇIYORDU.
+            if isinstance(d, ast.Constant) and d.value in (
+                "mqtt.broker_url",
+                "mqtt.broker_port",
+                "broker_url",
+                "broker_port",
+            ):
                 if rel not in _IZINLI:
                     okuyan.append(f"{rel}:{d.lineno} {d.value}")
     assert not okuyan, (
@@ -117,6 +124,19 @@ def test_KRITIK_MQTT_alani_gonderilen_POST_ETKISIZ_der_deger_YINE_yazilir_D6_16(
     assert govde.get("mqtt_notu") == beklenen, f"etkisiz notu istek dilinde değil ({dil}): {govde.get('mqtt_notu')!r}"
     assert sahte.get("mqtt.broker_url") == "10.0.0.9" and sahte.get("mqtt.broker_port") == 1884, (
         "değer YAZILMADI — Y15 yalnız işaretler, kaydı değiştirmez"
+    )
+
+
+@pytest.mark.parametrize(
+    "gonderilen", [{"mqtt_port": "1885"}, {"mqtt_broker": "10.0.0.7"}], ids=["yalniz_port", "yalniz_adres"]
+)
+def test_KRITIK_TEK_MQTT_alani_gonderilen_POST_de_ETKISIZ_der_D6_16(uc, gonderilen):
+    """Tur 2 (çürütücü): yukarıdaki kol iki alanı BİRLİKTE gönderiyordu — MQTT alan kümesinden biri düşse (yalnız port değişen
+    kayıt) not çıkmaz, kapı yeşil kalırdı."""
+    c, _ = uc
+    govde = c.post("/api/settings/", json=gonderilen, headers={"X-PEMF-Dil": "tr"}).json()
+    assert govde.get("mqtt_etkisiz") is True and govde.get("mqtt_notu") == TR_NOT, (
+        f"yalnız {sorted(gonderilen)} gönderilen kayıtta etkisiz notu YOK: {govde}"
     )
 
 
