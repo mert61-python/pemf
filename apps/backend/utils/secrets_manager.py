@@ -9,9 +9,15 @@ Tüm sırlar/token/anahtar/şifreler TEK dosyada toplanır:
 HİBRİT güvenlik:
   • operatör sırları (mqtt, tünel...) + api_token + pairing/device_id → DÜZ-METİN
     (operatör dosyayı açıp okuyabilir/girebilir; NTFS ACL ile korunur).
-  • KRİTİK kripto anahtarları (sqlcipher_key, patient_fernet_key, config_fernet_key,
-    master_secret) → dosya İÇİNDE makineye-bağlı **DPAPI** ile şifreli ("DPAPI:<b64>").
-    Dosya başka makineye kopyalansa açılmaz + düz-metinde görünmez (KVKK).
+  • KRİTİK kripto anahtarları (sqlcipher_key, patient_fernet_key, backup_recovery_code,
+    device_registry_secret, master_secret, mqtt_cloud_pass) → dosya İÇİNDE makineye-bağlı **DPAPI**
+    (CRYPTPROTECT_LOCAL_MACHINE; Linux/mac'te "MKEY:") ile şifreli ("DPAPI:<b64>"). Dosya başka makineye
+    kopyalansa açılmaz + düz-metinde görünmez (KVKK); makine dışı kurtarma = kurtarma zarfı (`utils.backup_recovery`).
+  • `config.json`un şifreli alanları için AYRI bir sır YOK: anahtar `patient_fernet_key`dir (`pemf_gui.config`).
+    1.9.50 ve öncesinin `.pemf_key`i bu dosyada DEĞİLDİR — veri kökünde DÜZ dosyadır, yalnız eski değerleri çözmek
+    için OKUNUR (üretilmez) ve yalnız NTFS ACL ile korunur (`backend_service._harden_secret_file_acls`).
+    ⚠️ D6.09 (B-3.7): bu liste eskiden kayıtta OLMAYAN bir "config" Fernet anahtarı sayıyordu. Kapı:
+    tests/test_sqlcipher_anahtar_YERI_belge_ve_ileti_D6_09.py (liste = kayıttaki DPAPI'li sırlar).
 
 LAZY MİGRASYON (veri kaybı YOK): bir anahtar dosyada yoksa, ilk get() çağrısında ESKİ
 kaynaktan (env → keyring → eski dosya) okunur ve dosyaya yazılır. Mevcut şifreli DB'leri

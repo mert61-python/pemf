@@ -2,8 +2,10 @@
 """
 SQLCipher at-rest sifreleme yardimcilari (paylasilan).
 
-patient_database.py + treatment_history_db.py ayni at-rest anahtarini (keyring
-'PEMF_GUI'/'sqlcipher_key') ve ayni plaintext->encrypted migrasyon desenini kullanir.
+patient_database.py + treatment_history_db.py ayni at-rest anahtarini (SecretsManager:
+<veri koku>/pemf_secrets.json -> auto.sqlcipher_key, DPAPI ile makineye bagli; keyring / .sqlcipher_key
+yalniz ESKI kaynak olarak bir kez okunup oraya tasinir — D6.09) ve ayni plaintext->encrypted migrasyon
+desenini kullanir.
 PEMF_ENCRYPT_AT_REST=1 + sqlcipher3 binding varsa whole-DB sifreleme; aksi halde duz-metin
 (geriye uyumlu). [audit 2026-06-28 P0: hasta PII whole-DB sifrelenmeli — patient_database
 eskiden duz sqlite3 + yalniz alan-Fernet idi; metadata/HMAC-index duz-metin kaliyordu.]

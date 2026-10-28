@@ -94,8 +94,8 @@ class PatientDatabase:
         self.config_manager._anahtar_hazirla()
         self._local = threading.local()  # Performans Fix (4.2): Thread-local connection pool
 
-        # P0 audit 2026-06-28: whole-DB SQLCipher at-rest (keyring 'sqlcipher_key' — treatment
-        # DB ile AYNI anahtar). Anahtar/binding BIR KEZ cozulur (per-op keyring okumasi olmasin).
+        # P0 audit 2026-06-28: whole-DB SQLCipher at-rest (SecretsManager `pemf_secrets.json` → `auto.sqlcipher_key`
+        # — treatment DB ile AYNI anahtar; D6.09). Anahtar/binding BIR KEZ cozulur (per-op sir okumasi olmasin).
         self._key_dir = Path(self.db_file).resolve().parent
         self._sqlcipher_mod = import_sqlcipher()
         self._cipher_key = get_sqlcipher_key(self._key_dir, self.logger)
@@ -109,7 +109,7 @@ class PatientDatabase:
         if not self.at_rest_encrypted and os.getenv("PEMF_ENCRYPT_AT_REST", "0") == "1":
             raise RuntimeError(
                 "PEMF_ENCRYPT_AT_REST=1 ama hasta DB'si icin SQLCipher saglanamadi (sqlcipher3 binding "
-                "yok veya .sqlcipher_key/keyring anahtari acilamadi) → hasta PII'sini duz-metin "
+                "yok veya pemf_secrets.json → auto.sqlcipher_key anahtari acilamadi) → hasta PII'sini duz-metin "
                 "yazmamak icin patients.db ACILMADI. sqlcipher3'u kurun ve anahtari dogrulayin."
             )
         # P0 audit 2026-06-28: SQLCipher cursor'i sqlite3.Row KABUL ETMEZ (TypeError) -> baglantiya
@@ -141,7 +141,8 @@ class PatientDatabase:
                     self._enc_warned = True
                     self.logger.warning(
                         "PATIENT DB AT-REST SIFRELEME KAPALI: hasta PII duz-metin SQLite yaziliyor. "
-                        "Uretimde sqlcipher3 + PEMF_ENCRYPT_AT_REST=1 (keyring) ayarlayin."
+                        "Uretimde sqlcipher3 + PEMF_ENCRYPT_AT_REST=1 ayarlayin (anahtar: pemf_secrets.json → "
+                        "auto.sqlcipher_key)."
                     )
                 conn = sqlite3.connect(self.db_file, timeout=30.0, check_same_thread=False)  # B-6.2
             try:

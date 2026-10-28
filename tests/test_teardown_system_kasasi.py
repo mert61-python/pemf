@@ -3,11 +3,12 @@
 """SYSTEM (LocalSystem) KİMLİK KASASI TEARDOWN'DA TEMİZLENİR — denetim 2026-09-06.
 
 Ölçülen durum: backend servisi (PemfBackend, NSSM) LocalSystem olarak koşar;
-apps/backend/database/sqlcipher_util.py `keyring.set_password("PEMF_GUI", "sqlcipher_key", ...)` yazar ve
-python-keyring'in Windows arka ucu bunu SYSTEM hesabının Credential Manager kasasına
-"<ad>@PEMF_GUI" hedefiyle koyar. `pemf_teardown.ps1::Remove-PemfCredentials` yükseltilmiş
-YÖNETİCİ olarak cmdkey çalıştırır → yalnız yöneticinin kasasını görür → DB/fernet anahtarları
-KVKK "tam temizlik"ten SAĞ ÇIKIYORDU; depoda o kasayı temizleyen başka adım yoktu.
+eski sürümlerin anahtar yolu (D2.45 öncesi `sqlcipher_util` / `pemf_gui.config` eski dalları)
+`keyring.set_password("PEMF_GUI", "<ad>", ...)` yazıyordu ve python-keyring'in Windows arka ucu bunu SYSTEM hesabının
+Credential Manager kasasına "<ad>@PEMF_GUI" hedefiyle koyar. Bugün anahtarlar `pemf_secrets.json`dadır (D6.09; üretim
+kodunda kasaya yazım YOK); kasadaki kayıt eski kurulumların artığıdır ve tam temizlikte yine silinmelidir.
+`pemf_teardown.ps1::Remove-PemfCredentials` yükseltilmiş YÖNETİCİ olarak cmdkey çalıştırır → yalnız yöneticinin
+kasasını görür → DB/fernet anahtarları KVKK "tam temizlik"ten SAĞ ÇIKIYORDU; depoda o kasayı temizleyen başka adım yoktu.
 
 Çözüm: `Remove-PemfSystemCredentials` — tek-seferlik `/RU SYSTEM` zamanlanmış görev SYSTEM
 bağlamında `kasa.ps1` koşturur (cmdkey /delete + cmdkey /list doğrulaması → sonuc.txt); ana

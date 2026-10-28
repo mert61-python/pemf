@@ -333,7 +333,7 @@ class TreatmentHistoryDB(
                 raise RuntimeError(
                     "PEMF_ENCRYPT_AT_REST=1 ama SQLCipher sağlanamadı (sqlcipher3 binding yok veya "
                     "anahtar açılamadı) → hasta PII'sini düz-metin yazmamak için tedavi DB'si AÇILMADI. "
-                    "sqlcipher3'ü kurun ve .sqlcipher_key/keyring anahtarını doğrulayın."
+                    "sqlcipher3'ü kurun ve pemf_secrets.json → auto.sqlcipher_key anahtarını doğrulayın."
                 )
             if not getattr(self, "_encryption_warned", False):
                 self._encryption_warned = True

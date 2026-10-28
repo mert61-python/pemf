@@ -7218,7 +7218,7 @@
      ]
     },
     {
-     "metin": "PEMF_ENCRYPT_AT_REST=1 ama hasta DB'si icin SQLCipher saglanamadi (sqlcipher3 binding yok veya .sqlcipher_key/keyring anahtari acilamadi) → hasta PII'sini duz-metin yazmamak icin patients.db ACILMADI. sqlcipher3'u kurun ve anahtari dogrulayin.",
+     "metin": "PEMF_ENCRYPT_AT_REST=1 ama hasta DB'si icin SQLCipher saglanamadi (sqlcipher3 binding yok veya pemf_secrets.json → auto.sqlcipher_key anahtari acilamadi) → hasta PII'sini duz-metin yazmamak icin patients.db ACILMADI. sqlcipher3'u kurun ve anahtari dogrulayin.",
      "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)",
      "turler": [
       "istisna"
@@ -8288,7 +8288,7 @@
    "kritik": false,
    "muaf": [
     {
-     "metin": "PEMF_ENCRYPT_AT_REST=1 ama SQLCipher sağlanamadı (sqlcipher3 binding yok veya anahtar açılamadı) → hasta PII'sini düz-metin yazmamak için tedavi DB'si AÇILMADI. sqlcipher3'ü kurun ve .sqlcipher_key/keyring anahtarını doğrulayın.",
+     "metin": "PEMF_ENCRYPT_AT_REST=1 ama SQLCipher sağlanamadı (sqlcipher3 binding yok veya anahtar açılamadı) → hasta PII'sini düz-metin yazmamak için tedavi DB'si AÇILMADI. sqlcipher3'ü kurun ve pemf_secrets.json → auto.sqlcipher_key anahtarını doğrulayın.",
      "gerekce": "iç istisna iletisi — çağıran günlüğe yazar / genel 500 döner; DB açılış nedeninde operatöre YALNIZ istisna sınıf adı gider (`headless_core.db_acilis_metni`)",
      "turler": [
       "istisna"
