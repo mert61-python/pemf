@@ -72,3 +72,22 @@ def test_KARSIT_KANIT_pozitif_olcek_AYNEN_yazilir(monkeypatch, modul_adi, lang, 
     metinler = _kayitli_metinler(monkeypatch, modul_adi, 0.3146, lang)
     assert beklenen in metinler, f"pozitif ölçek yazılmıyor: {metinler}"
     assert BEKLENEN_YOK[lang] not in metinler
+
+
+@pytest.mark.parametrize("modul_adi", [_FANTOM, _PETRI])
+@pytest.mark.parametrize("lang", ["tr", "en"])
+@pytest.mark.parametrize("olcek", [float("inf"), float("-inf"), -0.5, "abc"])
+def test_SONSUZ_NEGATIF_ve_SAYI_OLMAYAN_olcek_de_olculmus_deger_diye_YAZILMAZ(monkeypatch, modul_adi, lang, olcek):
+    """Tur 2 kolu (çürütücü — eşik / sonlu-değil genellemesi): kip notu yalnız 0 / None / NaN için değil, SONSUZ (sıfıra
+    bölünmüş ölçek), NEGATİF ve sayıya çevrilemeyen ölçek için de yazılır — "inf mm/px" / "-0.500 mm/px" ölçülmüş bir değer
+    gibi okunur."""
+    import re
+
+    metinler = _kayitli_metinler(monkeypatch, modul_adi, olcek, lang)
+    sayisal = [t for t in metinler if re.search(r"(-?\d+\.\d+|-?inf|nan) mm/px", t)]
+    assert not sayisal, (
+        f"{modul_adi.split('.')[-2]} [{lang}] ölçek={olcek!r}: panel ölçülmüş değer gibi yazıyor: {sayisal}"
+    )
+    assert BEKLENEN_YOK[lang] in metinler, (
+        f"{modul_adi.split('.')[-2]} [{lang}] ölçek={olcek!r}: kip notu yok: {metinler}"
+    )
