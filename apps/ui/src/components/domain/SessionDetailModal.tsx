@@ -58,6 +58,8 @@ const STATUS_ANAHTARLARI: Record<string, string> = {
   emergency_stopped: "seans.durum.emergency_stopped",
   aborted_due_to_power: "seans.durum.aborted_due_to_power",
   hardware_rejected: "seans.durum.hardware_rejected",
+  // Y207 (S-D5.3): kanıtı 3 açılış boyunca okunamayan seans — süre / doz bilinmiyor (uydurulmadı).
+  aborted_duration_unknown: "seans.durum.aborted_duration_unknown",
 };
 
 function statusEtiketi(status?: string): string {
@@ -295,6 +297,12 @@ function SummarySection({ session }: { session: SessionInfo | null }) {
         <SummaryItem label={t("seans.detay.operator")} value={session.operator_name || "—"} />
         <SummaryItem label={t("seans.detay.durum")} value={statusEtiketi(session.session_status)} />
       </View>
+      {/* Y207 (S-D5.3): kanıtı 3 açılış boyunca okunamayan seans "süre bilinmiyor" kapanır — süre / doz uydurulmadığı söylenir. */}
+      {(session.session_status || "").toLowerCase() === "aborted_duration_unknown" ? (
+        <Text style={[styles.hwNote, styles.hwNoteUyari]} testID="seans-sure-bilinmiyor-notu">
+          {t("seans.detay.sureBilinmiyorNotu")}
+        </Text>
+      ) : null}
       {session.patient_notes ? (
         <View style={styles.notesBox}>
           <Text style={styles.itemLabel}>{t("hasta.gozlem.notlar")}</Text>

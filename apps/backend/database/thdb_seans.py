@@ -53,6 +53,63 @@ class SeansKarisimi:
         "ai_proposal_rejected",
         "service_shutdown",
     )
+    #: ⚠️ Y207 (S-D5.3, sahip): kanıtı bu kadar AÇILIŞ boyunca okunamayan seans "süre bilinmiyor" olarak kapanır (D1.79'un "sonraki
+    #: açılışta yeniden dene"si kalıcı arızada seansı her açılışta "sürüyor" bırakıyordu). Süre / doz UYDURULMAZ (NULL kalır).
+    KANIT_OKUNAMADI_AZAMI_ACILIS = 3
+    SEANS_DURUMU_SURE_BILINMIYOR = "ABORTED_DURATION_UNKNOWN"
+
+    def _kanit_okunamadi_isle(self, cursor, session_id: int) -> bool:
+        """Y207: kanıtı okunamayan açılışı `session_events`'e yaz (önem `warning` → süresiz saklanır, A-07); AZAMİ açılışa ulaşınca seansı
+        "süre bilinmiyor" mühürle — `end_time` / `duration_minutes` ve açık bobin koşularının süresi NULL kalır (doz uydurulmaz), kayıt
+        ve ekran açıklamayı söyler. Sayılamazsa / yazılamazsa mühürlemez (D1.79 güvenli tarafı: seans `active` kalır).
+        @return seans mühürlendi mi."""
+        try:
+            onceki = int(
+                cursor.execute(
+                    "SELECT COUNT(*) FROM session_events WHERE session_id = ? AND event_type = 'kurtarma_kaniti_okunamadi'",
+                    (session_id,),
+                ).fetchone()[0]
+                or 0
+            )
+            deneme = onceki + 1
+            olay_sql = "INSERT INTO session_events (event_uuid, session_id, event_type, severity, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+            cursor.execute(
+                olay_sql,
+                (
+                    str(uuid.uuid4()),
+                    session_id,
+                    "kurtarma_kaniti_okunamadi",
+                    "warning",
+                    json.dumps({"deneme": deneme, "azami": self.KANIT_OKUNAMADI_AZAMI_ACILIS}),
+                    datetime.now().timestamp(),
+                ),
+            )
+            if deneme < self.KANIT_OKUNAMADI_AZAMI_ACILIS:
+                return False
+            cursor.execute(
+                "UPDATE treatment_sessions SET end_time = NULL, duration_minutes = NULL, session_status = ?, sync_status = 0, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ? AND session_status = 'active'",
+                (self.SEANS_DURUMU_SURE_BILINMIYOR, session_id),
+            )
+            cursor.execute(
+                olay_sql,
+                (
+                    str(uuid.uuid4()),
+                    session_id,
+                    "seans_sure_bilinmiyor",
+                    "warning",
+                    json.dumps({"neden": "kanit_okunamadi", "acilis": deneme}),
+                    datetime.now().timestamp(),
+                ),
+            )
+            return True
+        except Exception:
+            self.logger.error(
+                "Kurtarma: seans %s kanit-okunamadi sayaci yazilamadi — muhurlenmedi, sonraki acilista denenecek",
+                session_id,
+                exc_info=True,
+            )
+            return False
 
     def recover_stale_active_sessions(self, max_age_hours: int = 12) -> int:
         """Açık kalmış `active` seansları güvenli şekilde kapat (recovery).
@@ -103,6 +160,17 @@ class SeansKarisimi:
                     except KanitOkunamadi:
                         # D1.79 (B-3.73): geçici okuma hatası → bu seans MÜHÜRLENMEZ (0 dk / 0 sn koşu yazılmaz); 'active'
                         # kalır, sonraki açılışın kurtarması kanıtla yeniden dener.
+                        # ⚠️ Y207 (S-D5.3): AZAMİ açılış (3) boyunca okunamazsa "süre bilinmiyor" mühürlenir — süre / doz NULL.
+                        # Kapı: tests/test_acilis_kurtarmasi_KANIT_3_acilista_SURE_BILINMIYOR_Y207.py
+                        if self._kanit_okunamadi_isle(cursor, session_id):
+                            self.logger.error(
+                                "Kurtarma: seans %s kaniti %d acilis boyunca OKUNAMADI — 'sure bilinmiyor' olarak kapatildi "
+                                "(sure ve doz yazilmadi, uydurulmadi)",
+                                session_id,
+                                self.KANIT_OKUNAMADI_AZAMI_ACILIS,
+                            )
+                            recovered_count += 1
+                            continue
                         self.logger.error(
                             "Kurtarma: seans %s kaniti OKUNAMADI (gecici hata) — muhurlenmedi, sonraki acilista denenecek",
                             session_id,

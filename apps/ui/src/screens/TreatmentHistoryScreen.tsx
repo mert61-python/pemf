@@ -60,7 +60,9 @@ const STATUS_ANAHTARLARI: Record<string, string> = {
   aborted_due_to_power: "seans.durum.aborted_due_to_power",
   // ⚠️ Donanım komutu reddetti → seans HİÇ başlamadı. "Tamamlandı" yazmak,
   // uygulanmamış bir tedaviyi uygulanmış olarak belgelemek olurdu.
-  hardware_rejected: "seans.durum.hardware_rejected"
+  hardware_rejected: "seans.durum.hardware_rejected",
+  // Y207 (S-D5.3): kanıtı 3 açılış boyunca okunamayan seans — süre / doz bilinmiyor (uydurulmadı).
+  aborted_duration_unknown: "seans.durum.aborted_duration_unknown"
 };
 
 function statusEtiketi(status?: string): string {

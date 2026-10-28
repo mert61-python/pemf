@@ -30,6 +30,7 @@
     "siddetKayit": "Intensity (recorded)",
     "sokuluUyari": "⚠️ This session contains rows belonging to the ESP hardware that was removed from the system (including coil 8). The system has 7 coils; those rows are HISTORICAL records and it has not been verified that they were actually applied. These rows are not created in new sessions.",
     "stmNotu": "Note: temperature and field are measured only on coils with a sensor attached; values that were not measured appear empty (—).",
+    "sureBilinmiyorNotu": "This session's end evidence could not be read across three app starts; the session duration and the applied dose are unknown — no estimated value was recorded.",
     "sureDkSn": "{{m}}min {{s}}s",
     "sureSn": "{{s}}s",
     "tarih": "Date",
@@ -38,6 +39,7 @@
   },
   "durum": {
     "aborted_due_to_power": "Power Outage",
+    "aborted_duration_unknown": "Duration Unknown",
     "aborted_recovered": "Recovered",
     "active": "Active",
     "canceled": "Canceled",

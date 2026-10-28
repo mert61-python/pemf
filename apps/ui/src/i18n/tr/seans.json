@@ -30,6 +30,7 @@
     "siddetKayit": "Şiddet (kayıt)",
     "sokuluUyari": "⚠️ Bu seans, sistemden çıkarılmış ESP donanımına ait satırlar içeriyor (bobin 8 dahil). Sistem 7 bobinlidir; o satırlar GEÇMİŞ kayıttır ve gerçekten uygulandıkları doğrulanmamıştır. Yeni seanslarda bu satırlar oluşmaz.",
     "stmNotu": "Not: sıcaklık ve alan yalnız sensör takılı bobinlerde ölçülür; ölçülmeyen değerler boş (—) görünür.",
+    "sureBilinmiyorNotu": "Bu seansın bitiş kanıtı üç açılış boyunca okunamadı; seansın süresi ve uygulanan doz bilinmiyor — kayda tahmini bir değer yazılmadı.",
     "sureDkSn": "{{m}}dk {{s}}sn",
     "sureSn": "{{s}}sn",
     "tarih": "Tarih",
@@ -38,6 +39,7 @@
   },
   "durum": {
     "aborted_due_to_power": "Elektrik Kesintisi",
+    "aborted_duration_unknown": "Süre Bilinmiyor",
     "aborted_recovered": "Kurtarıldı",
     "active": "Aktif",
     "canceled": "İptal Edildi",

@@ -801,6 +801,7 @@
     },
     "durum": {
       "aborted_due_to_power": "Elektrik Kesintisi",
+      "aborted_duration_unknown": "Süre Bilinmiyor",
       "aborted_recovered": "Kurtarıldı",
       "active": "Aktif",
       "canceled": "İptal Edildi",

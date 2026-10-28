@@ -801,6 +801,7 @@
     },
     "durum": {
       "aborted_due_to_power": "Power Outage",
+      "aborted_duration_unknown": "Duration Unknown",
       "aborted_recovered": "Recovered",
       "active": "Active",
       "canceled": "Canceled",

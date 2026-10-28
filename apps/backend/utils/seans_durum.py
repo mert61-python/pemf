@@ -50,6 +50,8 @@ DURUM_ETIKETLERI: dict[str, str] = {
     "aborted_due_to_power": "seans.durum.aborted_due_to_power",
     # ⚠️ Donanım komutu reddetti → seans HİÇ başlamadı (2026-09-12 sahte-başarılı düzeltmesi).
     "hardware_rejected": "seans.durum.hardware_rejected",
+    # ⚠️ Y207 (S-D5.3): kanıtı 3 açılış boyunca okunamayan seans "süre bilinmiyor" kapanır (`SEANS_DURUMU_SURE_BILINMIYOR`).
+    "aborted_duration_unknown": "seans.durum.aborted_duration_unknown",
 }
 
 
