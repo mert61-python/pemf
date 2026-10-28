@@ -48,6 +48,9 @@ def _kos(cihazlar: list[tuple[str, str | None, int]]) -> tuple[int, int, int]:
     try:
         c.execute("attach database ':memory:' as public")
         c.execute("attach database ':memory:' as auth")
+        # Tur 2 (çürütücü): Postgres `LIKE` büyük/küçük harfe DUYARLIDIR, SQLite varsayılanı DEĞİL — eşleme bunu da taşımalı;
+        # yoksa `not like '%-DEV'` gibi Postgres'te '-dev' satırlarını SÜZMEYEN bir gövde burada yeşil kalıyordu.
+        c.execute("PRAGMA case_sensitive_like = ON")
         c.execute("create table public.devices (device_id text primary key, name text, last_seen text)")
         c.execute("create table auth.users (id text, email_confirmed_at text)")
         c.executemany("insert into auth.users values (?, ?)", [("u1", "2026-10-01 10:00:00"), ("u2", None)])
@@ -85,6 +88,14 @@ def test_adsiz_ve_benzer_adli_gercek_cihazlar_SAYILIR_bayat_satir_aktif_sayilmaz
     assert aktif == 2, (
         f"usage_counts aktif sayısı yanlış (30 gün penceresi bozuldu ya da gerçek cihazı '-dev' sanıyor): aktif={aktif}"
     )
+
+
+def test_aktif_pencere_TAM_30_gun_sinirin_iki_yaninda_D6_13():
+    """Tur 2 (çürütücü, eşik ±1): sitedeki "Aktif cihaz (30 gün)" — 29,5 gün önce görülen sayılır, 30,5 gün önce görülen
+    sayılmaz. Eskiden yalnız 1–3 ve 45 gün ölçülüyordu; pencere 31 güne kaysa da kapı yeşil kalıyordu."""
+    _, toplam, aktif = _kos([("sinir-ici", "PEMF-Vet", 29.5), ("sinir-disi", "PEMF-Vet", 30.5)])
+    assert toplam == 2, f"aparat: toplam {toplam}"
+    assert aktif == 1, f"usage_counts aktif penceresi 30 gün DEĞİL (29,5 / 30,5 gün sınırı): aktif={aktif}"
 
 
 def test_suzgec_ETIKETLEYICI_ile_ayni_soneki_kullanir():
