@@ -11,7 +11,9 @@ yok, `tedavi_bekleyen` sayısı şişik kalıyordu. İki yol:
 
 Düzeltme: tur başındaki bekleyen işleme girdilerin kartlarını KATI okumayla sınar (yalnız var olanlar; okuma hatası YÜKSELİR → bu turda
 hiçbir girdi düşmez). Kartı OLMAYAN girdi düşer + WARNING + denetim izi `kvkk.bekleyen_silinen_hasta` (yalnız sayı; ad YOK; boş turda iz
-yok). Tedavi geçmişine DOKUNULMAZ (kartı silinen hastanın seans satırları bugünkü hasta silme kuralıyla kalır — [SAHİBE] S-E4).
+yok). ⚠️ SON (Y204 · S-D5.10, sahip): girdi düşmeden ÖNCE tedavi adımı uygulanır (eskiden "tedavi geçmişine DOKUNULMAZ" — ad süresiz
+kalıyordu); tedavi adımı düşerse girdi KALIR. Bu dosya girdinin düşmesini / kalmasını ölçer — A testinde tedavi tetikleyicisi artık YALNIZ
+kartı DURAN hastanın ayna satırında (silinenin adımı uygulanabilsin); adımın kendisi `test_kvkk_SILINEN_kartin_tedavi_gecmisi_ANONIMLESIR_Y204.py`.
 
 Kurulum EN ALT katta: tedavi / kanonik adımın düşmesi GERÇEK SQLite tetikleyicisiyle (`RAISE(ABORT)`), kart silmesi GERÇEK
 `PatientDatabase.delete_patient`, okunamayan hasta DB'si GERÇEK "no such table". GERÇEK `services.kvkk_anonimlestirme.tur`.
@@ -117,6 +119,14 @@ def test_KRITIK_A_tedavi_adimi_dusen_hastanin_KARTI_SILINIRSE_girdisi_DUSER_iz_v
 
     pdb, tdb = o
     p1, p2 = _A_kur(pdb, tdb)
+    # SON (Y204): silinen kartın girdisi ancak tedavi adımı uygulanınca düşer → tetikleyici YALNIZ kartı duran p2'nin ayna satırında kalır.
+    _tetik_kaldir(tdb, "e4_tedavi_dus")
+    with tdb._get_connection() as c:
+        c.execute(
+            "CREATE TRIGGER e4_tedavi_dus_p2 BEFORE UPDATE ON patients WHEN OLD.patient_uuid = ? "
+            "BEGIN SELECT RAISE(ABORT, 'E4 benzetim'); END".replace("?", "'" + str(p2).replace("'", "''") + "'")
+        )
+        c.commit()
     assert pdb.delete_patient(p1) is True, "aparat: kart silinemedi"
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger=kv.logger.name):

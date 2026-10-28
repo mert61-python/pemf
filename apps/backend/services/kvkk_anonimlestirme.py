@@ -139,12 +139,28 @@ def _uzlastir(pdb, tdb) -> None:
         )
 
 
-def _silinen_kartlari_dus(pdb, tdb, bekleyen: dict) -> None:
+def _kimlik_bilgisi(pdb, bekleyen: dict, kimlikler) -> dict:
+    """`anonymize_patients_by_uuid` için {uuid: {"metinler": [ad, sahip, eposta], "ad_ile_kimliksiz": bool}} (Y125 kuralı)."""
+    from utils.turkce_metin import arama_katla
+
+    aktif = _aktif_adlar(pdb)
+    sonuc = {}
+    for k in kimlikler:
+        metinler = [m for m in (bekleyen.get(k) or []) if m and str(m).strip() and str(m) != "[ANONIM]"]
+        ad = (bekleyen.get(k) or [None])[0]
+        sonuc[k] = {"metinler": metinler, "ad_ile_kimliksiz": bool(ad) and arama_katla(str(ad)) not in aktif}
+    return sonuc
+
+
+def _silinen_kartlari_dus(pdb, tdb, bekleyen: dict) -> int:
     """⚠️ 2-F incelemesi §10 #4 (D5): kanonik KARTI SİLİNMİŞ hastanın girdisi listeden düşer. Eskiden hiç işlenmiyor, hiç düşmüyordu
     (`get_patient` → None → "anonim değil") → düz ad / sahip / e-posta kopyası SÜRESİZ kalıyor, her tur yeniden okunuyordu (ölçüldü).
     Varlık KATI okunur (`operator_sahipleri`: yalnız var olanlar, hata YÜKSELİR) — okunamazsa bu turda hiçbir girdi düşmez.
-    Tedavi geçmişine DOKUNULMAZ (kartı silinen hastanın seansları hasta silmenin bugünkü kuralıyla kalır — [SAHİBE] S-E4).
-    `bekleyen` yerinde güncellenir. Kapı: tests/test_kvkk_bekleyen_SILINEN_hasta_listeden_DUSER_D5E4.py"""
+    ⚠️ Y204 (S-D5.10, sahip): girdi DÜŞMEDEN ÖNCE tedavi adımı uygulanır — girdi yalnız anonimleştirmesi ONAYLANMIŞ hasta için yazılır
+    (onaylı tur ya da kanonik tarafı zaten anonim — `_uzlastir`); kartı sonradan silinse de tedavi geçmişindeki ad / sahip / e-posta
+    `[ANONIM]` olur (eskiden "tedavi geçmişine dokunulmaz" — ad SÜRESİZ kalıyordu). Tedavi adımı düşerse (-1) girdi KALIR, sonraki turda
+    yeniden denenir (B-3.34 sözleşmesi). `bekleyen` yerinde güncellenir. @return tedavi adımı uygulanan (düşen) girdi sayısı.
+    Kapılar: tests/test_kvkk_bekleyen_SILINEN_hasta_listeden_DUSER_D5E4.py · tests/test_kvkk_SILINEN_kartin_tedavi_gecmisi_ANONIMLESIR_Y204.py"""
     try:
         var = pdb.operator_sahipleri(list(bekleyen))
     except Exception:
@@ -152,10 +168,17 @@ def _silinen_kartlari_dus(pdb, tdb, bekleyen: dict) -> None:
             "KVKK bekleyen listesi: hasta kartlarinin varligi okunamadi — silinmis kart girdisi bu turda dusurulmedi.",
             exc_info=True,
         )
-        return
+        return 0
     silinen = sorted(k for k in bekleyen if k not in var)
     if not silinen:
-        return
+        return 0
+    n = tdb.anonymize_patients_by_uuid(silinen, kimlikler=_kimlik_bilgisi(pdb, bekleyen, silinen))
+    if n < 0:
+        logger.warning(
+            "KVKK: karti silinmis %d hastanin tedavi gecmisi anonimlestirilemedi — bekleyen girdi KALDI, sonraki turda yeniden denenecek.",
+            len(silinen),
+        )
+        return 0
     tdb.anonim_bekleyen_dus(silinen)
     for k in silinen:
         bekleyen.pop(k, None)
@@ -163,36 +186,29 @@ def _silinen_kartlari_dus(pdb, tdb, bekleyen: dict) -> None:
         "kvkk.bekleyen_silinen_hasta",
         scope="otomatik",
         item_count=len(silinen),
-        detail={"neden": "hasta_karti_silinmis"},
+        detail={"neden": "hasta_karti_silinmis", "tedavi_adimi": "uygulandi"},
     )
     logger.warning(
-        "KVKK: %d hastanin karti silinmis — tedavi-DB anonimlestirme bekleyen listesinden dusuruldu (tedavi gecmisine dokunulmadi).",
+        "KVKK: %d hastanin karti silinmis — tedavi gecmisi anonimlestirildi, bekleyen listesinden dusuruldu.",
         len(silinen),
     )
+    return len(silinen)
 
 
 def _bekleyenleri_isle(pdb, tdb) -> int:
-    """@return tedavi adımı BAŞARIYLA uygulanan hasta sayısı."""
+    """@return tedavi adımı BAŞARIYLA uygulanan hasta sayısı (kartı silinmiş girdiler dahil — Y204)."""
     bekleyen = tdb.anonim_bekleyen_oku()
     if not bekleyen:
         return 0
-    _silinen_kartlari_dus(pdb, tdb, bekleyen)
+    islenen = _silinen_kartlari_dus(pdb, tdb, bekleyen)
     if not bekleyen:
-        return 0
+        return islenen
     # Yalnız kanonik tarafı GERÇEKTEN anonim olanlar (kanonik adım düştüyse hasta hâlâ adaydır — tedavi tarafına dokunulmaz).
     anonim = {k for k in bekleyen if str((pdb.get_patient(k) or {}).get("anonymized") or 0) in ("1", "True", "true")}
     if not anonim:
-        return 0
-    aktif = _aktif_adlar(pdb)
-    from utils.turkce_metin import arama_katla
-
-    kimlikler = {}
-    for k in anonim:
-        metinler = [m for m in (bekleyen.get(k) or []) if m and str(m).strip() and str(m) != "[ANONIM]"]
-        ad = (bekleyen.get(k) or [None])[0]
-        kimlikler[k] = {"metinler": metinler, "ad_ile_kimliksiz": bool(ad) and arama_katla(str(ad)) not in aktif}
-    n = tdb.anonymize_patients_by_uuid(sorted(anonim), kimlikler=kimlikler)
+        return islenen
+    n = tdb.anonymize_patients_by_uuid(sorted(anonim), kimlikler=_kimlik_bilgisi(pdb, bekleyen, anonim))
     if n >= 0:
         tdb.anonim_bekleyen_dus(sorted(anonim))
-        return len(anonim)
-    return 0
+        return islenen + len(anonim)
+    return islenen
