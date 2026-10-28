@@ -34,10 +34,13 @@ README = DB / "README.md"
 
 # ── (a) komut yolları ─────────────────────────────────────────────────────────
 #: `--dosya <yol>`, `psql … -f <yol>` ve kök-göreli `database/<ad>.sql` atıfları (öncesinde `backend/` yoksa).
+#: Tur 2 (çürütücü): komutun KENDİ betik yolu (`python <yol>.py`) da — betik yolu kırık komut da hiçbir yerden çalışmaz
+#: (eskiden yalnız `--dosya` / `-f` argümanı denetleniyordu; `python tools/supabase_sql.py` kaçıyordu).
 _YOL_DESENLERI = (
     re.compile(r"--dosya\s+([^\s`|]+)"),
     re.compile(r"\bpsql\b[^\n`]*?\s-f\s+([^\s`|]+)"),
     re.compile(r"(?<![\w/.])(database/[\w<>*.-]+\.sql)\b"),
+    re.compile(r"\bpython[0-9.]*\s+([^\s`|]+\.py)\b"),
 )
 
 
@@ -80,7 +83,8 @@ def test_KARSIT_yol_denetimi_KIRIK_yolu_yakalar_D6_60(tmp_path):
     ornek.write_text(
         "`python scripts/supabase_sql.py --dosya database/<dosya>.sql --yaz`\n"
         "psql -v ON_ERROR_STOP=1 -f database/supabase_devices.sql \"$URL\"\n"
-        "`python scripts/supabase_sql.py --dosya apps/backend/database/supabase_jetonlar.sql --yaz`\n",
+        "`python scripts/supabase_sql.py --dosya apps/backend/database/supabase_jetonlar.sql --yaz`\n"
+        "`python tools/supabase_sql.py --denetim`\n",
         encoding="utf-8",
     )
     sonuc = []
@@ -89,6 +93,9 @@ def test_KARSIT_yol_denetimi_KIRIK_yolu_yakalar_D6_60(tmp_path):
             sonuc += [(no, m.group(1)) for m in desen.finditer(satir)]
     assert (1, "database/<dosya>.sql") in sonuc and (2, "database/supabase_devices.sql") in sonuc
     assert (3, "apps/backend/database/supabase_jetonlar.sql") in sonuc
+    assert (4, "tools/supabase_sql.py") in sonuc and not (KOK / "tools" / "supabase_sql.py").is_file(), (
+        "aparat: kırık betik yolu (`python tools/…py`) yakalanmadı"
+    )
     assert not any(no == 3 and y == "database/supabase_jetonlar.sql" for no, y in sonuc), (
         "aparat: doğru yolun kuyruğu ayrı atıf sayıldı"
     )
