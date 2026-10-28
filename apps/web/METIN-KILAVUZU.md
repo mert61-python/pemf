@@ -118,5 +118,6 @@ bakın; kod ile metin çelişirse kazanan koddur.
 - [ ] Yeni metinde Türkçe karakterler tam (ASCII yazım yok)
 - [ ] Yeni plan eklendiyse: `COMPARE` her satırda o tier'e değer veriyor (derleyici zorlar),
       kart ızgarası sütun sayısı yetiyor, `planFiyatGorunumu` "₺0" üretmiyor
-- [ ] ⚠️ `FREE_MODE=true` ve `PEMF_JETON_ENFORCED` kapalı — **satışı açma kararı sahibindir**
-      (sahip 2026-08-20: "henüz aktif etme, altyapı hazır şekilde kalsın")
+- [ ] ⚠️ `FREE_MODE=true` ve jeton KOD düzeyinde kapalı (Y194: `apps/backend/servers/jeton.py` `JETON_SAHIP_ACIK = False` —
+      ortamdaki `PEMF_JETON_ENFORCED=1` tek başına açamaz) — **satışı açma kararı sahibindir**
+      (sahip 2026-08-20: "henüz aktif etme, altyapı hazır şekilde kalsın"; 2026-10-24 Y194: "genel kodda kapat")

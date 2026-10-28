@@ -29,8 +29,8 @@ defterde bekler ve sahibinin bir sonraki çevrimiçi isteğinde gönderilir; o z
 ÇİFT DÜŞME YOK: her tüketim `istek_id` taşır; yeniden deneme ve uzlaştırma aynı jetonu iki kez
 harcayamaz (sunucuda `token_ledger` UNIQUE, burada yerel defterde anahtar kontrolü).
 
-⚠️ BAYRAKLI: `PEMF_JETON_ENFORCED` KAPALIYKEN her şey no-op — satış açılana kadar canlı
-davranış değişmez (entitlement.py deseniyle birebir).
+⚠️ İKİ ANAHTARLI: kod sabiti `JETON_SAHIP_ACIK` (Y194: False) VE ortam `PEMF_JETON_ENFORCED` birlikte açık değilse her şey
+no-op — satış açılana kadar canlı davranış değişmez (entitlement.py deseniyle birebir; D6.45).
 ⚠️ T3 · Y194 (sahip 2026-10-24): jeton KOD DÜZEYİNDE kapalı (`JETON_SAHIP_ACIK = False`) — ortamdaki `PEMF_JETON_ENFORCED=1` bu sürümde
 YOK SAYILIR; her hesapta AI sınırsız. Ücretlendirme mantığı SİLİNMEDİ: satış açılınca sabit `True` yapılıp derlenir, ortam yine gerekir.
 """
@@ -750,6 +750,7 @@ class JetonYoneticisi:
 # Bu bölüm yazılana kadar modül HİÇBİR üretim kodundan çağrılmıyordu: `PEMF_JETON_ENFORCED`
 # açılsa bile davranış değişmezdi (sessiz no-op tuzağı — eksik-taramasının P1 bulgusu).
 # Bağlantı entitlement.py deseniyle aynı: router-seviyesi bağımlılık (`ai_router`).
+# (Y194'ten beri ortam tek başına da açamaz — `JETON_SAHIP_ACIK`; belge: docs/JETON-SISTEMI.md Adım 6 · D6.45.)
 #
 # ⚠️ TAŞIMA KATMANI KARARI: belge "tüketimi /api/tokens ucuna bağla" diyordu; Supabase RPC'ye
 # DOĞRUDAN bağlandı (`rpc/jeton_bakiyem` + `rpc/jeton_tuket`, kullanıcının kendi JWT'siyle).

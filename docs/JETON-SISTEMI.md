@@ -75,7 +75,8 @@ sokan mutasyon kırmızı yanar).
 
 ## 3. İnternet şartı ve yolda kalan ödeme
 
-**Sahip kararı (2026-10-19, S-4B.5 + S-4BI.8):** ücretlendirme AÇIKKEN (`PEMF_JETON_ENFORCED=1`) yapay zekâ analizi
+**Sahip kararı (2026-10-19, S-4B.5 + S-4BI.8):** ücretlendirme AÇIKKEN (`JETON_SAHIP_ACIK = True` VE `PEMF_JETON_ENFORCED=1`;
+bugün KOD düzeyinde KAPALI — Y194, §5) yapay zekâ analizi
 internet ister. Bakiye / borç okunamıyorsa yeni analiz **başlatılmaz** — 402, mesaj nedenini ve tedavinin etkilenmediğini
 söyler, `X-PEMF-Jeton-Sebep: cevrimdisi` başlığıyla (arayüz "İnternet bağlantısı gerekli" başlığını gösterir). Seans,
 acil durdurma ve sensör izleme internetsiz de çalışır (bu kapıya hiç gelmez). Eskiden internetsiz analiz çevrimdışı
@@ -101,7 +102,7 @@ günlüğe yazar — teslimdeki kesin redle aynı sonuç: o tek analiz ücretsiz
 |---|---|---|
 | Şema | `apps/backend/database/supabase_jetonlar.sql` | `token_balances` + `token_ledger`, RLS, atomik `jeton_tuket` RPC, `jeton_donem_yenile` |
 | Uç | `apps/web/api/tokens.ts` | GET bakiye · POST tüketim (idempotans zorunlu) |
-| Cihaz | `apps/backend/servers/jeton.py` | Kapı + yolda kalan ödeme defteri + uzlaştırma; bayraklı; ücretlendirme açıkken internet şartı |
+| Cihaz | `apps/backend/servers/jeton.py` | Kapı + yolda kalan ödeme defteri + uzlaştırma; İKİ anahtarlı: kod sabiti `JETON_SAHIP_ACIK` (Y194: `False`) VE ortam `PEMF_JETON_ENFORCED` — sabit `False` iken ortam açamaz; ücretlendirme açıkken internet şartı |
 | Web modeli | `apps/web/src/config.ts::JETON` | Plan hakları, maliyetler, paketler (kullanıcı metninin kaynağı) |
 | Arayüz | `src/components/AccountButton.tsx`, `src/lib/jeton.ts` | Hesap menüsünde kalan jeton |
 | Fiyat metni | `apps/web/src/lib/planFiyat.ts` | Plan fiyat gösterimi — **tek kaynak**; aylık ücreti olmayan planı "₺0/ay" diye basmayı önler |
@@ -111,11 +112,15 @@ günlüğe yazar — teslimdeki kesin redle aynı sonuç: o tek analiz ücretsiz
 
 ## 5. Devreye alma — adım adım
 
-**Bugünkü durum (2026-08-20):** şema, uç, cihaz modülü ve arayüz HAZIR ve testli; ama sistem
+**Bugünkü durum (2026-08-20; Y194 ile 2026-10-24 güncellendi):** şema, uç, cihaz modülü ve arayüz HAZIR ve testli; ama sistem
 **hiçbir yerde devrede değil** — ve sahip kararıyla (2026-08-20) **şimdilik öyle kalacak**:
 "ücretsiz sistem şu an aktifte devam etmeli, henüz aktif etme; jeton kalsın, altyapı hazır
-şekilde." `FREE_MODE=true` ve `PEMF_JETON_ENFORCED` kapalı; ikisi de **testle kilitli**
-(`kullandikca-ode.test.ts` §6). Devreye alınacağı gün eksik olanlar (2026-08-22 güncellemesi): ~~(a) SQL Supabase'de
+şekilde." `FREE_MODE=true` (`kullandikca-ode.test.ts` §6 kilitler) ve jeton **KOD düzeyinde kapalı** (Y194, `3bb0d3e0`:
+`apps/backend/servers/jeton.py` `JETON_SAHIP_ACIK = False` → `JETON_ENFORCED = JETON_SAHIP_ACIK and PEMF_JETON_ENFORCED`).
+⚠️ Ortam bayrağı TEK BAŞINA açamaz: launcher `PEMF_JETON_ENFORCED`'i kendi ortamından geçirir; `1` olsa da kapı tam no-op, AI
+analizi her hesapta sınırsız (`tests/test_T3_Y194_jeton_KOD_duzeyinde_KAPALI.py` kilitler; ölçüm: ortam `1` → `JETON_ENFORCED=False`).
+Y194'ten ÖNCE kapı yalnız ortamdan açılıyordu ve bir makinede kullanıcı ortamındaki `1` her analizi bakiyeden düşürüyordu.
+Devreye alınacağı gün eksik olanlar (2026-08-22 güncellemesi): ~~(a) SQL Supabase'de
 çalıştırılmadı~~ ✅ Adım 1 yapıldı (2026-08-21); ~~(b) ödeme geri-çağrısı jeton yüklemiyor~~ ✅ Adım 3 yapıldı (2026-08-22); ~~(c) `apps/backend/servers/jeton.py`'yi çağıran kimse yok~~ ✅ Adım 4 yapıldı
 (2026-08-22, `jeton_gate` → `ai_router`).
 
@@ -259,7 +264,8 @@ yorumunda: cihaz Supabase'le zaten konuşuyor, siteye sıçrama tek yeni arıza 
 kimlik `auth.uid()`ten, idempotans RPC içinde). Uç eşlemesi: `pro/stop|status|approve|reject|
 frame|organ|calibrate` KAPILANMAZ (stop güvenlik sınıfı; frame seans-içi akış — ücret
 seans-başına `pro/start`=5); `pro/propose`=sensor(1); rna/kidney_ct/histopath=3; sound=1;
-kalan görüntü uçları=1. **Bayrak HÂLÂ KAPALI** — kapı bağlı ama uykuda; satış açılmadı.
+kalan görüntü uçları=1. **Jeton HÂLÂ KAPALI** — kapı bağlı ama uykuda; satış açılmadı. Y194'ten (2026-10-24) beri KOD
+düzeyinde: `JETON_SAHIP_ACIK = False` iken ortamdaki `PEMF_JETON_ENFORCED=1` de kapıyı açmaz (Adım 6).
 Kilit: `tests/test_jeton_gate.py` (9 test, 7 mutasyon — "pro/stop kapılanır" ve "tedavi ucu
 kapılanır" mutasyonları dâhil) + `apiClient.jeton402.test.ts`.
 
@@ -350,16 +356,22 @@ Bu adım bitene kadar kullandıkça-öde planı sitede görünür ama **satılma
 
 ---
 
-### Adım 6 — Bayrağı aç *(çalıştırma işi, ~1 dk + izleme)*
+### Adım 6 — Jetonu aç *(kod + yayın işi, ardından çalıştırma ~1 dk + izleme)*
 
-`PEMF_JETON_ENFORCED=1` (klinik cihazının servis ortamında). Açıldığı andan itibaren yapay zekâ analizi
-internet ister (§3); seans / acil durdurma internetsiz çalışmayı sürdürür. (`PEMF_JETON_OFFLINE_TAVAN` 2026-10-19'da kaldırıldı.)
+⚠️ Y194'ten (2026-10-24) beri İKİ anahtar gerekir — ortam bayrağı tek başına YETMEZ:
+1. **Kod (sahip anahtarı):** `apps/backend/servers/jeton.py` `JETON_SAHIP_ACIK = True` yapılır, test kapısı
+   (`tests/test_T3_Y194_jeton_KOD_duzeyinde_KAPALI.py`) yeni karara göre güncellenir ve uygulama yeniden derlenip yayınlanır.
+2. **Ortam:** `PEMF_JETON_ENFORCED=1` (klinik cihazının servis ortamında; launcher kendi ortamından backend'e geçirir).
+
+İkisi birden açıldığı andan itibaren yapay zekâ analizi internet ister (§3); seans / acil durdurma internetsiz çalışmayı
+sürdürür. (`PEMF_JETON_OFFLINE_TAVAN` 2026-10-19'da kaldırıldı.) Yalnız 2'yi yapmak bugün HİÇBİR şeyi değiştirmez.
 
 **Kademeli açmayı öner:** önce tek bir test kliniğinde aç, bir hafta izle (`token_ledger`'da
 tüketim akıyor mu, `jeton_bekleyen.json` şişiyor mu), sonra yaygınlaştır.
 
 **Anında geri alma:** `PEMF_JETON_ENFORCED=0` → sistem tamamen no-op olur, hiçbir analiz
-engellenmez. Şema ve defter yerinde kalır (veri kaybı yok).
+engellenmez (yeniden derleme gerekmez; `JETON_SAHIP_ACIK = False`'a dönmek ise yeni yayın ister). Şema ve defter yerinde kalır
+(veri kaybı yok).
 
 ---
 
