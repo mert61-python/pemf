@@ -112,12 +112,16 @@ describe('D6.29 · AccountButton kutusu yalnız okunmuş bakiyeyle çizilir', ()
   it('"Kalan jeton" satırı YALNIZ `jeton && (…)` koşulunun içinde', () => {
     const sf = ts.createSourceFile('AccountButton.tsx', ACCOUNT_SRC, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
     const korunan: ts.Node[] = []
+    // `a && b && (…)` sola bağlıdır: `(a && b) && (…)`. Y211 · S-D67.4 kutuyu `{jeton && !FREE_MODE && (…)}` yaptı → korunan sağ taraf,
+    // EN SOLDAKİ işleneni `jeton` olan && zincirinin sağıdır (yalnız doğrudan `jeton && (…)` değil).
+    const enSol = (n: ts.Expression): ts.Expression =>
+      ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ? enSol(n.left) : n
     const gez = (n: ts.Node): void => {
       if (
         ts.isBinaryExpression(n) &&
         n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
-        ts.isIdentifier(n.left) &&
-        n.left.text === 'jeton'
+        ts.isIdentifier(enSol(n.left)) &&
+        (enSol(n.left) as ts.Identifier).text === 'jeton'
       ) korunan.push(n.right)
       ts.forEachChild(n, gez)
     }
