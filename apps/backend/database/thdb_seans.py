@@ -801,6 +801,30 @@ class SeansKarisimi:
             return None
         return int(row[0]) if row else None
 
+    def son_biten_seans_aday_sayisi(
+        self, patient_name: str, en_cok_yas_s: float = 12 * 3600, simdi: float = None
+    ) -> int:
+        """Y209 (S-D5.4): kimliksiz notun ADLA eşleştiği aday sayısı — `son_biten_seans_kimligi` ile AYNI ölçüt (aynı ad, aktif değil,
+        son `en_cok_yas_s`). > 1 ise not en sonuncuya gider ama eşleşme BELİRSİZDİR (kayıt + ekran uyarır). Okuma düşerse 0 (uyarı yok;
+        not yolu değişmez)."""
+        import time as _time
+
+        ad = (patient_name or "").strip()
+        if not ad:
+            return 0
+        sinir = (_time.time() if simdi is None else float(simdi)) - float(en_cok_yas_s)
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM treatment_sessions WHERE patient_name = ? AND session_status != 'active' "
+                    "AND started_epoch IS NOT NULL AND started_epoch >= ?",
+                    (ad, sinir),
+                ).fetchone()
+        except _DB_ERROR as e:
+            self.logger.error(f"son_biten_seans_aday_sayisi hatası: {e}")
+            return 0
+        return int(row[0] or 0) if row else 0
+
     def son_biten_seans_belirsiz_mi(
         self, patient_name: str, en_cok_yas_s: float = 12 * 3600, simdi: float = None
     ) -> bool:

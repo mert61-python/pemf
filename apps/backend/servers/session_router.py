@@ -120,6 +120,28 @@ def _not_hedefi(payload: "SessionNotesPayload", db, bellek: dict) -> tuple[int, 
     )
 
 
+def _ad_eslesmesi_uyarisi(db, sid: int, aday: int) -> dict:
+    """Y209 (S-D5.4, sahip): kimliksiz (eski istemci) not ADLA en son bitmiş seansa yazıldı ve aynı adla birden çok aday var → davranış
+    AYNI (not kaydedildi), ama eşleşme belirsiz: KAYIT (`session_events`, önem `warning` — süresiz saklanır, ad YOK) + EKRAN (masaüstü
+    bildirimi iki dilde + yanıtta istek dilinde `uyari`). Uyarı üretilemezse not akışı bozulmaz (yalnız günlük).
+    Kapı: tests/test_eski_istemci_notu_AD_ESLESMESI_belirsizse_UYARI_Y209.py"""
+    if aday <= 1:
+        return {}
+    try:
+        db.record_session_event(
+            sid, "not_ad_eslesmesi_belirsiz", {"aday": int(aday), "hedef": "son_biten"}, severity="warning"
+        )
+        from servers import api_server as _api
+
+        _api._bildir(lambda d: ceviri.t("bildirim.notAdEslesmesiBelirsiz", dil=d, aday=int(aday)), "warning")
+        return {"uyari": ceviri.t("seans.uyari.notAdEslesmesiBelirsiz", aday=int(aday))}
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Y209: belirsiz ad eslesmesi uyarisi uretilemedi (not kaydedildi)", exc_info=True
+        )
+        return {}
+
+
 @router.post("/api/session/notes")
 def save_session_notes(payload: SessionNotesPayload, request: Request):
     """Seans-sonrası gözlem notu + not ekranındaki doz parametreleri → seansın KENDİ satırına (yeni satır AÇILMAZ).
@@ -166,6 +188,8 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
     with _api._session_lock:
         bellek = dict(_api._active_session)
     sid, yol = _not_hedefi(payload, db, bellek)
+    # Y209 (S-D5.4): yalnız ADLA bulunan hedefte (eski istemci, bellek dışı) aday sayısı — > 1 ise not yine yazılır, uyarı eklenir.
+    aday = db.son_biten_seans_aday_sayisi((payload.patient_name or "").strip()) if yol == "hasta" else 0
     try:
         bellek_bu = bellek.get("db_session_id") == sid
         ozet = db.seans_ozeti(sid) or {}
@@ -211,6 +235,7 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
             "updated": True,
             "durationPreserved": True,
             "hedef": yol,
+            **_ad_eslesmesi_uyarisi(db, sid, aday),
         }
     except Exception:
         # B3 güvenlik-fix: ham str(e) SIZMAZ (zaten loglanıyor) — generic detail.

@@ -471,6 +471,7 @@
     "mandalSifirlandi": "Acil durdurma mandalı SIFIRLANDI — bobinler başlatılmadı; tedavi için başlatmayı ayrıca verin.",
     "mandalStmKopma": "🔒 Bobin çalışırken STM32 bağlantısı koptu — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
     "mandalStmWatchdog": "🔒 Bobin çalışırken STM32 watchdog zaman aşımı — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+    "notAdEslesmesiBelirsiz": "Eski uygulamadan (hasta kimliği göndermeyen) gelen gözlem notu, hasta adıyla eşleşen en son seansa kaydedildi; aynı adla son 12 saatte {{aday}} seans var — Seans Geçmişi'nden notun doğru seansa gittiğini kontrol edin.",
     "sebepYok": "sebep bildirilmedi",
     "selfTestAtlandi": "Bobin {{coil}} self-test: atlandı (PWM pasif)",
     "selfTestBasarisiz": "🚨 Bobin {{coil}} self-test BAŞARISIZ — {{ayrinti}}",
@@ -874,6 +875,7 @@
     },
     "uyari": {
       "espErisilemez": "Sistem bağlantısı yok — ESP bobinleri {{esp_coils}} aktif OLMAYABİLİR (STM bobinleri çalışıyor).",
+      "notAdEslesmesiBelirsiz": "Not, hasta adıyla eşleşen EN SON seansa kaydedildi; aynı adla son 12 saatte {{aday}} seans var — notun doğru seansa gittiğini Seans Geçmişi'nden kontrol edin.",
       "stopDogrulanamadi": "Bobin {{bobinler}} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
     }
   },

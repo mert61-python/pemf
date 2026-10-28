@@ -471,6 +471,7 @@
     "mandalSifirlandi": "The emergency stop latch was RESET — the coils were not started; give the start command separately for treatment.",
     "mandalStmKopma": "🔒 The STM32 connection was lost while a coil was running — the EMERGENCY STOP latch was set. Check the coils; to start again, first press \"Reset\".",
     "mandalStmWatchdog": "🔒 The STM32 watchdog timed out while a coil was running — the EMERGENCY STOP latch was set. Check the coils; to start again, first press \"Reset\".",
+    "notAdEslesmesiBelirsiz": "An observation note from an older app version (which does not send the patient ID) was saved to the most recent session matching the patient name; there are {{aday}} sessions with this name in the last 12 hours — check in Session History that the note went to the right session.",
     "sebepYok": "no reason given",
     "selfTestAtlandi": "Coil {{coil}} self-test: skipped (PWM inactive)",
     "selfTestBasarisiz": "🚨 Coil {{coil}} self-test FAILED — {{ayrinti}}",
@@ -874,6 +875,7 @@
     },
     "uyari": {
       "espErisilemez": "No system connection — the ESP coils {{esp_coils}} may NOT be active (the STM coils are running).",
+      "notAdEslesmesiBelirsiz": "The note was saved to the MOST RECENT session matching the patient name; there are {{aday}} sessions with this name in the last 12 hours — check in Session History that the note went to the right session.",
       "stopDogrulanamadi": "The hardware STOP could NOT be VERIFIED for coil(s) {{bobinler}} — they may STILL BE RUNNING. Press EMERGENCY STOP or use the device's physical power button."
     }
   },
