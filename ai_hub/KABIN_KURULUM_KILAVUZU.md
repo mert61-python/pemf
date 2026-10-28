@@ -46,8 +46,15 @@ Kurulu makineye **yayınla** (app katmanı) gider; yayın sonrası backend yenid
 
 ## 0.5) FANTOM / PETRİ YERLEŞİMİ ve HEDEF DÜZLEMİ (2026-09-09, sahip kararı #6)
 
-> ℹ️ Bu bölüm 65×50×50 düzeneğinin ölçümleridir (TARİHÇE); güncel kabin yukarıda. Sonuç değişmedi: alçak lensle
-> taban düzlemi sayısal olarak dayanıksız — 2026-10-14 kabininde lens tabandan 2 cm, `-20` düzlemi tabanın altında.
+> ℹ️ Bu bölüm 65×50×50 düzeneğinin ölçümleridir (TARİHÇE); güncel kabin yukarıda. ~~Sonuç değişmedi: alçak lensle
+> taban düzlemi sayısal olarak dayanıksız — 2026-10-14 kabininde lens tabandan 2 cm, `-20` düzlemi tabanın altında.~~
+>
+> ⚠️ **DÜZELTME (L1-7.4 · D1.100):** aşağıdaki yatay-düzlem ölçümleri (kesişimin kabin dışına düştüğü tablolar ve "Neden" açıklaması)
+> HATALI POZUN ürünüydü — dönüşüm kamera orijinini marker→kabin DÖNDÜRMÜYORDU (`ai_hub/cv_ortak/coord_transform`, D1.100
+> `6ab1d1d`). Düzeltilmiş dönüşüm aynı yatay düzlemi fiziksel pozda **< 5 mm** çözer (kapı
+> `tests/test_koordinat_donusumu_FIZIKSEL_poz_DOGRULUK_ve_RED.py`); kabin dışı / arkadaki kesişim artık REDDEDİLİR.
+> Bugünkü kabinde (T2B 2026-10-23: lens tavan camının üstünde, işaret taban camında — §0) petri deney yerinde **24/24
+> kuyu** ölçüldü (±1,3 cm). Aşağıdaki tablolar ve "Neden" paragrafı yalnız tarih kaydıdır.
 
 > ⚠️ **BU DEĞERLER GEÇİCİ — sahip notu (2026-09-09): "kamera ile fantom ve petri konumları için
 > sahada tekrar düzeltme yapacağım".** Aşağıdaki işaret kenarı (15 cm), köşe yerleşimi (11/11 cm),
@@ -78,10 +85,11 @@ Kurulu makineye **yayınla** (app katmanı) gider; yayın sonrası backend yenid
 | **`Y = -20,0` (taban + 5 cm — SAHİP ÖLÇÜSÜ)** | (−48,3 · −20,0 · **+445,4**) cm | ❌ |
 | `Y = 0` (kabin ortası) | (11,7 · 0,0 · +2,0) cm | ✅ |
 
-> ⚠️ **Tabandan 5 cm de YETMİYOR.** Sahip ölçüsü yapılandırmaya yazıldı (`hedef_duzlem_eksen: "Y"`,
+> ⚠️ ~~**Tabandan 5 cm de YETMİYOR.** Sahip ölçüsü yapılandırmaya yazıldı (`hedef_duzlem_eksen: "Y"`,
 > `hedef_duzlem_cm: -20.0`) ama ölçüm, kamera lensi taban hizasındayken (Y = −25) 5 cm'lik
 > yüksekliğin ışın-düzlem kesişimini hâlâ **kötü koşullandırdığını** gösteriyor: kesişim kabinin
-> ~4,5 m ötesine düşüyor. Kabin ortası (Y = 0) ve eski dikey düzlem sağlam çalışıyor.
+> ~4,5 m ötesine düşüyor. Kabin ortası (Y = 0) ve eski dikey düzlem sağlam çalışıyor.~~ (TARİHÇE — hatalı poz;
+> bkz. bölüm başındaki DÜZELTME, D1.100)
 > Bu yüzden `PEMF_ARASTIRMA_AIPRO` **0 kalıyor**. Tezgâhta iki seçenekten biri gerekiyor:
 > **(a)** hedefi kabin ortası yüksekliğine bir platforma al (fantom modelinin eğitim aralığıyla da
 > uyuşur), **(b)** kamerayı üst köşeye/tavana taşı ve `fixed_position_cm`i yeniden ölç (kedi akışı
@@ -89,10 +97,11 @@ Kurulu makineye **yayınla** (app katmanı) gider; yayın sonrası backend yenid
 > ⚠️ Bu ölçüm KABİN DOĞRULUĞU değil, DÜZLEM SEÇİMİNİN SAYISAL DAYANIKLILIĞI hakkındadır:
 > fotoğraf gerçek kabinde 15 cm'lik işaretle çekilmedi, mesafeler ölçek farkı taşır.
 
-**Neden:** kamera lensi **taban hizasında** (`fixed_position_cm: [32.5, -25, -25]`, yani Y = −25 cm)
+~~**Neden:** kamera lensi **taban hizasında** (`fixed_position_cm: [32.5, -25, -25]`, yani Y = −25 cm)
 ve yatay hedef düzlemi onun yalnız **1 cm** üstünde. Işın bu düzlemi çok **sığ** bir açıyla keser;
 birkaç piksellik hata metrelere dönüşür. Kamera bu konumda kediyi (dikey hacim) görmek için
-seçilmişti — tabanda yatay duran bir plakayı 3B ölçmek için uygun değil.
+seçilmişti — tabanda yatay duran bir plakayı 3B ölçmek için uygun değil.~~ (TARİHÇE — hatalı pozun açıklamasıydı;
+D1.100 sonrası fiziksel pozda yatay düzlem < 5 mm çözülür.)
 
 ⚠️ **YAML'DA SAHİP ÖLÇÜSÜ YAZILI — eski davranışa DÖNÜLMEDİ (ölçüldü 2026-09-22):**
 `ai_hub/inference_em_fantom/phantom_cv_v3/cabin_config_v3.yaml:112-113` ve

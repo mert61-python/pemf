@@ -412,10 +412,12 @@ turundaki artık-referans demektir (kapılar yakalamadıysa bildirin).
 Kuyu — plan: `docs/arastirma-ai-pro-fantom-petri-plani.md`). Sürüş bilinçli olarak **kapalı**:
 `PEMF_ARASTIRMA_AIPRO=0` (bkz. `deploy/device.env`). Sebep ölçülmüş bir belirsizlik, tahmin değil:
 
-  · Karar #6'ya göre fantom/petri kabinde YATAY, tabanın hemen üstünde duracak. Kamera lensi de
+  · Karar #6'ya göre fantom/petri kabinde YATAY, tabanın hemen üstünde duracak. ~~Kamera lensi de
     taban hizasında (Y=−25 cm) olduğu için ışın hedef düzlemini SIĞ açıyla keser: gerçek bir
     fotoğrafta kuyu konumu kabin DIŞINA düştü (−97 · −24 · +1096 cm). Eski (Z=0) düzlemle aynı
-    fotoğraf (−2,3 · +7,7 · 0,0) cm veriyor.
+    fotoğraf (−2,3 · +7,7 · 0,0) cm veriyor.~~ ⚠️ **L1-7.4 · D1.100:** bu "sığ açı / kabin dışı" ölçümü HATALI POZUN
+    ürünüydü (dönüşüm kamera orijinini döndürmüyordu); düzeltilmiş dönüşüm yatay düzlemi fiziksel pozda < 5 mm çözer
+    (`tests/test_koordinat_donusumu_FIZIKSEL_poz_DOGRULUK_ve_RED.py`). Bugünkü kabin T2B'de ölçüldü (aşağıda GÜNCEL).
   · Fantom doz modelinin eğitim aralığı x −5,7…−3,1 · y −6,0…+6,1 · z −3,6…+4,0 cm — yani model
     kabin ORTASINA yakın duran bir fantomla eğitilmiş. Taban yerleşimi (y ≈ −24 cm) bu aralığın
     tamamen dışında kalır (arayüz bunu "eğitim aralığı dışında" diye yazar ama doğru çerçeve
@@ -432,10 +434,16 @@ Kuyu — plan: `docs/arastirma-ai-pro-fantom-petri-plani.md`). Sürüş bilinçl
 (15 cm işaretin sessiz bölgesi 8 cm'lik merkezde duvardan taşardı), hedef düzlemi **tabandan 5 cm**
 (`hedef_duzlem_eksen: "Y"`, `hedef_duzlem_cm: -20.0`).
 
-> ⚠️ **ÖLÇÜLDÜ: tabandan 5 cm de mevcut kamera konumuyla YETMİYOR.** Gerçek ArUco'lu fotoğrafta
+> ~~⚠️ **ÖLÇÜLDÜ: tabandan 5 cm de mevcut kamera konumuyla YETMİYOR.** Gerçek ArUco'lu fotoğrafta
 > kuyu (−48,3 · −20,0 · **+445,4**) cm çıkıyor = kabin dışı; `Y = 0` (kabin ortası) ve eski dikey
 > düzlem sağlam. Sebep aynı: kamera lensi taban hizasında (Y = −25), 5 cm'lik yükseklik ışını hâlâ
-> sığ açıyla kesiyor. Bu yüzden bayrak 0 kalıyor ve aşağıdaki adım 4 bir SEÇİM gerektiriyor.
+> sığ açıyla kesiyor. Bu yüzden bayrak 0 kalıyor ve aşağıdaki adım 4 bir SEÇİM gerektiriyor.~~ (TARİHÇE — hatalı poz, D1.100.)
+>
+> ⚠️ **GÜNCEL (T2B tezgâhı 2026-10-23 · üç kabin YAML'ı):** `cabin_extent_cm: [55.5, 35.0, 40.5]` · işaret 10 cm, TABAN camının
+> üstünde (`normal_axis_in_cabin: "+Y"`) · lens tavan camının üstünde, `fixed_position_cm: [2.75, 19.5, -12.25]`,
+> `to_marker_cm: 40.3` · petri `hedef_duzlem_cm: -17.2`. Petri deney yerinde **24/24 kuyu** (±1,3 cm) ölçüldü; fantom ölçülmedi.
+> Yukarıdaki 15 cm / 11×11 cm / `-20.0` değerleri ve aşağıdaki adım 1'in arka-duvar formülü (65×50×50) TARİHÇEDİR — güncel
+> yerleşim `ai_hub/KABIN_KURULUM_KILAVUZU.md` §0. Bayrak yine **0** (Y145 — açma kararı sahibin).
 
 **Yapılacak ölçüm (seçenekler ve tablo: `ai_hub/KABIN_KURULUM_KILAVUZU.md` §0.5):**
 1. Kabin işaretini (15 cm, A4 ArUco) arka duvara DÜZ ve duvara PARALEL yapıştır (merkez sol

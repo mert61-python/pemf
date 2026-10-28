@@ -353,3 +353,44 @@ def test_KRITIK_D6_72_kaynak_VAR_ve_kip_dallari_IKI_kipi_anlatir():
         assert re.search(r"[Ll]auncher kipi", b) and "install.rs" in b, (
             f"VERIFICATION {bolum.strip()} launcher kipi dalını anlatmalı"
         )
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# L1-7.4 (D1D §4 D1.100 Açık-2) — "yatay hedef düzlemi kötü koşullanmış / sığ açı / tabandan 5 cm YETMİYOR" HATALI POZUN ürünüydü.
+# ÖLÇÜLEN (HEAD ebf1c3fe): `ai_hub/KABIN_KURULUM_KILAVUZU.md` §0.5 (:49-50 "Sonuç değişmedi … sayısal olarak dayanıksız", :81-84 "kötü
+# koşullandırdığını", :92-95 "Neden … sığ açı") ve VERIFICATION §15 (:415-418, :435-438) — D1.100 (`6ab1d1d`) dönüşümü düzeltti:
+# fiziksel pozda yatay düzlem < 5 mm (`tests/test_koordinat_donusumu_FIZIKSEL_poz_DOGRULUK_ve_RED.py`). §15 bugünkü kabin (T2B) değerlerini
+# ÜRÜN YAML'ından taşır (D6.50'nin plan sayıları BAYAT — kullanılmaz).
+# ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+_KABIN_KILAVUZ = KOK / "ai_hub" / "KABIN_KURULUM_KILAVUZU.md"
+_PETRI_YAML = KOK / "ai_hub" / "inference_petri_dish" / "petri_cv_v2" / "cabin_config_v2.yaml"
+_KOTU_KOSUL = re.compile(
+    r"kötü\s+koşull|sığ\s+açıyla\s+kes|5\s*cm\s+de\s+(mevcut\s+kamera\s+konumuyla\s+)?YETMİYOR|sayısal\s+olarak\s+dayanıksız",
+    re.I,
+)
+
+
+def test_KRITIK_L1_7_4_yatay_duzlem_KOTU_KOSULLANMIS_demez():
+    v15 = _cizgisiz(_bolum(BELGE.read_text(encoding="utf-8"), "## ⏳ 15 — "))
+    k05 = _cizgisiz(_bolum(_KABIN_KILAVUZ.read_text(encoding="utf-8"), "## 0.5) "))
+    for ad, metin in (("VERIFICATION §15", v15), ("KABIN_KURULUM_KILAVUZU §0.5", k05)):
+        assert not _KOTU_KOSUL.search(metin), (
+            f"{ad}: 'yatay düzlem kötü koşullanmış' iddiası (hatalı poz — D1.100) çizgisiz duruyor"
+        )
+        assert "D1.100" in metin and "< 5 mm" in metin, (
+            f"{ad}: D1.100 düzeltmesini ve fiziksel pozdaki < 5 mm sonucu anmalı"
+        )
+        # mutant m4 (düzeltme notunun kanıt göndermesi silindi) YAŞADI → kol: kanıt kapısının adı da anılmalı
+        assert "test_koordinat_donusumu_FIZIKSEL_poz_DOGRULUK_ve_RED.py" in metin, f"{ad}: D1.100 kanıt kapısını anmalı"
+
+
+def test_KRITIK_L1_7_4_bolum15_GUNCEL_kabin_degerleri_URUN_YAMLindan():
+    yaml = _PETRI_YAML.read_text(encoding="utf-8")
+    v15 = _cizgisiz(_bolum(BELGE.read_text(encoding="utf-8"), "## ⏳ 15 — "))
+    for anahtar in ("cabin_extent_cm", "fixed_position_cm", "to_marker_cm", "hedef_duzlem_cm"):
+        m = re.search(r"^\s*" + anahtar + r":\s*([^#\n]+?)\s*(#|$)", yaml, re.M)
+        assert m, f"aparat: petri YAML'ında {anahtar} yok"
+        assert f"`{anahtar}: {m.group(1)}`" in v15, (
+            f"VERIFICATION §15 GÜNCEL bloğu `{anahtar}: {m.group(1)}` (ürün YAML'ı) taşımalı"
+        )
