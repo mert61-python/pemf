@@ -46,6 +46,7 @@ LANG = {
         "no_well":   "Kuyucuk bulunamadi",
         "method":    "Yontem: {m}",
         "mm_per_px": "Olcek: {s:.3f} mm/px",
+        "mm_per_px_yok": "Olcek: perspektif (ArUco), tek mm/px yok",
         "n_wells":   "Kuyucuk: {n}",
         "n_cancer":  "Kanser: {n}",
         "n_healthy": "Saglikli: {n}",
@@ -67,6 +68,7 @@ LANG = {
         "no_well":   "No well found",
         "method":    "Method: {m}",
         "mm_per_px": "Scale: {s:.3f} mm/px",
+        "mm_per_px_yok": "Scale: perspective (ArUco), no single mm/px",
         "n_wells":   "Wells: {n}",
         "n_cancer":  "Cancer: {n}",
         "n_healthy": "Healthy: {n}",
@@ -156,6 +158,18 @@ def panel_01_input(img, lang="tr"):
     return _header(img.copy(), f"01 - {LANG[lang]['input']}", style)
 
 
+def _olcek_metni(L, mm_per_px) -> str:
+    """İG-5.75 (D67): ölçek ≤ 0 / sonlu değil (ArUco PnP kipinde pipeline `mm_per_px = 0.0` verir — perspektif
+    izdüşümde TEK bir mm/px yok) → "0.000 mm/px" (ölçülmüş-sıfır) YAZILMAZ, kip notu yazılır."""
+    try:
+        s = float(mm_per_px)
+    except (TypeError, ValueError):
+        s = 0.0
+    if s > 0.0 and s != float("inf"):
+        return L["mm_per_px"].format(s=s)
+    return L["mm_per_px_yok"]
+
+
 def panel_02_yolo(img, detections, wells, method, mm_per_px, lang="tr"):
     """YOLO bbox + kontur + conf + well_id."""
     L = LANG[lang]
@@ -183,7 +197,7 @@ def panel_02_yolo(img, detections, wells, method, mm_per_px, lang="tr"):
     H = out.shape[0]
     _put_text(out, L["method"].format(m=method),
               (style.text_pad, H - 2 * (style.header_h // 2)), style)
-    _put_text(out, L["mm_per_px"].format(s=mm_per_px),
+    _put_text(out, _olcek_metni(L, mm_per_px),
               (style.text_pad, H - style.header_h // 2), style)
     return _header(out, f"02 - {L['yolo']}", style)
 
