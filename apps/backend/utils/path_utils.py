@@ -434,6 +434,37 @@ def _goc_tamam_yaz(hedef: Path, eski: Path) -> None:
         )
 
 
+def _farkli_kopyayi_bildir(eski: Path, hedef: Path, adlar) -> None:
+    """22-SON A2.1: kalıcı işaret yazılmadan ÖNCE — eski kökte hedeftekinden FARKLI bir DB kopyası kalıyorsa (hedefte zaten vardı, göç onu
+    getirmedi) bunu ve kurtarma yolunu günlüğe yaz. 1.9.50 / D67 öncesi göç hatası (atlanan DB yerine BOŞ DB kuruldu) yaşamış sahada ilk
+    açılış işareti yazar; 'boş hedef DB'yi kaldır + yeniden başlat' artık eski kaydı GETİRMEZ — işaretin de kaldırılması gerekir.
+    Davranış DEĞİŞMEZ (işaret yine yazılır); yalnız günlük."""
+    import logging
+
+    farkli: list[str] = []
+    for ad in adlar:
+        kaynak, varis = eski / ad, hedef / ad
+        try:
+            if (
+                kaynak.is_file()
+                and varis.is_file()
+                and (kaynak.stat().st_size != varis.stat().st_size or _sha256_dosya(kaynak) != _sha256_dosya(varis))
+            ):
+                farkli.append(ad)
+        except OSError:
+            farkli.append(ad)
+    if farkli:
+        logging.getLogger(__name__).warning(
+            "VERİ GÖÇÜ: kalıcı işaret %s yazılıyor ama eski kökte hedeftekinden FARKLI kopya var (%s) — hedefteki kullanılır, eski kök "
+            "bundan sonra OKUNMAZ. Eski dosya SİLİNMEDİ: %s. Hasta listesi beklenmedik biçimde BOŞSA (eski sürümün göç hatası) kurtarma: "
+            "teknik destek hedefteki boş DB'yi VE %s işaretini kaldırıp cihazı yeniden başlatır.",
+            _GOC_TAMAM_ISARETI,
+            ", ".join(farkli),
+            eski,
+            _GOC_TAMAM_ISARETI,
+        )
+
+
 def _okunamiyor_mu(dosya: Path) -> bool:
     """Y200: kaynak şu an okunamıyor mu (paylaşım kilidi / erişim)? YALNIZ engel / günlük NEDENİ içindir — taşıma kararı `_tasinabilir_mi`."""
     try:
@@ -577,6 +608,7 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
             _sqlcipher_anahtarini_gocur(eski, hedef, _ad)
 
         if not _dosyalari_gocur(eski, hedef, _GOC_DOSYALARI):
+            _farkli_kopyayi_bildir(eski, hedef, _GOC_DOSYALARI)  # 22-SON A2.1: kurtarma yolu günlükte
             _goc_tamam_yaz(hedef, eski)  # Y200: atlama / engel YOKSA — varsa sonraki açılış yeniden dener
     except Exception:
         # Göç bir KOLAYLIKtır; başarısız olması backend'i başlatmamalı.
