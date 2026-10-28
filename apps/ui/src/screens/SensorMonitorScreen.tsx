@@ -5,7 +5,7 @@
  * Python sensor_data_window.py'nin React karşılığı.
  * Çift eksenli (mT + °C) canlı grafik, 8 bobin seçimi, anlık değerler.
  */
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import {
   Text,
   View,
@@ -57,8 +57,16 @@ export function SensorMonitorScreen() {
     coils.length > 0 ? coils : Array.from({ length: STM_BOBIN_SAYISI }, (_, i) => ({ id: i + 1 })),
   ).map((c) => c.id);
 
-  // Initially show all connected coils
+  // Seçim varsayılanı TÜM slotlar (slot 8 ortaya çıkınca — ESP bağlı / çalışıyor — çipi seçili gelsin).
   const [visibleCoils, setVisibleCoils] = useState<Set<number>>(new Set(tumSlotIdleri()));
+  // ⚠️ İG-6.92: grafiğe YALNIZ çipi çizilen (görünür) VE seçili bobinler girer. Süzülmemiş küme gizli slot 8'in serisini de
+  // çiziyordu (ESP kapalı simde slot 8 `sensor_data` yayınlar; çipi olmadığı için kapatılamaz, ≈0 mT'si mT eksenini 0'a çeker).
+  // Çalışan slot 8 `gorunurBobinler` gereği görünür kalır → eğrisi de çizilir. Kapı: sensorGrafigiGizliSlot.IG692.test.tsx
+  const cizilecekAnahtar = cizilecek.join(",");
+  const grafikBobinleri = useMemo(
+    () => new Set(cizilecekAnahtar.split(",").map(Number).filter((id) => visibleCoils.has(id))),
+    [cizilecekAnahtar, visibleCoils],
+  );
   const [showMagnetic, setShowMagnetic] = useState(true);
   const [showTemp, setShowTemp] = useState(true);
 
@@ -140,7 +148,7 @@ export function SensorMonitorScreen() {
         {chartW > 0 && (
           <RealtimeChart
             history={sensorHistory}
-            visibleCoils={visibleCoils}
+            visibleCoils={grafikBobinleri}
             showMagnetic={showMagnetic}
             showTemp={showTemp}
             // [S7 adım 2] 1200 px kapağı kaldırıldı: eksen boşlukları artık genişlikten
