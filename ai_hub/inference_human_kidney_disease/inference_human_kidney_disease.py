@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import pickle
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
@@ -38,6 +39,14 @@ import onnxruntime as ort
 import pandas as pd
 
 THIS_DIR = Path(__file__).resolve().parent
+
+# İG-5.30 (D67, 2026-10-28): `xai_top_features` determinizmi KÜRESEL np.random'a dayanır (shap 0.49.1 KernelExplainer'ın seed
+# parametresi yok; koalisyon örneklemesi küresel np.random.choice / permutation). Router (`asyncio.to_thread`) ve ai_service
+# istekleri iş parçacıklarında koşar: kilitsiz, bir isteğin seed(0)'ı ötekinin örneklemesini ortadan kesiyor ve get_state /
+# set_state sırası karışıyordu — ölçüldü: 50 eşzamanlı çağrı → 50 FARKLI açıklama, hiçbiri tek iş parçacığı sonucuna eşit değil;
+# küresel durum geri yüklenmiyor. Kritik bölge (durum al → seed → açıkla → geri yükle) süreç içinde sıralanır; tek çağrının DEĞERİ
+# değişmez. Not: bu kilit yalnız CKD↔CKD yarışını kapatır; aynı anda küresel np.random kullanan BAŞKA kod örneklemeyi yine bozabilir.
+_SHAP_RNG_KILIDI = threading.Lock()
 
 # UCI CKD column inventory — keep in sync with training/hkd_train_common.py.
 NUMERIC = ["age", "bp", "sg", "al", "su",
@@ -323,7 +332,8 @@ def xai_top_features(features: dict, top_n: int = 7,
 
     PT'siz XAI yolu: KernelExplainer model-agnostik predict-callable sarar (GPU gerekmez).
     Determinizm: koalisyon orneklemesi np.random kullanir -> cagri suresince seed(0),
-    sonra GLOBAL DURUM GERI YUKLENIR. TEK-KAYNAK: router in-process + ai_service ayni
+    sonra GLOBAL DURUM GERI YUKLENIR; bu kritik bolge `_SHAP_RNG_KILIDI` ile sıralanır
+    (İG-5.30: eşzamanlı istekte de aynı açıklama). TEK-KAYNAK: router in-process + ai_service ayni
     fonksiyonu cagirir (kapi-paritesi dersi).
 
     Doner: {"prob_ckd", "top_features": [{"feature","attribution"}...], "baseline"}.
@@ -343,27 +353,28 @@ def xai_top_features(features: dict, top_n: int = 7,
     # Eski `_referans_background` ve `NORMAL_REFERANS` karşıt-kanıt testleri için DURUYOR ama artık kullanılmıyor.
     bg = xai_arka_plan_verisi(post_names)
 
-    _rng_durum = np.random.get_state()
-    try:
-        np.random.seed(0)
-        expl = shap.KernelExplainer(_proba, bg)
-        # ⚠️ DENETİM 2026-08-28 #04 — İKİ AYAR DA ZORUNLU, ÖLÇÜLDÜ:
-        #
-        # (1) `l1_reg=False`. Verilmezse shap 0.49.1 varsayılanı `"num_features(10)"` devreye
-        #     girer (`_kernel.py:51`). Dönüşüm sonrası uzay tam 24 kolon olduğu için
-        #     24 özelliğin 14'ü TAM SIFIRA zorlanıyordu — ve sıfırlananların arasında `sc`
-        #     (KREATİNİN) vardı. Böbrek hastalığı açıklamasında kreatininin katkısı "0.0"
-        #     olarak raporlanıyordu; `l1_reg=False` ile aynı hastada `sc = +0.0221`.
-        #
-        # (2) `nsamples` 60 → 8000. 60 koalisyon, 24 özellikli bir modelde Monte-Carlo
-        #     gürültüsünün içinde kalıyordu; `np.random.seed(0)` bunu tekrarlanabilir yapıyor
-        #     ama YAKINSAMIŞ yapmıyor — deterministik biçimde yanlış. Ölçüm: yalnız seed'i
-        #     değiştirince ilk-5 kümesi TAMAMEN değişiyordu (seed 0/1/2 → ayrık kümeler).
-        #     8000'de 6 farklı seed ilk-5'i BİREBİR aynı veriyor: {htn, sg, dm, al, appet}.
-        #     Bedel ölçüldü: 0,009 s → 0,175 s/çağrı; AI_TIMEOUT_MS bütçesinde önemsiz.
-        sv = expl.shap_values(Xp, nsamples=n_kernel_samples, silent=True, l1_reg=False)
-    finally:
-        np.random.set_state(_rng_durum)
+    with _SHAP_RNG_KILIDI:
+        _rng_durum = np.random.get_state()
+        try:
+            np.random.seed(0)
+            expl = shap.KernelExplainer(_proba, bg)
+            # ⚠️ DENETİM 2026-08-28 #04 — İKİ AYAR DA ZORUNLU, ÖLÇÜLDÜ:
+            #
+            # (1) `l1_reg=False`. Verilmezse shap 0.49.1 varsayılanı `"num_features(10)"` devreye
+            #     girer (`_kernel.py:51`). Dönüşüm sonrası uzay tam 24 kolon olduğu için
+            #     24 özelliğin 14'ü TAM SIFIRA zorlanıyordu — ve sıfırlananların arasında `sc`
+            #     (KREATİNİN) vardı. Böbrek hastalığı açıklamasında kreatininin katkısı "0.0"
+            #     olarak raporlanıyordu; `l1_reg=False` ile aynı hastada `sc = +0.0221`.
+            #
+            # (2) `nsamples` 60 → 8000. 60 koalisyon, 24 özellikli bir modelde Monte-Carlo
+            #     gürültüsünün içinde kalıyordu; `np.random.seed(0)` bunu tekrarlanabilir yapıyor
+            #     ama YAKINSAMIŞ yapmıyor — deterministik biçimde yanlış. Ölçüm: yalnız seed'i
+            #     değiştirince ilk-5 kümesi TAMAMEN değişiyordu (seed 0/1/2 → ayrık kümeler).
+            #     8000'de 6 farklı seed ilk-5'i BİREBİR aynı veriyor: {htn, sg, dm, al, appet}.
+            #     Bedel ölçüldü: 0,009 s → 0,175 s/çağrı; AI_TIMEOUT_MS bütçesinde önemsiz.
+            sv = expl.shap_values(Xp, nsamples=n_kernel_samples, silent=True, l1_reg=False)
+        finally:
+            np.random.set_state(_rng_durum)
 
     # ckd sinifinin katmani: List[(N,F)x2] (eski shap) veya (N,F,2) (yeni shap)
     if isinstance(sv, list):
