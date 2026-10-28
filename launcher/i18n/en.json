@@ -285,7 +285,7 @@
           "use": {
             "u01": "Choose ‘Veterinarian’ and sign in.",
             "u02": "Add a new patient from ‘Patients’.",
-            "u03": "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.",
+            "u03": "Start a session from ‘Control’ and adjust the coils.",
             "u04": "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘Reports’."
           },
           "who": "For veterinarians and clinics"
@@ -383,7 +383,7 @@
         "ad": "Research"
       },
       "vet": {
-        "aciklama": "Clinical diagnosis + session (em_kedi, thermal)",
+        "aciklama": "Clinical diagnosis + session",
         "ad": "Veterinarian"
       }
     },

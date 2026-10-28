@@ -2174,8 +2174,10 @@
           await afterLogin();
         } catch (e) {
           busy = false;
-          fail(e);
-          const m = String(e || "");
+          // Y211 · S-D67.15: `auth_login` hatası `{kod, mesaj}` — DAVRANIŞ makine-okur koda (`AuthError::kod`), ekran metni mesaja
+          // bakar (ileti dil / üslup için değişebilir). Kodsuz (dize) hata da gösterilir.
+          const kod = e && typeof e === "object" ? String(e.kod || "") : "";
+          fail(e && typeof e === "object" ? String(e.mesaj || "") : String(e || ""));
           // ── KİMLİK HATASINDA ALANI TEMİZLE (2026-08-10, saha hatası) ──────────────────────
           // Belirti: doğru parola yazıldı → "hatalı" dendi; alan SİLİNİP aynı şey yazılınca
           // giriş yapıldı. Yani ilk denemede alanın içinde başka bir şey vardı (otomatik
@@ -2183,7 +2185,7 @@
           // kimse göremiyordu. Eskiden alan yalnız BAŞARIDA temizleniyordu → kullanıcı üstüne
           // yazmaya devam ediyor, hata birikiyordu. Artık her kimlik hatasında sıfırlanır ve
           // odak parolaya döner: her deneme TEMİZ başlar.
-          if (m.includes("parola hatalı") || m.includes("parola hatali") || /incorrect email or password/i.test(m)) {
+          if (kod === "kimlik_hatali") {
             const uyari = parolaUyarisi(password);
             $("login-pass").value = "";
             pwGoster(false);                // parola ekranda unutulmasın
@@ -2191,10 +2193,8 @@
             if (uyari) notice(uyari);       // görünmez sorunu SÖYLE (sessizce düzeltme)
           }
           // Sunucuya ulaşılamadıysa kurulu cihaz yine açılabilmeli (çevrimdışı çıkış yolu).
-          // ⚠️ Bu metin `core/auth.rs::AuthError::Offline`'ın Display'iyle SÖZLEŞMELİDİR; orada
-          // `cevrimdisi_mesaji_ui_sozlesmesini_korur` testi metni kilitliyor (yeniden
-          // yazılırsa çıkış yolu sessizce kaybolurdu).
-          if (m.includes("İnternet bağlantısı yok") || /no internet connection/i.test(m)) {
+          // ⚠️ Kod `core/auth.rs::AuthError::kod` ile SÖZLEŞMELİDİR; orada `cevrimdisi_mesaji_ui_sozlesmesini_korur` kodu kilitliyor.
+          if (kod === "cevrimdisi") {
             setOffline(true);
             if (envCache && envCache.already_installed) {
               $("btn-offline-start").hidden = false;

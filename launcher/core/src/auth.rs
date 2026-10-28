@@ -79,6 +79,25 @@ pub enum AuthError {
     Malformed,
 }
 
+impl AuthError {
+    /// Y211 · S-D67.15 (sahip; KURALLAR §4.11): arayüzün DAVRANIŞ kararı (`index.html::doLogin` — kimlik hatasında şifre alanını temizle,
+    /// çevrimdışında "Çevrimdışı başlat" çıkış yolu) METNE değil bu makine-okur KODA bakar. Eskiden ileti metni ("parola hatalı",
+    /// "İnternet bağlantısı yok") sözleşmeydi ve metin dil / üslup için değiştirilemiyordu. Kodlar SABİT (arayüz onları karşılaştırır).
+    pub fn kod(&self) -> &'static str {
+        match self {
+            AuthError::UrlPin => "adres_dogrulanamadi",
+            AuthError::Offline => "cevrimdisi",
+            AuthError::BadCredentials => "kimlik_hatali",
+            AuthError::MissingInput => "girdi_bos",
+            AuthError::EmailNotConfirmed => "eposta_dogrulanmamis",
+            AuthError::RateLimited => "cok_deneme",
+            AuthError::SessionRevoked => "oturum_gecersiz",
+            AuthError::Server(_) => "sunucu_hatasi",
+            AuthError::Malformed => "yanit_okunamadi",
+        }
+    }
+}
+
 /// Doğrulanmış oturum. Backend'e devredilen alanlar E-ÖZELLİĞİ SÖZLEŞMESİYLE birebir aynı:
 /// `{access_token, refresh_token, email, expires_at}`.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -453,9 +472,8 @@ mod tests {
         let bos = AuthError::MissingInput.to_string();
         let yanlis = AuthError::BadCredentials.to_string();
         assert_ne!(bos, yanlis, "iki durum ayni metni veriyorsa ayirmanin anlami yok");
-        // UI `doLogin` yalnız "parola hatalı" gördüğünde alanı temizler; boş-girdi mesajı o
-        // dizeyi İÇERMEMELİ, yoksa kullanıcının yazdığı e-posta da boşuna silinir.
-        assert!(!bos.contains("parola hatalı"), "bos-girdi mesaji UI temizleme kosuluna takiliyor");
+        // UI `doLogin` yalnız `kimlik_hatali` KODUNDA alanı temizler (Y211 · S-D67.15); boş girdi o kodu TAŞIMAMALI.
+        assert_ne!(AuthError::MissingInput.kod(), AuthError::BadCredentials.kod(), "bos-girdi UI temizleme koduna takiliyor");
     }
 
     #[test]
@@ -567,29 +585,41 @@ mod tests {
         assert!(matches!(session_from_json(&v, "x"), Err(AuthError::Malformed)));
     }
 
-    /// ⚠️ UI SÖZLEŞMESİ: `index.html::doLogin` çevrimdışı dalını BU MESAJIN İÇERİĞİNE bakarak
-    /// ayırt ediyor ("Çevrimdışı başlat" çıkış yolunu o dal açıyor). Metin yeniden yazılırsa
-    /// internetsiz klinikte kurulu cihazın açılma yolu SESSİZCE kaybolurdu → burada kilitli.
+    /// ⚠️ UI SÖZLEŞMESİ: `index.html::doLogin` çevrimdışı dalını (internetsiz klinikte kurulu cihazın "Çevrimdışı başlat" çıkış yolu)
+    /// Y211 · S-D67.15'ten beri METNE değil `cevrimdisi` KODUNA bakarak açar — kod burada kilitli.
     #[test]
     fn cevrimdisi_mesaji_ui_sozlesmesini_korur() {
-        assert!(
-            AuthError::Offline.to_string().contains("İnternet bağlantısı yok"),
-            "UI'nin aradigi metin degisti — 'Cevrimdisi baslat' cikis yolu kaybolur: {}",
-            AuthError::Offline
-        );
+        assert_eq!(AuthError::Offline.kod(), "cevrimdisi", "UI'nin baktigi kod degisti — 'Cevrimdisi baslat' cikis yolu kaybolur");
     }
 
-    /// ⚠️ UI SÖZLEŞMESİ #2 (2026-08-10 saha hatası): `index.html::doLogin` kimlik hatasında
-    /// parola alanını temizleyip odaklamak için BU MESAJIN İÇERİĞİNE ("parola hatalı") bakıyor.
-    /// Mesaj yeniden yazılırsa temizleme sessizce kaybolur ve hata yeniden ortaya çıkar:
-    /// kullanıcı görünmeyen bir kalıntının üstüne yazmaya devam eder.
+    /// ⚠️ UI SÖZLEŞMESİ #2 (2026-08-10 saha hatası): `index.html::doLogin` kimlik hatasında şifre alanını temizleyip odaklar —
+    /// Y211 · S-D67.15'ten beri METNE ("parola hatalı") değil `kimlik_hatali` KODUNA bakarak. Kod değişirse temizleme sessizce kaybolur
+    /// ve hata yeniden ortaya çıkar: kullanıcı görünmeyen bir kalıntının üstüne yazmaya devam eder. Kodlar birbirinden AYRI olmalı.
     #[test]
     fn KRITIK_kimlik_hatasi_mesaji_UI_temizleme_sozlesmesini_korur() {
-        let m = AuthError::BadCredentials.to_string();
-        assert!(
-            m.contains("parola hatalı"),
-            "UI'nin aradigi metin degisti — hatali giriste parola alani TEMIZLENMEZ olur: {m}"
-        );
+        assert_eq!(AuthError::BadCredentials.kod(), "kimlik_hatali", "UI'nin baktigi kod degisti — hatali giriste sifre alani TEMIZLENMEZ");
+        let tum = [
+            AuthError::UrlPin, AuthError::Offline, AuthError::BadCredentials, AuthError::MissingInput, AuthError::EmailNotConfirmed,
+            AuthError::RateLimited, AuthError::SessionRevoked, AuthError::Server(500), AuthError::Malformed,
+        ];
+        let kodlar: std::collections::BTreeSet<&str> = tum.iter().map(|e| e.kod()).collect();
+        assert_eq!(kodlar.len(), tum.len(), "iki hata AYNI kodu tasiyor — arayuz ayiramaz");
+    }
+
+    /// Y211 · S-D67.15: `doLogin` DAVRANIŞI koda bakar (`e.kod`), metne bakan karşılaştırma ("parola hatalı" / "İnternet bağlantısı
+    /// yok" / İngilizce eşleri) kalmadı — ileti artık dil / üslup için serbestçe değişebilir. Kaynak-metin kapısı (UI'nin koşucusu yok).
+    #[test]
+    fn KRITIK_Y211_doLogin_KODA_bakar_METNE_bakmaz() {
+        let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../app/ui/index.html");
+        let s = std::fs::read_to_string(p).expect("index.html okunamadi").replace("\r\n", "\n");
+        let i = s.find("async function doLogin()").expect("doLogin yok");
+        let g = &s[i..i + s[i..].find("\n      }\n").expect("doLogin govde sonu yok")];
+        for parca in [r#"kod === "kimlik_hatali""#, r#"kod === "cevrimdisi""#] {
+            assert!(g.contains(parca), "doLogin {parca} ile dallanmiyor");
+        }
+        for yasak in ["parola hatal", "incorrect email or password", "İnternet bağlantısı yok", "no internet connection"] {
+            assert!(!g.to_lowercase().contains(&yasak.to_lowercase()), "doLogin hala METNE bakiyor: {yasak}");
+        }
     }
 
     /// UI dosyası gerçekten bu davranışları taşıyor mu? (kaynak-metin kapısı — düzeltme

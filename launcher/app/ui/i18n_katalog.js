@@ -83,7 +83,7 @@ window.PEMF_I18N_KATALOG = {
      "use": {
       "u01": "Choose ‘Veterinarian’ and sign in.",
       "u02": "Add a new patient from ‘Patients’.",
-      "u03": "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.",
+      "u03": "Start a session from ‘Control’ and adjust the coils.",
       "u04": "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘Reports’."
      },
      "who": "For veterinarians and clinics"
@@ -181,7 +181,7 @@ window.PEMF_I18N_KATALOG = {
     "ad": "Research"
    },
    "vet": {
-    "aciklama": "Clinical diagnosis + session (em_kedi, thermal)",
+    "aciklama": "Clinical diagnosis + session",
     "ad": "Veterinarian"
    }
   },
@@ -325,7 +325,7 @@ window.PEMF_I18N_KATALOG = {
      "use": {
       "u01": "‘Veteriner Hekim’ profilini seçip girin.",
       "u02": "‘Hastalar’ ekranından yeni hasta ekleyin.",
-      "u03": "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.",
+      "u03": "‘Kontrol’ ekranından seansı başlatın ve bobinleri ayarlayın.",
       "u04": "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘Raporlar’ ile klinik istatistiklerinizi görün."
      },
      "who": "Veteriner hekimler ve klinikler için"
@@ -423,7 +423,7 @@ window.PEMF_I18N_KATALOG = {
     "ad": "Araştırma"
    },
    "vet": {
-    "aciklama": "Klinik teşhis + seans (em_kedi, termal)",
+    "aciklama": "Klinik teşhis + seans",
     "ad": "Veteriner Hekim"
    }
   },

@@ -77,8 +77,8 @@
       "cevrimdisi": "İnternet bağlantısı yok — çevrimdışı devam edebilirsiniz",
       "cokDeneme": "Çok fazla deneme yapıldı — birkaç dakika sonra tekrar deneyin",
       "epostaDogrulanmamis": "E-posta adresiniz doğrulanmamış — gelen kutunuzu kontrol edin",
-      "girdiBos": "E-posta ve parola boş bırakılamaz",
-      "kimlikHatali": "E-posta veya parola hatalı",
+      "girdiBos": "E-posta ve şifre boş bırakılamaz",
+      "kimlikHatali": "E-posta veya şifre hatalı",
       "oturumGecersiz": "Kayıtlı oturum geçersiz — lütfen tekrar giriş yapın",
       "sunucuHatasi": "Giriş sunucusu hata verdi (HTTP {{kod}})",
       "yanitOkunamadi": "Giriş yanıtı okunamadı"
@@ -285,7 +285,7 @@
           "use": {
             "u01": "‘Veteriner Hekim’ profilini seçip girin.",
             "u02": "‘Hastalar’ ekranından yeni hasta ekleyin.",
-            "u03": "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.",
+            "u03": "‘Kontrol’ ekranından seansı başlatın ve bobinleri ayarlayın.",
             "u04": "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘Raporlar’ ile klinik istatistiklerinizi görün."
           },
           "who": "Veteriner hekimler ve klinikler için"
@@ -383,7 +383,7 @@
         "ad": "Araştırma"
       },
       "vet": {
-        "aciklama": "Klinik teşhis + seans (em_kedi, termal)",
+        "aciklama": "Klinik teşhis + seans",
         "ad": "Veteriner Hekim"
       }
     },

@@ -1669,6 +1669,14 @@ fn oturum_karari(sonuc: &Result<auth::Session, auth::AuthError>) -> OturumKarari
     }
 }
 
+/// Y211 · S-D67.15: giriş hatası arayüze `{kod, mesaj}` olarak gider — `doLogin`'in DAVRANIŞI makine-okur koda (`AuthError::kod`),
+/// ekran metni `mesaj`a bakar (metin dil / üslup için değişebilir; eskiden "parola hatalı" metni sözleşmeydi).
+#[derive(serde::Serialize)]
+struct GirisHatasi {
+    kod: &'static str,
+    mesaj: String,
+}
+
 /// E-posta + parola ile giriş. `remember` → oturum işletim sistemi korumalı depoya yazılır.
 ///
 /// GÜVENLİK: parola YALNIZ burada geçer; hiçbir yere yazılmaz, hata metinlerine konmaz.
@@ -1678,13 +1686,14 @@ async fn auth_login(
     email: String,
     password: String,
     remember: bool,
-) -> Result<AuthStatus, String> {
+) -> Result<AuthStatus, GirisHatasi> {
     let (e, p) = (email.trim().to_string(), password);
-    let sonuc = tauri::async_runtime::spawn_blocking(move || auth::login_budgeted(&e, &p))
-        .await
-        .map_err(|err| pemf_launcher_core::dil::t_ile("rust.hata.girisGorevCoktu", &[("err", &err.to_string())]))?;
+    let sonuc = tauri::async_runtime::spawn_blocking(move || auth::login_budgeted(&e, &p)).await.map_err(|err| GirisHatasi {
+        kod: "gorev_coktu",
+        mesaj: pemf_launcher_core::dil::t_ile("rust.hata.girisGorevCoktu", &[("err", &err.to_string())]),
+    })?;
     // `AuthError`'ın Display'i zaten TÜRKÇE ve HTTP gövdesini yansıtmaz (bkz. core/auth.rs).
-    let session = sonuc.map_err(|err| err.to_string())?;
+    let session = sonuc.map_err(|err| GirisHatasi { kod: err.kod(), mesaj: err.to_string() })?;
 
     let root = install::default_install_root(&home_dir());
     let s2 = session.clone();
@@ -3548,6 +3557,20 @@ mod tests {
         let i = soy.find("async fn auth_login(").expect("auth_login yok");
         let son = soy[i + 1..].find("\nasync fn ").map(|j| i + 1 + j).unwrap_or(soy.len());
         assert!(soy[i..son].contains("secret_store::hatirla_tercihini_yaz(&root, hatirla)"), "giris tercihi isarete yazilmiyor");
+    }
+
+    /// Y211 · S-D67.15: `auth_login` hatası arayüze `{kod, mesaj}` gider ve kod `AuthError::kod`dan gelir — `doLogin`'in kimlik hatasında
+    /// şifre alanını temizlemesi / çevrimdışı çıkış yolu bu koda bakar (auth.rs `KRITIK_Y211_doLogin_KODA_bakar_METNE_bakmaz`). Kod
+    /// sabitlenir ya da metin gönderilirse (eski `err.to_string()` sözleşmesi) arayüz davranışı sessizce kaybolur. Yorumlar soyulur.
+    #[test]
+    fn KRITIK_Y211_auth_login_hatasi_KOD_ve_MESAJ_tasir() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+        let i = soy.find("async fn auth_login(").expect("auth_login yok");
+        let son = soy[i + 1..].find("\nasync fn ").map(|j| i + 1 + j).unwrap_or(soy.len());
+        let g: String = soy[i..son].chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(g.contains("->Result<AuthStatus,GirisHatasi>"), "auth_login hata tipi kodlu degil");
+        assert!(g.contains("GirisHatasi{kod:err.kod(),mesaj:err.to_string()}"), "AuthError kodu arayuze gitmiyor");
+        assert!(!g.contains(".map_err(|err|err.to_string())"), "kodsuz (yalniz metin) hata donuyor");
     }
 
     /// [S4] Parite: rotasyon senkron thread'i ve F5 yakalama BELLEĞİ de güncellemeli; orphan

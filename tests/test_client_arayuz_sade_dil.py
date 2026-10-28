@@ -171,22 +171,10 @@ _YASAK = {
         "Home Owner": (r"(?i)\bhome ?owner", "'Pet Owner'"),
     },
 }
-# Bilinçli, DAR istisna: giriş hatası iletisi arayüz SÖZLEŞMESİ — `index.html::doLogin` kimlik hatasında şifre alanını METNE bakarak
-# ("parola hatalı") temizler ve `launcher/core/src/auth.rs` KRITIK testi bunu pinler. KURALLAR §4.11: metne göre dallanan ileti ÖNCE
-# makine-okur koda geçer, sonra yeniden yazılır — o iş ayrı madde. İstisna BAYATLARSA (ileti düzeltildiyse) aşağıdaki kapı kırmızıdır.
-_ISTISNA = {
-    (
-        "tr",
-        "rust.giris.kimlikHatali",
-        "Parola",
-    ): "arayüz sözleşmesi m.includes(\"parola hatalı\") — auth.rs KRITIK testi",
-    ("tr", "rust.giris.girdiBos", "Parola"): "aynı giriş iletisi çifti (boş girdi ≠ kimlik hatası sözleşmesi, auth.rs)",
-    (
-        "tr",
-        "index.html:js",
-        "Parola",
-    ): "doLogin karşılaştırma değeri \"parola hatalı\" / \"parola hatali\" (kod içi karşılaştırma, ekrana gitmez)",
-}
+# Bilinçli, DAR istisna defteri. Y211 · S-D67.15 (sahip): giriş hatası iletisi artık METİN sözleşmesi DEĞİL — `doLogin` makine-okur koda
+# (`AuthError::kod`) bakar → "parola" istisnaları (kimlikHatali / girdiBos / doLogin karşılaştırması) KALDIRILDI, iletiler "şifre" der.
+# İstisna BAYATLARSA (ileti düzeltildiyse) aşağıdaki kapı kırmızıdır.
+_ISTISNA: dict[tuple[str, str, str], str] = {}
 
 
 def _duz(d: dict, yol: str = ""):
