@@ -8,8 +8,9 @@ modeli olmayan alan göstergesi D1.91'de kaldırıldı. Dizin CANLI — silinmez
 
 > Bu dosya eskiden Google AI Studio şablonunun İngilizce README'siydi (yerelde çalıştırma + Gemini API anahtarı
 > talimatı). Simülatörün kaynağı Gemini'yi ÇAĞIRMAZ (`src/` içinde `@google/genai` / `GEMINI_API_KEY` kullanımı yok);
-> `package.json`daki `@google/genai` bağımlılığı ve `vite.config.ts`deki `GEMINI_API_KEY` tanımı şablondan kalmadır —
-> çalıştırmak için anahtar GEREKMEZ.
+> çalıştırmak için anahtar GEREKMEZ. Şablon artığı `vite.config.ts` `GEMINI_API_KEY` tanımı, AI Studio HMR anahtarı ve
+> `.env.example` kaldırıldı (Y211 · S-D67.8). `package.json`daki `@google/genai` kaydı ağsız kaldırılamadığı için duruyor
+> (kullanılmıyor; kilit dosyası da değişmeli) — ağ açık bir derleme oturumunda `npm uninstall @google/genai`.
 
 ## Üründe nerede
 
