@@ -60,6 +60,14 @@ except Exception:  # utils yolu yoksa eski davranış
         return str(yerel)
 
 
+try:  # KI G5: modül-yanı ANA ağırlık (XAI .pt; yalnız kaynaktan koşu — donmuşta modül yanında değil) da bütünlük denetiminden geçer
+    from utils.model_downloader import modul_yani_agirlik as _modul_yani
+except Exception:  # utils yolu yoksa eski davranış
+
+    def _modul_yani(yerel, _repo):
+        return str(yerel)
+
+
 def _require(path: Path, label: str):
     if not path.exists():
         sys.exit(f"⚠  {label} not found at {path}\n"
@@ -234,6 +242,8 @@ def xai_top_genler(df: "pd.DataFrame", top_n: int = 10,
             from utils.model_downloader import download_model_sync
 
             pt_path = download_model_sync("ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt")
+        else:  # KI G5: modül yanındaki .pt (kaynaktan koşu) — özet tutmazsa YÜKLENMEZ (`torch.load` öncesi)
+            pt_path = _modul_yani(pt_path, f"ai_hub/inference_human_kidney_rna/{Path(pt_path).name}")
 
     X = np.log2(df.values.astype(np.float32) + 1.0)
     X = scaler.transform(X)[:, fs_idx].astype(np.float32)

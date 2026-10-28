@@ -283,3 +283,27 @@ def yan_dosya_coz(yerel_yol, repo_yolu: str) -> str:
         raise
     except Exception:
         return str(yerel_yol)
+
+
+def modul_yani_agirlik(yerel_yol, repo_yolu: str) -> str:
+    """KI G5 (22 A3a G5): modülün YANINDAKİ ANA ağırlık (ONNX / pkl / pt) yüklemeden ÖNCE bütünlük denetiminden geçer.
+
+    Modüller ağırlığı `os.path.exists(<modül>/<ağırlık>)` ise doğrudan yüklüyor, `download_model_sync` (denetimli) yalnız modül yanında dosya
+    YOKSA çağrılıyordu. Donmuş pakette ≥ 5 MB ağırlık modül yanına gömülmez (spec) — yol hep çözücüden geçer; KAYNAKTAN koşuda ise modül
+    yanındaki kopya (ör. git'te izlenen `cat_disease/XGBoost.pkl`) denetimsiz yükleniyordu. Kural: beklenen özet (`<dosya>.sha256` / takipli
+    manifest `repo_yolu`) tutmazsa, dosya kesikse ya da okunamazsa `ModelButunlukHatasi` (YÜKLENMEZ — AI ucu 503 + açık uyarı); beklenen özet
+    YOKSA açık UYARI. Donmuş paket: yol AYNEN döner (davranış DEĞİŞMEZ)."""
+    yerel = str(yerel_yol)
+    if getattr(sys, "frozen", False):
+        return yerel
+    sebep = butunluk_sebebi(Path(yerel), repo_yolu)
+    if sebep is not None:
+        raise ModelButunlukHatasi(yerel, sebep)
+    if not (Path(yerel + ".sha256").exists() or _manifest_ozetleri().get(_goreli_anahtar(repo_yolu))):
+        logger.warning(
+            "Model bütünlük UYARISI (kaynaktan koşu): %s modülün yanında ve beklenen özeti YOK (yan .sha256 / manifest %s) — "
+            "DENETİMSİZ yükleniyor",
+            yerel,
+            repo_yolu,
+        )
+    return yerel

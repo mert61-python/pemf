@@ -32,6 +32,13 @@ import pandas as pd
 # CONFIG
 # ============================================================
 _DIR = os.path.dirname(os.path.abspath(__file__))
+# KI G5: modul YANINDAKI agirlik (yalniz kaynaktan kosu — XGBoost.pkl git'te izlenir; donmusta modul yaninda degil) de butunluk
+# denetiminden gecer: ozet tutmazsa YUKLENMEZ (ModelButunlukHatasi), ozet yoksa acik uyari. Donmusta davranis degismez.
+try:
+    from utils.model_downloader import modul_yani_agirlik as _modul_yani
+except Exception:  # utils yolu yoksa (izole kullanim) eski davranis
+    def _modul_yani(yerel, _repo):
+        return yerel
 MODEL_PATH = os.path.join(_DIR, "XGBoost.pkl")
 if not os.path.exists(MODEL_PATH):
     try:
@@ -39,6 +46,8 @@ if not os.path.exists(MODEL_PATH):
         MODEL_PATH = download_model_sync("ai_hub/cat_disease/XGBoost.pkl")
     except Exception:
         pass
+else:
+    MODEL_PATH = _modul_yani(MODEL_PATH, "ai_hub/cat_disease/XGBoost.pkl")
 # Denetim 2026-08-28 #09: yan dosyalar da /models'e duser (Docker imajinda
 # ai_hub/**/*.pkl elenir; klinik frozen EXE'de dosya modul yaninda oldugu icin
 # ilk kosul tutar ve cozucuye hic girilmez).

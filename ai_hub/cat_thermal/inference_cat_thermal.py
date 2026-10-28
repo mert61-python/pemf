@@ -30,6 +30,11 @@ import numpy as np
 from PIL import Image
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
+try:
+    from utils.model_downloader import modul_yani_agirlik as _modul_yani
+except Exception:  # utils yolu yoksa (izole kullanim) eski davranis
+    def _modul_yani(yerel, _repo):
+        return yerel
 
 AVAILABLE_MODELS = {
     "GhostNetV2": os.path.join(_DIR, "GhostNetV2.onnx"),
@@ -55,6 +60,10 @@ class CatThermalPredictor:
                 onnx_path = download_model_sync(repo_path)
             except Exception as e:
                 raise FileNotFoundError(f"Model bulunamadi ve indirilemedi ({model_name}): {e}")
+        elif model_path is None:
+            # KI G5: modul YANINDAKI ONNX (yalniz kaynaktan kosu; donmusta modul yaninda degil) de butunluk denetiminden gecer —
+            # ozet tutmazsa YUKLENMEZ (ModelButunlukHatasi), ozet yoksa acik uyari. Mikroservisin acik `model_path`i DEGISMEZ.
+            onnx_path = _modul_yani(onnx_path, f"ai_hub/cat_thermal/{model_name}.onnx")
 
         if providers is None:
             providers = ["CPUExecutionProvider"]

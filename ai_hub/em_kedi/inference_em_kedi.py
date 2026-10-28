@@ -39,6 +39,13 @@ except ImportError:  # pragma: no cover - yalnız bağımsız CLI kullanımı
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "BiLSTM_XXL_Raw"
+# KI G5: modul YANINDAKI ONNX (yalniz kaynaktan kosu; donmusta modul yaninda degil) de butunluk denetiminden gecer — ozet tutmazsa
+# YUKLENMEZ (ModelButunlukHatasi, olcekleyicilerin `_yan`i gibi), ozet yoksa acik uyari. Donmusta davranis degismez.
+try:
+    from utils.model_downloader import modul_yani_agirlik as _modul_yani
+except Exception:  # utils yolu yoksa (izole kullanim) eski davranis
+    def _modul_yani(yerel, _repo):
+        return yerel
 ONNX_PATH = os.path.join(_DIR, f"{MODEL_NAME}.onnx")
 MODEL_DOWNLOAD_ERROR = None
 if not os.path.exists(ONNX_PATH):
@@ -47,6 +54,8 @@ if not os.path.exists(ONNX_PATH):
         ONNX_PATH = download_model_sync(f"ai_hub/em_kedi/{MODEL_NAME}.onnx")
     except Exception as exc:
         MODEL_DOWNLOAD_ERROR = exc
+else:
+    ONNX_PATH = _modul_yani(ONNX_PATH, f"ai_hub/em_kedi/{MODEL_NAME}.onnx")
 # Denetim 2026-08-28 #09: yan dosyalar da /models'e duser (Docker imajinda
 # ai_hub/**/*.pkl elenir; klinik frozen EXE'de dosya modul yaninda oldugu icin
 # ilk kosul tutar ve cozucuye hic girilmez).

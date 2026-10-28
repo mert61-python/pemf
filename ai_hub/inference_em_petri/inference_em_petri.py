@@ -46,6 +46,12 @@ except ImportError:  # pragma: no cover - yalnız bağımsız CLI kullanımı
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "BaggingRegressor"
+# KI G5 (em_kedi ikizi): modul YANINDAKI ONNX (yalniz kaynaktan kosu) de butunluk denetiminden gecer; donmusta davranis degismez.
+try:
+    from utils.model_downloader import modul_yani_agirlik as _modul_yani
+except Exception:  # utils yolu yoksa (izole kullanim) eski davranis
+    def _modul_yani(yerel, _repo):
+        return yerel
 ONNX_PATH = os.path.join(_DIR, f"{MODEL_NAME}.onnx")
 MODEL_DOWNLOAD_ERROR = None
 if not os.path.exists(ONNX_PATH):
@@ -54,6 +60,8 @@ if not os.path.exists(ONNX_PATH):
         ONNX_PATH = download_model_sync(f"ai_hub/inference_em_petri/{MODEL_NAME}.onnx")
     except Exception as exc:
         MODEL_DOWNLOAD_ERROR = exc
+else:
+    ONNX_PATH = _modul_yani(ONNX_PATH, f"ai_hub/inference_em_petri/{MODEL_NAME}.onnx")
 # SCALER YOLU COZUCUSU (2026-09-09, em_kedi paritesi): Docker imajinda ai_hub kopyalanirken
 # kucuk .pkl dosyalari eleniyor (Dockerfile .dockerignore); ONNX ProgramData/release_assets
 # uzerinden cozulurken scaler'lar modul dizininde araniyor ve predictor SESSIZCE oluyordu.
