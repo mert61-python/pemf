@@ -201,7 +201,9 @@ export function SessionProgressCard({
         <TouchableOpacity style={styles.btnEmergency} onPress={onEmergencyStop}
           accessibilityRole="button" accessibilityState={{ busy: stopping }}
           accessibilityLabel={kritikMetin("guvenlik.acilDurdur.seansKartiEtiketi")}>
-          <Text style={styles.btnEmergencyText} numberOfLines={1} adjustsFontSizeToFit>
+          {/* Y222 (sahip): dar ekranda yazı KESİLMEZ ve KISALTILMAZ — satır sınırı yok, sığmazsa iki satıra iner. Eskiden
+              `numberOfLines={1} adjustsFontSizeToFit` idi: react-native-web sığdırmayı uygulamaz → 360 px'te "🚨 EMERGEN…". */}
+          <Text style={styles.btnEmergencyText}>
             {stopping ? kritikMetin("guvenlik.acilDurdur.durduruluyor") : kritikMetin("guvenlik.acilDurdur.dugme")}
           </Text>
         </TouchableOpacity>
@@ -332,5 +334,5 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     alignItems: "center",
   },
-  btnEmergencyText: { color: "#fff", fontWeight: "800" },
+  btnEmergencyText: { color: "#fff", fontWeight: "800", textAlign: "center" },
 });
