@@ -10,6 +10,10 @@
  *
  * /api/health'ten dönen deviceId saklanır → sonraki uzaktan bağlantı için eşleşme.
  * Web'de (backend'den serve edilir) origin zaten doğrudur; hızlı geçilir.
+ *
+ * BE 1 · Y229 (yalnız telefon / yerel yol; web DEĞİŞMEZ): `discoverBackend("kayitliHemen")` kayıtlı ÖZEL ağ adresini sağlık
+ * denetimi BEKLEMEDEN uygular (PC kapalıyken soket telefonun kendi 127.0.0.1'ini arıyordu) · `discoverBackend("hafif")` =
+ * kayıtlı adres + kısa mDNS (bağlantı yokken ~5 sn'de bir); ağır basamaklar (uzak + /24) yalnız tam merdivende.
  */
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -21,8 +25,11 @@ import { korunanFetch } from "@/services/duzHttpKapisi";
 const ADDR_KEY = "@pemf_server_address";
 const HEALTH_TIMEOUT_MS = 2500;
 const MDNS_TIMEOUT_MS = 4000;
+const HAFIF_MDNS_MS = 2500; // BE 1(b): hafif yoklamanın mDNS'i kayıtlı adresle AYNI ANDA — tur ~2,5 sn, 5 sn aralığa sığar
 
 export type DiscoverySource = "current" | "saved" | "mdns" | "subnet" | "remote" | "none";
+/** "tam" = merdivenin tamamı · "hafif" = kayıtlı adres + kısa mDNS · "kayitliHemen" = kayıtlı ÖZEL ağ adresini sınamadan uygula. */
+export type KesifKipi = "tam" | "hafif" | "kayitliHemen";
 export interface DiscoveryResult {
   address: string;
   source: DiscoverySource;
@@ -174,7 +181,17 @@ async function apply(addr: string): Promise<boolean> {
 }
 
 // ── 2. mDNS (aynı WiFi, sıfır-konfig) ───────────────────────────────────────
-async function discoverMdns(): Promise<string | null> {
+// BE 1: TEK UÇUŞ — hafif yoklama ile tam merdiven aynı anda tararsa yerel mDNS taraması birbirini durdurmasın; ikinci çağıran
+// süren taramanın sonucunu alır.
+let _mdnsInFlight: Promise<string | null> | null = null;
+function discoverMdns(sureMs: number = MDNS_TIMEOUT_MS): Promise<string | null> {
+  if (_mdnsInFlight) return _mdnsInFlight;
+  _mdnsInFlight = _mdnsTara(sureMs).finally(() => {
+    _mdnsInFlight = null;
+  });
+  return _mdnsInFlight;
+}
+async function _mdnsTara(sureMs: number): Promise<string | null> {
   if (Platform.OS === "web") return null;
   let Zeroconf: any;
   try {
@@ -208,7 +225,7 @@ async function discoverMdns(): Promise<string | null> {
       zc.on("error", () => {});
       // Backend auto_discovery.py: _pemfvet._tcp.local. (port 8000)
       zc.scan("pemfvet", "tcp", "local.");
-      setTimeout(() => finish(null), MDNS_TIMEOUT_MS);
+      setTimeout(() => finish(null), sureMs);
     } catch {
       finish(null);
     }
@@ -273,7 +290,7 @@ async function probeHost(ip: string, timeoutMs: number): Promise<ProbeHit | null
   }
 }
 
-async function discoverSubnet(requireDeviceId?: string | null): Promise<string | null> {
+async function discoverSubnet(requireDeviceId?: string | null, gecersiz: () => boolean = () => false): Promise<string | null> {
   // Web'de tarayıcı keyfi IP'lere health bağlantısı yapamaz (CORS) → atla; web'de origin zaten doğru.
   if (Platform.OS === "web") return null;
   // NOT: isOnWifi() ile ATLANMAZ — açılışta NetInfo henüz hazır değilken false dönüp aynı-WiFi yerel
@@ -286,6 +303,7 @@ async function discoverSubnet(requireDeviceId?: string | null): Promise<string |
   for (let h = 2; h <= 254; h++) if (!priority.includes(h)) order.push(h);
   for (const sub of subs) {
     for (let i = 0; i < order.length; i += 40) {
+      if (gecersiz()) return null; // BE 1: hafif yoklama bu arada bağladı → uzun taramayı (pil / ağ) sürdürme
       const chunk = order.slice(i, i + 40);
       const results = await Promise.allSettled(chunk.map((h) => probeHost(`${sub}.${h}`, 1200)));
       const hits: ProbeHit[] = results
@@ -364,11 +382,65 @@ async function preferLanIfReachable(result: DiscoveryResult | null): Promise<Dis
   return result;
 }
 
+// BE 1: hafif yoklamanın her başarılı uygulaması nesli artırır. Süren TAM tur kendi neslini taşır; nesil değiştiyse (hafif yoklama
+// bu arada bağladı) adres UYGULAMAZ ve alt ağ taramasını keser — iki kaynak WS hedefini çırpındırmasın (aşağıdaki ORTA fix ilkesi).
+let _baglantiNesli = 0;
+
+let _hafifInFlight: Promise<DiscoveryResult | null> | null = null;
+/** BE 1(b): bağlantı yokken ucuz yoklama — kayıtlı adres (LAN'da kimliksiz, tünelde device_id şartı AYNEN) ile kısa mDNS AYNI
+ *  ANDA. Uzak (Supabase) ve /24 taraması YOK (seyrek, tam merdivende). Web'de koşmaz (köken doğru kaynaktır). Tek uçuş. */
+function hafifYokla(): Promise<DiscoveryResult | null> {
+  if (Platform.OS === "web") return Promise.resolve(null);
+  if (_hafifInFlight) return _hafifInFlight;
+  _hafifInFlight = _hafifYoklaImpl().finally(() => {
+    _hafifInFlight = null;
+  });
+  return _hafifInFlight;
+}
+async function _hafifYoklaImpl(): Promise<DiscoveryResult | null> {
+  const mdns = discoverMdns(HAFIF_MDNS_MS).catch(() => null);
+  try {
+    const saved = (await AsyncStorage.getItem(ADDR_KEY)) || (await AsyncStorage.getItem("@pemf_server_ip"));
+    if (saved) {
+      const requireId = isPrivateHost(hostOf(saved)) ? null : await getStoredDeviceId();
+      if ((await checkHealth(saved, requireId)) && (await apply(saved))) {
+        _baglantiNesli += 1;
+        return { address: saved, source: "saved" };
+      }
+    }
+  } catch {
+    /* mDNS'e düş */
+  }
+  const m = await mdns;
+  if (m && (await checkHealth(m)) && (await apply(m))) {
+    _baglantiNesli += 1;
+    return { address: m, source: "mdns" };
+  }
+  return null;
+}
+
+/** BE 1(a): kayıtlı ÖZEL ağ (LAN) adresini sağlık denetimi BEKLEMEDEN uygula — PC kapalıyken açılan telefonun soketi ilk andan
+ *  PC'yi arasın (eskiden 127.0.0.1). Tünel / https adres burada UYGULANMAZ: device_id şartı merdivenin sağlık denetiminde (bayat
+ *  trycloudflare adresi başka kiracıya atanabilir). Web'de koşmaz. */
+async function kayitliAdresiHemenUygula(): Promise<DiscoveryResult | null> {
+  if (Platform.OS === "web") return null;
+  try {
+    const saved = (await AsyncStorage.getItem(ADDR_KEY)) || (await AsyncStorage.getItem("@pemf_server_ip"));
+    if (!saved || !isPrivateHost(hostOf(saved))) return null;
+    if (!updateServiceConfig(saved)) return null;
+    return { address: saved, source: "saved" };
+  } catch {
+    return null;
+  }
+}
+
 let _discoverInFlight: Promise<DiscoveryResult | null> | null = null;
 // ORTA fix: örtüşen keşif FIRTINASINI önle — WS düşünce onNeedRediscovery HER başarısızlıkta çağrılıyor;
 // önceki uzun (~70sn) subnet taraması bitmeden yenisi başlıyordu (80+ eşzamanlı fetch + yarışlı apply/
 // AsyncStorage yazımı → WS hedefi çırpınıyordu). Aynı anda TEK keşif; ikinci çağrı mevcut Promise'i döndürür.
-export function discoverBackend(): Promise<DiscoveryResult | null> {
+export function discoverBackend(kip: KesifKipi = "tam"): Promise<DiscoveryResult | null> {
+  if (kip === "hafif") return hafifYokla();
+  if (kip === "kayitliHemen") return kayitliAdresiHemenUygula();
   if (_discoverInFlight) return _discoverInFlight;
   // Sonuç TÜNEL ise LAN'a yükselt (aynı-WiFi önceliği) → tünel-401 + LAN-gölgeleme kök çözümü.
   _discoverInFlight = _discoverBackendImpl()
@@ -377,6 +449,8 @@ export function discoverBackend(): Promise<DiscoveryResult | null> {
   return _discoverInFlight;
 }
 async function _discoverBackendImpl(): Promise<DiscoveryResult | null> {
+  const nesil = _baglantiNesli;
+  const gecersiz = () => _baglantiNesli !== nesil; // BE 1: hafif yoklama bu tur sürerken bağladı
   // Web: origin zaten doğru kaynaktır.
   if (Platform.OS === "web") {
     const origin = serviceConfig.apiBaseUrl.replace("/api", "");
@@ -403,23 +477,26 @@ async function _discoverBackendImpl(): Promise<DiscoveryResult | null> {
       const isLan = isPrivateHost(hostOf(saved));
       const requireId = isLan ? null : await getStoredDeviceId();
       if (await checkHealth(saved, requireId)) {
-        if (await apply(saved)) return { address: saved, source: "saved" };
+        if (!gecersiz() && (await apply(saved))) return { address: saved, source: "saved" };
       }
     }
   } catch {}
+  if (gecersiz()) return null;
 
   // 2) mDNS (aynı WiFi, sıfır-konfig — varsa anında bulur)
   const m = await discoverMdns();
-  if (m && (await checkHealth(m)) && (await apply(m))) return { address: m, source: "mdns" };
+  if (m && (await checkHealth(m)) && !gecersiz() && (await apply(m))) return { address: m, source: "mdns" };
+  if (gecersiz()) return null;
 
   // 3) UZAKTAN (farklı WiFi): kayıtlı device_id ile Supabase tünel URL → subnet'ten ÖNCE
   //    (farklı ağda tam /24 subnet ~sn boşa harcıyordu; remote orada hızlı bağlar).
   const r = await discoverRemote();
-  if (r && (await apply(r))) return { address: r, source: "remote" };
+  if (r && !gecersiz() && (await apply(r))) return { address: r, source: "remote" };
+  if (gecersiz()) return null;
 
   // 4) Subnet tarama — HER ZAMAN son çare. Aynı WiFi'de mDNS başarısızsa cihazı bulan KANITLI yol.
-  const s = await discoverSubnet();
-  if (s && (await apply(s))) return { address: s, source: "subnet" };
+  const s = await discoverSubnet(undefined, gecersiz);
+  if (s && !gecersiz() && (await apply(s))) return { address: s, source: "subnet" };
 
   return null;
 }

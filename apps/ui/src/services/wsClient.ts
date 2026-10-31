@@ -40,12 +40,20 @@ const PING_INTERVAL_MS = 15000; // her 15sn ping
 const STALE_TIMEOUT_MS = 25000; // bu süre mesaj gelmezse half-open say → kapat
 const REDISCOVER_AFTER_FAILS = 4; // bu kadar başarısız denemeden sonra yeniden keşif iste
 const CONNECT_TIMEOUT_MS = 10000; // CONNECTING aşaması bu sürede açılmazsa soket ölü sayılır
+const DOGRULAMA_MS = 4000; // BE 1(d): arka plandan dönüşte ping'e bu sürede yanıt yoksa soket ölü sayılır
+
+/** BE 1(d) · Y229: bağlantıya dışarıdan erişim. `connectPemfWebSocket` kurulurken doldurur (sahte istemcide boş kalır). */
+export interface WsKontrol {
+  /** Arka plandan dönüş: soket bir ileti (pong dahil) ya da yeni `onopen` ile DOĞRULANANA dek bağlantı "yok" bildirilir. */
+  dogrula?: () => void;
+}
 
 // ─── Connection ──────────────────────────────────────────────────────────────
 export function connectPemfWebSocket(
   onMessage: WsMessageHandler,
   onState?: (connected: boolean) => void,
-  onNeedRediscovery?: () => void
+  onNeedRediscovery?: () => void,
+  kontrol?: WsKontrol
 ): () => void {
   if (typeof WebSocket === "undefined") {
     onState?.(false);
@@ -59,6 +67,17 @@ export function connectPemfWebSocket(
   let reconnectDelay = 1000;
   let consecutiveFails = 0;
   let lastMessageTs = Date.now();
+  // BE 1(d): arka plandan dönüşte OS soketi çoktan kesmiş olabilir (Samsung ~6 sn'de keser) ama donuk JS `onclose`u geç alır →
+  // nokta ~2 sn YANLIŞ YEŞİL kalıyordu (31.10 ölçüldü). Doğrulama bekleyen soket ilk iletisinde (pong dahil) yeniden "bağlı" olur.
+  let dogrulamaBekliyor = false;
+  let dogrulamaTimer: ReturnType<typeof setTimeout> | null = null;
+  const dogrulamayiBirak = () => {
+    dogrulamaBekliyor = false;
+    if (dogrulamaTimer) {
+      clearTimeout(dogrulamaTimer);
+      dogrulamaTimer = null;
+    }
+  };
 
   const stopHeartbeat = () => {
     if (pingTimer) {
@@ -79,6 +98,7 @@ export function connectPemfWebSocket(
         const dead = socket;
         socket = null;
         stopHeartbeat();
+        dogrulamayiBirak();
         if (dead) {
           try {
             dead.onclose = null as any;
@@ -101,6 +121,10 @@ export function connectPemfWebSocket(
 
   const handleMessage = (event: MessageEvent) => {
     lastMessageTs = Date.now();
+    if (dogrulamaBekliyor) {
+      dogrulamayiBirak();
+      onState?.(true); // soket arka plandan döndükten sonra gerçekten konuştu
+    }
     // AYRIM: JSON ayrıştırma hatası ile İŞLEYİCİ hatası aynı catch'te yutuluyordu. Bir reducer
     // hatası (ör. beklenmedik alan) "geçersiz JSON" sayılıp sessizce düşüyor, telemetri hiç
     // uygulanmıyor ama soket canlı olduğu için UI "CANLI" kalıyordu — donmuş değerler canlı gibi.
@@ -170,6 +194,7 @@ export function connectPemfWebSocket(
             connecting.close();
           } catch { /* ignore */ }
           socket = null;
+          dogrulamayiBirak();
           onState?.(false);
           scheduleReconnect();
         }
@@ -181,6 +206,7 @@ export function connectPemfWebSocket(
         if (closedByCaller) { try { socket?.close(); } catch { /* ignore */ } return; }
         reconnectDelay = 1000; // backoff sıfırla
         consecutiveFails = 0;
+        dogrulamayiBirak(); // yeni soketin açılması doğrulamadır
         onState?.(true);
         startHeartbeat();
       };
@@ -189,6 +215,7 @@ export function connectPemfWebSocket(
       socket.onclose = (event) => {
         clearTimeout(openTimer);
         stopHeartbeat();
+        dogrulamayiBirak();
         // YARIŞ: epoch değişiminde (keşif yeni adres bulunca) önce disconnect() çağrılır, hemen
         // ardından YENİ soket kurulur. Eski soketin onclose'u SONRA tetiklendiğinde aynı setter'ı
         // `false` ile çağırıp CANLI olan yeni bağlantıyı "Çevrimdışı" işaretliyordu (banner yanıp
@@ -210,12 +237,45 @@ export function connectPemfWebSocket(
     }
   };
 
+  if (kontrol) {
+    kontrol.dogrula = () => {
+      if (closedByCaller) return;
+      onState?.(false);
+      const s = socket;
+      // Açılmamış soket (kuruluyor / yeniden bağlanıyor): `onopen` doğrular.
+      if (!s || s.readyState !== 1 /* OPEN */) return;
+      dogrulamaBekliyor = true;
+      try {
+        s.send(JSON.stringify({ type: "ping" }));
+      } catch {
+        /* ölü soket — süre dolunca yeniden kurulur */
+      }
+      if (dogrulamaTimer) clearTimeout(dogrulamaTimer);
+      dogrulamaTimer = setTimeout(() => {
+        dogrulamaTimer = null;
+        if (!dogrulamaBekliyor || closedByCaller || s !== socket) return;
+        dogrulamaBekliyor = false;
+        // Yanıt yok: soket arka planda ölmüş, `onclose` gelmedi → half-open yolu (handler'ları sök, kapat, yeniden kur).
+        socket = null;
+        stopHeartbeat();
+        try {
+          s.onclose = null as any;
+          s.onmessage = null as any;
+          s.onerror = null as any;
+          s.close();
+        } catch { /* ignore */ }
+        scheduleReconnect();
+      }, DOGRULAMA_MS);
+    };
+  }
+
   openSocket();
 
   return () => {
     closedByCaller = true;
     if (reconnectTimer) clearTimeout(reconnectTimer);
     stopHeartbeat();
+    dogrulamayiBirak();
     try {
       socket?.close();
     } catch {

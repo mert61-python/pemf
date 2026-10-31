@@ -15,9 +15,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { Platform } from "react-native";
 import { serviceConfig, loadStoredApiToken } from "@/services/config";
 import { apiGet, apiPost } from "@/services/apiClient";
-import { connectPemfWebSocket, WsMessage } from "@/services/wsClient";
+import { connectPemfWebSocket, WsMessage, type WsKontrol } from "@/services/wsClient";
 import { discoverBackend } from "@/services/discovery";
 import { mockSnapshot } from "@/services/mockData";
 import { useNetworkReachability } from "@/hooks/useNetworkReachability";
@@ -39,6 +40,14 @@ import type {
 
 // ─── History max length ────────────────────────────────────────────────────
 const MAX_HISTORY = 2000;
+
+// BE 1 · Y229: telefon (yerel) yeniden bağlanması. YALNIZ yerel yol — web'in bağlantı davranışı DEĞİŞMEZ (makale B2 web'den
+// ölçer; kapı `LiveDataContext.BE1.web.test.tsx`).
+const yerelMi = () => Platform.OS !== "web";
+/** Bağlantı yokken hafif yoklama aralığı (kayıtlı adres + kısa mDNS). Ağır basamaklar (uzak + /24) bundan bağımsız, seyrek. */
+const HAFIF_YOKLAMA_MS = 5000;
+/** Aynı adreste yoklamanın soketi yeniden kurdurma sıklığı tavanı — sağlık geçip soket reddedilirse (ör. 1008) sıcak döngü olmasın. */
+const YOKLAMA_YENIDEN_KURMA_ARALIGI_MS = 15000;
 
 // AI Pro kapalı-döngü canlı telemetrisi (backend ai_router._ai_pro_loop yayını).
 export interface AiVisionData {
@@ -503,17 +512,25 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // açık kalan tablette bu, pil ve CPU'yu boşuna tüketiyordu. Başarılı turdan sonra bekleme YOK.
   const DISCOVERY_COOLDOWN_MS = 20000;
   const lastFailedDiscoveryRef = useRef(0);
+  // BE 1(c) · Y229: kullanıcının ya da ortamın AÇIK tetiği (elle "yeniden bağlan", ön plana dönüş, ağ dönüşü) soğumaya TAKILMAZ —
+  // eskiden soğuma bunları yutuyordu (31.10 ölçüldü). Keşif sürerken gelen zorlu tetik de tur bitince soğumasız koşar.
+  const pendingZorlaRef = useRef(false);
 
-  const runDiscovery = useCallback(async (forceReconnect: boolean) => {
+  const runDiscovery = useCallback(async (forceReconnect: boolean, zorla = false) => {
     // Keşif sürüyorsa AT-MA, BEKLET → mevcut bitince bir kez daha çalışır. (Audit P1: WiFi↔mobil-veri
     // geçişinde, devam eden uzun keşif yüzünden NetInfo tetiği düşüp uzun süre kopuk kalıyordu.)
-    if (discoveringRef.current) { pendingDiscoverRef.current = true; return; }
+    if (discoveringRef.current) {
+      pendingDiscoverRef.current = true;
+      if (zorla) pendingZorlaRef.current = true;
+      return;
+    }
     discoveringRef.current = true;
+    let buTurZorla = zorla;
     try {
       do {
         pendingDiscoverRef.current = false;
         const sinceFail = Date.now() - lastFailedDiscoveryRef.current;
-        if (sinceFail < DISCOVERY_COOLDOWN_MS) break; // soğuma: art arda tam tarama yapma
+        if (!buTurZorla && sinceFail < DISCOVERY_COOLDOWN_MS) break; // soğuma: art arda tam tarama yapma (zorlu tetik hariç)
         const prevWs = serviceConfig.websocketUrl; // adres GERÇEKTEN değişti mi?
         try {
           const res = await discoverBackend();
@@ -530,6 +547,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
           lastFailedDiscoveryRef.current = Date.now();
           /* keşif hatası — mevcut bağlantıyla devam */
         }
+        buTurZorla = pendingZorlaRef.current;
+        pendingZorlaRef.current = false;
       } while (pendingDiscoverRef.current); // keşif sırasında yeni istek geldiyse (ağ değişti) tekrarla
     } finally {
       discoveringRef.current = false;
@@ -545,6 +564,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       await loadStoredApiToken();
+      // BE 1(a): kayıtlı ÖZEL ağ adresi sağlık denetimi BEKLENMEDEN uygulanır → ilk soket PC'yi arar (PC kapalıyken açılan
+      // telefon eskiden 70 sn kendi 127.0.0.1'ini arıyordu). Tünel adresinde device_id şartı aynen (merdivende).
+      if (yerelMi()) await Promise.resolve(discoverBackend("kayitliHemen")).catch(() => null);
       if (cancelled) return;
       setTokenLoaded(true);
       runDiscovery(true);
@@ -558,12 +580,17 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   //    ile kapatıyor, wsClient bunu görüp backoff'u 30 saniyeye çıkarıyordu; saklı adres değişmediği
   //    için keşif de epoch bump'lamıyordu → uygulama açılışta ~30sn boyunca canlı telemetrisiz
   //    kalıyordu. Artık token belleğe alınmadan soket açılmaz.
+  // BE 1(d): soket denetimi (arka plandan dönüşte doğrulama) — wsClient kurulurken doldurur.
+  const wsKontrolRef = useRef<WsKontrol>({});
   useEffect(() => {
     if (!tokenLoaded) return;
+    const kontrol: WsKontrol = {};
+    wsKontrolRef.current = kontrol;
     const disconnect = connectPemfWebSocket(
       handleWsMessage,
       (connected) => setWsConnected(connected),
-      () => runDiscovery(true) // tekrarlayan kopmada adres değişmiş olabilir → yeniden keşif
+      () => runDiscovery(true), // tekrarlayan kopmada adres değişmiş olabilir → yeniden keşif
+      kontrol
     );
 
     refresh();
@@ -585,18 +612,52 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionEpoch, tokenLoaded]);
 
+  // BE 1(b) · Y229: bağlantı YOKKEN zamana bağlı hafif yoklama (kayıtlı adres + kısa mDNS, ~5 sn). Eskiden yeniden keşif yalnız her
+  // 4. soket hatasında + 20 sn soğumayla koşuyordu → PC'den önce açılan telefon ~96 sn yeşile dönmedi (31.10). Yoklama backend'i
+  // bulunca soket HEMEN yeniden kurulur (geri çekilme / asılı bağlantı beklenmez). Ağır basamaklar (uzak + /24) tam merdivende kalır.
+  const sonYoklamaKurulumuRef = useRef(0);
+  const hafifYoklamaSonucu = useCallback((r: { address: string } | null, oncekiWs: string) => {
+    if (!r || wsConnectedRef.current) return;
+    lastFailedDiscoveryRef.current = 0;
+    const adresDegisti = serviceConfig.websocketUrl !== oncekiWs;
+    if (!adresDegisti && Date.now() - sonYoklamaKurulumuRef.current < YOKLAMA_YENIDEN_KURMA_ARALIGI_MS) return;
+    sonYoklamaKurulumuRef.current = Date.now();
+    setConnectionEpoch((e) => e + 1);
+  }, []);
+  const hafifYokla = useCallback((yalnizAdresDegisirse: boolean) => {
+    const oncekiWs = serviceConfig.websocketUrl;
+    Promise.resolve(discoverBackend("hafif"))
+      .then((r) => {
+        if (yalnizAdresDegisirse && serviceConfig.websocketUrl === oncekiWs) return;
+        hafifYoklamaSonucu(r, oncekiWs);
+      })
+      .catch(() => {});
+  }, [hafifYoklamaSonucu]);
+  useEffect(() => {
+    if (!yerelMi() || !tokenLoaded || wsConnected) return;
+    const id = setInterval(() => hafifYokla(false), HAFIF_YOKLAMA_MS);
+    return () => clearInterval(id);
+  }, [tokenLoaded, wsConnected, hafifYokla]);
+
   // 3+4) Ağ değişimi (WiFi geçişi) + ön-plana dönüş → keşfi/yeniden-bağlanmayı tetikle.
   //      (audit B-2.4: NetInfo + AppState mantığı tiplenmiş, test-edilebilir hook'lara çıkarıldı →
   //      god-context küçüldü; `any`'ler giderildi. Public API/davranış AYNI.)
-  const triggerReconnect = useCallback(() => runDiscovery(true), [runDiscovery]);
+  // BE 1(c): yerel yolda bu tetikler soğumaya TAKILMAZ (zorla); web'de eski davranış.
+  const triggerReconnect = useCallback(() => runDiscovery(true, yerelMi()), [runDiscovery]);
   useNetworkReachability(triggerReconnect);
-  useForegroundReconnect(triggerReconnect);
+  // BE 1(d): arka plandan dönüşte soket doğrulanana (pong / yeni `onopen`) dek "bağlı" DEĞİL — eskiden ~2 sn yanlış yeşil.
+  const arkaPlandanDonus = useCallback(() => {
+    if (yerelMi()) wsKontrolRef.current.dogrula?.();
+  }, []);
+  useForegroundReconnect(triggerReconnect, arkaPlandanDonus);
 
   // Faz3: elle yeniden bağlan (gösterge/banner'a dokununca) — WS yeniden kur + keşif merdiveni.
   const reconnect = useCallback(() => {
     setConnectionEpoch((e) => e + 1);
-    runDiscovery(true);
-  }, [runDiscovery]);
+    runDiscovery(true, yerelMi());
+    // BE 1(c): süren uzun bir tam tur dokunuşu bekletmesin — hafif yoklama hemen (adres değişirse soket yeniden kurulur).
+    if (yerelMi()) hafifYokla(true);
+  }, [runDiscovery, hafifYokla]);
 
   // telemetryStale veri-YAŞINA bağlı (tedavi sırasında WS canlı olsa bile donmuş telemetriyi yakalar),
   // bu yüzden ticker çalışır: data-frozen-but-socket-alive geçişini re-render'la tetikler. (Boştayken
