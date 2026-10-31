@@ -12,8 +12,12 @@ yanıtında vardı. AI Pro durdurma ucu `/api/ai/pro/stop` ise iki kez bekliyord
 bağımlılığında (serbest uç kararı bile `to_thread`'de) ve eşzamanlı (`def`) uç olarak anyio'nun ORTAK iş parçacığı
 sınırlayıcısında (40).
 
-SÖZLEŞME: iki ortak havuz da (asyncio varsayılan yürütücüsü + anyio varsayılan sınırlayıcısı) asılı işlerle DOLUYKEN
-her STOP yolu < 1 sn'de STOP'u PORTA yazar (ESP yolunda yayını yapar) ve yanıtını döner — ≥ 30 deneme. Ölçüt HTTP
+SÖZLEŞME: iki ortak havuz da (asyncio varsayılan yürütücüsü + anyio varsayılan sınırlayıcısı) asılı işlerle KİLİTLİYKEN
+her STOP yolu STOP'u PORTA yazar (ESP yolunda yayını yapar) ve yanıtını döner — 30 deneme. KESİN ölçüt (SA, 2026-10-31):
+havuz kilidi STOP porta ULAŞIP yanıt döndükten SONRA açılır (cömert güvenlik süresi `GUVENLIK_S`); STOP ya da yanıt
+ortak havuza bağlıysa kilit açılmadan ASLA gelmez → her koşuda kırmızı; bağlı değilse makine yükünden bağımsız yeşil.
+Eski ölçüt "her denemede < 1 sn" yükü ölçüyordu (MH2 tam süiti `cbbbe023`: makine APK derlerken 30 denemenin 1'inde
+1,10 sn — tek başına 3 × yeşil). 1 sn BÜTÇESİ ayrı kolda (`test_BUTCE_…`, gerekçesi orada). Ölçüt HTTP
 kodu değil PORTA YAZILAN BAYTLAR (firmware aynasıyla çözülür): GERÇEK `HeadlessCore` (yalnız DB açılışları sahte;
 HWSender GERÇEK) + GERÇEK `HardwareController` + GERÇEK uçlar; TEK olay döngüsü (httpx ASGITransport + asyncio.run —
 TestClient her istekte yeni döngü açar, ortak havuzu ölçemez). Sahte olan: tek erişimli seri taşıma (porta yazılan her
@@ -32,8 +36,10 @@ import types
 import pytest
 
 DENEME = 30
-SINIR_S = 1.0  # sözleşme: STOP porta ve yanıt < 1 sn
-BEKLEME_S = SINIR_S + 1.0  # aparat: yanıtı en çok bu kadar bekle (kırmızıda deneme süresi)
+SINIR_S = 1.0  # sözleşme bütçesi: STOP porta ve yanıt < 1 sn (bütçe kolu, ortanca)
+BEKLEME_S = SINIR_S + 1.0  # bütçe kolu: yanıtı en çok bu kadar bekle (kırmızıda deneme süresi)
+GUVENLIK_S = 30.0  # kesin kol: havuz kilidinin en uzun süresi (tipik STOP ~0,01 sn; yalnız havuza bağlı STOP'ta dolar)
+BUTCE_DENEME = 11  # bütçe kolu: ortanca için tek sayı
 
 
 def _bekle(kosul, sure=5.0):
@@ -256,7 +262,8 @@ def _ilk_stop_esp(o, t0: float):
 
 async def _havuzlari_doldur():
     """İki ORTAK havuzu asılı işlerle doldurur (asılı disk / DB benzeri). @return (olay, isler, dolu_mu).
-    Aparat kanıtı: iki havuzda da kısa bir iş 0,3 sn'de BAŞLAMAZ."""
+    İşler `olay` açılana dek BİTMEZ (kilit; güvenlik süresinden uzun bekler). Aparat kanıtı: iki havuzda da kısa bir iş
+    0,3 sn'de BAŞLAMAZ — işçilerin hepsi kilitte, sonraki iş kuyrukta (yükten bağımsız)."""
     import anyio.to_thread
 
     loop = asyncio.get_running_loop()
@@ -264,8 +271,9 @@ async def _havuzlari_doldur():
     n_asyncio = int(loop._default_executor._max_workers)
     n_anyio = int(anyio.to_thread.current_default_thread_limiter().total_tokens)
     olay = threading.Event()
-    isler = [asyncio.ensure_future(asyncio.to_thread(olay.wait, 60)) for _ in range(n_asyncio + 2)]
-    isler += [asyncio.ensure_future(anyio.to_thread.run_sync(olay.wait, 60)) for _ in range(n_anyio + 2)]
+    kilit_s = GUVENLIK_S + 30.0
+    isler = [asyncio.ensure_future(asyncio.to_thread(olay.wait, kilit_s)) for _ in range(n_asyncio + 2)]
+    isler += [asyncio.ensure_future(anyio.to_thread.run_sync(olay.wait, kilit_s)) for _ in range(n_anyio + 2)]
     await asyncio.sleep(0.05)
     dolu = []
     for deneme in (lambda: asyncio.to_thread(lambda: None), lambda: anyio.to_thread.run_sync(lambda: None)):
@@ -277,71 +285,121 @@ async def _havuzlari_doldur():
     return olay, isler, all(dolu)
 
 
-def _bir_deneme(o, ad: str, deneme: int, havuz_dolu: bool):
-    """Tek deneme (kendi olay döngüsü): hazırlık → [havuzlar dolu] → istek → STOP'un porta yazıldığı an."""
+def _bir_deneme(o, ad: str, deneme: int, havuz_dolu: bool, kilit_en_cok_s: float = GUVENLIK_S):
+    """Tek deneme (kendi olay döngüsü): hazırlık → [havuzlar kilitli] → istek → STOP'un porta yazıldığı an + yanıt.
+    Havuz kilidi STOP porta ULAŞIP yanıt döndükten SONRA açılır (en çok `kilit_en_cok_s`): ortak havuza bağlı STOP / yanıt
+    kilit açılmadan GELMEZ. İstek bu süre içinde iptal EDİLMEZ (iptal STOP'u düşürebilir — yükte sahte kırmızı).
+    @return (kod, yanit_s, stop_s) — kilit süresinde gelmeyen None."""
     import httpx
 
     y = YOLLAR[ad]
     if y["olcut"] == "stm":
         _bobin1_sur(o)
     y["hazirla"](o, deneme)
+    bul = _ilk_stop_stm if y["olcut"] == "stm" else _ilk_stop_esp
 
     async def _kos():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=o.api.app), base_url="http://cihaz") as c:
+
+            async def _iste():
+                r = await y["istek"](o, c)
+                return r.status_code, time.perf_counter()
+
             olay, isler, dolu = (None, [], True)
             if havuz_dolu:
                 olay, isler, dolu = await _havuzlari_doldur()
+            gorev = None
             try:
                 assert dolu, "aparat: ortak havuzlar DOLMADI (olcum anlamsiz)"
                 t0 = time.perf_counter()
-                kod, yanit_s = None, None
-                try:
-                    r = await asyncio.wait_for(y["istek"](o, c), timeout=BEKLEME_S)
-                    kod, yanit_s = r.status_code, time.perf_counter() - t0
-                except asyncio.TimeoutError:
-                    pass
-                bul = _ilk_stop_stm if y["olcut"] == "stm" else _ilk_stop_esp
-                while time.perf_counter() < t0 + SINIR_S and bul(o, t0) is None:
+                gorev = asyncio.ensure_future(_iste())
+                son = t0 + kilit_en_cok_s
+                while time.perf_counter() < son and (bul(o, t0) is None or not gorev.done()):
                     await asyncio.sleep(0.01)
                 ts = bul(o, t0)
+                kod, yanit_s = None, None
+                if gorev.done() and not gorev.cancelled() and gorev.exception() is None:
+                    kod, t_yanit = gorev.result()
+                    yanit_s = t_yanit - t0
                 return kod, yanit_s, (None if ts is None else ts - t0)
             finally:
                 if olay is not None:
-                    olay.set()
+                    olay.set()  # kilit YALNIZ burada açılır: STOP + yanıt geldikten (ya da süre dolduktan) SONRA
+                if gorev is not None and not gorev.done():
+                    await asyncio.wait([gorev], timeout=10)
+                    gorev.cancel()
                 await asyncio.gather(*isler, return_exceptions=True)
+                if gorev is not None:
+                    await asyncio.gather(gorev, return_exceptions=True)
 
     return asyncio.run(_kos())
 
 
 def _olc(o, ad: str, n: int, havuz_dolu: bool):
+    """KESİN ölçüt: STOP porta ulaştı VE yanıt beklenen kodla döndü (kilit süresi içinde). İlk kötü denemede durur:
+    havuza bağlı STOP her denemede gelmez, tekrar yalnız güvenlik süresi kadar bekletir."""
     y = YOLLAR[ad]
-    sonuclar = [_bir_deneme(o, ad, i, havuz_dolu) for i in range(n)]
-    kotu = [
-        s
-        for s in sonuclar
-        if s[0] not in y["kod"] or s[1] is None or s[1] >= SINIR_S or s[2] is None or s[2] >= SINIR_S
-    ]
+    sonuclar, kotu = [], []
+    for i in range(n):
+        s = _bir_deneme(o, ad, i, havuz_dolu)
+        sonuclar.append(s)
+        if s[0] not in y["kod"] or s[1] is None or s[2] is None:
+            kotu.append(s)
+            break
     _sure = [round(s[2], 3) if s[2] is not None else None for s in sonuclar]
-    print(f"O11_ORAN yol={ad} havuz_dolu={havuz_dolu} kirmizi={len(kotu)}/{n} stop_s={_sure[:6]} ornek_kotu={kotu[:3]}")
+    _en = max((s[2] for s in sonuclar if s[2] is not None), default=None)
+    print(
+        f"O11_ORAN yol={ad} havuz_dolu={havuz_dolu} kirmizi={len(kotu)}/{len(sonuclar)} stop_s={_sure[:6]} "
+        f"en_uzun_stop_s={None if _en is None else round(_en, 3)} ornek_kotu={kotu[:3]}"
+    )
     return kotu
 
 
 @pytest.mark.parametrize("ad", list(YOLLAR))
-def test_KRITIK_ortak_havuzlar_DOLUYKEN_STOP_1_sn_icinde_PORTA_gider(aparat, ad):
+def test_KRITIK_ortak_havuzlar_KILITLIYKEN_STOP_PORTA_gider_yanit_doner(aparat, ad):
     kotu = _olc(aparat, ad, DENEME, havuz_dolu=True)
     assert not kotu, (
-        f"{ad}: iki ortak iş parçacığı havuzu asılı işlerle doluyken {len(kotu)}/{DENEME} denemede STOP {SINIR_S} sn "
-        f"içinde PORTA gitmedi ya da yanıt dönmedi — STOP yolu ortak havuza bağlı (Ö.4-Y8). "
+        f"{ad}: iki ortak iş parçacığı havuzu asılı işlerle KİLİTLİYKEN STOP {GUVENLIK_S:.0f} sn içinde PORTA gitmedi ya da "
+        f"yanıt dönmedi (kilit yalnız STOP + yanıttan SONRA açılır) — STOP yolu ortak havuza bağlı (Ö.4-Y8). "
         f"(kod, yanit_s, stop_s) örnek: {kotu[:3]}"
     )
 
 
 @pytest.mark.parametrize("ad", list(YOLLAR))
 def test_KARSIT_havuzlar_BOSKEN_aparat_STOPu_olcer(aparat, ad):
-    """Aparat kanıtı: havuzlar boşken aynı ölçüm her yolda STOP'u < 1 sn'de porta yazılmış görür (kırmızı yalnız
-    havuz bağımlılığından gelir, aparattan değil)."""
+    """Aparat kanıtı: havuzlar boşken aynı kesin ölçüm her yolda STOP'u porta yazılmış ve yanıtı dönmüş görür (kırmızı
+    yalnız havuz bağımlılığından gelir, aparattan değil)."""
     kotu = _olc(aparat, ad, 3, havuz_dolu=False)
     assert not kotu, f"{ad}: havuz boşken bile ölçüt tutmadı (aparat?): {kotu}"
+
+
+@pytest.mark.parametrize("ad", list(YOLLAR))
+def test_BUTCE_ortak_havuzlar_DOLUYKEN_STOP_ORTANCA_1_sn_icinde(aparat, ad):
+    """1 sn BÜTÇESİ — ayrı kol. GEREKÇE: kesin kol STOP'un ortak havuza BAĞLI OLMADIĞINI kanıtlar ama havuzdan bağımsız
+    olup YAPISAL olarak yavaş bir STOP'u (ör. porta yazmadan önce teyit / uyku bekleyen, yanıtı geciktiren) göremez;
+    sözleşme sayısı 1 sn. Ölçüt ORTANCA (11 deneme, havuzlar dolu, deneme başına en çok `BEKLEME_S`): yapısal gecikme
+    her denemede olur → ortanca yakalar; tek bir zamanlayıcı takılması (MH2: makine APK derlerken 30'da 1, 1,10 sn)
+    makine yükünü ölçer, Ö.4-Y8'i değil → ortancayı oynatmaz."""
+    y = YOLLAR[ad]
+    yari = BUTCE_DENEME // 2
+    sonuclar = []
+    for i in range(BUTCE_DENEME):
+        sonuclar.append(_bir_deneme(aparat, ad, i, havuz_dolu=True, kilit_en_cok_s=BEKLEME_S))
+        asan = [
+            s for s in sonuclar if s[0] not in y["kod"] or s[1] is None or s[2] is None or max(s[1], s[2]) >= SINIR_S
+        ]
+        if len(asan) > yari:
+            break  # ortanca artık bütçeyi aşar
+    sonsuz = float("inf")
+    stop = sorted(s[2] if s[2] is not None else sonsuz for s in sonuclar)
+    yanit = sorted(s[1] if s[1] is not None and s[0] in y["kod"] else sonsuz for s in sonuclar)
+    stop_orta, yanit_orta = stop[len(stop) // 2], yanit[len(yanit) // 2]
+    print(f"O11_BUTCE yol={ad} n={len(sonuclar)} stop_ortanca_s={stop_orta:.3f} yanit_ortanca_s={yanit_orta:.3f}")
+    assert len(sonuclar) == BUTCE_DENEME and stop_orta < SINIR_S and yanit_orta < SINIR_S, (
+        f"{ad}: ortak havuzlar doluyken STOP / yanıt ORTANCASI {SINIR_S} sn bütçesini aştı — STOP yapısal olarak yavaş "
+        f"(Ö.4-Y8 sözleşmesi < 1 sn). ortanca stop_s={stop_orta:.3f} yanit_s={yanit_orta:.3f}; (kod, yanit_s, stop_s): "
+        f"{sonuclar}"
+    )
 
 
 @pytest.mark.parametrize("ad", ["acil_durdur", "seans_durdur_AKTIF"])
