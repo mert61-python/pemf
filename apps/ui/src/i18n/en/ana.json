@@ -8,7 +8,6 @@
   "bobinVerisiBekleniyor": "Waiting for coil data… (it will appear once connected)",
   "calisanBobinDisi": "Running coils: {{count}} | Outside a session context — hardware is energized",
   "calisanBobinKalan": "Running coils: {{count}} | Remaining: {{kalan}} min",
-  "canliBaglantiYok": "⚠️ No live connection — the values shown may be out of date.",
   "cihazAgi": "Device Network",
   "dakika": "{{dk}} min",
   "donanim": "Hardware",

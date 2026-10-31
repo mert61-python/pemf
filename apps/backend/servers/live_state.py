@@ -712,14 +712,30 @@ def stm_uyum_yaz(veri: dict) -> dict:
     return durum
 
 
-def estop_teyidi_yaz(teyitli: bool, kaynak: str = "estop") -> dict:
+_ALAN_YOK = object()
+
+
+def estop_teyidi_yaz(teyitli: bool, kaynak: str = "estop", calisiyordu=_ALAN_YOK) -> dict:
     """D1.E04 · İG-6.7: ACİL DURDUR'un TEYİT durumunu yaz ve yayınla (`estop_teyit`). Teyitten BAĞIMSIZ `running:false`
     yayını (canlı durum sıfırlaması) "durdu" kanıtı DEĞİLDİR; istemci görünür durdurmayı bu alana göre tutar.
-    Yalnız RAPOR — STOP'u kapılamaz, gönderimi azaltmaz (Ö.4-Y8)."""
+    Yalnız RAPOR — STOP'u kapılamaz, gönderimi azaltmaz (Ö.4-Y8).
+
+    Y227 (BE 2b): `calisiyordu` = durdurma ANINDA bobin / seans var mıydı (True / False / None = okunamadı). İstemci "teyitsiz" düğmeyi
+    YALNIZ `calisiyordu` False DEĞİLKEN tutar (alan yoksa eski davranış). ⚠️ YAPIŞKAN: teyitsiz bir durdurma çalışırken (ya da durum
+    bilinmezken) geldiyse, teyit gelene dek sonraki teyitsiz durdurmalar onu "boştaydı"ya İNDİREMEZ — istemci aynı basışta İKİ istek
+    gönderir (`emergencyStop.ts` 1. ve 2. adım) ve ikincisi bobinleri zaten durmuş görür."""
     import time as _t
 
     veri = {"teyitli": bool(teyitli), "kaynak": str(kaynak), "zaman": _t.time()}
     with _live_state_lock:
+        if calisiyordu is not _ALAN_YOK:
+            c = calisiyordu if calisiyordu in (True, False) else None
+            onceki = _live_state.get("estopTeyit")
+            if not teyitli and c is not True and onceki and onceki.get("teyitli") is False:
+                onceki_c = onceki.get("calisiyordu") if "calisiyordu" in onceki else None
+                if onceki_c is not False:
+                    c = onceki_c
+            veri["calisiyordu"] = c
         _live_state["estopTeyit"] = veri
         _ws_broadcast_sync({"type": "estop_teyit", "data": dict(veri)})
     return veri

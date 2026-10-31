@@ -37,6 +37,7 @@
     },
     "onceSifirla": "Yeniden başlatmak için önce \"Sıfırla\"; sıfırlama bobinleri başlatmaz.",
     "oncekiOturum": "önceki oturumda ACİL DURDUR — sıfırlanmadı ({{asil}})",
+    "pcKapandi": "PC'deki PEMF uygulaması kapatıldı — yeniden açılınca otomatik bağlanır",
     "sifirla": "Sıfırla",
     "sifirlaBaslik": "Acil durdurma mandalı sıfırlansın mı?",
     "sifirlaEtiketi": "Acil durdurma mandalını sıfırla",

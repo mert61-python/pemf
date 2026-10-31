@@ -131,7 +131,9 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   // CH1 · Y151: bu cihazda açık e-posta hesapları (etkin dahil). >1 iken "Çıkış Yap" TÜM hesaplardan çıkar → etiket bunu söyler.
   const hesapSayisi = hesaplar?.length ?? (session ? 1 : 0);
   const [hesapMenusuAcik, setHesapMenusuAcik] = useState(false);
-  const { unreadCount, connectionQuality, reconnect } = useLiveData();
+  const { unreadCount, connectionQuality, reconnect, snapshot } = useLiveData();
+  // Y226 (BE 2a): bağlantı, PC'deki uygulamanın BOŞTAKİ kapanışıyla koptu → kırmızı "bağlanılamıyor" yerine tek NÖTR satır.
+  const pcKapandi = snapshot?.estopMandali?.aktif === true && snapshot?.estopMandali?.bostaKapanis === true;
 
   const [rehberAcik, setRehberAcik] = useState(false);
   const { showToast } = useToast();
@@ -455,13 +457,13 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
         {connectionQuality === "offline" && (
           <Pressable
             onPress={() => setRehberAcik(true)}
-            style={[styles.connBanner, styles.connBannerOffline]}
+            style={[styles.connBanner, pcKapandi ? styles.connBannerNotr : styles.connBannerOffline]}
             testID="conn-banner"
             accessibilityRole="button"
             accessibilityLabel={t("kabuk.baglanti.secenekleriAc")}
           >
-            <Text style={styles.connBannerText}>
-              {t("kabuk.baglanti.gercekDegil")}
+            <Text style={pcKapandi ? styles.connBannerNotrText : styles.connBannerText}>
+              {pcKapandi ? t("guvenlik.mandal.pcKapandi") : t("kabuk.baglanti.gercekDegil")}
             </Text>
           </Pressable>
         )}
@@ -808,6 +810,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   connBannerOffline: { backgroundColor: "#3a1a1a" },
+  connBannerNotr: { backgroundColor: colors.panel },
+  connBannerNotrText: { color: colors.textMuted, fontSize: rf(12), fontWeight: "600", textAlign: "center" },
   connBannerText: { color: "#fcd34d", fontSize: rf(12), fontWeight: "700", textAlign: "center" },
   notifBadgeWrap: { position: "relative", padding: spacing.xs },
   notifBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "flex-end", paddingHorizontal: spacing.lg },

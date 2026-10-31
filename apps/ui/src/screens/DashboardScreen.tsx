@@ -78,11 +78,8 @@ export function DashboardScreen() {
         </View>
       </View>
 
-      {!wsConnected && (
-        <View style={styles.offlineBanner}>
-          <Text style={styles.offlineBannerText}>{t("ana.canliBaglantiYok")}</Text>
-        </View>
-      )}
+      {/* BE 2d (sahip 31.10): bağlantı yokken ikinci bant ("Canlı bağlantı yok …") KALDIRILDI — kabuğun bandı aynı şeyi söylüyor
+          ve eylem veriyor (dokun → bağlanma seçenekleri). */}
 
       {/* Metrics */}
       <ResponsiveGrid>
@@ -281,13 +278,5 @@ const styles = StyleSheet.create({
   },
   bottomLeft: { flex: 2, minWidth: rs(260) },
   bottomRight: { flex: 1, minWidth: rs(220), gap: spacing.md },
-  offlineBanner: {
-    backgroundColor: "#1c1917",
-    borderColor: "#78350f",
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: spacing.sm,
-  },
-  offlineBannerText: { color: "#f59e0b", fontSize: typography.small, fontWeight: "600", textAlign: "center" },
   coilEmptyText: { color: colors.textMuted, fontSize: typography.small, textAlign: "center", paddingVertical: spacing.lg },
 });

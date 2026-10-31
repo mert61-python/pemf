@@ -37,6 +37,7 @@
     },
     "onceSifirla": "To start again, press \"Reset\" first; resetting does not start the coils.",
     "oncekiOturum": "EMERGENCY STOP in the previous app run — not reset ({{asil}})",
+    "pcKapandi": "The PEMF app on the PC was closed — it will reconnect automatically when reopened",
     "sifirla": "Reset",
     "sifirlaBaslik": "Reset the emergency stop latch?",
     "sifirlaEtiketi": "Reset the emergency stop latch",

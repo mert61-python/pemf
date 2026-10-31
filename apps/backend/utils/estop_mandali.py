@@ -118,6 +118,9 @@ _durum = {
     "eylem_sifirla": False,
     # I18NI-A1.1: `eylem`in dil karşılıkları {tr, en} (WS yükü dil bilmez; `eylem` TR bayt bayt kalır, EN arayüz `en`i seçer). Diske YAZILMAZ.
     "eylemler": {},
+    # Y226 (BE 2a): mandalı launcher'ın BOŞTA kapanış durdurması kurdu (`kapanis_durdur`, kalıcı değil) — arayüz alarm bandı yerine tek
+    # nötr satır gösterir. Mandalın kendisi (START reddi, nesil) AYNEN; diske YAZILMAZ; Sıfırla ve sonraki her `mandalla` kaldırır.
+    "bosta_kapanis": False,
 }
 #: TD6 · K12: neden → (metin, monotonik an, sifirla_soyler) — bir SONRAKİ `mandalla(neden)` çağrısı alır (`eylem_birak`).
 _bekleyen_eylem: dict = {}
@@ -152,11 +155,14 @@ def eylem_birak(neden: str, metin: str, sifirla_soyler: bool = False, metinler: 
         _bekleyen_eylem[str(neden or "")[:80]] = (str(metin or "")[:500], time.monotonic(), bool(sifirla_soyler), _dil)
 
 
-def mandalla(neden: str = "") -> int:
-    """Acil durdurma: mandalı KUR ve nesli artır. Kilit dışında hiçbir şey beklemez (STOP'u geciktirmez)."""
+def mandalla(neden: str = "", bosta_kapanis: bool = False) -> int:
+    """Acil durdurma: mandalı KUR ve nesli artır. Kilit dışında hiçbir şey beklemez (STOP'u geciktirmez).
+
+    `bosta_kapanis` (Y226): YALNIZ launcher'ın boştaki kapanış durdurması — mandal aynen kurulur, arayüz alarm yerine nötr satır gösterir."""
     global _nesil
     with _kilit:
         _durum["aktif"] = True
+        _durum["bosta_kapanis"] = bool(bosta_kapanis)
         _durum["neden"] = str(neden or "")[:80]
         _bek = _bekleyen_eylem.pop(_durum["neden"], None)
         _taze = bool(_bek) and time.monotonic() - _bek[1] <= _BEKLEYEN_EYLEM_OMRU_S
@@ -189,6 +195,7 @@ def sifirla(kaynak: str = "") -> bool:
     with _kilit:
         onceki = bool(_durum["aktif"])
         _durum["aktif"] = False
+        _durum["bosta_kapanis"] = False
         _durum["onceki_oturum"] = False
         _durum["eylem"] = ""
         _durum["eylem_sifirla"] = False
@@ -240,6 +247,8 @@ def durum() -> dict:
             "eylemSifirlaSoyler": bool(_durum.get("eylem_sifirla")),
             # I18NI-A1.1: `eylem`in dil karşılıkları (eski istemci yok sayar; boş = karşılık yok → arayüz `eylem`e düşer).
             "eylemler": dict(_durum.get("eylemler") or {}),
+            # Y226 (yalnız-ek): boştaki kapanış durdurması — arayüz alarm bandı yerine nötr satır (eski istemci yok sayar → eski bant).
+            "bostaKapanis": bool(_durum.get("bosta_kapanis")),
         }
 
 
@@ -356,6 +365,7 @@ def kalicilik_kur(yol) -> dict:
             _durum["neden"] = f"{ONCEKI_OTURUM_NEDENI}:{onceki_neden}"[:80]
             _durum["zaman"] = time.time()
             _durum["onceki_oturum"] = True
+            _durum["bosta_kapanis"] = False
             _durum["eylem"] = ""
             _durum["eylem_sifirla"] = False
             _durum["eylemler"] = {}

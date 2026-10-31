@@ -256,6 +256,9 @@ export interface EstopTeyit {
   /** "estop" (E-stop yanıtının teyidi) | "stm_ack" (kartın sonradan gelen tüm-sıfır ACK'i). */
   kaynak?: string;
   zaman?: number;
+  /** Y227 (BE 2b): durdurma ANINDA bobin / seans var mıydı — false = boştaydı (teyitsiz düğme tutulmaz), null = okunamadı.
+   *  Eski backend göndermez → eski davranış (teyitsizken düğme kalır). */
+  calisiyordu?: boolean | null;
 }
 
 /**
@@ -278,6 +281,8 @@ export interface EstopMandali {
   eylem?: string;
   /** I18NI-A1.1: `eylem`in dil karşılıkları {tr, en} (WS yükü dil bilmez). Eski sunucu: yok → `eylem`. */
   eylemler?: Partial<Record<string, string>>;
+  /** Y226 (BE 2a): mandalı PC'deki uygulamanın BOŞTAKİ kapanışı kurdu — alarm bandı yerine tek nötr satır. Eski sunucu: yok. */
+  bostaKapanis?: boolean;
 }
 
 // ─── WebSocket live data ──────────────────────────────────────────────────────

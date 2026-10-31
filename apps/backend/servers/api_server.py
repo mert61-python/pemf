@@ -1828,6 +1828,30 @@ def _herhangi_bobin_calisiyor() -> bool:
         return True
 
 
+def _durdurma_aninda_calisiyor_mu(seans_aktifti: bool):
+    """Y227 (BE 2b): durdurma ANINDA bobin / seans var mıydı — True / False / None (okunamadı). Teyit iletisine ve yanıta yazılır;
+    istemci "ACİL DURDUR (teyitsiz)" düğmesini yalnız False DEĞİLKEN tutar. ⚠️ HİÇBİR ŞEY BEKLEMEZ (Ö.4-Y8): `_emergency_stop_all`
+    STOP'tan ÖNCE çağırır — canlı durum kilidi o an meşgulse beklemek yerine None (bilinmiyor → düğme kalır, güvenli taraf).
+    Ölçüt `_herhangi_bobin_calisiyor` ile aynı (HardwareController komut durumu VEYA canlı durum)."""
+    if seans_aktifti:
+        return True
+    try:
+        _hc_durum = getattr(state.hardware, "coils_state", None) or {}
+        if any(bool((v or {}).get("is_running")) for v in _hc_durum.values()):
+            return True
+        if not _live_state_lock.acquire(blocking=False):
+            return None
+        try:
+            return any(bool(c.get("running")) for c in _live_state["coils"].values())
+        finally:
+            _live_state_lock.release()
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Y227: durdurma anindaki bobin durumu okunamadi -> bilinmiyor", exc_info=True
+        )
+        return None
+
+
 def _y45_mandal_kur(neden: str) -> bool:
     """Y45 (sahip, 1-C §9 S1): kopma / watchdog anında bobin çalışıyorsa ACİL DURDUR MANDALI — STOP'tan ÖNCE, kapısız.
     Aktif STM seansında `_emergency_stop_all` zaten kurar; bu yol SEANSSIZ (elle) sürüşü kapsar. Boştayken KURULMAZ
@@ -7366,7 +7390,9 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
     # ÖNCE kurulur: arada kabul edilen bir START, bu E-stop'un STOP'undan sonra keep-alive ile sürerdi. Kurmak yalnız
     # bir bayrak + sayaç (beklemez, hiçbir şeye kapılanmaz); başarısız olsa bile E-stop'un geri kalanı KOŞAR (Ö.4-Y8).
     try:
-        estop_mandali.mandalla(reason)
+        estop_mandali.mandalla(
+            reason, bosta_kapanis=not kalici
+        )  # Y226: boştaki kapanış → arayüzde alarm yerine nötr satır
     except Exception:
         logging.getLogger(__name__).exception("E-stop: mandal kurulamadi (durdurma SURUYOR)")
 
@@ -7377,6 +7403,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
         _started_ep = _active_session.get("started_epoch")
         _start_mono_es = _active_session.get("start_mono")  # kayıt süresi DST-güvenli
         _active_session["is_active"] = False
+    # Y227: durdurma ANINDA bir şey çalışıyor muydu (teyit iletisine) — STOP'tan ÖNCE okunur, hiçbir şey BEKLEMEZ (Ö.4-Y8).
+    _calisiyordu = _durdurma_aninda_calisiyor_mu(_was_active)
     stm_stopped = False
     _stm_isaret = None
     _stm_stop_sirasi = None
@@ -7559,20 +7587,25 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
     # D1.E04 · İG-6.7: teyit durumu `running:false` sıfırlamasından AYRI yayınlanır (istemci teyitsizken durdurmayı tutar).
     try:
         live_state.estop_teyidi_yaz(
-            bool(_stm_ok and _esp_ok), "stm_red" if _stm_red else ("stm_yanitsiz" if _stm_yanitsiz else "estop")
+            bool(_stm_ok and _esp_ok),
+            "stm_red" if _stm_red else ("stm_yanitsiz" if _stm_yanitsiz else "estop"),
+            calisiyordu=_calisiyordu,
         )
     except Exception:
         logging.getLogger(__name__).exception("E-stop: teyit durumu yayinlanamadi (durdurma tamam)")
+    # Y226: boştaki kapanış durdurmasında (`kalici=False`) istemciye ALARM gitmez — günlüğe yine yazılır.
     if _stm_red:
         logging.getLogger(__name__).error("E-stop: kart STOP'u REDDETTI (STM_NACK, kabul yok) — teyit YOK")
         try:
-            _bildir(lambda d: "⛔ " + _stm32_kimlik.estop_kart_red_metni(d), "error")
+            if kalici:
+                _bildir(lambda d: "⛔ " + _stm32_kimlik.estop_kart_red_metni(d), "error")
         except Exception:
             logging.getLogger(__name__).exception("E-stop: kart reddi bildirilemedi (durdurma tamam)")
     elif _stm_yanitsiz:
         logging.getLogger(__name__).error("E-stop: kart STOP'a YANIT VERMEDI (tum-sifir STM_OK / NACK yok) — teyit YOK")
         try:
-            _bildir(lambda d: "⛔ " + _stm32_kimlik.estop_kart_yanitsiz_metni(d), "error")
+            if kalici:
+                _bildir(lambda d: "⛔ " + _stm32_kimlik.estop_kart_yanitsiz_metni(d), "error")
         except Exception:
             logging.getLogger(__name__).exception("E-stop: kart yanitsizligi bildirilemedi (durdurma tamam)")
     return {
@@ -7597,6 +7630,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
             if _stm_red
             else (_stm32_kimlik.estop_kart_yanitsiz_metni() if _stm_yanitsiz else None)
         ),
+        # Y227 (yalnız-ek): durdurma ANINDA bobin / seans var mıydı (True / False / None = okunamadı) — istemci teyitsiz düğmeyi buna göre tutar.
+        "calisiyordu": _calisiyordu,
     }
 
 

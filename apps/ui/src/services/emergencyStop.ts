@@ -33,6 +33,8 @@ interface EmergencyStopResponse {
    *  T2D-1: "yanitsiz" = STOP'a hiç yanıt yok → `confirmed:false`; ekranda genel "teyit edilemedi" uyarısı (fiziksel güç). */
   stmKartYaniti?: "kabul" | "red" | "yanitsiz" | null;
   stmRedMesaji?: string | null;
+  /** Y227 (BE 2b): durdurma ANINDA bobin / seans var mıydı (false = boştaydı, null = okunamadı). Eski backend göndermez. */
+  calisiyordu?: boolean | null;
 }
 interface CommandResponse {
   status?: string;
@@ -46,10 +48,25 @@ const BRIDGE_TIMEOUT_MS = 5000;
  * @returns `confirmed` — donanımın durduğu SUNUCU TARAFINDAN teyit edildi mi.
  *          `false` ise bobinler hâlâ çalışıyor OLABİLİR; çağıran mutlaka uyarmalıdır (`kartReddetti` → KART_RED metni).
  *          `kartReddetti` — TD3: teyit yok VE kart STOP'u NACK'ledi (backend `stmKartYaniti: "red"`).
+ *          `calisiyordu` — Y227: durdurma ANINDA bir şey çalışıyor muydu (yanıtlardan biri `true` ise true; okunamadıysa null;
+ *          hiçbir yanıt alanı taşımıyorsa undefined → çağıran eski davranışı korur). Yalnız GÖRÜNÜRLÜK — gönderimi etkilemez.
  */
-export async function performEmergencyStop(): Promise<{ confirmed: boolean; kartReddetti: boolean }> {
+export async function performEmergencyStop(): Promise<{
+  confirmed: boolean;
+  kartReddetti: boolean;
+  calisiyordu?: boolean | null;
+}> {
   let teyitli = false;
   let kartRed = false;
+  // Aynı basış İKİ E-stop isteği gönderir (1. ve 2. adım); ikincisi bobinleri zaten durmuş görür → herhangi biri "çalışıyordu" derse o.
+  let calisiyordu: boolean | null | undefined = undefined;
+  const calismaBilgisi = (r: EmergencyStopResponse | null) => {
+    if (!r || !("calisiyordu" in r)) return;
+    const c = r.calisiyordu;
+    if (c === true || calisiyordu === true) calisiyordu = true;
+    else if (c !== false || calisiyordu === null) calisiyordu = null;
+    else calisiyordu = false;
+  };
   // ⚠️ SGI-3.2 (A-63 · 1-C i3-F-5 · Ö.4-Y8 — gecikme de kapılanmadır): TD3'ten beri backend E-stop yanıtı, STOP porta yazıldıktan
   // SONRA kartın yanıtını ≤ 0,25 sn bekliyor (NACK'li / yanıtsız kartta tam süre). Adımlar sırayla `await` edildiğinde 2. adım ve
   // `stop_all_coils` bu RAPOR beklemesi kadar (×2) GEÇ gidiyordu. Yedek STOP'lar artık 1. adımın yanıtını BEKLEMEDEN gider;
@@ -61,6 +78,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean; kart
         "/hardware/emergency_stop", {}, null, { silent: true, durdurma: true }); // D3I-A1.3 · Y8: düz-HTTP kapısına bağlanmaz
       if (r?.confirmed === true) teyitli = true;
       if (r?.stmKartYaniti === "red") kartRed = true;
+      calismaBilgisi(r);
     } catch {
       /* aşağıdaki son çareye düş */
     }
@@ -80,6 +98,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean; kart
   const d1 = await adim1;
   if (d1?.confirmed === true) teyitli = true;
   if (d1?.stmKartYaniti === "red") kartRed = true;
+  calismaBilgisi(d1);
 
   // 2) Yedek: AYNI yetkili uç standart istemciyle (yukarıda, 1. adımla AYNI anda başladı). Birincil yol ham `fetch` + bridge
   // adresini kullanır; bu ise apiPost'un taban adresi/auth'u/timeout'u üzerinden gider (tünel
@@ -96,7 +115,7 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean; kart
     /* yut — teyit 1./2. adımdan gelir */
   }
   await stopAll;
-  return { confirmed: teyitli, kartReddetti: !teyitli && kartRed };
+  return { confirmed: teyitli, kartReddetti: !teyitli && kartRed, calisiyordu };
 }
 
 /** 1. adım: bridge ucu (tek atışta STM + ESP). ASLA throw etmez; gövde yoksa / okunamazsa null. */

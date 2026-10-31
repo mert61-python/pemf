@@ -71,10 +71,22 @@ export function mandalEylemi(neden?: string, eylem?: string, eylemler?: Partial<
 
 export function EstopMandalBandi() {
   const { t } = useTranslation();
-  const { snapshot } = useLiveData();
+  const { snapshot, connectionQuality } = useLiveData();
   const [mesgul, setMesgul] = useState(false);
   const mandal = snapshot?.estopMandali;
+  // Y228 (BE 2c · sahip): cihaza bağlı DEĞİLKEN bant gizli — son bilinen mandal ve çalışamayan "Sıfırla" gösterilmez; bağlanınca gerçek
+  // durum gelir (Karşılama / Giriş dahil: aynı bileşen). ACİL DURDUR bu kuralın DIŞINDA (kayan düğme bağlantıdan bağımsız kalır).
+  if (connectionQuality === "offline") return null;
   if (!mandal?.aktif) return null;
+  // Y226 (BE 2a · sahip): PC'deki uygulama BOŞTAYKEN kapatıldı — mandal ve STOP'lar aynen, ama alarm yerine tek NÖTR satır (bağlantı birazdan
+  // kopar; kopunca aynı satırı kabuk söyler).
+  if (mandal.bostaKapanis === true) {
+    return (
+      <View style={styles.notr} testID="pc-kapandi-satiri">
+        <Text style={styles.notrMetin}>{t("guvenlik.mandal.pcKapandi")}</Text>
+      </View>
+    );
+  }
   const eylem = mandalEylemi(mandal.neden, mandal.eylem, mandal.eylemler);
   // Eylem metni "Sıfırla" adımını ZATEN söylüyorsa (duty reddi, Y74) bant onu ikinci kez yazmaz.
   // 13 §2-d: sunucu METNİNE göre dallanma YOK — makine-okur alan (`eylemSifirlaSoyler`) önce; alan yoksa (eski sunucu) eski metin eşleşmesi.
@@ -150,4 +162,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dugmeMetni: { color: colors.danger, fontWeight: "800", fontSize: rf(13) },
+  notr: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, margin: spacing.sm },
+  notrMetin: { color: colors.textMuted, fontSize: rf(12), textAlign: "center" },
 });

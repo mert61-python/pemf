@@ -85,7 +85,9 @@ export function GlobalEmergencyStop({
   useEffect(() => {
     if (backendTeyitli) setYerelTeyitsiz(false);
   }, [backendTeyitli, snapshot.estopTeyit?.zaman]);
-  const teyitsiz = snapshot.estopTeyit?.teyitli === false || yerelTeyitsiz;
+  // Y227 (BE 2b · sahip): teyitsiz durdurma düğmeyi YALNIZ durdurma ANINDA bobin / seans varsa ya da durum okunamadıysa tutar
+  // (`calisiyordu !== false`; alan yoksa = eski backend → eski davranış). Boştayken verilen durdurmanın teyitsizliği düğmeyi tutmaz.
+  const teyitsiz = (snapshot.estopTeyit?.teyitli === false && snapshot.estopTeyit?.calisiyordu !== false) || yerelTeyitsiz;
 
   if (gizle) return null;
   if (!running && !active && !belirsiz && !teyitsiz) return null;
@@ -95,9 +97,9 @@ export function GlobalEmergencyStop({
     // görsel geri bildirim içindir, dokunuşu engellemez.
     setBusy(true);
     emitToast(kritikMetin("guvenlik.acilDurdur.gonderiliyor"), "info");
-    const { confirmed, kartReddetti } = await performEmergencyStop();
+    const { confirmed, kartReddetti, calisiyordu } = await performEmergencyStop();
     setBusy(false);
-    setYerelTeyitsiz(!confirmed);
+    setYerelTeyitsiz(!confirmed && calisiyordu !== false); // Y227: kendi basışında da aynı kural
     if (confirmed) emitToast(kritikMetin("guvenlik.acilDurdur.durduruldu"), "success");
     else {
       // TD3: kart STOP'u reddettiyse eylem: gücü kes / USB'yi çıkar.
