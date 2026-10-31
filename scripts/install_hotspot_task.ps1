@@ -28,6 +28,13 @@
 # sistem principal'i YOK). setup_services.ps1'deki surum elevated kurulumda
 # kosuyordu; burada gerek yok, cunku WinRT yolu yukseltilmeden calisiyor.
 #
+# ⚠️⚠️ Y231 (2026-10-31, sahip makinesinde OLCULDU): oturum acilisi tetikleyicisi
+# KULLANICISIZ (`-AtLogOn` tek basina = "herhangi bir kullanici") ise Gorev
+# Zamanlayici YONETICI ister → standart hesapta her acilista "Erisim engellendi",
+# gorev HIC kurulmuyordu (hotspot.log). Windows PEMF-Gateway'i bagli cihaz yokken
+# ~4 dk'da kapatinca geri acan kalmiyordu. Tetikleyici BU kullaniciya baglanir
+# (`-User DOMAIN\kullanici`) → ayni kayit yoneticisiz gecer.
+#
 # Kullanim:
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File install_hotspot_task.ps1
 #   ... -Ps1Yolu "C:\...\start_hotspot.ps1"   (varsayilan: bu betigin yani)
@@ -101,7 +108,7 @@ Set-Content -LiteralPath $VbsYolu -Value $vbs -Encoding ASCII
 # ── Gorevi kur (idempotent) ───────────────────────────────────────────────────
 try {
     $act = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$VbsYolu`""
-    $trg = New-ScheduledTaskTrigger -AtLogOn
+    $trg = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
     # Tekrar araligi ayri bir tetikleyiciden kopyalanir — New-ScheduledTaskTrigger
     # -AtLogOn dogrudan -RepetitionInterval kabul etmez.
     $trg.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 3)).Repetition

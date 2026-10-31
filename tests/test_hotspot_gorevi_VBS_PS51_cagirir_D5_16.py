@@ -47,7 +47,7 @@ function global:Register-ScheduledTask {
 }
 function global:Unregister-ScheduledTask { param($TaskName, [switch]$Confirm) Add-Content -LiteralPath $Kayit -Value '{"cagri":"Unregister"}' }
 function global:New-ScheduledTaskAction { param($Execute, $Argument) [pscustomobject]@{ Execute = $Execute; Argument = $Argument } }
-function global:New-ScheduledTaskTrigger { param([switch]$AtLogOn, [switch]$Once, $At, $RepetitionInterval) [pscustomobject]@{ Repetition = $RepetitionInterval } }
+function global:New-ScheduledTaskTrigger { param([switch]$AtLogOn, [switch]$Once, $At, $RepetitionInterval, $User) [pscustomobject]@{ Repetition = $RepetitionInterval } }
 function global:New-ScheduledTaskSettingsSet { param([switch]$AllowStartIfOnBatteries, [switch]$DontStopIfGoingOnBatteries, $ExecutionTimeLimit) [pscustomobject]@{ Hidden = $false } }
 foreach ($ad in 'Register-ScheduledTask', 'Unregister-ScheduledTask', 'New-ScheduledTaskAction', 'New-ScheduledTaskTrigger', 'New-ScheduledTaskSettingsSet') {
   if ((Get-Command $ad).CommandType -ne 'Function') { Write-Output "GOLGE DEVREDE DEGIL: $ad"; exit 99 }

@@ -102,7 +102,8 @@ export function GatewayStatusPanel() {
       {/* ⚠️ KABLOSUZ BAĞLANTI (2026-08-10). `hotspotActive` zaten çekiliyordu ama HİÇ
           GÖSTERİLMİYORDU — yani PEMF-Gateway kapalıyken 6-8 numaralı bobinler sessizce
           bağlanamıyor, operatör sebebini hiçbir yerden göremiyordu. Backend hotspot'u açılışta
-          otomatik başlatır (backend_service._start_hotspot_safe); bu satır sonucu görünür kılar. */}
+          otomatik başlatır (backend_service._start_hotspot_safe); bu satır sonucu görünür kılar.
+          Y231 (BE 3b): adı ne olduğunu söyler — "Cihaz Wi-Fi'si (PEMF-Gateway)" (telefonların bağlandığı PC hotspot'u). */}
       <GatewayRow
         label={t("ayarlar.sistemDurumu.kablosuzBaglanti")}
         state={stale ? "unknown" : gwInfo.hotspotActive ? "online" : "offline"}

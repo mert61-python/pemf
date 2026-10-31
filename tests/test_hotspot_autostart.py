@@ -202,7 +202,8 @@ def test_KRITIK_arayuzde_KABLOSUZ_BAGLANTI_satiri_VAR():
     import i18n_yardimci as iy
 
     anahtar = "ayarlar.sistemDurumu.kablosuzBaglanti"
-    iy.metin_kapisi("apps/ui/src/components/domain/GatewayStatusPanel.tsx", anahtar, "Kablosuz Bağlantı")
+    # Y231 (BE 3b · sahip 31.10): satır adı ne olduğunu söyler — "Kablosuz Bağlantı" → "Cihaz Wi-Fi'si (PEMF-Gateway)".
+    iy.metin_kapisi("apps/ui/src/components/domain/GatewayStatusPanel.tsx", anahtar, "Cihaz Wi-Fi'si (PEMF-Gateway)")
     assert "gwInfo.hotspotActive" in s, "satir hotspotActive'e BAGLI degil (olu gosterge)"
     # Bağlantı yokken bayat "Aktif" göstermemeli (panelin genel kuralı).
     kesit = s[s.index(anahtar) - 200 : s.index(anahtar) + 300]
