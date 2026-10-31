@@ -112,10 +112,15 @@ try {
     # Tekrar araligi ayri bir tetikleyiciden kopyalanir — New-ScheduledTaskTrigger
     # -AtLogOn dogrudan -RepetitionInterval kabul etmez.
     $trg.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 3)).Repetition
+    # ⚠️ BE 3b-2 (2026-10-31, GERCEK kurulumda OLCULDU): yalniz oturum acilisi tetikleyicisi olan gorevin NextRunTime'i BOS —
+    # tekrarlar ancak bir SONRAKI oturum acilisinda baslar; uyku / uyanma ile kullanilan makinede gorev HIC kosmaz. Launcher
+    # gorevi her uygulama acilisinda yeniden kurdugu icin kurulum anindan baslayan ikinci (zaman) tetikleyici gorevi o andan
+    # itibaren her 3 dk kosturur. Kullanici gorevinde zaman tetikleyicisi yonetici GEREKTIRMEZ.
+    $trgSimdi = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 3)
     $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
     $set.Hidden = $true
-    Register-ScheduledTask -TaskName $GOREV -Action $act -Trigger $trg -Settings $set -Force -ErrorAction Stop | Out-Null
-    Log "gorev kuruldu/guncellendi → $Ps1Yolu (logon + her 3 dk, penceresiz, kullanici kapsami)"
+    Register-ScheduledTask -TaskName $GOREV -Action $act -Trigger @($trg, $trgSimdi) -Settings $set -Force -ErrorAction Stop | Out-Null
+    Log "gorev kuruldu/guncellendi → $Ps1Yolu (logon + simdiden itibaren her 3 dk, penceresiz, kullanici kapsami)"
     exit 0
 } catch {
     Log "HATA: gorev kurulamadi: $($_.Exception.Message)"

@@ -7,6 +7,9 @@ açılışına bağlı tetikleyici) kaydeder.
 Görev Zamanlayıcı yönetici ister → her açılışta `hotspot.log`: "gorev kurulamadi: Erişim engellendi". Görev hiç olmadığı için Windows
 PEMF-Gateway'i bağlı cihaz yokken ~4 dk'da kapatınca geri açan YOKTU ("Kablosuz Bağlantı: Kapalı" doğruydu). `-User <USERDOMAIN\\USERNAME>`
 ile aynı kayıt yöneticisiz geçiyor (koordinatör ölçtü, deneme görevi silindi).
+⚠️ BE 3b-2 (31.10, GERÇEK kurulumda ölçüldü): yalnız oturum açılışı tetikleyicisi olan görevin `NextRunTime`'ı BOŞ — tekrarlar ancak bir
+SONRAKİ oturum açılışında başlar; uyku / uyanma ile kullanılan makinede görev hiç koşmaz. Bu yüzden ikinci tetikleyici: kurulum anından
+(başlatıcı görevi her uygulama açılışında yeniden kurar) başlayan, 3 dk'da bir tekrarlayan zaman tetikleyicisi (kullanıcı görevi — yönetici yok).
 
 ÖLÇÜM: betik GERÇEKTEN pwsh'ta koşar; görev cmdlet'leri GÖLGE (gerçek Görev Zamanlayıcı'ya ASLA gidilmez — gölge çözümü betikten ÖNCE
 denetlenir, değilse 99). Kaydedilen: oturum açılışı tetikleyicisinin `-User` değeri; `Register-ScheduledTask`'a yönetici ilkesi
@@ -41,7 +44,7 @@ function global:Register-ScheduledTask {
   Add-Content -LiteralPath $Kayit -Value (ConvertTo-Json -Compress @{
     cagri = 'Register'; ad = $TaskName; exe = $Action.Execute
     principal = [bool]$Principal; user = [string]$User; runlevel = [string]$RunLevel
-    tetik_user = [string]$Trigger.User; tetik_logon = [bool]$Trigger.AtLogOn; tekrar = [string]$Trigger.Repetition
+    tetikler = @($Trigger | ForEach-Object { @{ logon = [bool]$_.AtLogOn; once = [bool]$_.Once; user = [string]$_.User; at_fark_sn = $_.AtFarkSn; tekrar_dk = $_.Repetition.Dk } })
   })
   [pscustomobject]@{ TaskName = $TaskName }
 }
@@ -49,7 +52,9 @@ function global:Unregister-ScheduledTask { param($TaskName, [switch]$Confirm) Ad
 function global:New-ScheduledTaskAction { param($Execute, $Argument) [pscustomobject]@{ Execute = $Execute; Argument = $Argument } }
 function global:New-ScheduledTaskTrigger {
   param([switch]$AtLogOn, [switch]$Once, $At, $RepetitionInterval, $User)
-  [pscustomobject]@{ AtLogOn = [bool]$AtLogOn; User = $User; Repetition = $RepetitionInterval }
+  $fark = if ($At) { [math]::Round((([datetime]$At) - (Get-Date)).TotalSeconds) } else { $null }
+  $dk = if ($RepetitionInterval) { ([timespan]$RepetitionInterval).TotalMinutes } else { $null }
+  [pscustomobject]@{ AtLogOn = [bool]$AtLogOn; Once = [bool]$Once; User = $User; AtFarkSn = $fark; Repetition = [pscustomobject]@{ Dk = $dk } }
 }
 function global:New-ScheduledTaskSettingsSet { param([switch]$AllowStartIfOnBatteries, [switch]$DontStopIfGoingOnBatteries, $ExecutionTimeLimit) [pscustomobject]@{ Hidden = $false } }
 function global:New-ScheduledTaskPrincipal { param($UserId, $LogonType, $RunLevel) Add-Content -LiteralPath $Kayit -Value '{"cagri":"Principal"}'; [pscustomobject]@{ UserId = $UserId } }
@@ -103,12 +108,25 @@ def test_KRITIK_oturum_acilisi_tetikleyicisi_BU_KULLANICIYA_bagli_yoneticisiz_ku
     assert r.returncode == 0, r.stdout + r.stderr
     kayit = [c for c in cagrilar if c.get("cagri") == "Register"]
     assert len(kayit) == 1, cagrilar
-    k = kayit[0]
-    assert k["tetik_logon"] is True, k
-    assert k["tetik_user"] == r"KLINIK-PC\hekim", (
-        f"oturum açılışı tetikleyicisi kullanıcısız ({k['tetik_user']!r}) — 'herhangi bir kullanıcı' tetikleyicisi YÖNETİCİ ister, "
+    logon = [t for t in kayit[0]["tetikler"] if t["logon"]]
+    assert len(logon) == 1, kayit[0]
+    assert logon[0]["user"] == r"KLINIK-PC\hekim", (
+        f"oturum açılışı tetikleyicisi kullanıcısız ({logon[0]['user']!r}) — 'herhangi bir kullanıcı' tetikleyicisi YÖNETİCİ ister, "
         "standart hesapta 'Erişim engellendi' ile görev HİÇ kurulmaz (Y231, hotspot.log)"
     )
+
+
+def test_KRITIK_BE3b2_oturum_ACIKKEN_de_kurulumdan_itibaren_3_dk_da_bir_kosar(tmp_path):
+    """Yalnız oturum açılışı tetikleyicisi → `NextRunTime` boş (gerçek kurulumda ölçüldü): uyku / uyanmayla kullanılan makinede görev HİÇ koşmaz."""
+    _r, cagrilar, _g = _kos(tmp_path)
+    k = [c for c in cagrilar if c.get("cagri") == "Register"][0]
+    zaman = [t for t in k["tetikler"] if t["once"]]
+    assert len(zaman) == 1, (
+        f"kurulum anından başlayan zaman tetikleyicisi YOK — görev ancak bir sonraki oturum açılışında koşar: {k}"
+    )
+    assert zaman[0]["at_fark_sn"] is not None and -60 <= zaman[0]["at_fark_sn"] <= 120, zaman[0]
+    assert zaman[0]["tekrar_dk"] == 3, zaman[0]
+    assert [t["tekrar_dk"] for t in k["tetikler"] if t["logon"]] == [3], k
 
 
 def test_KRITIK_yonetici_ilkesi_YOK_tekrar_araligi_ve_gizlilik_AYNEN(tmp_path):
