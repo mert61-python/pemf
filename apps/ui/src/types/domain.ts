@@ -209,6 +209,8 @@ export interface EFieldLive {
 export interface DashboardSnapshot {
   gateway: ConnectionState;
   mqtt: ConnectionState;
+  /** Y230 (BE 3): ESP alt sistemi açık mı (backend `esp_etkin()`); yoksa (eski backend) KAPALI — `espEtkinMi`. */
+  espEtkin?: boolean;
   /**
    * İNTERNET — CİHAZ AĞINDAN AYRI. Bu ürün internetsiz ÇALIŞIR; internet yalnız uzaktan
    * erişim içindir. ⚠️ Arayüz bunu NÖTR bilgi olarak gösterir, arıza rengiyle DEĞİL.

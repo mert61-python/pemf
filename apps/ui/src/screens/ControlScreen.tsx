@@ -32,7 +32,7 @@ import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
-import { gorunurBobinler, espSlotuGorunur, STM_BOBIN_SAYISI, stmBobiniMi, tumSlotIdleri } from "@/services/bobinGorunurlugu";
+import { gorunurBobinler, espEtkinMi, espSlotuGorunur, STM_BOBIN_SAYISI, stmBobiniMi, tumSlotIdleri } from "@/services/bobinGorunurlugu";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 import { akimOlcumuAcik } from "@/utils/olculenAlan";
 import { hedefEtiketi } from "@/utils/seansDegerEtiketi";
@@ -216,7 +216,11 @@ export function ControlScreen() {
     const coilsById = new Map((snapshot.coils ?? []).map((c) => [c.id, c]));
     const effective = requested.filter((id) => isCoilConnected(coilsById.get(id) ?? { id }));
     if (effective.length === 0) {
-      platformAlert(t("kontrol.ekran.baglantiYok"), t("kontrol.ekran.baglantiYokGovde"));
+      // Y230 (BE 3): ESP kapalıyken metin "WiFi" (ESP) demez — yalnız STM.
+      platformAlert(
+        t("kontrol.ekran.baglantiYok"),
+        espEtkinMi(snapshot) ? t("kontrol.ekran.baglantiYokGovde") : t("kontrol.ekran.baglantiYokGovdeStm")
+      );
       return null;
     }
     if (effective.length < requested.length) {

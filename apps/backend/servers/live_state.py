@@ -693,6 +693,9 @@ def _build_ws_snapshot() -> dict:
             # CH4 · Y154 (yalnız-ek): akım sensörü bayrağı (`utils.akim_olcumu`, varsayılan KAPALI) — arayüz akım satırlarını YALNIZ
             # `true` iken çizer (alanı göndermeyen eski backend → gizli).
             "akimOlcumu": akim_olcumu_acik(),
+            # Y230 (BE 3 · yalnız-ek): ESP alt sistemi açık mı — arayüzün ESP / MQTT yüzeylerini çizmesinin TEK kaynağı (alanı göndermeyen
+            # eski backend → gizli; ESP bugün sahada kapalı).
+            "espEtkin": esp_etkin(),
         }
 
 

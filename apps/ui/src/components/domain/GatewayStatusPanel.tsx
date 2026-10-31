@@ -9,6 +9,7 @@ import { colors, spacing, typography, rf, rs, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import type { ConnectionState } from "@/types/domain";
+import { espEtkinMi } from "@/services/bobinGorunurlugu";
 import { useTranslation } from "react-i18next";
 
 interface GatewayInfo {
@@ -63,11 +64,9 @@ export function GatewayStatusPanel() {
   const stale = !wsConnected;
   const gated = (s: ConnectionState | undefined, dflt: ConnectionState): RowState =>
     stale ? "unknown" : (s ?? dflt);
-  // T-e (Tezgâh-2 #8): ESP BİLİNÇLİ kapalıyken (Ö.4-Y7) cihaz köprüsünün çalışmaması arıza değildir → "Devre dışı" (gri), kırmızı DEĞİL.
-  // Kaynak: backend'in `espEtkin` alanı; eski backend'de canlı durumun `mqtt: devre_disi`si (yalnız ESP kapalıyken).
-  const espKapali = gwInfo.espEtkin === false || snapshot.mqtt === "devre_disi";
-  const kopru = gated(snapshot.gateway, "offline");
-  const kopruDurumu: RowState = espKapali && kopru !== "online" && kopru !== "unknown" ? "devre_disi" : kopru;
+  // Y230 (BE 3 · sahip): ESP KAPALIYKEN "Sistem Bağlantısı" (MQTT) ve "Cihaz Köprüsü" satırları HİÇ çizilmez (T-e'nin "Devre dışı"
+  // gösterimini aşar). Tek kaynak backend'in ESP-etkin bilgisi (`espEtkinMi`); ESP açıkken satırlar eski davranışla.
+  const espEtkin = espEtkinMi(snapshot);
   // İnternet: bağlantı yok / hiç yoklama alınmadı / servis ölçmedi → "Bilinmiyor" (eskiden "Kapalı" kırmızı — ölçülmemiş).
   const internetDurumu: RowState =
     stale || !gwAlindi || gwInfo.internetBilinmiyor ? "unknown" : gwInfo.networkOnline ? "online" : "offline";
@@ -87,13 +86,15 @@ export function GatewayStatusPanel() {
       </View>
 
       <GatewayRow label={t("ayarlar.sistemDurumu.uygulamaBaglantisi")} state={wsConnected ? "online" : "offline"} />
-      <GatewayRow label={t("ayarlar.sistemDurumu.sistemBaglantisi")} state={gated(snapshot.mqtt, "offline")} />
-      <GatewayRow
-        label={t("ayarlar.sistemDurumu.cihazKoprusu")}
-        state={kopruDurumu}
-        devreDisiMetni={t("ayarlar.sistemDurumu.devreDisi")}
-        testID="sistem-durumu-kopru"
-      />
+      {espEtkin && <GatewayRow label={t("ayarlar.sistemDurumu.sistemBaglantisi")} state={gated(snapshot.mqtt, "offline")} />}
+      {espEtkin && (
+        <GatewayRow
+          label={t("ayarlar.sistemDurumu.cihazKoprusu")}
+          state={gated(snapshot.gateway, "offline")}
+          devreDisiMetni={t("ayarlar.sistemDurumu.devreDisi")}
+          testID="sistem-durumu-kopru"
+        />
+      )}
       <GatewayRow label={t("ayarlar.sistemDurumu.donanimSurucusu")} state={gated(snapshot.stm, "warning")} />
       {/* gwInfo ayrı bir poll'den gelir; başarısız poll SON İYİ değeri korur (bilinçli) → bağlantı
           yokken o değeri de "Bilinmiyor" olarak göster, yeşil "Aktif" bırakma. */}

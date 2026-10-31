@@ -39,6 +39,7 @@
     "aiProKamera": "AI Pro — Camera Closed-Loop",
     "baglantiYok": "No connection",
     "baglantiYokGovde": "There is no active connection for the selected coils (STM32/WiFi offline).",
+    "baglantiYokGovdeStm": "There is no active connection for the selected coils (STM32 offline).",
     "bazilariCevrimdisi": "Some coils are offline",
     "bobinSecimEtiketi": "Coil {{id}}, {{secim}}, {{baglanti}}",
     "bobinSecimi": "Coil Selection",

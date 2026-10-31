@@ -4,6 +4,8 @@
  *
  * ÖLÇÜLEN KUSUR (Tezgâh-2): ağ izleme servisi yokken İnternet "Kapalı" (kırmızı), ESP kapalıyken Cihaz Köprüsü "Kapalı" (kırmızı) —
  * ölçülmemiş / bilinçli kapalı şey arıza gibi gösteriliyordu. Testler ÇİZİLEN değeri ölçer.
+ * ⚠️ Y230 (BE 3 · sahip 31.10, T-e'yi AŞAR): ESP kapalıyken "Cihaz Köprüsü" ve "Sistem Bağlantısı" satırları HİÇ çizilmez ("Devre dışı" da yok);
+ * tek kaynak `snapshot.espEtkin` (alan yok = eski backend → gizli). ESP açıkken satırlar eski davranışla.
  */
 import { act, render, waitFor } from "@testing-library/react-native";
 import i18n from "i18next";
@@ -60,36 +62,40 @@ test("KARSIT: olculmus internet yok → 'Kapalı', var → 'Aktif'", async () =>
   await waitFor(() => expect(ekran2.getByTestId("sistem-durumu-internet").props.children).toBe("Aktif"));
 });
 
-test("KRITIK: ESP bilincli kapaliyken Cihaz Koprusu 'Devre dışı' (kirmizi 'Kapalı' DEGIL)", async () => {
+test("KRITIK Y230: ESP kapaliyken Cihaz Koprusu satiri HIC cizilmez ('Devre dışı' da yok)", async () => {
+  mockCanli = { snapshot: { mqtt: "devre_disi", gateway: "offline", stm: "online", espEtkin: false }, wsConnected: true };
   mockGet.mockResolvedValue(durum({ espEtkin: false }));
   const ekran = render(<GatewayStatusPanel />);
   await waitFor(() => expect(mockGet).toHaveBeenCalled());
-  await waitFor(() => expect(ekran.getByTestId("sistem-durumu-kopru").props.children).toBe("Devre dışı"));
+  expect(ekran.queryByTestId("sistem-durumu-kopru")).toBeNull();
+  expect(ekran.queryByText("Devre dışı")).toBeNull();
 });
 
-test("KRITIK: eski backend (espEtkin yok) — canli durum mqtt=devre_disi da ESP kapali demektir", async () => {
+test("KRITIK Y230: eski backend (espEtkin yok) — satir gizli (ESP sahada sokulu)", async () => {
   mockCanli = { snapshot: { mqtt: "devre_disi", gateway: "offline", stm: "online" }, wsConnected: true };
   mockGet.mockResolvedValue(durum());
   const ekran = render(<GatewayStatusPanel />);
-  expect(await deger(ekran, "sistem-durumu-kopru")).toBe("Devre dışı");
+  await waitFor(() => expect(mockGet).toHaveBeenCalled());
+  expect(ekran.queryByTestId("sistem-durumu-kopru")).toBeNull();
 });
 
 test("KARSIT: ESP etkinken kopru kapaliysa 'Kapalı'; acikken 'Aktif'", async () => {
+  mockCanli = { snapshot: { mqtt: "online", gateway: "offline", stm: "online", espEtkin: true }, wsConnected: true };
   mockGet.mockResolvedValue(durum({ espEtkin: true }));
   const ekran = render(<GatewayStatusPanel />);
   await waitFor(() => expect(mockGet).toHaveBeenCalled());
   await waitFor(() => expect(ekran.getByTestId("sistem-durumu-kopru").props.children).toBe("Kapalı"));
-  mockCanli = { snapshot: { mqtt: "devre_disi", gateway: "online", stm: "online" }, wsConnected: true };
+  mockCanli = { snapshot: { mqtt: "online", gateway: "online", stm: "online", espEtkin: true }, wsConnected: true };
   const ekran2 = render(<GatewayStatusPanel />);
   expect(await deger(ekran2, "sistem-durumu-kopru")).toBe("Aktif");
 });
 
-test("EN: 'Unknown' / 'Disabled'", async () => {
+test("EN: 'Unknown'; ESP kapaliyken kopru satiri yok", async () => {
   await act(async () => {
     await i18n.changeLanguage("en");
   });
   mockGet.mockResolvedValue(durum({ espEtkin: false, internetBilinmiyor: true }));
   const ekran = render(<GatewayStatusPanel />);
-  await waitFor(() => expect(ekran.getByTestId("sistem-durumu-kopru").props.children).toBe("Disabled"));
-  expect(ekran.getByTestId("sistem-durumu-internet").props.children).toBe("Unknown");
+  await waitFor(() => expect(ekran.getByTestId("sistem-durumu-internet").props.children).toBe("Unknown"));
+  expect(ekran.queryByTestId("sistem-durumu-kopru")).toBeNull();
 });

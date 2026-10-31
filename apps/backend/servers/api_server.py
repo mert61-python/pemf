@@ -2205,7 +2205,11 @@ def _handle_backend_event(event) -> None:
         with _live_state_lock:
             _live_state["gateway"] = gateway_state
             _live_state["internet"] = "online" if internet_var else "offline"
-            if data.get("mqtt_broker_reachable"):
+            # Y230 (BE 3): ESP KAPALIYKEN yerel broker erişilebilirliği (mosquitto ESP'den bağımsız koşar) ESP / MQTT durumu DEĞİLDİR —
+            # eskiden burada kapısız "online" yazılıyor, Ana Ekran "ESP / MQTT" rozeti yeşil yanıyordu (`mqtt.broker.status` işleyicisiyle çelişki).
+            if not live_state.esp_etkin():
+                _live_state["mqtt"] = "devre_disi"
+            elif data.get("mqtt_broker_reachable"):
                 _live_state["mqtt"] = "online"
             mqtt_state = _live_state["mqtt"]
             internet_state = _live_state["internet"]
@@ -2227,6 +2231,12 @@ def _handle_backend_event(event) -> None:
         )
         return
     if event.event_type in {"mqtt.broker.error", "discovery.error"}:
+        # Y230 (BE 3): ESP kapalıyken broker hatası operatöre gösterilmez (kurulu olmayan alt sistem) — günlükte kalır.
+        if event.event_type == "mqtt.broker.error" and not live_state.esp_etkin():
+            logging.getLogger(__name__).info(
+                "MQTT broker hatasi (ESP kapali, bildirim yok): %s", data.get("message", "")
+            )
+            return
         _push_notification(str(data.get("message", event.event_type)), "warning")
 
 

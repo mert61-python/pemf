@@ -39,6 +39,7 @@
     "aiProKamera": "AI Pro — Kamera Kapalı-Döngü",
     "baglantiYok": "Bağlantı yok",
     "baglantiYokGovde": "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı).",
+    "baglantiYokGovdeStm": "Seçili bobinler için aktif bağlantı yok (STM32 çevrimdışı).",
     "bazilariCevrimdisi": "Bazı bobinler çevrimdışı",
     "bobinSecimEtiketi": "Bobin {{id}}, {{secim}}, {{baglanti}}",
     "bobinSecimi": "Bobin Seçimi",

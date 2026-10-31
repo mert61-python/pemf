@@ -12,7 +12,7 @@ import { GatewayStatusPanel } from "@/components/domain/GatewayStatusPanel";
 import { colors, spacing, typography, rf, rs, layoutMax, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
-import { gorunurBobinler } from "@/services/bobinGorunurlugu";
+import { espEtkinMi, gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { canliYogunluk, YOGUNLUK_ETIKETI } from "@/utils/yogunlukGosterimi";
 import { modEtiketi } from "@/utils/seansDegerEtiketi";
 import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
@@ -60,7 +60,9 @@ export function DashboardScreen() {
         {/* ⚠️ "Sistem" (MQTT) rozeti YALNIZ ESP kuruluysa çizilir. ESP kartları söküldüğünde
             (sahip, 2026-09-11) broker çalışmaz ve rozet kalıcı sarı/kırmızı kalırdı — kurulu
             olmayan bir alt sistem için alarm, gerçek alarmları görünmez yapar. */}
-        {snapshot.mqtt !== "devre_disi" && <StatusPill label="ESP / MQTT" state={snapshot.mqtt} />}
+        {/* Y230 (BE 3): tek kaynak backend'in ESP-etkin bilgisi — eskiden `mqtt !== devre_disi`ydi ve backend broker erişilebilir
+            olunca ESP kapısız "online" yazdığı için rozet ESP kapalıyken YEŞİL yanıyordu (31.10 ölçüldü). */}
+        {espEtkinMi(snapshot) && <StatusPill label="ESP / MQTT" state={snapshot.mqtt} />}
         {/* TD1: kart bağlı ama yazılımı uyumsuzsa "Donanım" YEŞİL OLMAZ (tezgâh: uyumsuz kartta yeşildi). */}
         <StatusPill label={t("ana.donanim")} state={donanimRozetDurumu(snapshot)} />
         {/* İNTERNET — NÖTR BİLGİ, ARIZA DEĞİL. Bu cihaz internetsiz tam çalışır; internet

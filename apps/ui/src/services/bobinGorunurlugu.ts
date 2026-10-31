@@ -52,6 +52,15 @@ export function gorunurBobinler<T extends GorunurlukGirdisi>(liste: readonly T[]
   return liste.filter((c) => c.id <= STM_BOBIN_SAYISI || Boolean(c.connected) || Boolean(c.running));
 }
 
+/**
+ * Y230 (BE 3 · sahip): ESP alt sistemi AÇIK mı — ESP / MQTT yüzeylerinin (Ana Ekran rozeti, Sistem Durumu satırları, ESP metinleri) TEK
+ * kaynağı backend'in `esp_etkin()`i (`snapshot.espEtkin`). Alan yoksa (eski backend) KAPALI sayılır: ESP sahada sökülü (2026-09-11).
+ * ⚠️ Çalışır görünen bir ESP yuvası bundan BAĞIMSIZ çizilmeye devam eder (`gorunurBobinler`) — durdurma görünürlüğü kapılanmaz.
+ */
+export function espEtkinMi(snapshot?: { espEtkin?: boolean } | null): boolean {
+  return snapshot?.espEtkin === true;
+}
+
 /** Ekranda ESP slotu da var mı (başlık "1–8" mi "1–7" mi yazacak). */
 export function espSlotuGorunur(liste: readonly GorunurlukGirdisi[]): boolean {
   return gorunurBobinler(liste).some((c) => c.id > STM_BOBIN_SAYISI);
