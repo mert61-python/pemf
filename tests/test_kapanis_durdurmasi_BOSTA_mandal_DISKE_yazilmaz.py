@@ -86,7 +86,9 @@ def ortam(monkeypatch, tmp_path):
         def coils_state(self):
             if calisan["bobin"] == "okunamaz":
                 raise RuntimeError("durum okunamadi")
-            return {b: {"is_running": bool(calisan["bobin"]) and b == TUM_STM[0]} for b in TUM_STM}
+            # ⚠️ Y235 (S-BE.4): `TUM_STM` bir KÜME — eskiden `TUM_STM[0]` istisna atıyor, "bobin" kolu ürünün "okunamadı → ÇALIŞIYOR"
+            # yolundan yeşil oluyordu (doğru sonuç, yanlış neden; bobin algısını bozan bir mutant yaşardı).
+            return {b: {"is_running": bool(calisan["bobin"]) and b == min(TUM_STM)} for b in TUM_STM}
 
         def stop_all_coils(self):
             olaylar.append(("stop", "stm"))
@@ -169,6 +171,8 @@ def test_KRITIK_bobin_calisirken_ya_da_seans_surerken_kapanis_mandali_DISKE_yaza
     r = _kapanis(o)
     assert r.status_code == 200, r.text
     assert r.json()["mandalKalici"] is True, r.json()
+    # Y235: kol HANGİ yoldan geçti — "bobin" gerçek bobin durumundan (True), "okunamaz" fail-safe yoldan (None) ayrışır.
+    assert r.json()["calisiyordu"] is {"bobin": True, "seans": True, "okunamaz": None}[hal], r.json()
     assert "stm" in _stoplar(o)
     assert _bekle(lambda: _dosya_aktif(o) is True), f"{hal}: gerçek kesinti mandalı diske YAZILMADI"
     assert any(t == "bildirim" for t, _ in o.olaylar), "operatöre söylenmedi"
