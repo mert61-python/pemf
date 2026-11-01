@@ -212,6 +212,22 @@ pub const ENV_JETON_ENFORCED: &str = "PEMF_JETON_ENFORCED";
 /// `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`.
 pub const ENV_KEEP_PLAIN_BACKUP: &str = "PEMF_KEEP_PLAIN_BACKUP";
 
+/// HOTSPOT PROFİL KAPISI (Y234 · S-BE.3, 2026-11-01). Backend açılışta PEMF-Gateway hotspot'unu kurulu profile BAKMADAN
+/// açıyordu (`backend_service._start_hotspot_safe`); profil kapısı yalnız keep-alive görevindeydi (`flow::hotspot_gorevi_gerekli`).
+/// Yalnız "Evcil Hayvan Sahibi" (`home`) kurulu makine bobin sürmez → AP gereksiz (aynı-WiFi keşfini bozar — bkz. flow'daki not).
+///
+/// ⚠️ `"0"` YALNIZ profil kaydı DOLU ve hiçbiri terapi profili değilse verilir. Kayıt yok / bozuk / boşsa DEĞİŞKEN VERİLMEZ
+/// (backend varsayılanı = bugünkü davranış): klinikte telefon PEMF-Gateway'e bağlanır, okunamayan bir kayıt yüzünden AP'yi
+/// kapatmak telefonu cihazdan koparırdı.
+///
+/// CIKIS KAPISI: ortamda tanimliysa DOKUNULMAZ (değer AYNEN geçirilir — bkz. ENV_KEEP_PLAIN_BACKUP'taki "miras" notu).
+pub const ENV_HOTSPOT: &str = "PEMF_HOTSPOT";
+
+/// Y234: backend'e `PEMF_HOTSPOT=0` geçilmeli mi — profil kaydı DOLU ve hiçbiri terapi profili değil (saf → birim-testlenebilir).
+pub fn hotspot_kapatilmali(profiller: &[String]) -> bool {
+    !profiller.is_empty() && !crate::flow::hotspot_gorevi_gerekli(profiller)
+}
+
 /// TIBBİ VERİ KÖKÜ — MAKİNE GENELİ (2026-08-09 denetimi, Tier 1).
 ///
 /// ⚠️ ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyordu,
@@ -1122,6 +1138,12 @@ where
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "0".to_string()),
     );
+    // HOTSPOT PROFİL KAPISI (bkz. ENV_HOTSPOT · Y234): ortamdaki değer AYNEN; yoksa yalnız terapisiz kurulumda "0".
+    if let Some(v) = getenv(ENV_HOTSPOT).filter(|v| !v.trim().is_empty()) {
+        env.insert(ENV_HOTSPOT.to_string(), v);
+    } else if hotspot_kapatilmali(&read_installed_profiles(install_root)) {
+        env.insert(ENV_HOTSPOT.to_string(), "0".to_string());
+    }
     // TIBBİ VERİ KÖKÜ (bkz. ENV_DATA_DIR): makine-geneli yazılabilirse oraya. Bu satır olmadan
     // backend %APPDATA%'ya düşüyor ve ikinci Windows hesabı "boş klinik" görüyordu.
     if let Some(d) = cozulmus_veri_dizini(getenv) {
@@ -2285,6 +2307,67 @@ mod tests {
             env.get(ENV_ENABLE_TUNNEL).map(String::as_str),
             Some("1"),
             "uzaktan erişim kapalı → farklı ağdan bağlanma ÇALIŞMAZ ve mobil kullanıcıya              yanlışlıkla 'kod hatalı' dedirtir"
+        );
+    }
+
+    /// Y234 · S-BE.3: backend açılışta PEMF-Gateway'i profilden BAĞIMSIZ açıyordu → yalnız terapisiz (`home`) kurulumda `PEMF_HOTSPOT=0`.
+    #[test]
+    fn KRITIK_Y234_yalniz_ev_profilinde_backend_HOTSPOT_kapali_baslar() {
+        let (_pd, pds) = sahte_pd();
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(installed_profiles_path(d.path()), r#"["home"]"#).unwrap();
+        let env = backend_env_with(yalniz_pd(&pds), d.path(), 8000, "");
+        assert_eq!(
+            env.get(ENV_HOTSPOT).map(String::as_str),
+            Some("0"),
+            "yalniz Ev Sahibi kurulu makinede backend PEMF-Gateway hotspot'unu ACMAMALI"
+        );
+    }
+
+    /// Y234: terapi profili varsa ya da profil kaydı okunamıyorsa değişken VERİLMEZ (backend varsayılanı = bugünkü davranış) —
+    /// klinikte telefon PEMF-Gateway'e bağlanır; okunamayan kayıt yüzünden AP kapanırsa telefon cihazdan kopar.
+    #[test]
+    fn KRITIK_Y234_terapi_profilinde_ya_da_kayit_okunamazsa_HOTSPOT_degiskeni_VERILMEZ() {
+        let (_pd, pds) = sahte_pd();
+        let haller: [(Option<&str>, &str); 6] = [
+            (Some(r#"["vet"]"#), "vet"),
+            (Some(r#"["research"]"#), "research"),
+            (Some(r#"["home","vet"]"#), "home+vet"),
+            (Some("[]"), "bos kayit"),
+            (Some("{bozuk-json"), "bozuk kayit"),
+            (None, "kayit yok"),
+        ];
+        for (icerik, ad) in haller {
+            let d = tempfile::tempdir().unwrap();
+            if let Some(i) = icerik {
+                std::fs::write(installed_profiles_path(d.path()), i).unwrap();
+            }
+            let env = backend_env_with(yalniz_pd(&pds), d.path(), 8000, "");
+            assert!(
+                !env.contains_key(ENV_HOTSPOT),
+                "{ad}: PEMF_HOTSPOT={:?} verildi — klinikte telefon PEMF-Gateway'e baglanamaz",
+                env.get(ENV_HOTSPOT)
+            );
+        }
+    }
+
+    /// Y234 çıkış kapısı: operatörün tanımladığı değer AYNEN geçer (yalnız-home kurulumda da "1" ezilmez).
+    #[test]
+    fn Y234_ortamdaki_HOTSPOT_degeri_AYNEN_gecer() {
+        let (_pd, pds) = sahte_pd();
+        let pdr: &str = &pds;
+        let getenv = move |k: &str| match k {
+            "PROGRAMDATA" => Some(pdr.to_string()),
+            ENV_HOTSPOT => Some("1".to_string()),
+            _ => None,
+        };
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(installed_profiles_path(d.path()), r#"["home"]"#).unwrap();
+        let env = backend_env_with(getenv, d.path(), 8000, "");
+        assert_eq!(
+            env.get(ENV_HOTSPOT).map(String::as_str),
+            Some("1"),
+            "operatorun PEMF_HOTSPOT degeri EZILDI"
         );
     }
 
