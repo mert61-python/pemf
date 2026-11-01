@@ -94,6 +94,16 @@ def test_KRITIK_envanter_satiri_CIKARIMIN_ACTIGI_dosya(monkeypatch):
 
 @pytest.fixture
 def duzen(tmp_path, monkeypatch):
+    # KP-1 TEST HİJYENİ (BEK bulgusu, mekanizma ölçüldü 2026-11-01): `ai_hazirlik(derin=0)`'ın `find_spec` taraması ÜST paketleri içe
+    # aktarır — `petri_cv_v2/__init__.py` → `pipeline.py` → `em_petri`, ve `em_petri` ağırlık yolunu İÇE AKTARMA anında çözer. İlk yükleme
+    # bu sahte donmuş düzende (boş tmp model kökü) olursa bayat yol + `MODEL_DOWNLOAD_ERROR` süreç boyu `sys.modules`'ta kalır → ardından
+    # koşan petri testleri "BaggingRegressor.onnx bulunamadı" (HTTP 500). Önce GERÇEK ortamda bir kez tara; düzen boyunca YENİ `ai_hub`
+    # modülü yüklenmediğini teardown'da doğrula (envantere içe aktarmada yol çözen yeni paket eklenirse burada kırmızı).
+    import servers.ai_router as air
+
+    for _ad, import_yolu, _model in air._AI_MODUL_ENVANTERI:
+        air._modul_hazir_mi(import_yolu, False)
+    once = {m for m in sys.modules if m.startswith("ai_hub")}
     meipass = tmp_path / "runtime" / "PEMF_Backend" / "_internal"
     (meipass / "ai_models").mkdir(parents=True)
     profil = tmp_path / "ai_models"
@@ -101,7 +111,9 @@ def duzen(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
     monkeypatch.setenv("PEMF_AI_MODELS_DIR", str(profil))
-    return meipass, profil
+    yield meipass, profil
+    yeni = sorted({m for m in sys.modules if m.startswith("ai_hub")} - once)
+    assert not yeni, f"sahte donmuş düzende İLK kez yüklenen ai_hub modülü (bayat model yolu süreç boyu kalır): {yeni}"
 
 
 def _kopyala(kaynak_rel: str, hedef: Path) -> None:
