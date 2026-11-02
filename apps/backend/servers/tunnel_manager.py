@@ -403,6 +403,9 @@ def _tunnel_url_alive(timeout: float = 6.0) -> bool:
         with urllib.request.urlopen(url + "/api/health", timeout=timeout) as r:
             code = getattr(r, "status", None) or r.getcode()
             return 200 <= int(code) < 500
+    except urllib.error.HTTPError as e:
+        # Y241 (KP1 T-1): urlopen 4xx'te HTTPError fırlatır; edge 4xx (Access 403 / 404 / 429) forward ediyor = CANLI, 5xx ölü.
+        return 200 <= int(e.code) < 500
     except Exception:
         return False
 

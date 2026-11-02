@@ -40,6 +40,8 @@ from servers import tunnel_manager as tm
 
 URL1 = "https://ilk-ornek.trycloudflare.com"
 URL2 = "https://ikinci-ornek.trycloudflare.com"
+# KP-2 A2: bekçi 4xx / 5xx testleri GERÇEK urllib zincirini kullanır (`ortam` fikstürü urlopen'u sahteler → içe aktarma anındaki gerçeği geri koy)
+_GERCEK_URLOPEN = urllib.request.urlopen
 UZUN_TOKEN = "eyJ" + "a" * 60  # gerçek token uzun base64 (>= 40)
 
 
@@ -616,24 +618,27 @@ def _gercek_zincir(monkeypatch, kod):
 @pytest.mark.parametrize("kod,beklenen", [(200, True), (204, True), (530, False)])
 def test_tunnel_url_alive_GERCEK_urllib_zinciri_2xx_CANLI_530_OLU(monkeypatch, kod, beklenen):
     """GERÇEK urllib zinciri, yalnız https taşıyıcısı sahte: 2xx → True, 530 (Cloudflare origin unreachable) → False; istek
-    `<url>/api/health`'e TEK kez gider. (Aşağıdaki [SAHİBE] testinin aparatı bu karşıtla doğrulanır.)"""
+    `<url>/api/health`'e TEK kez gider. (Aşağıdaki 4xx / 5xx testlerinin aparatı bu karşıtla doğrulanır.)"""
     t = _gercek_zincir(monkeypatch, kod)
     assert tm._tunnel_url_alive(timeout=1.0) is beklenen
     assert t.istekler == ["https://uzak.klinik.example/api/health"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="[SAHİBE] urlopen 4xx'te HTTPError FIRLATIR → `200 <= code < 500` (4xx = edge forward ediyor) dalına hiç varılmaz; "
-    "403/404/429 'ölü' sayılır → watchdog 2 turda tüneli yeniden başlatır — apps/backend/servers/tunnel_manager.py:402-407",
-)
-@pytest.mark.parametrize("kod", [403, 404, 429])
-def test_SAHIBE_tunnel_url_alive_edge_4xx_dondururse_CANLI_sayilmali(monkeypatch, kod):
-    """Dış URL'den 4xx (ör. NAMED tünel önünde Cloudflare Access 403, kenar hız sınırı 429, ingress yok 404) → edge forward
-    ediyor → True beklenir (kodun kendi aralığı 200 ≤ code < 500). Sahte YALNIZ https taşıyıcısında: HTTPError'ı GERÇEK urllib
-    üretir (önerme ölçülür, varsayılmaz); ölçülen: False. Ürün düzeltilince XPASS(strict) → kırmızı → xfail kaldırılır."""
+@pytest.mark.parametrize("kod", [400, 401, 403, 404, 429, 499])
+def test_tunnel_url_alive_edge_4xx_dondururse_CANLI(monkeypatch, kod):
+    """Y241 (KP1 T-1, KP-2 A2): dış URL'den 4xx (ör. NAMED tünel önünde Cloudflare Access 403, kenar hız sınırı 429, ingress yok
+    404) → edge forward ediyor → True (aralığın üst sınırı 499 dahil). Sahte YALNIZ https taşıyıcısında: HTTPError'ı GERÇEK urllib
+    üretir. Önce: urlopen'un fırlattığı HTTPError genel `except`'e düşüp False dönüyordu (bekçi tüneli ~40 sn'de bir yeniden başlatırdı)."""
     t = _gercek_zincir(monkeypatch, kod)
     assert tm._tunnel_url_alive(timeout=1.0) is True
+    assert t.istekler == ["https://uzak.klinik.example/api/health"]
+
+
+@pytest.mark.parametrize("kod", [500, 502, 503, 504])
+def test_tunnel_url_alive_edge_5xx_dondururse_OLU(monkeypatch, kod):
+    """Y241: 5xx (alt sınır 500 dahil; 502 bad gateway, 503, 504) → edge origin'e ulaşamıyor → False (yeniden başlatma adayı)."""
+    t = _gercek_zincir(monkeypatch, kod)
+    assert tm._tunnel_url_alive(timeout=1.0) is False
     assert t.istekler == ["https://uzak.klinik.example/api/health"]
 
 
@@ -703,6 +708,47 @@ def test_watchdog_dis_URL_iki_ARDISIK_oluyse_yeniden_baslatir_arada_saglikli_tur
     assert [u for u, _ in ortam.urlopen.urller] == [URL1 + "/api/health"] * 5
     assert tm._tunnel_process is s2
     assert gelen == [URL1, URL2] and tm.get_tunnel_url() == URL2
+
+
+def _bekci_gercek_zincir(monkeypatch, kod):
+    """Bekçi senaryosu için GERÇEK `urlopen` + yalnız https taşıyıcısı sahte (`_HttpsTasiyici(kod)`; ağ YOK)."""
+    t = _HttpsTasiyici(kod)
+    monkeypatch.setattr(urllib.request, "urlopen", _GERCEK_URLOPEN)
+    monkeypatch.setattr(urllib.request, "_opener", urllib.request.build_opener(t))
+    return t
+
+
+@pytest.mark.parametrize("kod", [403, 404, 429])
+def test_watchdog_dis_URL_4xx_donerse_tuneli_YENIDEN_BASLATMAZ(ortam, monkeypatch, kod):
+    """Y241 (KP-2 A2): tur 1 tünel yok → başlat (URL1); tur 2–5 dış `/api/health` 4xx (GERÇEK urllib HTTPError) → edge canlı →
+    ölü sayacı artmaz: tek Popen, sürece terminate / kill YOK, URL değişmez, her tur check_interval bekler. (Önce: 4xx ölü sayılıp
+    2. turda tünel yeniden başlatılıyordu.)"""
+    s1 = _Surec([f"INF {URL1}\n".encode()])
+    ortam.popen.sira = [s1]
+    t = _bekci_gercek_zincir(monkeypatch, kod)
+    olay = _SahteOlay([_okuyucuyu_bekle, None, None, None, None])
+    _watchdog_kos(olay, monkeypatch, ci=20)
+    assert olay.beklemeler == [20] * 5
+    assert len(ortam.popen.kayit) == 1
+    assert s1.cagrilar == []
+    assert t.istekler == [URL1 + "/api/health"] * 4
+    assert tm._tunnel_process is s1 and tm.get_tunnel_url() == URL1
+
+
+def test_watchdog_dis_URL_502_iki_ARDISIK_ise_yeniden_baslatir(ortam, monkeypatch):
+    """Y241 karşıtı: 5xx ölü kalır — tur 1 başlat (URL1), tur 2 ve 3 dış `/api/health` 502 (GERÇEK urllib) → 2/2 → eski süreç
+    terminate + wait(5), yeni süreç (URL2) başlar."""
+    s1 = _Surec([f"INF {URL1}\n".encode()])
+    s2 = _Surec([f"INF {URL2}\n".encode()])
+    ortam.popen.sira = [s1, s2]
+    t = _bekci_gercek_zincir(monkeypatch, 502)
+    olay = _SahteOlay([_okuyucuyu_bekle, None, _okuyucuyu_bekle])
+    _watchdog_kos(olay, monkeypatch, ci=20)
+    assert olay.beklemeler == [20] * 3
+    assert len(ortam.popen.kayit) == 2
+    assert s1.cagrilar == ["terminate", ("wait", 5)]
+    assert t.istekler == [URL1 + "/api/health"] * 2
+    assert tm._tunnel_process is s2 and tm.get_tunnel_url() == URL2
 
 
 def test_watchdog_dongu_HATASI_bildirilir_dongu_YASAR(ortam, monkeypatch, caplog):
