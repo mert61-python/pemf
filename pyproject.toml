@@ -161,7 +161,10 @@ omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 # ~4 puan altına YÜKSELTİLİR (düşürülmez — sahip kararı #20, kapı test_ci_workflow_gate). Ölçüm 4-A kapanış süitinde.
 # ÖLÇÜLEN (4-A kapanış, 2026-10-10, temiz klon @ cb2926fe, Windows, 6250 geçen test, 8 kaynak yüzeyi): TOPLAM %79,14
 # (21580 ifade). Eşik 50 → 75 (~4 puan marj). Taban artık 75: test_ci_workflow_gate bunun altını KIRMIZI yapar.
-fail_under = 75
+# ÖLÇÜLEN (KP-2 A5, Y243, 2026-11-03, CI eşdeğeri: temiz klon @ 1436a587, Windows, `pytest tests --cov`, 11332 geçen test,
+# aynı 12 kaynak yüzeyi): TOPLAM %96,58 (25940 ifade, 886 kapsanmayan). Eşik 75 → 95 (ölçülen − ~1,5; coverage.py
+# `precision` 0 → karşılaştırma yuvarlanmış tam sayıyla). Taban artık 95.
+fail_under = 95
 show_missing = false
 
 [tool.mypy]
