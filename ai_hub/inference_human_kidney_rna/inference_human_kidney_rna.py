@@ -70,8 +70,8 @@ except Exception:  # utils yolu yoksa eski davranış
 
 def _require(path: Path, label: str):
     if not path.exists():
-        sys.exit(f"⚠  {label} not found at {path}\n"
-                  f"   Run training.py + export_best_real.py to produce it.")
+        raise FileNotFoundError(f"⚠  {label} not found at {path}\n"
+                                f"   Run training.py + export_best_real.py to produce it.")
 
 
 def _load_meta_and_aux():

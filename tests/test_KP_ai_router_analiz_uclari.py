@@ -9,8 +9,8 @@ sound/cat, vision/kidney_ct, vision/histopath, vision/scratch, vision/cat_organ,
 model İNDİRİCİDEN doğru göreli yolla istenir ve önbelleğe alınır; indirici bütünlük DIŞI hata verirse modül-yanı yola düşülür,
 bütünlük reddi YUTULMAZ (503 + dosya adı); geçici dosya silinemese de analiz döner; çıkarım hatası ham iletisini SIZDIRMADAN
 500 + uç etiketi; açıklama (XAI) başarısı / hatası analizi düşürmez; boyut / boş / bozuk CSV-ses girdileri reddedilir.
-RNA: gerçek öngörücüyü kullanan test git-ignored eser yoksa `capraz` deseniyle atlar; yan dosyası eksik öngörücü için doğru
-sözleşme (500 + `ai.hata.rnaAnaliz`, SystemExit sızmaz) `xfail(strict)` ile bekletilir — [SAHİBE] KP1-IB.2.
+RNA: gerçek öngörücüyü kullanan test git-ignored eser yoksa `capraz` deseniyle atlar; yan dosyası eksik öngörücü için sözleşme
+(500 + `ai.hata.rnaAnaliz`, SystemExit sızmaz) — KP1-IB.2, KP-2 A1 (Y240) ile düzeltildi (`_require` → `FileNotFoundError`).
 
 Sahte EN ALT katta: ağ (`ai_client.httpx` → gerçek httpx + `MockTransport`), çıkarım motoru (`ultralytics.YOLO`, model sınıfları
 — ağırlıklar klonda YOK), model indirici, süreç (`subprocess.run` = ffmpeg), WAV okuyucu (`wave.open`). Geçici dosyalar tmp
@@ -431,8 +431,8 @@ def test_rna_DOSYA_yuklemesi_okunur_gen_sutunu_UYUSMAZSA_400_beklenen_ve_gelen(i
     """CSV dosya olarak gelir (3 gen sütunu) → gerçek KidneyRnaPredictor 20531 bekler → 400 + `ai.hata.genSutunSayisi`.
 
     TUR 2 · KP1-IB.1: gerçek öngörücü git-ignored eserlere dayanır → eser / paket yoksa `capraz` deseniyle ATLA (ZORUNLU kipte
-    DÜŞ). Atlamasız koşu ağırlıksız ortamda kırmızı değil ASILI kalıyordu (`_require` → `sys.exit` TestClient portalını öldürür;
-    ürün davranışı KP1-IB.2 → `test_rna_YAN_DOSYA_eksikse_500_ve_backend_AYAKTA`)."""
+    DÜŞ). Atlamasız koşu ağırlıksız ortamda kırmızı değil ASILI kalıyordu (`_require` → `sys.exit` TestClient portalını öldürüyordu;
+    KP1-IB.2, KP-2 A1 ile düzeldi → `test_rna_YAN_DOSYA_eksikse_500_ve_backend_AYAKTA`)."""
     capraz.paket_yoksa_atla("onnxruntime")
     capraz.paket_yoksa_atla("joblib")
     for rel in _RNA_IZLENMEYEN:
@@ -465,21 +465,14 @@ def _dongu_kapat(dongu) -> None:
         dongu.close()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=SystemExit,
-    reason="[SAHİBE] RNA yan dosyası eksikse `_require` sys.exit → SystemExit uçtan OLAY DÖNGÜSÜNE sızar (500 yerine backend "
-    "döngüsü/süreci düşer) — ai_hub/inference_human_kidney_rna/inference_human_kidney_rna.py:71-81 + "
-    "apps/backend/servers/ai_router.py:4320-4325",
-)
 def test_rna_YAN_DOSYA_eksikse_500_ve_backend_AYAKTA(monkeypatch, tmp_path):
     """RNA öngörücüsünün yan dosyası (best_model_meta.json — ilk `_require`; git-ignored eserlerden BAĞIMSIZ) yok → uç, öteki
     çıkarım hatalarıyla AYNI sözleşmeyle 500 + `ai.hata.rnaAnaliz` döner (SystemExit SIZMAZ), öngörücü önbelleğe girmez ve AYNI
     olay döngüsündeki komşu iş (backend'in öteki istekleri — ACİL DURDUR uçları dahil) tamamlanır.
 
-    TUR 2 · KP1-IB.2 GERÇEK ÜRÜN HATASI (bağımsız sonda `_inceleme/sonda_t2/sonda_t2_rna_gercek_asgi.py`: gerçek `api.app` yığını +
-    uvicorn 0.48 `run_asgi` sarmalı → SystemExit `starlette/middleware/base.py:144` alt görevinden döngüye kaçar, sarmal yakalayamaz,
-    komşu iş 9/30 adımda kalır, yanıt gitmez). Ürün düzelince bu test XPASS → strict kırmızı → işaret kaldırılır."""
+    KP1-IB.2 GERÇEK ÜRÜN HATASIYDI (gerçek `api.app` yığını + uvicorn 0.48 `run_asgi` sarmalı → SystemExit `starlette/middleware/
+    base.py:144` alt görevinden döngüye kaçıyor, komşu iş 9/30 adımda kalıyor, yanıt gitmiyordu). KP-2 A1 (Y240): `_require` →
+    `FileNotFoundError`. Gerçek ASGI yığını + ardından ACİL DURDUR kanıtı: `test_KP2_A1_rna_yan_dosya_eksik_backend_AYAKTA.py`."""
     import asyncio
 
     from ai_hub.inference_human_kidney_rna import inference_human_kidney_rna as ihr
