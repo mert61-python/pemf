@@ -5019,7 +5019,7 @@ def start_ai_session(
                 "durduruldu %s (aksi halde enerjili kalirlardi).",
                 _orphan_coils,
             )
-        except Exception:
+        except Exception:  # pragma: no cover — SAVUNMA: alt işlevler STOP hatasını içeride yakalar
             logging.getLogger(__name__).exception("Sahipsiz bobin STOP hatasi: %s", _orphan_coils)
     # P1 audit 2026-06-28: AKTIF MANUEL (non-AI) seans varken AI baslayinca _active_session KOSULSUZ
     # eziliyordu → manuel db_session_id/coil_ids kayboluyor, acik coil-run'lar kapanmiyor, DB satiri
@@ -5057,7 +5057,7 @@ def start_ai_session(
                 mode,
                 prev.get("db_session_id"),
             )
-        except Exception:
+        except Exception:  # pragma: no cover — SAVUNMA: _finalize_session_db hatayı içeride yakalar
             logging.getLogger(__name__).exception("AI gecisinde eski manuel seans kapatma hatasi")
 
     # DENETIM 2026-08-17 (hasta-verisi karismasi, `/api/session/start` ile SIMETRI): manuel yol

@@ -200,7 +200,7 @@ class CloudSyncWorker:
         60sn döngü beklenmez; telefon rotasyon/cold-boot sonrası eski/null URL görmez (audit: yayın gecikmesi)."""
         try:
             self._publish_device_registry()
-        except Exception as e:
+        except Exception as e:  # pragma: no cover — SAVUNMA: _publish_device_registry Exception yakalar
             logger.debug(f"publish_now hatasi: {e}")
 
     def start(self):
@@ -361,7 +361,7 @@ class CloudSyncWorker:
                             # "bozuk/okunamayan kayıt" kirliliği önlenir). Kendi kayıtların çözülür → çekilir.
                             try:
                                 dec = patient_db._decrypt_field(name_val) if name_val else ""
-                            except Exception:
+                            except Exception:  # pragma: no cover — SAVUNMA: _decrypt_field içeride yakalar
                                 dec = "[okunamayan kayıt]"
                             if dec == "[okunamayan kayıt]":
                                 skipped += 1

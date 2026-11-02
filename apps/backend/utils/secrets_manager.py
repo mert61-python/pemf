@@ -427,7 +427,7 @@ def _cihaz_kimlik_deposu() -> Path:
         d = Path(override)
     elif os.name == "nt":
         d = Path(os.getenv("PROGRAMDATA") or r"C:\ProgramData") / "PEMF_System"
-    else:
+    else:  # pragma: no cover — PLATFORM: Linux / macOS makine deposu dalı (/var/lib/pemf → ~/.pemf)
         d = Path("/var/lib/pemf")
         try:
             d.mkdir(parents=True, exist_ok=True)

@@ -31,7 +31,7 @@ from utils import ceviri
 try:
     from .path_utils import get_app_data_directory as get_shared_app_data_directory
     from .path_utils import kaynak_kokunu_bul
-except ImportError:
+except ImportError:  # pragma: no cover — ULASILAMAZ: yalnız doğrudan betik koşumunda
     from path_utils import get_app_data_directory as get_shared_app_data_directory
     from path_utils import kaynak_kokunu_bul
 
@@ -44,7 +44,7 @@ def _sahip():
     ayrı kilit ya da ayrı ACL TUTMAZ. (`pemf_gui` depo kökünde; doğrudan betik koşumunda kök sys.path'e eklenir.)"""
     try:
         from pemf_gui import config as sahip_modulu
-    except ModuleNotFoundError:
+    except ModuleNotFoundError:  # pragma: no cover — ULASILAMAZ: yalnız doğrudan betik koşumunda
         kok = str(kaynak_kokunu_bul(__file__))
         if kok not in sys.path:
             sys.path.insert(0, kok)

@@ -1826,7 +1826,7 @@ def _ai_hazirlik_loop():
     _son_yayin = 0.0
     try:
         from servers.api_server import _ws_broadcast_sync as _yayinla
-    except Exception:  # pragma: no cover — api_server yoksa (izole test) yayın atlanır
+    except Exception:  # api_server yoksa (izole test) yayın atlanır
         _yayinla = None
     try:
         while _ai_hazirlik_active:

@@ -15,7 +15,7 @@ from pathlib import Path
 
 try:
     import keyring
-except Exception:  # pragma: no cover - optional dependency fallback
+except Exception:  # isteğe bağlı bağımlılık — keyring yoksa eski anahtar yolu keyring adımını atlar
     keyring = None
 
 # SQLCipher + sqlite3 istisna demetleri TEK KAYNAKTAN. Eskiden bu blok BURADA ve

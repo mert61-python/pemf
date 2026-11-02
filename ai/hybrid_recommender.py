@@ -732,7 +732,7 @@ if __name__ == '__main__':
     info = recommender.get_protocol_info("Eklem Sorunu")
     print(f"   Found: {info['found']}, Type: {info['type']}")
     print("   Similar protocols:")
-    for sim in info['similar_protocols'][:3]:
+    for sim in info['similar_protocols'][:3]:  # pragma: no cover — ULASILAMAZ: tanıtım girdisinde benzer yok
         print(f"     - {sim['name']} (similarity: {sim['similarity']:.2f})")
 
     print("\n" + "=" * 60)

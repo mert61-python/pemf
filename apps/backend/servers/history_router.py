@@ -545,7 +545,7 @@ def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db
             outcome="ok" if silinen else "bulunamadi",
             detail=ozet,
         )
-    except Exception:
+    except Exception:  # pragma: no cover — SAVUNMA: audit_log.kimlikli_yaz hatayı içeride yakalar
         logger.debug("Toplu silme denetim izi yazilamadi (non-fatal).", exc_info=True)
     # ⚠️ `istenen` ile `silinen` AYRI raporlanır: operatör bir başkasının aynı anda sildiği
     # kayıtları seçmiş olabilir. "5 sildim" demek yerine gerçeği söyle.

@@ -120,6 +120,42 @@ def test_hazirlik_kare_OKUNAMAZSA_bekler_lokalizasyon_HATASI_onbellegi_gecersiz_
     assert air._ai_hazirlik_active is False
 
 
+def test_hazirlik_api_server_ICE_AKTARILAMAZSA_onizleme_yayini_ATLANIR_dongu_surer(monkeypatch):
+    """KP-2 A4 (Y242 — eski etiketsiz pragma kaldırıldı, kol test edilebilir): `servers.api_server` içe aktarılamıyor (izole koşu:
+    `sys.modules` girdisi None → ModuleNotFoundError) → yayıncı yok sayılır, döngü kareyi okur ve lokalize eder, uyku 0,05;
+    `api_server._ws_broadcast_sync` ÇAĞRILMAZ; kamera bırakılır, bayrak iner."""
+    import sys
+
+    from servers import ai_pro_hedef
+    from servers import api_server as api
+
+    def _bitir():
+        air._ai_hazirlik_active = False
+
+    kamera = _Kamera([np.zeros((48, 64, 3), np.uint8)], _bitir)
+    acilan = _kamera_kur(monkeypatch, kamera)
+    uykular = []
+    _sahte_zaman(monkeypatch, uykular)
+    monkeypatch.setattr(ai_pro_hedef.KediSaglayici, "yukle", lambda self: None)
+    lokalize = []
+    monkeypatch.setattr(ai_pro_hedef.KediSaglayici, "localize", lambda self, kare, oid: lokalize.append(oid) or None)
+    yayin = []
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda m: yayin.append(m))
+    monkeypatch.setitem(sys.modules, "servers.api_server", None)
+    monkeypatch.setattr(air, "_localize_organ", _GERCEK_LOKALIZE)
+    monkeypatch.setattr(air, "_ai_organ_cache", {**air._ai_organ_cache, "localized": True, "organ_id": -1, "at": 0.0})
+    monkeypatch.setattr(air, "_ai_hazirlik_active", True)
+    monkeypatch.setattr(air, "_ai_hazirlik_started_at", 0.0)
+    monkeypatch.setattr(air, "_ai_relocalize", True)
+    monkeypatch.setattr(air, "_ai_hedef_modeli", "kedi")
+    air._ai_hazirlik_loop()
+    assert acilan == [0] and kamera.okunan == 1 and kamera.birakildi
+    assert len(lokalize) == 1
+    assert uykular == [0.05]
+    assert yayin == []
+    assert air._ai_hazirlik_active is False
+
+
 # ───────────────────────────── seans döngüsü ─────────────────────────────
 
 

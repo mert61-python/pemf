@@ -110,10 +110,6 @@ def get_api_token() -> str:
     except Exception as e:
         logger.error("SecretsManager api_token okunamadı, eski yola düşülüyor: %s", e)
     # FALLBACK (SecretsManager yok/hata) — eski davranış, geçiş güvenliği
-    env = os.getenv("PEMF_API_TOKEN", "").strip()
-    if env:
-        _token = env
-        return _token
     f = _token_file()
     try:
         if f.exists():
