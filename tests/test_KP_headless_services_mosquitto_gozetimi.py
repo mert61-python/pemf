@@ -232,7 +232,9 @@ def o(monkeypatch, tmp_path):
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path / "veri"))
     for ad in ("PEMF_MQTT_BIND", "PEMF_MQTT_REQUIRE_AUTH", "PEMF_MQTT_PASSWORD_FILE"):
         monkeypatch.delenv(ad, raising=False)
-    monkeypatch.setattr(hs.MosquittoSupervisor, "MOSQUITTO_EXE_PATHS", [str(tmp_path / "pf" / "mosquitto.exe")])
+    monkeypatch.setattr(
+        hs.MosquittoSupervisor, "MOSQUITTO_EXE_PATHS", [str(tmp_path / "program_files" / "mosquitto.exe")]
+    )
     monkeypatch.setattr(
         path_utils, "_GOC_YAPILDI", set(path_utils._GOC_YAPILDI)
     )  # süreç-başı göç işareti testte kirlenmesin
@@ -750,7 +752,7 @@ def test_ikili_arama_WINDOWSta_PAKETLI_dizin_once_ek_adaylar_PROGRAM_yollari(o, 
     assert _sup(o)._find_mosquitto_exe() == exe
     ((stem, dizinler, ek),) = casus.kayit
     assert stem == "mosquitto" and dizinler[0] == o.tmp / "appdata" / "PEMF_GUI" / "mosquitto"
-    assert ek == [o.tmp / "pf" / "mosquitto.exe"]
+    assert ek == [o.tmp / "program_files" / "mosquitto.exe"]
 
 
 def test_ikili_arama_POSIXte_ek_adaylar_SISTEM_yollari_paketli_uzantisiz_bulunur(o, casus, monkeypatch):
