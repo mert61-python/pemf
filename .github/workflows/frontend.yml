@@ -56,5 +56,6 @@ jobs:
       - name: Typecheck (tsc --noEmit)
         run: npx tsc --noEmit
 
+      # Y243 (KP-2 A5): `--coverage` → jest.config.js `coverageThreshold` UYGULANIR (eşik altı kapsam işi kırar).
       - name: Unit tests (jest)
-        run: npm test
+        run: npm test -- --coverage

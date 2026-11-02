@@ -28,4 +28,20 @@ module.exports = {
   transformIgnorePatterns: [
     "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@react-native-async-storage/.*|lucide-react-native))",
   ],
+  // Y243 (KP-2 A5): kapsam paydası (KP-1'de genişletildi: ürün kaynağının tamamı, 166 dosya; araç yapılandırmaları
+  // eslint / jest / metro / jest.setup payda DIŞI) + eşik — CI `npm test -- --coverage` ile uygulanır. Eşikler ölçülenin
+  // ~1 puan altı; yalnız YÜKSELTİLİR.
+  collectCoverageFrom: [
+    "src/**/*.{ts,tsx,js,jsx}",
+    "app/**/*.{ts,tsx,js,jsx}",
+    "modules/**/*.{ts,tsx,js,jsx}",
+    "auth-pages/**/*.{js,jsx,ts,tsx}",
+    "scripts/**/*.{js,jsx,ts,tsx,mjs,cjs}",
+    "!**/__tests__/**",
+    "!**/*.d.ts",
+    "!**/node_modules/**",
+  ],
+  coverageThreshold: {
+    global: { lines: 85, statements: 81, branches: 76, functions: 78 },
+  },
 };
