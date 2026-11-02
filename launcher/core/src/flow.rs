@@ -3496,3 +3496,590 @@ pub fn ").map(|k| i + k).unwrap_or(src.len());
         assert!(!cagrildi && !gunluk.exists());
     }
 }
+
+// ==== KP2-C TESTLERI BASLANGIC (yalniz test; urun satirlari kaymaz) ====
+/// KP-2 · launcher/core/src/flow.rs · sözleşmeler: önbellekten (AĞSIZ) katmansız kurulum + parçalı profil · yarım base açılımı
+/// silinir · onarımın kayıt / disk kolları · ön-indirme kuruluma dokunmaz · katmansız / katmanlı güncelleme + atomik takas +
+/// geri alma · yarım takas kurtarma kolları · deneme sayacı · profil kaldırma kenar kolları.
+/// AĞ YOK: paket URL'leri pinlenmemiş `example.invalid` — önbellek ıskalarsa indirme host pininde reddedilir (gerçek ağa çıkılmaz).
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod kp2_testleri {
+    use super::*;
+    use sha2::{Digest, Sha256};
+    use std::io::Write as _;
+
+    const WEB: &str = "PEMF_Backend/_internal/frontend/dist/index.html";
+
+    fn sha_hex(b: &[u8]) -> String {
+        let mut h = Sha256::new();
+        h.update(b);
+        format!("{:x}", h.finalize())
+    }
+
+    /// Bellekte zip üret; sonu `/` olan ad DİZİN girdisidir.
+    fn zip_bayt(girdiler: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut z = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let o: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        for (ad, icerik) in girdiler {
+            if ad.ends_with('/') {
+                z.add_directory(*ad, o).unwrap();
+            } else {
+                z.start_file(*ad, o).unwrap();
+                z.write_all(icerik).unwrap();
+            }
+        }
+        z.finish().unwrap().into_inner()
+    }
+
+    fn exe_zipte() -> String {
+        format!("PEMF_Backend/{}", crate::platform::backend_exe_name())
+    }
+
+    fn base_zip(exe: &[u8]) -> Vec<u8> {
+        zip_bayt(&[(&exe_zipte(), exe), (WEB, b"YENI-WEB")])
+    }
+
+    struct Pk {
+        url: String,
+        sha: String,
+        boyut: u64,
+    }
+
+    impl Pk {
+        fn json(&self) -> String {
+            format!(r#"{{"url":"{}","sha256":"{}","size":{},"kind":"zip"}}"#, self.url, self.sha, self.boyut)
+        }
+    }
+
+    /// Paketi önbelleğe koy (dosya adı = URL'nin son parçası). `boyut_yaz=false` → manifest boyutu 0 (önbellek "hazır" SAYILMAZ
+    /// ama `ensure_package` sha'yı doğrulayıp yine önbellekten verir).
+    fn onbellege(root: &Path, ad: &str, bayt: &[u8], boyut_yaz: bool) -> Pk {
+        let c = install::cache_dir(root);
+        fs::create_dir_all(&c).unwrap();
+        fs::write(c.join(ad), bayt).unwrap();
+        Pk { url: format!("https://example.invalid/{ad}"), sha: sha_hex(bayt), boyut: if boyut_yaz { bayt.len() as u64 } else { 0 } }
+    }
+
+    fn man(base: Option<&Pk>, katman: Option<(&Pk, &Pk)>, modeller: &[(&str, &Pk)], parcalar: &[(&str, Vec<&Pk>)]) -> String {
+        let plat = crate::platform::current();
+        let mut s = String::from(r#"{"schema":2,"version":"9.9.9""#);
+        if let Some(b) = base {
+            s += &format!(r#","runtimes":{{"{plat}":{}}}"#, b.json());
+        }
+        if let Some((d, a)) = katman {
+            s += &format!(r#","layers":{{"{plat}":{{"deps":{},"app":{}}}}}"#, d.json(), a.json());
+        }
+        let m: Vec<String> = modeller.iter().map(|(n, p)| format!(r#""{n}":{}"#, p.json())).collect();
+        let pr: Vec<String> = parcalar
+            .iter()
+            .map(|(n, v)| format!(r#""{n}":[{}]"#, v.iter().map(|p| p.json()).collect::<Vec<_>>().join(",")))
+            .collect();
+        s += &format!(r#","models":{{{}}},"model_parts":{{{}}}}}"#, m.join(","), pr.join(","));
+        s
+    }
+
+    /// Yapısal olarak SAĞLAM kurulu cihaz (exe + `_internal/frontend/dist/index.html`).
+    fn kurulu(root: &Path, exe: &[u8]) {
+        let k = install::runtime_dir(root).join("PEMF_Backend");
+        fs::create_dir_all(k.join("_internal").join("frontend").join("dist")).unwrap();
+        fs::write(install::backend_path(root), exe).unwrap();
+        fs::write(k.join("_internal").join("frontend").join("dist").join("index.html"), b"ESKI-WEB").unwrap();
+    }
+
+    fn devam() -> net::Control {
+        net::Control::Continue
+    }
+
+    fn exe_icerigi(rt: &Path) -> Vec<u8> {
+        fs::read(rt.join("PEMF_Backend").join(crate::platform::backend_exe_name())).unwrap()
+    }
+
+    /// Katmansız manifest + paketler önbellekte → kurulum AĞA ÇIKMADAN: eski runtime artığı silinir, base açılır ve sha'sı
+    /// kaydedilir; parçalı profilin TÜM zip'leri açılır, birleşik sha yazılır, profil "kurulu" işaretlenir.
+    #[test]
+    fn kp2_katmansiz_kurulum_onbellekten_eski_artigi_siler_base_ve_parcali_profili_acar_kaydeder() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        let artik = install::runtime_dir(&root).join("ESKI_SURUM.dll");
+        fs::create_dir_all(artik.parent().unwrap()).unwrap();
+        fs::write(&artik, b"bayat").unwrap();
+        let base = onbellege(&root, "base.zip", &base_zip(b"YENI-EXE"), true);
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"A")]), true);
+        let vet2 = onbellege(&root, "vet-2.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/b.onnx", b"BB")]), true);
+        let m = man(Some(&base), None, &[("vet", &vet)], &[("vet", vec![&vet2])]);
+
+        let mut olaylar = Vec::new();
+        install_profiles(&m, &["vet".to_string()], &root, &mut |p| olaylar.push(p), &devam).unwrap();
+
+        assert_eq!(fs::read(install::backend_path(&root)).unwrap(), b"YENI-EXE");
+        assert!(!artik.exists(), "eski sürümün artığı yeni kurulumda yaşıyor (iki sürümün birleşimi)");
+        let kayit = install::read_installed_packages(&root);
+        assert_eq!(kayit.base, base.sha, "base açıldı ama kimliği kaydedilmedi");
+        assert_eq!(kayit.models.get("vet"), Some(&format!("{}+{}", vet.sha, vet2.sha)), "parçalı profilin birleşik kimliği");
+        assert_eq!(install::read_installed_profiles(&root), vec!["vet".to_string()]);
+        assert_eq!(fs::read(root.join("ai_models/ai_hub/em_kedi/b.onnx")).unwrap(), b"BB", "ikinci parça açılmadı");
+        assert_eq!(
+            olaylar,
+            vec![
+                Progress::ManifestFetched { version: "9.9.9".into(), schema: 2 },
+                Progress::Cached { what: "base".into() },
+                Progress::Extracting { what: crate::dil::t("rust.kurulum.eskiSurumTemizleniyor") },
+                Progress::Extracting { what: "base".into() },
+                Progress::Cached { what: "vet".into() },
+                Progress::Cached { what: "vet-p2".into() },
+                Progress::Extracting { what: "vet".into() },
+            ]
+        );
+    }
+
+    /// Base açılımı YARIDA düşerse (exe yazıldıktan sonra hostile girdi) `runtime/` SİLİNİR ve base sha YAZILMAZ —
+    /// yarım ağaç "kurulu" görünmez.
+    #[test]
+    fn kp2_katmansiz_base_acilimi_YARIDA_duserse_runtime_SILINIR_sha_YAZILMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        let base = onbellege(&root, "base.zip", &zip_bayt(&[(&exe_zipte(), b"EXE"), ("PEMF_Backend/CON.txt", b"aygit")]), true);
+        let m = man(Some(&base), None, &[], &[]);
+        let r = install_profiles(&m, &[], &root, &mut |_| {}, &devam);
+        assert!(matches!(r, Err(FlowError::Extract(extract::ExtractError::PathEscape(_)))), "{r:?}");
+        assert!(!install::runtime_dir(&root).exists(), "yarım açılan base ağacı (exe yazılmış) diskte kaldı");
+        assert_eq!(install::read_installed_packages(&root).base, "", "yarım açılım 'kurulu' kaydedildi");
+    }
+
+    /// Onar + kayıt OKUNUR (`["vet"]`) → kayıttaki profil önbellekten yeniden açılır (silinmiş model dosyası geri gelir).
+    #[test]
+    fn kp2_onar_KAYITLI_profili_onbellekten_yeniden_acar() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(install::installed_profiles_path(&root), r#"["vet"]"#).unwrap();
+        let base = onbellege(&root, "base.zip", &base_zip(b"EXE"), true);
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"MODEL")]), true);
+        let m = man(Some(&base), None, &[("vet", &vet)], &[]);
+        let mut olaylar = Vec::new();
+        repair(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        assert_eq!(fs::read(root.join("ai_models/ai_hub/em_kedi/a.onnx")).unwrap(), b"MODEL");
+        assert_eq!(install::read_installed_packages(&root).models.get("vet"), Some(&vet.sha));
+        assert!(olaylar.contains(&Progress::Extracting { what: "vet".into() }), "kayıttaki profil onarılmadı: {olaylar:?}");
+    }
+
+    /// Onar + kayıt YOK ama diskte `ai_models/ai_hub/em_kedi` VAR → profil diskten çıkarılır (vet), kullanıcıya "eski kurulum
+    /// algılandı (1)" bildirilir ve profil kurulup kaydedilir.
+    #[test]
+    fn kp2_onar_kayit_YOKKEN_diskteki_modulden_profili_cikarir_ve_BILDIRIR() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        fs::create_dir_all(root.join("ai_models/ai_hub/em_kedi")).unwrap();
+        let base = onbellege(&root, "base.zip", &base_zip(b"EXE"), true);
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"M")]), true);
+        let m = man(Some(&base), None, &[("vet", &vet)], &[]);
+        let mut olaylar = Vec::new();
+        repair(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        assert_eq!(
+            olaylar.first(),
+            Some(&Progress::Extracting { what: crate::dil::t_ile("rust.kurulum.eskiKurulumAlgilandi", &[("adet", "1")]) })
+        );
+        assert_eq!(install::read_installed_profiles(&root), vec!["vet".to_string()]);
+    }
+
+    /// Ön-indirme: plan bayat + paket boyutu manifestte YOK (önbellek "hazır" sayılmaz) → paketler önbellekten SHA ile doğrulanır
+    /// (Cached), ama KURULUMA dokunulmaz: exe, kayıtlar, runtime.new değişmez.
+    #[test]
+    fn kp2_on_indirme_boyutsuz_paketleri_dogrular_kuruluma_DOKUNMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"ESKI-EXE");
+        install::record_base_sha(&root, &"b".repeat(64));
+        install::add_installed_profiles(&root, &["vet".to_string()]);
+        install::record_model_sha(&root, "vet", &"c".repeat(64));
+        let base = onbellege(&root, "base.zip", &base_zip(b"YENI-EXE"), false);
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"M")]), false);
+        let m = man(Some(&base), None, &[("vet", &vet)], &[]);
+        let plan = pending_updates(&m, &root).unwrap();
+        assert!(plan.base && plan.profiles == vec!["vet".to_string()] && !plan.cached, "ön koşul: {plan:?}");
+
+        let mut olaylar = Vec::new();
+        prefetch_updates(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        assert_eq!(olaylar, vec![Progress::Cached { what: "base".into() }, Progress::Cached { what: "vet".into() }]);
+        assert_eq!(fs::read(install::backend_path(&root)).unwrap(), b"ESKI-EXE", "ön-indirme kurulumu değiştirdi");
+        assert_eq!(install::read_installed_packages(&root).base, "b".repeat(64));
+        assert!(!install::runtime_new_dir(&root).exists() && !root.join("ai_models").exists());
+    }
+
+    /// Ön-indirme: (a) kurulum GÜNCEL → (b) bayat ama paketler önbellekte HAZIR → hiçbir olay yok (doğrulama / indirme yapılmaz).
+    #[test]
+    fn kp2_on_indirme_guncelse_ya_da_paketler_HAZIRSA_hicbir_sey_yapmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"EXE");
+        let base = onbellege(&root, "base.zip", &base_zip(b"YENI"), true);
+        let m = man(Some(&base), None, &[], &[]);
+        install::record_base_sha(&root, &base.sha);
+        let mut olaylar = Vec::new();
+        prefetch_updates(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        install::record_base_sha(&root, &"b".repeat(64));
+        assert!(pending_updates(&m, &root).unwrap().cached, "ön koşul: paket önbellekte hazır");
+        prefetch_updates(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        assert!(olaylar.is_empty(), "gereksiz ön-indirme: {olaylar:?}");
+    }
+
+    /// Katmanlı manifest + katmanlar güncel + yalnız profil bayat (boyutsuz) → ön-indirme YALNIZ profili ister.
+    #[test]
+    fn kp2_katmanli_on_indirme_yalniz_BAYAT_profili_ister() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"EXE");
+        let deps = onbellege(&root, "deps.zip", &zip_bayt(&[("PEMF_Backend/_internal/torch.dll", b"T")]), true);
+        let app = onbellege(&root, "app.zip", &base_zip(b"APP"), true);
+        install::record_layer_sha(&root, "deps", &deps.sha);
+        install::record_layer_sha(&root, "app", &app.sha);
+        install::add_installed_profiles(&root, &["vet".to_string()]);
+        install::record_model_sha(&root, "vet", &"c".repeat(64));
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"M")]), false);
+        let m = man(None, Some((&deps, &app)), &[("vet", &vet)], &[]);
+        let mut olaylar = Vec::new();
+        prefetch_updates(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        assert_eq!(olaylar, vec![Progress::Cached { what: "vet".into() }]);
+    }
+
+    /// Güncelleme gerekmiyorsa `update_installed` hiçbir olay üretmeden BOŞ geri-alma bilgisi döner (sağlık kapısı koşmaz).
+    #[test]
+    fn kp2_guncelleme_GEREKMIYORSA_bos_geri_alma_bilgisi_doner() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"EXE");
+        let base = onbellege(&root, "base.zip", &base_zip(b"EXE"), true);
+        install::record_base_sha(&root, &base.sha);
+        let m = man(Some(&base), None, &[], &[]);
+        let mut olaylar = Vec::new();
+        let g = update_installed(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        assert_eq!(g, GeriAlmaBilgisi::default());
+        assert!(!g.bir_sey_yapildi() && olaylar.is_empty(), "{olaylar:?}");
+    }
+
+    /// Katmansız güncelleme: yeni ağaç `runtime.new`'de (yarım sahne artığı temizlenerek) kurulur, ATOMİK takas edilir
+    /// (eski sürüm `runtime.old`'da; önceki artık silinir); kayıt sağlık kapısından ÖNCE yazılmaz, onayda yazılır.
+    #[test]
+    fn kp2_katmansiz_guncelleme_ayri_agacta_kurar_atomik_takas_eder_onayda_sha_yazar() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"ESKI-EXE");
+        install::record_base_sha(&root, &"b".repeat(64));
+        fs::create_dir_all(install::runtime_old_dir(&root).join("ARTIK")).unwrap();
+        fs::create_dir_all(install::runtime_new_dir(&root).join("YARIM")).unwrap();
+        let base = onbellege(&root, "base.zip", &base_zip(b"YENI-EXE"), true);
+        let m = man(Some(&base), None, &[], &[]);
+        let mut olaylar = Vec::new();
+        let g = update_installed(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+
+        assert_eq!(g, GeriAlmaBilgisi { tam_takas: true, base_sha: base.sha.clone(), ..Default::default() });
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root)), b"YENI-EXE");
+        assert_eq!(exe_icerigi(&install::runtime_old_dir(&root)), b"ESKI-EXE", "geri dönüş yolu (runtime.old) yok");
+        assert!(!install::runtime_old_dir(&root).join("ARTIK").exists(), "önceki takasın artığı silinmedi");
+        assert!(!install::runtime_dir(&root).join("YARIM").exists(), "yarım sahne artığı yeni sürüme karıştı");
+        assert!(olaylar.contains(&Progress::Extracting { what: crate::dil::t("rust.kurulum.eskiSurumTemizleniyor") }));
+        assert_eq!(install::read_installed_packages(&root).base, "b".repeat(64), "kayıt sağlık kapısından ÖNCE yazıldı");
+
+        guncellemeyi_onayla(&root, &g);
+        assert_eq!(install::read_installed_packages(&root).base, base.sha, "onayda base sha yazılmadı");
+        assert!(!install::runtime_old_dir(&root).exists());
+    }
+
+    /// Katmansız güncellemede yeni ağaç YAPISAL eksikse (web arayüzü yok) → InvalidData + `yeniKurulumEksik`; sahne silinir,
+    /// çalışan kurulum DOKUNULMADAN kalır (takas yapılmaz).
+    #[test]
+    fn kp2_katmansiz_guncellemede_YAPISAL_eksik_agac_reddedilir_calisan_kurulum_kalir() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"ESKI-EXE");
+        install::record_base_sha(&root, &"b".repeat(64));
+        let base = onbellege(&root, "base.zip", &zip_bayt(&[(&exe_zipte(), b"YENI")]), true);
+        let m = man(Some(&base), None, &[], &[]);
+        let e = update_installed(&m, &root, &mut |_| {}, &devam).unwrap_err();
+        let beklenen = crate::dil::t("rust.kurulum.yeniKurulumEksik");
+        assert!(
+            matches!(&e, FlowError::Io(io) if io.kind() == std::io::ErrorKind::InvalidData && io.to_string() == beklenen),
+            "{e:?}"
+        );
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root)), b"ESKI-EXE");
+        assert!(!install::runtime_new_dir(&root).exists() && !install::runtime_old_dir(&root).exists());
+    }
+
+    /// Katmanlı (deps+app) güncellemede APP açılımı düşerse → `runtime.new` silinir, çalışan kurulum ve kayıtlar aynen kalır.
+    #[test]
+    fn kp2_katmanli_guncellemede_app_acilimi_duserse_YENI_agac_silinir_calisan_kalir() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"ESKI-EXE");
+        install::record_layer_sha(&root, "deps", &"d".repeat(64));
+        install::record_layer_sha(&root, "app", &"e".repeat(64));
+        let deps = onbellege(&root, "deps.zip", &zip_bayt(&[("PEMF_Backend/_internal/torch.dll", b"T")]), true);
+        let app = onbellege(&root, "app.zip", &zip_bayt(&[(&exe_zipte(), b"YENI"), ("PEMF_Backend/CON.txt", b"x")]), true);
+        let m = man(None, Some((&deps, &app)), &[], &[]);
+        let e = update_installed(&m, &root, &mut |_| {}, &devam).unwrap_err();
+        assert!(matches!(e, FlowError::Extract(extract::ExtractError::PathEscape(_))), "{e:?}");
+        assert!(!install::runtime_new_dir(&root).exists(), "yarım yeni ağaç kaldı");
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root)), b"ESKI-EXE");
+        assert_eq!(install::read_installed_packages(&root).deps, "d".repeat(64));
+    }
+
+    /// Katmanlı manifest + katmanlar güncel + yalnız profil bayat → katmanlara dokunulmaz (geri-alma bilgisi BOŞ),
+    /// profil yenilenir ve gerçek sha yazılır.
+    #[test]
+    fn kp2_katmanli_yalniz_profil_bayatsa_katmanlara_DOKUNMAZ_profili_yeniler() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"EXE");
+        let deps = onbellege(&root, "deps.zip", &zip_bayt(&[("PEMF_Backend/_internal/torch.dll", b"T")]), true);
+        let app = onbellege(&root, "app.zip", &base_zip(b"APP"), true);
+        install::record_layer_sha(&root, "deps", &deps.sha);
+        install::record_layer_sha(&root, "app", &app.sha);
+        install::add_installed_profiles(&root, &["vet".to_string()]);
+        install::record_model_sha(&root, "vet", &"c".repeat(64));
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"YENI-MODEL")]), true);
+        let m = man(None, Some((&deps, &app)), &[("vet", &vet)], &[]);
+        let mut olaylar = Vec::new();
+        let g = update_installed(&m, &root, &mut |p| olaylar.push(p), &devam).unwrap();
+        assert_eq!(g, GeriAlmaBilgisi::default(), "katmanlara dokunulmadığı hâlde geri-alma sözü verildi");
+        assert_eq!(install::read_installed_packages(&root).models.get("vet"), Some(&vet.sha));
+        assert_eq!(fs::read(root.join("ai_models/ai_hub/em_kedi/a.onnx")).unwrap(), b"YENI-MODEL");
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root)), b"EXE");
+        assert_eq!(
+            olaylar,
+            vec![
+                Progress::ManifestFetched { version: "9.9.9".into(), schema: 2 },
+                Progress::Cached { what: "vet".into() },
+                Progress::Extracting { what: "vet".into() },
+            ]
+        );
+    }
+
+    /// Takas YAPILDIKTAN sonra profil yenilemesi düşerse → eski runtime GERİ konur (runtime.old / runtime.bozuk kalmaz) ve
+    /// özgün açılım hatası döner; profilin sha kaydı boş kalır (yarım model "güncel" sayılmaz).
+    #[test]
+    fn kp2_profil_yenilemesi_TAKASTAN_SONRA_duserse_eski_runtime_GERI_konur_ozgun_hata_doner() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"ESKI-EXE");
+        install::record_base_sha(&root, &"b".repeat(64));
+        install::add_installed_profiles(&root, &["vet".to_string()]);
+        install::record_model_sha(&root, "vet", &"c".repeat(64));
+        let base = onbellege(&root, "base.zip", &base_zip(b"YENI-EXE"), true);
+        let vet = onbellege(&root, "vet.zip", b"ZIP-DEGIL", true);
+        let m = man(Some(&base), None, &[("vet", &vet)], &[]);
+        let e = update_installed(&m, &root, &mut |_| {}, &devam).unwrap_err();
+        assert!(matches!(e, FlowError::Extract(extract::ExtractError::Zip(_))), "özgün hata yerine: {e:?}");
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root)), b"ESKI-EXE", "doğrulanmamış sürüm canlıda kaldı");
+        assert!(!install::runtime_old_dir(&root).exists() && !root.join("runtime.bozuk").exists());
+        assert_eq!(install::read_installed_packages(&root).models.get("vet"), Some(&String::new()));
+    }
+
+    /// App katmanı açılımı düşer: (a) kök listesi VAR → eski app yedekten GERİ konur, yedek silinir, açılım hatası döner;
+    /// (b) kök listesi YOK → yedek alınmamıştır, hiçbir şey taşınmaz, açılım hatası döner.
+    #[test]
+    fn kp2_app_katmani_acilimi_duserse_yedekliyse_GERI_koyar_yedeksizse_dokunmaz() {
+        for kok_listesi in [true, false] {
+            let d = tempfile::tempdir().unwrap();
+            let root = d.path().join("kok");
+            kurulu(&root, b"ESKI-EXE");
+            if kok_listesi {
+                fs::write(install::app_roots_path(&root), br#"{"roots":["PEMF_Backend/_internal/frontend/dist"]}"#).unwrap();
+            }
+            let zip_yolu = d.path().join("app.zip");
+            fs::write(&zip_yolu, b"ZIP-DEGIL").unwrap();
+            let mut butce = 0u64;
+            let r = app_katmanini_degistir(&zip_yolu, &root, &mut butce, &mut |_| {}, &devam);
+            assert!(matches!(r, Err(FlowError::Extract(extract::ExtractError::Zip(_)))), "{kok_listesi}: {r:?}");
+            let web = install::runtime_dir(&root).join(WEB);
+            assert_eq!(fs::read(&web).unwrap(), b"ESKI-WEB", "{kok_listesi}: eski app geri konmadı");
+            assert!(!install::app_backup_dir(&root).exists(), "{kok_listesi}: yedek dizini kaldı");
+        }
+    }
+
+    /// Atomik takas: (a) yeni ağaç YOKSA eski sürüm GERİ konur ve hata döner; (b) canlı runtime YOKSA yeni ağaç doğrudan yerleşir.
+    #[test]
+    fn kp2_atomik_takas_yeni_agac_yoksa_eskiyi_GERI_koyar_runtime_yoksa_dogrudan_yerlesir() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"ESKI-EXE");
+        let r = atomik_takas(&root);
+        assert!(matches!(&r, Err(FlowError::Io(io)) if io.kind() == std::io::ErrorKind::NotFound), "{r:?}");
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root)), b"ESKI-EXE", "takas düşünce ortada runtime kalmadı");
+        assert!(!install::runtime_old_dir(&root).exists());
+
+        let root2 = d.path().join("kok2");
+        let yeni = install::runtime_new_dir(&root2).join("PEMF_Backend");
+        fs::create_dir_all(&yeni).unwrap();
+        fs::write(yeni.join(crate::platform::backend_exe_name()), b"YENI").unwrap();
+        atomik_takas(&root2).unwrap();
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root2)), b"YENI");
+        assert!(!install::runtime_old_dir(&root2).exists() && !install::runtime_new_dir(&root2).exists());
+    }
+
+    /// Yarım takas kurtarma: runtime VAR ama yapısal bozuk + (a) yedek YOK → false; (b) yedek var ama kök listesi yok (geri
+    /// konacak bir şey yok) → false. İki durumda da ölü sahne (`runtime.new`) temizlenir, canlı runtime silinmez.
+    #[test]
+    fn kp2_yarim_takas_bozuk_runtime_kurtarilamazsa_false_ve_olu_sahne_temizlenir() {
+        for yedek_var in [false, true] {
+            let d = tempfile::tempdir().unwrap();
+            let root = d.path().join("kok");
+            fs::create_dir_all(install::runtime_dir(&root).join("PEMF_Backend")).unwrap();
+            fs::write(install::backend_path(&root), b"EXE").unwrap();
+            fs::create_dir_all(install::runtime_new_dir(&root).join("x")).unwrap();
+            if yedek_var {
+                fs::create_dir_all(install::app_backup_dir(&root).join("PEMF_Backend")).unwrap();
+            }
+            assert!(!yarim_takasi_kurtar(&root), "{yedek_var}: kurtarılamayan kurulum 'kurtarıldı' dendi");
+            assert!(!install::runtime_new_dir(&root).exists(), "{yedek_var}: ölü sahne kaldı");
+            assert_eq!(fs::read(install::backend_path(&root)).unwrap(), b"EXE");
+        }
+    }
+
+    /// Tam takas geri alması + `runtime.old` YOK → hiçbir şeye dokunmadan Ok (canlı ağaç olduğu gibi kalır).
+    #[test]
+    fn kp2_tam_takas_geri_almasi_eski_surum_yoksa_DOKUNMADAN_ok() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"EXE");
+        guncellemeyi_geri_al(&root, &GeriAlmaBilgisi { tam_takas: true, ..Default::default() }).unwrap();
+        assert_eq!(exe_icerigi(&install::runtime_dir(&root)), b"EXE");
+        assert!(!root.join("runtime.bozuk").exists());
+    }
+
+    /// Geri alma kaydı: kurulu cihazda her çağrı hedefin ("base:<sha>") sayacını ARTIRIR → sınırda otomatik kurulum durur;
+    /// kurulu olmayan kökte hedef yoktur → sayaç YAZILMAZ.
+    #[test]
+    fn kp2_geri_alma_kaydi_hedef_sayacini_artirir_kurulu_degilse_yazmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"EXE");
+        install::record_base_sha(&root, &"b".repeat(64));
+        let sha = "f".repeat(64);
+        let m = man(Some(&Pk { url: "https://example.invalid/base.zip".into(), sha: sha.clone(), boyut: 5 }), None, &[], &[]);
+        geri_almayi_kaydet(&root, &m);
+        geri_almayi_kaydet(&root, &m);
+        let hedef = format!("base:{sha}");
+        assert_eq!(install::read_runtime_attempt(&root), Some((hedef.clone(), 2)));
+        assert!(pending_updates(&m, &root).unwrap().otomatik_durduruldu, "deneme sınırı dolduğu hâlde otomatik kurulum sürüyor");
+
+        let bos = d.path().join("bos");
+        geri_almayi_kaydet(&bos, &m);
+        assert_eq!(install::read_runtime_attempt(&bos), None);
+    }
+
+    /// Benimseme: kurulu değilse hiçbir kayıt yazılmaz (`installed_packages.json` oluşmaz).
+    #[test]
+    fn kp2_benimseme_kurulu_DEGILSE_kayit_yazmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(install::installed_profiles_path(&root), r#"["vet"]"#).unwrap();
+        let m = man(None, None, &[("vet", &Pk { url: "https://example.invalid/vet.zip".into(), sha: "a".repeat(64), boyut: 1 })], &[]);
+        adopt_unknown_models(&m, &root).unwrap();
+        assert!(!install::installed_packages_path(&root).exists());
+    }
+
+    /// Plan: bayat base + bayat profil önbellekte HAZIR, güncel profil plana GİRMEZ → cached=true, bayt toplamı yalnız bayatlar,
+    /// hedef kimliği "base:<sha>".
+    #[test]
+    fn kp2_plan_guncel_profili_dislar_hazir_onbellegi_cached_sayar() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        kurulu(&root, b"EXE");
+        install::record_base_sha(&root, &"b".repeat(64));
+        install::add_installed_profiles(&root, &["home".to_string(), "vet".to_string()]);
+        let home = Pk { url: "https://example.invalid/home.zip".into(), sha: "a".repeat(64), boyut: 7 };
+        install::record_model_sha(&root, "home", &home.sha);
+        install::record_model_sha(&root, "vet", &"c".repeat(64));
+        let base = onbellege(&root, "base.zip", &base_zip(b"YENI"), true);
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"M")]), true);
+        let m = man(Some(&base), None, &[("home", &home), ("vet", &vet)], &[]);
+        let p = pending_updates(&m, &root).unwrap();
+        assert!(p.base && p.cached, "{p:?}");
+        assert_eq!(p.profiles, vec!["vet".to_string()], "güncel profil (home) plana girdi");
+        assert_eq!(p.bytes, base.boyut + vet.boyut);
+        assert_eq!(p.hedef, format!("base:{}", base.sha));
+    }
+
+    /// Plan paketleri: katmansız manifest + base BAYAT DEĞİL → base listeye GİRMEZ, yalnız planlı profilin paketleri döner.
+    #[test]
+    fn kp2_plan_paketleri_base_bayat_degilse_yalniz_profil_paketleri() {
+        let pk = |ad: &str| Pk { url: format!("https://example.invalid/{ad}"), sha: "a".repeat(64), boyut: 1 };
+        let m = Manifest::parse(&man(Some(&pk("base.zip")), None, &[("vet", &pk("vet.zip"))], &[])).unwrap();
+        let plan = UpdatePlan { profiles: vec!["vet".to_string()], ..Default::default() };
+        let etiketler: Vec<String> = plan_paketleri(&m, &plan).into_iter().map(|(_, e)| e).collect();
+        assert_eq!(etiketler, vec!["vet".to_string()]);
+    }
+
+    /// Profil kaldırma: boş liste → profilSecilmedi; kalan profil manifestte YOK → profilManifestteYok (hiçbir dosya silinmez).
+    #[test]
+    fn kp2_profil_kaldirma_bos_liste_ve_kalan_profil_manifestte_yoksa_REDDEDER() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        let vet = onbellege(&root, "vet.zip", &zip_bayt(&[("ai_models/ai_hub/em_kedi/a.onnx", b"A")]), true);
+        let m = Manifest::parse(&man(None, None, &[("vet", &vet)], &[])).unwrap();
+        install::add_installed_profiles(&root, &["home".to_string(), "vet".to_string()]);
+        let e = remove_profiles(&root, &m, &[], &mut |_| {}).unwrap_err();
+        assert!(matches!(&e, FlowError::ProfilKaldirma(s) if *s == crate::dil::t("rust.kurulum.profilSecilmedi")), "{e:?}");
+        let e = remove_profiles(&root, &m, &["vet".to_string()], &mut |_| {}).unwrap_err();
+        let beklenen = crate::dil::t_ile("rust.kurulum.profilManifestteYok", &[("ad", "home")]);
+        assert!(matches!(&e, FlowError::ProfilKaldirma(s) if *s == beklenen), "{e:?}");
+        assert!(install::cache_dir(&root).join("vet.zip").exists());
+    }
+
+    /// Profil kaldırma kenarları: dizin girdileri (`ai_models/`, `…/`) ve `./` parçaları normalize edilir; parça aynı zip'i
+    /// tekrar listeler (tekrar sayılmaz); diskte olmayan dosya atlanır; zip'te dosya ama diskte DİZİN olan girdiye dokunulmaz;
+    /// kalan profilin ortak dosyası KORUNUR; önbellek zip'i silinir (aynı yol ikinci kez "zaten yok" sayılır); kayıtlar güncellenir.
+    #[test]
+    fn kp2_profil_kaldirma_kenar_girdileri_dogru_isler_ortaklari_korur_rapor_dogru() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("kok");
+        let home = onbellege(&root, "home.zip", &zip_bayt(&[("ai_models/ai_hub/ortak/s.onnx", b"S")]), true);
+        let vet_bayt = zip_bayt(&[
+            ("ai_models/", b""),
+            ("ai_models/ai_hub/", b""),
+            ("ai_models/./ai_hub/em_kedi/a.onnx", b"AAA"),
+            ("ai_models/ai_hub/ortak/s.onnx", b"S"),
+            ("ai_models/ai_hub/em_kedi/yok.onnx", b"Y"),
+            ("ai_models/ai_hub/em_kedi/klasor", b"K"),
+        ]);
+        let vet = onbellege(&root, "vet.zip", &vet_bayt, true);
+        let m = Manifest::parse(&man(None, None, &[("home", &home), ("vet", &vet)], &[("vet", vec![&vet])])).unwrap();
+        let mk = install::models_dir(&root).join("ai_hub");
+        fs::create_dir_all(mk.join("em_kedi").join("klasor")).unwrap();
+        fs::create_dir_all(mk.join("ortak")).unwrap();
+        fs::write(mk.join("em_kedi").join("a.onnx"), b"AAA").unwrap();
+        fs::write(mk.join("ortak").join("s.onnx"), b"S").unwrap();
+        install::add_installed_profiles(&root, &["home".to_string(), "vet".to_string()]);
+        install::record_model_sha(&root, "vet", &vet.sha);
+
+        let r = remove_profiles(&root, &m, &["vet".to_string()], &mut |_| {}).unwrap();
+        assert_eq!(
+            r,
+            RemoveReport {
+                removed: vec!["vet".to_string()],
+                installed: vec!["home".to_string()],
+                freed_bytes: 3 + vet_bayt.len() as u64,
+                kept_shared: 1,
+            }
+        );
+        assert!(!mk.join("em_kedi").join("a.onnx").exists());
+        assert!(mk.join("ortak").join("s.onnx").exists(), "kalan profilin ortak dosyası silindi");
+        assert!(mk.join("em_kedi").join("klasor").is_dir(), "diskteki dizine dokunuldu");
+        assert!(!install::cache_dir(&root).join("vet.zip").exists() && install::cache_dir(&root).join("home.zip").exists());
+        assert_eq!(install::read_installed_packages(&root).models.get("vet"), None);
+    }
+
+    /// Zip listesi okunamazsa (dosya yok) → ProfilKaldirma `onbellekOkunamadi` (profil + dosya adı + işletim sistemi hatası).
+    #[test]
+    fn kp2_zip_listesi_dosya_yoksa_eyleme_donuk_hata() {
+        let d = tempfile::tempdir().unwrap();
+        let yol = d.path().join("yok.zip");
+        let os = fs::File::open(&yol).unwrap_err().to_string();
+        let e = zip_dosya_listesi(&yol, "vet").unwrap_err();
+        let beklenen = crate::dil::t_ile("rust.kurulum.onbellekOkunamadi", &[("profil", "vet"), ("dosya", "yok.zip"), ("hata", &os)]);
+        assert!(matches!(&e, FlowError::ProfilKaldirma(s) if *s == beklenen), "{e:?}");
+    }
+}
