@@ -8,8 +8,8 @@ geri çekilmesi (istemci kurulamazsa / kayıt yayını düşerse bekleme ×2, ba
 yutulur ve günlüğe yazılır, PULL'da çözülemeyen (başka kliniğin) kayıt yerele YAZILMAZ ve sayısı uyarılır, tünel URL'si
 TTL içinde son bilinenle korunur ve TTL aşılınca NULL yayınlanır, sürüm alanlı `upsert_device` reddedilirse BİR KEZ uyarı +
 eski imzayla yeniden deneme, yayınlanan eşleştirme kodu veri kökünde KALICI olandır, RPC hiç yoksa `pairing_code`suz tablo
-yedeği + "rpc_missing", veri kökü oluşturulamazsa `publish_now` istisna sızdırmaz / RPC yapmaz / iz bırakır (ve [SAHİBE]
-KP1-IA.4: `_publish_device_registry` ilk yayında False + "error" + UYARI vermeli — xfail), `init_cloud_sync` tek örnek.
+yedeği + "rpc_missing", veri kökü oluşturulamazsa `publish_now` istisna sızdırmaz / RPC yapmaz / iz bırakır (ve KP1-IA.4 —
+KP-2 A3 / Y240 ile düzeldi: `_publish_device_registry` ilk yayında False + "error" + UYARI), `init_cloud_sync` tek örnek.
 
 Sahte EN ALT katta: Supabase istemcisi (kayıtçı `rpc(...).execute()` / `table(...).upsert(...)`), `supabase` paketi
 (`sys.modules` girdisi: None ya da `create_client`i düşen modül — monkeypatch geri koyar), kasa
@@ -424,28 +424,38 @@ def test_KAYIT_RPC_HIC_YOKSA_pairing_codesuz_tablo_yedegi_rpc_missing(ortam):
 def test_PUBLISH_NOW_veri_koku_OLUSTURULAMAZSA_istisna_sizmaz_RPC_yok_ariza_IZ_birakir(ortam, monkeypatch, caplog):
     """Yeni işçi (henüz hiç kayıt yayını yok) + veri kökü oluşturulamıyor (gerçek `mkdir` arızası) → tünel geri çağrısı
     `publish_now` istisnasız döner (tünel yöneticisinin geri çağrı döngüsü kırılmaz), eksik yükle RPC / tablo yazımı YAPILMAZ ve
-    arıza günlükte İZ bırakır. İki geçerli iz: bugün `publish_now`ın DEBUG "publish_now hatasi: …" kolu (sync_worker.py:202-203;
-    iç neden [SAHİBE] KP1-IA.4), ürün düzeltilince `_publish_device_registry`nin UYARI "Device registry publish BASARISIZ: …" kolu
-    — bu test düzeltmeyle KIRILMAZ; sessizlik iki durumda da YASAK."""
+    arıza günlükte UYARI izi bırakır: `_publish_device_registry`nin "Device registry publish BASARISIZ: …" kolu. (KP1-IA.4 öncesi iz
+    `publish_now`ın DEBUG "publish_now hatasi: …" koluydu — `AttributeError` orada yutuluyordu; KP-2 A3 / Y240 ile düzeldi.)"""
+    from servers import sync_worker as sw
+
     ist = _Istemci()
     w = _isci(ist)
+    monkeypatch.setattr(sw, "_sync_worker", w)
     _veri_koku_bozulur(ortam, monkeypatch)
     caplog.set_level(logging.DEBUG)
     w.publish_now("https://yeni.trycloudflare.com")
     assert (ist.rpc_cagri, ist.tablo_cagri) == ([], [])
-    assert any(m.startswith(("publish_now hatasi: ", "Device registry publish BASARISIZ: ")) for m in _log(caplog))
+    assert any(m.startswith("Device registry publish BASARISIZ: ") for m in _log(caplog))
+    assert not any(m.startswith("publish_now hatasi: ") for m in _log(caplog))
+    assert sw.get_registry_status() == "error"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AttributeError,
-    reason="[SAHİBE] ilk kayıt yayını RPC öncesi düşerse `_registry_status` tanımsız → AttributeError sızar; durum 'error' olmaz "
-    "(/api/health 'unknown'), UYARI yazılmaz — apps/backend/servers/sync_worker.py:710 (`__init__` özniteliği kurmuyor)",
-)
+def test_YENI_isci_kayit_durumu_UNKNOWN_ile_baslar(ortam, monkeypatch):
+    """KP-2 A3 / Y240: yeni işçi (henüz kayıt yayını yok) → öznitelik `_registry_status` VAR ve "unknown"; `/api/health` alanı
+    (`get_registry_status`) "unknown" der (öznitelik yokluğunun `getattr` varsayılanına değil kurucunun değerine dayanır)."""
+    from servers import sync_worker as sw
+
+    w = _isci(_Istemci())
+    monkeypatch.setattr(sw, "_sync_worker", w)
+    assert w.__dict__["_registry_status"] == "unknown"
+    assert sw.get_registry_status() == "unknown"
+
+
 def test_KAYIT_ilk_yayin_RPC_ONCESI_duserse_False_durum_ERROR_ve_UYARI(ortam, monkeypatch, caplog):
     """Yeni işçi + veri kökü oluşturulamıyor → `_publish_device_registry` FIRLATMAZ, False döner; `get_registry_status()`
     (/api/health alanı) "error"; UYARI "Device registry publish BASARISIZ: …"; RPC yok (DENETIM 2026-08-28 #02 görünürlük
-    sözleşmesi, sync_worker.py:700-714)."""
+    sözleşmesi). KP1-IA.4 GERÇEK ÜRÜN HATASIYDI (`__init__` `_registry_status`'u kurmuyordu → except dalı `AttributeError`
+    yükseltiyordu, durum "unknown" kalıyordu); KP-2 A3 (Y240) ile düzeldi."""
     from servers import sync_worker as sw
 
     ist = _Istemci()

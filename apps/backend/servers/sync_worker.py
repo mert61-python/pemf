@@ -122,6 +122,7 @@ class CloudSyncWorker:
         except Exception:
             self.device_id = "unknown-device"
         self._reg_secret = None  # Coverage-audit P1: bulut capability-token cache (_registry_secret)
+        self._registry_status = "unknown"  # Y240 (KP1 IA.4): ilk yayın RPC öncesi düşerse except dalı bu alanı OKUR
 
         self.client = None
         if self.supabase_url and self.supabase_key:
