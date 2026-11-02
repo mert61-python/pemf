@@ -162,5 +162,5 @@ def test_betik_olarak_calistirilinca_main_cikis_koduyla_biter(ortam, monkeypatch
         runpy.run_path(ku.__file__, run_name="__main__")
     assert c.value.code == 1
     assert all(y in sys.path for y in beklenen), (
-        "kaynak ağacından koşunca depo kökü / appsackend yola eklenmedi (utils bulunmaz)"
+        "kaynak ağacından koşunca depo kökü / apps/backend yola eklenmedi (utils bulunmaz)"
     )
