@@ -711,6 +711,15 @@ def test_veri_koku_cozulemez_ve_EV_pemf_gui_YOKSA_dizin_kurulur_DB_acilir(tmp_pa
     monkeypatch.setenv("USERPROFILE", str(ev))
     monkeypatch.setenv("HOME", str(ev))
     _kasa_anahtari(monkeypatch, "")
-    d = pdb.get_patient_database()
-    tekil_temiz.append(d)
+    # A-46 atlama kapısı (conftest) xfail raporunun İZİNİ de "atlama nedeni" diye tarar; ürünün şema kurulumu izinde
+    # şifreleme sürücüsünün adını geçirdiği için bu belge-xfail süiti çıkış 1 yapıyordu (KP-2 kapanış, 03.11 ölçüldü).
+    # Düşüş burada yakalanır ve YALNIZ iletiyle, istisna zinciri olmadan bildirilir — sözleşme aynı.
+    try:
+        d = pdb.get_patient_database()
+    except RuntimeError as e:
+        hata = str(e)
+    else:
+        hata = None
+        tekil_temiz.append(d)
+    assert hata is None, f"hasta DB açılmadı: {hata}"
     assert (ev / ".pemf_gui" / "patients.db").exists()
