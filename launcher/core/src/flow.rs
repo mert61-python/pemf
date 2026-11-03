@@ -1024,6 +1024,13 @@ impl GeriAlmaBilgisi {
         // doğrulanmamış sürüm sessizce onaylanırdı.
         self.tam_takas || self.app_yedegi || self.app_degisti
     }
+
+    /// Onaylanınca kurulu sayılacak paket kimliği — `install::backend_env_with` ile AYNI kural: katmanlıda
+    /// `app`, katmansızda `base`. Boşsa `None` (kimlik kayıttan okunur). Sağlık kapısındaki backend'e geçer
+    /// (`start_backend_kimlikli`), yoksa güncellemeden sonraki ilk oturum eski `buildId`i raporlar.
+    pub fn paket_kimligi(&self) -> Option<&str> {
+        [self.app_sha.as_str(), self.base_sha.as_str()].into_iter().find(|s| !s.is_empty())
+    }
 }
 
 /// Yapısal doğrulama: ağaç en azından ÇALIŞTIRILABİLİR görünüyor mu?
@@ -1814,12 +1821,23 @@ pub fn start_backend(
     install_root: &Path,
     on: &mut dyn FnMut(Progress),
 ) -> Result<(std::process::Child, String, u16), FlowError> {
+    start_backend_kimlikli(install_root, on, None)
+}
+
+/// `start_backend` + paket kimliği: güncelleme sağlık kapısı `GeriAlmaBilgisi::paket_kimligi()`ni verir
+/// (kayıt henüz eski — bkz. `install::paket_kimligini_uygula`). `None` = kayıttaki kimlik.
+pub fn start_backend_kimlikli(
+    install_root: &Path,
+    on: &mut dyn FnMut(Progress),
+    paket_kimligi: Option<&str>,
+) -> Result<(std::process::Child, String, u16), FlowError> {
     let port = crate::backend::find_free_port(install::DEFAULT_PORT, 50)?;
     on(Progress::StartingBackend { port });
-    let child = crate::backend::start_and_wait(
+    let child = crate::backend::start_and_wait_kimlikli(
         install_root,
         port,
         std::time::Duration::from_secs(180),
+        paket_kimligi,
     )?;
     let url = crate::backend::app_url(port);
     // Hotspot keep-alive görevini her açılışta eşitle: idempotent, penceresiz ve
@@ -2072,6 +2090,20 @@ mod tests {
             err,
             FlowError::Manifest(crate::manifest::ManifestError::UnsupportedPlatform { .. })
         ));
+    }
+
+    /// YAYIN 2026-11-03 (`buildId` bulgusu): sağlık kapısına geçen kimlik `install::backend_env_with` ile AYNI kural —
+    /// katmanlıda `app`, katmansızda `base`; ikisi de boşsa `None` (kimlik kayıttan okunur).
+    #[test]
+    fn paket_kimligi_katmanlida_APP_katmansizda_BASE_bossa_YOK() {
+        let (a, b) = ("a".repeat(64), "b".repeat(64));
+        let katmanli = GeriAlmaBilgisi { tam_takas: true, deps_sha: "c".repeat(64), app_sha: a.clone(), ..Default::default() };
+        assert_eq!(katmanli.paket_kimligi(), Some(a.as_str()), "deps ya da boş kimlik seçildi");
+        let ikisi = GeriAlmaBilgisi { app_sha: a.clone(), base_sha: b.clone(), ..Default::default() };
+        assert_eq!(ikisi.paket_kimligi(), Some(a.as_str()), "app varken base seçildi");
+        let tek_parca = GeriAlmaBilgisi { base_sha: b.clone(), ..Default::default() };
+        assert_eq!(tek_parca.paket_kimligi(), Some(b.as_str()));
+        assert_eq!(GeriAlmaBilgisi { app_yedegi: true, ..Default::default() }.paket_kimligi(), None);
     }
 
     /// DENETİM 2026-08-04: 4xx KALICIDIR — yeniden denemek kullanıcıyı ~22 sn boşuna bekletiyordu.

@@ -1177,6 +1177,23 @@ where
     env
 }
 
+/// Güncelleme SAĞLIK KAPISINDA başlatılan backend'in paket kimliği (`ENV_BASE_SHA`).
+///
+/// ⚠️ YAYIN 2026-11-03 bulgusu: kayıt (`installed_packages.json`) sağlık kapısı GEÇTİKTEN SONRA yazılır
+/// (`flow::guncellemeyi_onayla`), ama kapıda başlatılan süreç onaydan sonra da ÇALIŞMAYA DEVAM EDER →
+/// `backend_env` kimliği eski kayıttan okuyordu ve güncellemeden sonraki ilk oturum `/api/health`te
+/// ESKİ `buildId`i raporluyordu (destek / bulut envanteri cihazı yanlış paketle görür). Kapıdaki
+/// başlatma, onaylanacak kimliği buradan geçirir; `None` / boş = kayıttaki değer AYNEN kalır.
+pub fn paket_kimligini_uygula(
+    mut env: BTreeMap<String, String>,
+    paket_kimligi: Option<&str>,
+) -> BTreeMap<String, String> {
+    if let Some(k) = paket_kimligi.map(str::trim).filter(|k| !k.is_empty()) {
+        env.insert(ENV_BASE_SHA.to_string(), k.to_string());
+    }
+    env
+}
+
 /// Kurulu backend'in sürümü (`runtime/PEMF_Backend/_internal/VERSION`).
 ///
 /// GERİ ÇAĞIRMA için gerekli (bkz. `Manifest::min_supported_version`): "bu cihaz destek dışı
@@ -2516,6 +2533,24 @@ mod tests {
             .collect::<Vec<_>>(),
             "backend'e giden ortam değişkeni kümesi değişti — bilinçli mi?"
         );
+    }
+
+    /// YAYIN 2026-11-03 (`buildId` bulgusu): sağlık kapısının verdiği kimlik kayıttakinin ÜZERİNE yazılır, başka anahtara
+    /// dokunmaz; yok / boş / yalnız boşluk = kayıttaki AYNEN; kayıt yokken (ilk kurulum) kimlik EKLENİR.
+    #[test]
+    fn paket_kimligini_uygula_KAPI_kimligi_kaydi_ezer_bos_ezmez() {
+        let mut env = BTreeMap::new();
+        env.insert(ENV_BASE_SHA.to_string(), "cb33f48382a2".to_string());
+        env.insert(ENV_API_PORT.to_string(), "8000".to_string());
+        let yeni = paket_kimligini_uygula(env.clone(), Some("d8b0fea4bfaf"));
+        assert_eq!(yeni.get(ENV_BASE_SHA).map(String::as_str), Some("d8b0fea4bfaf"), "kapı kimliği uygulanmadı");
+        assert_eq!(yeni.get(ENV_API_PORT).map(String::as_str), Some("8000"), "başka anahtar değişti");
+        assert_eq!(yeni.len(), env.len());
+        for k in [None, Some(""), Some("   ")] {
+            assert_eq!(paket_kimligini_uygula(env.clone(), k), env, "{k:?} kaydı ezdi");
+        }
+        let ilk = paket_kimligini_uygula(BTreeMap::new(), Some(" abc "));
+        assert_eq!(ilk.get(ENV_BASE_SHA).map(String::as_str), Some("abc"));
     }
 
     /// LN L8 · Y96 (sahip): veri kökünün ACL'i yalnız PAYLAŞILAN YEREL gruba `Değiştir` verir; yerel `Users` (S-1-5-32-545) HİÇBİR

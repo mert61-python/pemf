@@ -604,6 +604,17 @@ pub fn start_and_wait(
     port: u16,
     timeout: Duration,
 ) -> Result<Child, BackendError> {
+    start_and_wait_kimlikli(install_root, port, timeout, None)
+}
+
+/// `start_and_wait` + paket kimliği (`ENV_BASE_SHA`) üzerine yazımı: güncelleme sağlık kapısı onaylanacak
+/// kimliği verir (bkz. `install::paket_kimligini_uygula`); `None` = kayıttaki kimlik.
+pub fn start_and_wait_kimlikli(
+    install_root: &Path,
+    port: u16,
+    timeout: Duration,
+    paket_kimligi: Option<&str>,
+) -> Result<Child, BackendError> {
     let exe = install::backend_path(install_root);
     if !exe.exists() {
         return Err(BackendError::NotFound(exe.display().to_string()));
@@ -627,6 +638,7 @@ pub fn start_and_wait(
     // Aynı harita hem çocuğa verilir HEM DE `read_tail`e — günlük yolu çocuğun gördüğü
     // `PEMF_DATA_DIR`/`PEMF_LOG_DIR` ile çözülsün (bkz. read_tail'deki arıza notu).
     let cocuk_env = install::backend_env(install_root, port, &nonce);
+    let cocuk_env = install::paket_kimligini_uygula(cocuk_env, paket_kimligi);
     for (k, v) in &cocuk_env {
         cmd.env(k, v);
     }
@@ -1919,6 +1931,23 @@ mod tests {
             g.find("cmd.spawn()").expect("spawn çağrısı yok"),
         );
         assert!(e < k && k < s, "kayıt çocuk ortamından önce ya da süreç başladıktan sonra");
+    }
+
+    /// YAYIN 2026-11-03 (`buildId` bulgusu): kimlikli başlatma, paket kimliğini çocuk ortamı KURULDUKTAN SONRA ve çocuğa
+    /// VERİLMEDEN ÖNCE uygular; kimliksiz `start_and_wait` aynı gövdeye `None` ile düşer (davranışı değişmez).
+    #[test]
+    fn KRITIK_kimlikli_baslatma_paket_kimligini_cocuga_vermeden_ONCE_uygular() {
+        let src = include_str!("backend.rs").replace("\r\n", "\n");
+        let sade = &src[src.find("pub fn start_and_wait(").expect("start_and_wait yok")..];
+        let sade = &sade[..sade.find("pub fn start_and_wait_kimlikli(").expect("kimlikli başlatma yok")];
+        assert!(sade.contains("start_and_wait_kimlikli(install_root, port, timeout, None)"), "kimliksiz başlatma None ile düşmüyor");
+        let g = &src[src.find("pub fn start_and_wait_kimlikli(").expect("kimlikli başlatma yok")..];
+        let (e, u, d) = (
+            g.find("let cocuk_env = install::backend_env(").expect("çocuk ortamı yok"),
+            g.find("let cocuk_env = install::paket_kimligini_uygula(cocuk_env, paket_kimligi);").expect("kimlik UYGULANMIYOR"),
+            g.find("for (k, v) in &cocuk_env").expect("ortam çocuğa verilmiyor"),
+        );
+        assert!(e < u && u < d, "kimlik çocuk ortamından önce ya da çocuğa verildikten sonra uygulanıyor");
     }
 
     /// LN L6 · İG-8.21: `backend.port`'taki dinleyici TCP kabul ediyor ama yoklamaya HİÇ yanıt vermiyorsa (yük altındaki backend)

@@ -11,8 +11,9 @@ kapıları `main.rs`'te bir dizenin İLK geçtiği yerin ±900/1200 karakterlik 
     bozan yayın onaylanır, `runtime.old` silinir — D1.37'nin güvenlik ağı).
 
 Bu modül `main.rs`'i YORUMLARI SOYULMUŞ (Rust'a özgü, dize-bilinçli `rs_soyucu`) hâlde okur,
-`match flow::start_backend(&root2, &mut on) {` bloğunu süslü-parantez eşlemesiyle bulur ve her
-iddiayı DOĞRU KOLUN üst düzeyinde (alt blok içinde değil) TAM İFADE olarak arar.
+`match flow::start_backend_kimlikli(&root2, &mut on, geri.paket_kimligi()) {` bloğunu süslü-parantez eşlemesiyle bulur
+ve her iddiayı DOĞRU KOLUN üst düzeyinde (alt blok içinde değil) TAM İFADE olarak arar. (2026-11-04: sağlık kapısı backend'i
+onaylanacak paket kimliğiyle başlatır — `buildId` bulgusu; eskiden `match flow::start_backend(&root2, &mut on) {`.)
 
 ⚠️ Davranışsal Rust kolu (onay kararını saf fonksiyona çıkarıp app crate testinde ölçmek) bu
 oturumda YAPILMADI: Rust/cargo testleri gerçek ProgramData'ya yazıyor (B-8.7 → D5.41).
@@ -27,7 +28,7 @@ from rs_soyucu import blok_sonu, ifade_deseni, rs_soy, ust_duzey_eslesmeler
 
 MAIN_RS = Path(__file__).resolve().parents[1] / "launcher" / "app" / "src" / "main.rs"
 
-ESLESME = "match flow::start_backend(&root2, &mut on) {"
+ESLESME = "match flow::start_backend_kimlikli(&root2, &mut on, geri.paket_kimligi()) {"
 OK_KOLU = "Ok((child, url, port)) => {"
 ERR_KOLU = "Err(e) => {"
 KAYDET = "flow::geri_almayi_kaydet(&root2, &manifest_raw);"

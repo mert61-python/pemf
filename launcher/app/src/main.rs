@@ -1321,7 +1321,9 @@ async fn apply_runtime_update(
         if !geri.bir_sey_yapildi() {
             return Ok(GuncellemeSonucu::DegisiklikYok);
         }
-        match flow::start_backend(&root2, &mut on) {
+        // Bu süreç onaydan SONRA da çalışmaya devam eder → kimliği eski kayıttan değil, onaylanacak paketten
+        // (YAYIN 2026-11-03: güncellemeden sonraki ilk oturum `/api/health`te eski `buildId`i raporluyordu).
+        match flow::start_backend_kimlikli(&root2, &mut on, geri.paket_kimligi()) {
             Ok((child, url, port)) => {
                 // ⚠️ DENETİM 2026-08-23 (C5): "AYAKTA" ≠ "KULLANILABİLİR".
                 // `wait_for_health` HTTP 200 + nonce ölçer; backend AYNI yanıtta `dbReady` alanını
@@ -3278,6 +3280,21 @@ mod tests {
         assert_eq!((a3, c3), (0, false));
         let (_, c4) = rotasyon_ardisik(true, a3, 5); // 1
         assert!(!c4, "sıfırlama sonrası tek kesin-ölü çıkmamalı");
+    }
+
+    /// YAYIN 2026-11-03 ÖNCE-KIRMIZI (`buildId` bulgusu): güncelleme SAĞLIK KAPISINDA başlatılan backend onaydan sonra da
+    /// çalışmaya devam eder → paket kimliğini eski kayıttan değil, onaylanacak paketten (`geri.paket_kimligi()`) almalı;
+    /// yoksa güncellemeden sonraki ilk oturum `/api/health`te eski `buildId`i raporlar (bu makinede 03.11'de ölçüldü).
+    #[test]
+    fn KRITIK_saglik_kapisi_backendi_ONAYLANACAK_paket_kimligiyle_baslar() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let kapi = &soy[soy.find("flow::update_installed(&manifest_raw, &root2").expect("güncelleme yolu yok")..];
+        let kapi = &kapi[..kapi.find("flow::guncellemeyi_onayla(&root2, &geri)").expect("onay yok")];
+        assert!(
+            kapi.contains("flow::start_backend_kimlikli(&root2, &mut on, geri.paket_kimligi())"),
+            "sağlık kapısı backend'i onaylanacak kimlik olmadan başlatıyor"
+        );
+        assert!(!kapi.contains("flow::start_backend(&root2"), "sağlık kapısında kimliksiz start_backend kaldı");
     }
 
     /// Rust yorum-soyucu (satır + blok + string-bilinçli) — yapısal kapılar doc-comment'lerdeki
