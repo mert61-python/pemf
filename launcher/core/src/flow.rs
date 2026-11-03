@@ -3502,8 +3502,8 @@ pub fn ").map(|k| i + k).unwrap_or(src.len());
 /// silinir · onarımın kayıt / disk kolları · ön-indirme kuruluma dokunmaz · katmansız / katmanlı güncelleme + atomik takas +
 /// geri alma · yarım takas kurtarma kolları · deneme sayacı · profil kaldırma kenar kolları.
 /// AĞ YOK: paket URL'leri pinlenmemiş `example.invalid` — önbellek ıskalarsa indirme host pininde reddedilir (gerçek ağa çıkılmaz).
-#[cfg(test)]
 #[allow(non_snake_case)]
+#[cfg(test)]
 mod kp2_testleri {
     use super::*;
     use sha2::{Digest, Sha256};
