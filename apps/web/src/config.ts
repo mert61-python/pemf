@@ -123,7 +123,7 @@ export const DOWNLOAD_HOST = {
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
   launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
-  windowsTag: 'launcher-v1.9.51', // 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
+  windowsTag: 'launcher-v1.9.52', // 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-10, sahip isteği). İndirilen dosya `PEMFVetClient-Setup.exe`
   // diye kaydediliyordu; İndirilenler klasöründe üç sürüm yan yana durunca hangisinin hangisi
   // olduğu anlaşılmıyordu ve destek çağrısında "hangi setup'ı kurdunuz?" sorusu cevapsız
@@ -148,7 +148,7 @@ export const DOWNLOAD_HOST = {
   // 2026-08-06: Android AYRI etiket. Eskiden mac/linux ile ORTAK launcherTag'i (1.9.2) kullanıyordu
   // → APK güncellense bile site ESKİ sürümü (2.3.2) veriyordu. Mobil sürüm döngüsü masaüstünden
   // bağımsız olduğu için kendi etiketi olmalı.
-  androidTag: 'client-app-v1.9.48',
+  androidTag: 'client-app-v1.9.51',
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-11) — Windows ile AYNI gerekçe: İndirilenler klasöründe üç
   // sürüm yan yana durunca hangisinin hangisi olduğu anlaşılmıyor ve destek çağrısında "hangi
   // APK'yı kurdunuz?" cevapsız kalıyordu. Windows `windowsTag`ten türetilebiliyor (etiket sürümü
@@ -159,7 +159,7 @@ export const DOWNLOAD_HOST = {
   // ⚠️ SÜRÜM FARKI KULLANICIYA AÇIKLANIR (metin denetimi 2026-08-20): İndir sayfasında bilgisayar
   // kartı "1.9.32", telefon kartı "2.3.18" gösteriyor ve sebebi hiçbir yerde yazmıyordu. Telefon
   // uygulaması AYRI sürüm döngüsüne sahiptir (ayrı yayın etiketi); numaraların eşleşmesi beklenmez.
-  androidVersion: '2.3.34', // 2026-09-11: bobin 6-7 kabloyla (STM32) suruluyor, tek liste 'Bobinler 1-7'; bobin 1-5 akim gostergesi; olculmeyen alan kisa cizgi
+  androidVersion: '2.3.35', // 2026-11-03 (client-app-v1.9.51): İngilizce dil seçeneği; Android güncelleme bildirimi Türkçe karakterlerle
   /** İndir sayfasında telefon kartında gösterilir — uygulamanın ROLÜNÜ açıklar (tek başına
    *  terapi uygulamaz; masaüstündeki cihazın uzaktan kumandasıdır). */
   androidRolNotu: 'Kliniğinizdeki cihaza bağlanır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensörleri izleyebilir ve hasta kayıtlarına bakabilirsiniz. Cihazın bağlı olduğu klinik bilgisayarı açık olmalıdır.',
@@ -181,10 +181,10 @@ export const CLIENT = {
   // ⚠️ `windowsTag` ile AYNI sürüm olmalı — sayfada "1.9.18" okuyup adında 1.9.20 yazan dosya
   // indirmek kullanıcıyı yanıltır ve destek çağrısını çözümsüz bırakır. Etiket yükseltilirken
   // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
-  version: '1.9.51',
+  version: '1.9.52',
   channel: 'Sürüm 2026.1',
   sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner). ⚠️ Windows 1.9.43'ten beri ~252 MB (WebView2 offline installer gömülü); mac/linux hâlâ küçük. Kart tek sizeMB gösteriyor — Windows'a özel boyut ayrı iş.
-  releaseDate: '10 Eyl 2026',
+  releaseDate: '3 Kas 2026',
   ready: DOWNLOAD_HOST.ready,
   downloads: {
     windows: {
@@ -543,9 +543,10 @@ export const FEATURES = [
 export const PATCH = {
   version: CLIENT.version,
   date: CLIENT.releaseDate,
+  // 2026-11-03: launcher 1.9.52 notları (pemf CHANGELOG "## launcher 1.9.52 — 2026-11-03"); önceki notlar app 1.9.19'undu.
   notes: [
-    'Güvenlik ve kayıt doğruluğu sürümü: bobin bir komutu reddederse artık ekranda sebebiyle görünür ve tedavi geçmişine hiç çalışmamış bobin yazılmaz.',
-    'Acil durdurmanın bulut yedeği ve kapanan seans kayıtları arka planda sağlamlaştırıldı; telefon ile bilgisayar sürümü farklıysa uygulama bunu artık açıkça söyler.',
+    'Açılışta pencerenin donması giderildi; boştayken kapatıldığında “önceki oturumda ACİL DURDUR” uyarısı yanlışlıkla bir sonraki açılışa kalmıyor.',
+    'Uygulamalar artık İngilizce de kullanılabiliyor (Ayarlar › “Dil / Language”); kurulum ve kaldırma pencereleri de Türkçe ya da İngilizce.',
   ],
 } as const
 
