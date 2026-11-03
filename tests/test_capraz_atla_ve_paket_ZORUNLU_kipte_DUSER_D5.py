@@ -118,6 +118,9 @@ def _alt_kosu(tmp_path: Path, ad: str, govde: str, zorunlu: bool) -> tuple[int, 
     if zorunlu:
         env["PEMF_CAPRAZ_KAYNAK_ZORUNLU"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    # Çıktı aşağıda UTF-8 çözülür: çocuk da UTF-8 yazmalı. Y30 (`yayin_oncesi_suit.ps1`) değişkeni vermez → borudaki çocuk cp1254
+    # yazıyor, "isteğe bağlı" bozuk okunup kol kırmızıydı (ölçüldü 2026-11-03; denetim koşucusu değişkeni verdiği için görünmedi).
+    env["PYTHONIOENCODING"] = "utf-8"
     komut = [sys.executable, "-m", "pytest", str(kok / "tests" / "test_modul_duzeyi.py"), "-q", "-rfEs"]
     komut += ["-p", "no:cacheprovider", "-p", "no:randomly", "--rootdir", str(kok), "-c", str(kok / "pytest.ini")]
     r = subprocess.run(

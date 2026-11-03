@@ -11,7 +11,7 @@ D3.48'in "başka sürüm yüklenmez, başka köke düşülmez, 503 + açık uyar
 SÖZLEŞME: çözücü (`utils.model_downloader`) VARKEN `pt_coz` onu kullanır — `PEMF_AI_MODELS_DIR` 1. köktür ve aday aynı süzgeçten geçer:
 özet tutmazsa `ModelButunlukHatasi` (ana model yolu → `_ai_fail` 503 + `ai.hata.modelButunluk`; XAI ikincil → açıklama üretilmez, analiz
 sürer), kesik kopyada sonraki kök. Çözücü YOKSA (ai_service imajı — sahada yok) eski davranış: yalnız mount.
-Uçtan uca kollar GERÇEK ağırlıkla (G3I_MODELLER=1; yoksa atlanır, PEMF_GOLDEN_REQUIRED=1'de düşer): kidney_ct'nin PT ikizi yerine BAŞKA
+Uçtan uca kollar GERÇEK ağırlıkla (PEMF_AI_MODELS_DIR ya da ürün kökleri; yoksa atlanır, PEMF_GOLDEN_REQUIRED=1'de düşer): kidney_ct'nin PT ikizi yerine BAŞKA
 modelin (feline yolov8s.pt) yüklenebilir ağırlığı — HEAD açıklamayı yanlış sürümle SESSİZCE üretiyordu.
 """
 
@@ -45,6 +45,13 @@ def kok(tmp_path, monkeypatch):
     monkeypatch.setattr(md, "_ozet_onbellegi", {})
     monkeypatch.setenv("PEMF_AI_MODELS_DIR", str(tmp_path / "modeller"))
     monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "pd"))  # 2. kök boş (sahte ev kökü sızmasın)
+    # Makinenin GERÇEK kökleri (kalıcı AppData `.ai_models`, `release_assets/ai_models`, paket) dışarıda: yayın makinesinde (guii, Y30)
+    # `release_assets/ai_models`te gerçek GhostNetV2.pt durur → kesik adaydan sonraki kök onu bulur, KARŞIT kol yanlış nedenle
+    # kırmızı olurdu (ölçüldü 2026-11-03; temiz klonda o kökler boş). Ürünün kök SIRASI korunur, yalnız tmp altındakiler kalır.
+    tum_kokler = md._candidate_model_roots
+    monkeypatch.setattr(
+        md, "_candidate_model_roots", lambda: [r for r in tum_kokler() if Path(r).is_relative_to(tmp_path)]
+    )
     return tmp_path / "modeller", md
 
 
@@ -140,18 +147,31 @@ os._exit(0)
 """
 
 
+def _gercek_agirlik_koku() -> Path | None:
+    """Gerçek ağırlık kökü: önce `PEMF_AI_MODELS_DIR` (denetim koşucusu verir), yoksa ÜRÜNÜN kendi kök listesi (`_candidate_model_roots`;
+    yayın makinesinde `release_assets/ai_models`). Y30 (`yayin_oncesi_suit.ps1`) değişkeni VERMEZ — yalnız ona bakılınca iki uçtan uca
+    kol PEMF_GOLDEN_REQUIRED=1'de her yayında düşüyordu (ölçüldü 2026-11-03)."""
+    from utils.model_downloader import _candidate_model_roots
+
+    env = os.environ.get("PEMF_AI_MODELS_DIR", "")
+    for k in ([Path(env)] if env else []) + list(_candidate_model_roots()):
+        if all((Path(k) / r).is_file() for r in (CT_ONNX, RETIC_PT)):
+            return Path(k)
+    return None
+
+
 @pytest.fixture(scope="module")
 def uctan_uca(tmp_path_factory):
     from golden.eser import atla
 
-    gercek = os.environ.get("PEMF_AI_MODELS_DIR", "")
-    if not gercek or not all((Path(gercek) / r).is_file() for r in (CT_ONNX, RETIC_PT)):
-        atla("gerçek ağırlık kökü yok (G3I_MODELLER=1 ile koşulur)")
+    gercek = _gercek_agirlik_koku()
+    if gercek is None:
+        atla("gerçek ağırlık kökü yok (PEMF_AI_MODELS_DIR / ürün kökleri: release_assets/ai_models)")
     tmp = tmp_path_factory.mktemp("d3i_e1")
     kok = tmp / "modeller"
     for hedef, kaynak in ((CT_ONNX, CT_ONNX), (CT_PT, RETIC_PT)):  # PT ikizi yerine BAŞKA modelin yüklenebilir ağırlığı
         (kok / hedef).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(Path(gercek) / kaynak, kok / hedef)
+        shutil.copyfile(gercek / kaynak, kok / hedef)
     (kok / CPN).parent.mkdir(parents=True, exist_ok=True)
     (kok / CPN).write_bytes(b"\x80\x02" + b"K" * 300_000)  # CPN: manifestle TUTMAYAN kopya
     env = yalitik_ortam(tmp / "ev")

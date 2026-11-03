@@ -30,9 +30,21 @@ def _kok(tmp_path, onnx_bayt: bytes):
     return kok
 
 
+def _temiz_klon(monkeypatch, tmp_path):
+    """Modül yanı = TEMİZ KLON (yalnız izlenen `best_model.txt`). Yayın makinesinde (guii, Y30) modül yanında git-ignored GERÇEK ONNX /
+    preprocessor durur; ürün önce oraya baktığı (`yan_dosya_coz`) ve `eser_var_mi` depo kökünü sorduğu için sahte kökteki bozuk eser
+    hiç yüklenmiyordu — üç kol 'gecti' ile kırmızıydı (ölçüldü 2026-11-03)."""
+    temiz = tmp_path / "temiz_klon"
+    (temiz / D).mkdir(parents=True)
+    shutil.copy2(E.KOK / D / "best_model.txt", temiz / D / "best_model.txt")
+    monkeypatch.setattr(E, "KOK", temiz)
+    monkeypatch.setattr(Y.ckd_modulu(), "THIS_DIR", temiz / D)
+
+
 def _sonuc(monkeypatch, kok):
     """E.yukle'nin sonucu: ('fail' | 'skip' | 'gecti', ileti)."""
     monkeypatch.setattr(md, "_candidate_model_roots", lambda: [kok])
+    _temiz_klon(monkeypatch, kok.parent)
     m = Y.ckd_modulu()
     m.load_model.cache_clear()
 
