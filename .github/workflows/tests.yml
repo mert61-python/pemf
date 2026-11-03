@@ -166,14 +166,15 @@ jobs:
         run: cargo test --workspace --all-targets --locked
       # Y243 (KP-2 A5): başlatıcı satır kapsamı eşiği. Araç sürümü SABİT (cargo-llvm-cov 0.9.1, `--locked`); payda launcher/core/src +
       # launcher/app/src (entegrasyon testleri `tests/` hariç; bağımlılıklar aracın varsayılanıyla hariç). Eşik ölçülenin ~1 puan
-      # altı (KP-1 / KP-2: satır %80,77) — yalnız YÜKSELTİLİR.
+      # altı (KP-1 / KP-2: satır %80,77) — yalnız YÜKSELTİLİR. KP-2 kapanış (2026-11-03): %82,16 (dosya içi #[cfg(test)]
+      # modülleri paydada; ürün satırları %81,43) → 81.
       - name: llvm-tools (kapsam)
         run: rustup component add llvm-tools-preview
       - name: cargo-llvm-cov kur (sabit sürüm)
         run: cargo install cargo-llvm-cov --locked --version 0.9.1
       - name: cargo llvm-cov (satır kapsamı eşiği)
         working-directory: launcher
-        run: cargo llvm-cov --workspace --all-targets --locked --ignore-filename-regex "[\\/]tests[\\/]" --fail-under-lines 79
+        run: cargo llvm-cov --workspace --all-targets --locked --ignore-filename-regex "[\\/]tests[\\/]" --fail-under-lines 81
       # D3.15 (B-8.18): bağımlılık güvenlik denetimi HER PUSH'ta (eskiden yalnız `launcher-v*` etiketinde — yani yayından SONRA).
       # `launcher/.cargo/audit.toml`'daki gerekçeli yoksayma listesi okunur (çalışma dizini launcher) — onsuz 7 bakımsız uyarı
       # hattı hep kırmızı yapardı; listede olmayan her yeni açık / uyarı kırar. Yoksayma listesine gerçek açık EKLENMEZ.

@@ -30,7 +30,7 @@ module.exports = {
   ],
   // Y243 (KP-2 A5): kapsam paydası (KP-1'de genişletildi: ürün kaynağının tamamı, 166 dosya; araç yapılandırmaları
   // eslint / jest / metro / jest.setup payda DIŞI) + eşik — CI `npm test -- --coverage` ile uygulanır. Eşikler ölçülenin
-  // ~1 puan altı; yalnız YÜKSELTİLİR.
+  // ~1 puan altı; yalnız YÜKSELTİLİR. KP-2 kapanış (2026-11-03) ölçülen: satır %89,01 · deyim %84,94 · dal %79,60 · fonksiyon %81,28.
   collectCoverageFrom: [
     "src/**/*.{ts,tsx,js,jsx}",
     "app/**/*.{ts,tsx,js,jsx}",
@@ -42,6 +42,6 @@ module.exports = {
     "!**/node_modules/**",
   ],
   coverageThreshold: {
-    global: { lines: 85, statements: 81, branches: 76, functions: 78 },
+    global: { lines: 88, statements: 83, branches: 78, functions: 80 },
   },
 };
