@@ -116,7 +116,7 @@ function PlatformCard({
         {/* İNDİRME BOYUTU (metin denetimi 2026-08-20): dört kartın hiçbirinde boyut yoktu;
             kullanıcı ne indireceğini bilmiyordu. Kurulum dosyası ile asıl uygulama + modeller ayrı
             ayrı söylenir (asıl uygulama kurulum sırasında iner). D6.42: boyut HEDEFE özel (Windows
-            ≈253 MB — WebView2 gömülü); ölçülmemiş hedefte (macOS / Linux, Yakında) satır çizilmez. */}
+            ≈211 MB — WebView2 gömülü); ölçülmemiş hedefte (macOS / Linux, Yakında) satır çizilmez. */}
         {(target === 'android' || sizeMB) && (
           <div className="inline-flex items-center gap-1.5">
             <Check className="h-3.5 w-3.5 text-primary" />

@@ -63,7 +63,7 @@ const ALTIN: Record<string, unknown> = {
  },
  "CLIENT": {
   "channel": "Sürüm 2026.1",
-  "releaseDate": "10 Eyl 2026",
+  "releaseDate": "3 Kas 2026",
   "androidOs": "Android 8.0 ve üzeri · telefona doğrudan kurulur"
  },
  "MODULES": [
@@ -242,10 +242,10 @@ const ALTIN: Record<string, unknown> = {
   }
  ],
  "PATCH": {
-  "date": "10 Eyl 2026",
+  "date": "3 Kas 2026",
   "notes": [
-   "Başlatıcı düzeltmesi: kurulabilir paket varken “paket henüz yayınlanmadı” denip kurulumun ve güncellemenin kilitlenmesi bir daha olmaz.",
-   "Klinik tarafında görünür bir değişiklik yok; 1.9.47 ve sonrası kurulu cihazlar bu sürüme kendiliğinden geçer."
+   "Açılışta pencerenin donması giderildi; boştayken kapatıldığında “önceki oturumda ACİL DURDUR” uyarısı yanlışlıkla bir sonraki açılışa kalmıyor.",
+   "Uygulamalar artık İngilizce de kullanılabiliyor (Ayarlar › “Dil / Language”); kurulum ve kaldırma pencereleri de Türkçe ya da İngilizce."
   ]
  },
  "COMPARE": [

@@ -127,7 +127,7 @@ export const DOWNLOAD_HOST = {
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
   launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
-  windowsTag: 'launcher-v1.9.51', // 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
+  windowsTag: 'launcher-v1.9.52', // 1.9.52 (2026-11-03) = acilista pencere donmasi giderildi (guvenlik duvari / yedek / guncelleme denetimi arka planda); bosta kapanis 'ACIL DURDUR' uyarisi birakmiyor; 'Beni hatirla' gecici hatada silinmiyor; kurulum / kaldirma pencereleri TR + EN. 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-10, sahip isteği). İndirilen dosya `PEMFVetClient-Setup.exe`
   // diye kaydediliyordu; İndirilenler klasöründe üç sürüm yan yana durunca hangisinin hangisi
   // olduğu anlaşılmıyordu ve destek çağrısında "hangi setup'ı kurdunuz?" sorusu cevapsız
@@ -152,7 +152,7 @@ export const DOWNLOAD_HOST = {
   // 2026-08-06: Android AYRI etiket. Eskiden mac/linux ile ORTAK launcherTag'i (1.9.2) kullanıyordu
   // → APK güncellense bile site ESKİ sürümü (2.3.2) veriyordu. Mobil sürüm döngüsü masaüstünden
   // bağımsız olduğu için kendi etiketi olmalı.
-  androidTag: 'client-app-v1.9.48',
+  androidTag: 'client-app-v1.9.51',
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-11) — Windows ile AYNI gerekçe: İndirilenler klasöründe üç
   // sürüm yan yana durunca hangisinin hangisi olduğu anlaşılmıyor ve destek çağrısında "hangi
   // APK'yı kurdunuz?" cevapsız kalıyordu. Windows `windowsTag`ten türetilebiliyor (etiket sürümü
@@ -163,8 +163,8 @@ export const DOWNLOAD_HOST = {
   // ⚠️ SÜRÜM FARKI KULLANICIYA AÇIKLANIR (metin denetimi 2026-08-20): İndir sayfasında bilgisayar
   // kartı "1.9.32", telefon kartı "2.3.18" gösteriyor ve sebebi hiçbir yerde yazmıyordu. Telefon
   // uygulaması AYRI sürüm döngüsüne sahiptir (ayrı yayın etiketi); numaraların eşleşmesi beklenmez.
-  androidVersion: '2.3.35', // YH D1 (2026-10-22) YAYIN ADAYI — HENUZ YAYINLANMADI: site bu degerle ancak PEMF_Vet_Mobil-2.3.35.apk
-  // `androidTag` surumune YUKLENDIKTEN SONRA yayina cikar (yayin akisi: scripts/site_indirme_dogrula.py). Sahadaki/yayindaki son APK: 2.3.34.
+  androidVersion: '2.3.35', // 2026-11-03 YAYINDA (client-app-v1.9.51): Ingilizce dil secenegi; Android guncelleme bildirimi Turkce karakterlerle
+  // (yayin akisi: scripts/site_indirme_dogrula.py).
   /** İndir sayfasında telefon kartında gösterilir — uygulamanın ROLÜNÜ açıklar (tek başına
    *  terapi uygulamaz; masaüstündeki cihazın uzaktan kumandasıdır). */
   get androidRolNotu() { return i18n.t('icerik.indir.androidRol') },
@@ -186,7 +186,7 @@ export const CLIENT = {
   // ⚠️ `windowsTag` ile AYNI sürüm olmalı — sayfada "1.9.18" okuyup adında 1.9.20 yazan dosya
   // indirmek kullanıcıyı yanıltır ve destek çağrısını çözümsüz bırakır. Etiket yükseltilirken
   // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
-  version: '1.9.51',
+  version: '1.9.52',
   get channel() { return i18n.t('icerik.indir.kanal') },
   // D6.42 + D6.66: platformdan bağımsız `sizeMB: 3` ("NSIS launcher ~2.9 MB") KALDIRILDI — Windows kurulum dosyası 1.9.43'ten beri
   // WebView2 çevrimdışı kurucusunu gömer; boyut Windows'a özel alanda (`downloads.windows.sizeMB`), macOS / Linux boyutu ölçülmedi (Yakında).
@@ -205,8 +205,8 @@ export const CLIENT = {
       // için config yorumu zaten "kullanıcıyı yanıltır" diye tarif ediyor.
       version: `${DOWNLOAD_HOST.windowsTag.replace(/^launcher-v/, '')}`,
       // Kurulum dosyası boyutu (MB; Windows Gezgini'nin gösterdiği 1024 tabanı) — `pemf-app-packages/manifest.json` `launcher.size`
-      // 265.032.239 B ≈ 253 MiB (launcher 1.9.51). Kapı: `tests/test_site_paket_boyutlari.py` (±%10, tek kaynak manifest).
-      sizeMB: 253,
+      // 220.956.183 B ≈ 211 MiB (launcher 1.9.52). Kapı: `tests/test_site_paket_boyutlari.py` (±%10, tek kaynak manifest).
+      sizeMB: 211,
     },
     macos: {
       key: 'macos' as const,

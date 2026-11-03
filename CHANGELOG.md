@@ -6,15 +6,12 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
-## launcher 1.9.52 · mobile 2.3.35 — YAYIN ADAYI (YAYINLANMADI; app 1.9.51 ile birlikte — 🌐 İngilizce seçeneği)
+## launcher 1.9.52 — 2026-11-03 · mobile 2.3.35 (🌐 İngilizce seçeneği; app 1.9.51 ile birlikte)
 
-> ⚠️ **BU SÜRÜMLER HENÜZ YAYINLANMADI** (hazırlık: 2026-10-22). Sahada ve yayında olan:
-> uygulama **1.9.50** · PEMF Vet Client **1.9.51** · telefon uygulaması **2.3.34**. Yayın
-> adayı numaraları: uygulama **1.9.51** (değişiklikleri hemen aşağıdaki "app 1.9.51" girdisinde
-> ve bu girdide) · PEMF Vet Client **1.9.52** · telefon **2.3.35** (Android sürüm kodu 42, iOS
-> derleme 8). Yayınlandığında başlığa tarih ve paket kimliği (`buildId`) satırı eklenecektir;
-> kimlik yayındaki manifest'ten okunur, elle yazılmaz. Aşağıdaki "app 1.9.51" girdisindeki
-> **kontrolcü yazılımı uyarısı** bu yayın adayı için de geçerlidir.
+> Uygulama **1.9.51** (değişiklikleri hemen aşağıdaki "app 1.9.51" girdisinde ve bu girdide),
+> PEMF Vet Client **1.9.52** ve telefon uygulaması **2.3.35** (Android sürüm kodu 42) birlikte
+> yayınlandı. Aşağıdaki "app 1.9.51" girdisindeki **kontrolcü yazılımı uyarısı** bu sürümler
+> için de geçerlidir.
 
 **🌐 Uygulamalar artık İngilizce de kullanılabiliyor.** Bilgisayar uygulaması, telefon
 uygulaması, PEMF Vet Client (kurulum ve kaldırma pencereleri dahil), DEMA simülatörü ile seans
@@ -45,12 +42,7 @@ noktasız "I" ile değil). İngilizce gösterimde değişiklik yok.
 **Telefon uygulaması 2.3.35:** İngilizce seçeneği; Android'deki güncelleme indirme
 bildirimi Türkçe karakterlerle yazılıyor ("Güncelleme indirme", "uygulamayı").
 
-## app 1.9.51 — YAYINLANMADI (hazırlanan sürüm; sahada 1.9.50 var — 🔀 sürüş biçimi artık ekrandan seçiliyor)
-
-> ⚠️ **BU SÜRÜM HENÜZ YAYINLANMADI.** Aşağıdaki kontrolcü-yazılımı yeniden yükleme talimatını
-> **UYGULAMAYIN** — sahadaki uygulama **1.9.50**'dir; 121 baytlık yeni kontrolcü yazılımına
-> geçilirse 1.9.50 ile **hiçbir bobin çalışmaz**. Yayınlandığında başlığa tarih ve `buildId`
-> satırı eklenecektir.
+## app 1.9.51 — 2026-11-03 (🔀 sürüş biçimi artık ekrandan seçiliyor)
 
 > ⚠️⚠️ **KONTROLCÜ YAZILIMI MUTLAKA YENİDEN YÜKLENMELİ — YALNIZ UYGULAMAYI GÜNCELLEMEK
 > CİHAZI ÇALIŞMAZ HÂLE GETİRİR.** Komut paketine bir alan eklendi (120 → 121 bayt).
@@ -208,6 +200,8 @@ sürülmez.
 panellerinde fotoğraf artık bilgisayarın varsayılan (ör. dizüstü) kamerası yerine kabin
 kamerasından çekilir; kullanılacak kamera panelde seçilir. **Canlı Kamera** ile seçilen
 aralıkta (1 kare/sn · 2 sn · 5 sn) anlık analiz yapılır.
+
+Paket kimliği (`buildId`): `d8b0fea4bfaf`. Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞTİ (`527d40c3a0f7`, yeni URL `client-app-v1.9.51`).
 
 ## app 1.9.50 — 2026-09-11 (🔌 kablo çıkarsa anlar, geri takınca kendine gelir)
 

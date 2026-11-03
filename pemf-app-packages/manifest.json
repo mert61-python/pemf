@@ -1,20 +1,20 @@
 {
   "schema": 2,
-  "version": "1.9.50",
-  "tag": "client-app-v1.9.50",
+  "version": "1.9.51",
+  "tag": "client-app-v1.9.51",
   "runtimes": {},
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.50/base-app.zip",
-        "sha256": "cb33f48382a2eeef93af91f97aa56fb25ce8e40afb004a7d3df7fa6851013e89",
-        "size": 81363203,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.51/base-app.zip",
+        "sha256": "d8b0fea4bfaf4a5b6ede37438c8816855f5e11b6b3ca1a0fb2836f6a5f7ec8a9",
+        "size": 83633754,
         "kind": "zip"
       },
       "deps": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.41/base-deps.zip",
-        "sha256": "99ac8a491f37b77ecac371ed6213c25531ef9b499dbdac30a13be002f4bdfdd6",
-        "size": 1487710488,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.51/base-deps.zip",
+        "sha256": "527d40c3a0f7886a4982eab0014e455cf9ffd6bd757895b88b00cfd11379a331",
+        "size": 1486500496,
         "kind": "zip"
       },
       "rollout": 100
@@ -74,21 +74,22 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.51",
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.51/PEMFVetClient-Setup.exe",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.51/PEMFVetClient-Setup-1.9.51.exe",
-    "sha256": "7cc744445082f63a61d1cbb8d3c055d629f77cfcf91f18dc0b623f7fca41e891",
-    "size": 265032239,
+    "version": "1.9.52",
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.52/PEMFVetClient-Setup.exe",
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.52/PEMFVetClient-Setup-1.9.52.exe",
+    "sha256": "75ddda8d823b0aa595c12a4e020420ea15deb7b33187c32008c74235878fe82f",
+    "size": 220956183,
     "rollout": 100
   },
   "mobile": {
     "android": {
-      "version": "2.3.34",
-      "versionCode": 41,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.48/PEMF_Vet_Mobil-2.3.34.apk",
-      "sha256": "b24cea2b0c31c60c875a7b232bc8315a883176491d35f811012a7fef8d08bb12",
-      "size": 128539115,
-      "notes": "Bobin 6-7 artik kabloyla (STM32) suruluyor; kontrol ekraninda tek liste: Bobinler 1-7. Bobin 1-5'te akim olcumu goruntuleniyor. Sensoru olmayan olcum artik kisa cizgi (-) gosteriliyor, 0.00 degil. ⚠️ Cihazdaki kontrolcu yazilimi da guncellenmis olmali."
+      "version": "2.3.35",
+      "versionCode": 42,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.51/PEMF_Vet_Mobil-2.3.35.apk",
+      "sha256": "2bf78cea893e5c87ddc4ab9bab1a884de8fc6369e14d1f0f589bbdcf43fdd20a",
+      "size": 129194143,
+      "notes": "İngilizce dil seçeneği eklendi (Ayarlar › Dil / Language). Android güncelleme bildirimi Türkçe karakterlerle doğru yazılıyor.",
+      "notes_en": "Adds an English language option (Settings › Language / Dil). The Android update notification text is corrected."
     }
   }
 }

@@ -150,7 +150,7 @@ describe('4) indirme sayfası kararı', () => {
   it('KARŞIT-KANIT: kurulum dosyası boyutu ile toplam indirme AYRI AYRI anlatılır', () => {
     // Aşırı-düzeltme yönü: tek bir sayı yazmak ("5 GB indirilecek") kurulum dosyasını asıl indirmeyle
     // karıştırır ve kullanıcıyı gereksiz korkutur. D6.42 + D6.66: eski "sizeMB < 50" kilidi YANLIŞ değeri
-    // (≈3 MB; gerçek Windows kurulum dosyası ≈253 MB — WebView2 gömülü) kilitliyordu. Kesin değer manifestle
+    // (≈3 MB; gerçek Windows kurulum dosyası ≈211 MB — WebView2 gömülü) kilitliyordu. Kesin değer manifestle
     // TEK eşikte `tests/test_site_paket_boyutlari.py`de; burada AYRIM korunur: kurulum dosyası, profil
     // seçiminden bağımsız inen taban paketinden (CLIENT_BASE_MB) KÜÇÜK ve kart Windows'a özel alanı okur.
     expect(CLIENT.downloads.windows.sizeMB).toBeGreaterThan(0)

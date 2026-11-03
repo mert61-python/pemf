@@ -1,12 +1,12 @@
 # PEMF Vet — Web Sitesi (Vercel)
 
 Veteriner **PEMF Vet Client** için indirme/tanıtım sitesi. Vite + React + TypeScript + Tailwind v4.
-Kullanıcı buradan **client’ı (Windows kurulum dosyası ~253 MB — NSIS launcher + gömülü WebView2 çevrimdışı kurucusu; tek kaynak
+Kullanıcı buradan **client’ı (Windows kurulum dosyası ~211 MB — NSIS launcher + gömülü WebView2 çevrimdışı kurucusu; tek kaynak
 `pemf-app-packages/manifest.json` `launcher.size`)** indirir; asıl uygulama ve AI modelleri (seçilen profillere göre ~1,5–5 GB) client içinden iner.
 
 ## Ürün modeli (siteyi anlamak için)
 
-**3 katman:** Website (bu proje, Vercel) → **Client/Launcher** (~253 MB Windows kurulum dosyası, indirilir, next-next kurulur; profil seçilir, modeller iner, “Başlat” ile açılır, masaüstü kısayolları) → **Uygulama** (büyük, gömülü; React web arayüzü). Mobil ayrıdır (App/Play Store).
+**3 katman:** Website (bu proje, Vercel) → **Client/Launcher** (~211 MB Windows kurulum dosyası, indirilir, next-next kurulur; profil seçilir, modeller iner, “Başlat” ile açılır, masaüstü kısayolları) → **Uygulama** (büyük, gömülü; React web arayüzü). Mobil ayrıdır (App/Play Store).
 
 **İki bağımsız eksen:**
 - **Kullanım profili = NE kurulur** (Ev Sahibi · Veteriner · Araştırma) — çoklu seçim, **client içinde**; yalnız seçilen AI modelleri iner.
