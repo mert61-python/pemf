@@ -93,6 +93,8 @@ if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Forc
 # ve VBScript'te tirnak `""` ile kacilir, backtick ile DEGIL → uretilen dosya
 # calismazdi (yalitilmis testte yakalandi). `Chr(34)` ile tirnak hic gomulmuyor:
 # yollar degiskene alinir, tirnak calisma aninda eklenir. Yollarda tirnak olamaz.
+# `-BekciKipi` (sahip 2026-11-04): gorev hotspot'u YALNIZ PEMF backend calisirken acik tutar — PEMF kapaliyken
+# start_hotspot.ps1 hicbir sey yapmadan cikar (eskiden kapatilan hotspot 3 dk icinde geri geliyordu).
 $vbs = @"
 ' PEMF-Hotspot sessiz baslatici — install_hotspot_task.ps1 uretir, ELLE DUZENLEMEYIN.
 Option Explicit
@@ -101,7 +103,7 @@ Set sh = CreateObject("WScript.Shell")
 q = Chr(34)
 ps51 = "$Ps51"
 ps1 = "$Ps1Yolu"
-sh.Run q & ps51 & q & " -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File " & q & ps1 & q, 0, False
+sh.Run q & ps51 & q & " -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File " & q & ps1 & q & " -BekciKipi", 0, False
 "@
 Set-Content -LiteralPath $VbsYolu -Value $vbs -Encoding ASCII
 

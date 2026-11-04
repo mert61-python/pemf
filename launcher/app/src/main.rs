@@ -2786,6 +2786,10 @@ fn main() {
                             // sil ki sonraki bir uninstall ölü bir porta E-stop POST'lamasın. (Çökme
                             // yolunda bu handler ÇALIŞMAZ → dosya kalır ve uninstaller E-stop'lar.)
                             clear_port_if_stopped(&root, Some(port));
+                            // Sahip 2026-11-04: backend kapandı → PEMF-Gateway hotspot'u da kapanır (eskiden açık kalıyor, görev
+                            // her 3 dk geri açıyordu). Yalnız BİZİM backend'imizi durdurduysak; bobin STOP'u ve kill'den SONRA,
+                            // beklemeden (ayrı süreç). Benimsenen / başkasının backend'inde bu blok koşmaz → hotspot'a dokunulmaz.
+                            flow::hotspot_kapat(&root);
                         };
                         if is_main {
                             job(); // süreç çıkıyor → bobin durdurma BİTMEDEN dönme
@@ -3295,6 +3299,24 @@ mod tests {
             "sağlık kapısı backend'i onaylanacak kimlik olmadan başlatıyor"
         );
         assert!(!kapi.contains("flow::start_backend(&root2"), "sağlık kapısında kimliksiz start_backend kaldı");
+    }
+
+    /// Sahip 2026-11-04 ÖNCE-KIRMIZI: PEMF kapatılınca PEMF-Gateway hotspot'u da kapanır. Kapatma YALNIZ bu başlatıcının
+    /// durdurduğu backend'in kapanış işinde (benimsenen backend'e dokunulmaz) ve bobin STOP'u + kill + port temizliğinden SONRA
+    /// (Ö.4-Y8 sırası bozulmaz); üretim kodunda başka yerde çağrılmaz.
+    #[test]
+    fn KRITIK_kapanis_isi_backendden_SONRA_hotspotu_kapatir() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let uretim = &soy[..soy.find("#[cfg(test)]").expect("test modülü yok")];
+        let cagri = "flow::hotspot_kapat(&root);";
+        assert_eq!(uretim.matches(cagri).count(), 1, "hotspot kapatma üretimde tam bir kez olmalı");
+        let is = &uretim[uretim.find("let mut job = move || {").expect("kapanış işi yok")..];
+        let is = &is[..is.find("};").expect("kapanış işi sonu yok")];
+        let sira: Vec<usize> = ["backend::safe_stop_coils(port);", "let _ = child.kill();", "clear_port_if_stopped(&root, Some(port));", cagri]
+            .iter()
+            .map(|p| is.find(p).unwrap_or_else(|| panic!("kapanış işinde {p} yok")))
+            .collect();
+        assert!(sira.windows(2).all(|w| w[0] < w[1]), "sıra bozuk (STOP → kill → port → hotspot olmalı): {sira:?}");
     }
 
     /// Rust yorum-soyucu (satır + blok + string-bilinçli) — yapısal kapılar doc-comment'lerdeki

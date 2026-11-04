@@ -10,7 +10,11 @@ param(
     [string]$Ssid,
     [string]$Pass,
     # Yalniz durum tespiti yap (sahip/istemci/yok), hotspot'a DOKUNMA — tani + test icin.
-    [switch]$Kontrol
+    [switch]$Kontrol,
+    # Zamanlanmis gorevin (PEMF-Hotspot, logon + her 3 dk) kipi: hotspot YALNIZ PEMF backend calisirken acik tutulur.
+    [switch]$BekciKipi,
+    # Baslaticinin backend'i DURDURDUKTAN sonra cagirdigi kip: PEMF'in hotspot'unu (SSID eslesirse) KAPATIR.
+    [switch]$Kapat
 )
 $ErrorActionPreference = "Continue"
 
@@ -57,6 +61,32 @@ function Get-PemfUygulananAp($Yonetici) {
     } catch { return "uygulanan SSID/bant OKUNAMADI ($_)" }
 }
 
+# ── HOTSPOT YALNIZ PEMF ACIKKEN (sahip 2026-11-04) ──────────────────────────
+# ARIZA (sahip makinesinde gozlendi): PEMF kapatilinca hotspot KAPANMIYORDU. PEMF-Hotspot gorevi logon + her 3 dk bu betigi
+# PEMF'in calisip calismadigina BAKMADAN kosturuyordu → elle kapatilan hotspot bile 3 dk icinde geri geliyordu; kapatan yol yoktu.
+# Artik: gorev `-BekciKipi` ile cagirir (backend yoksa DOKUNMAZ) ve baslatici backend'i durdurduktan sonra `-Kapat` cagirir.
+# Backend sureci adi = PyInstaller exe'si (`runtime\PEMF_Backend\PEMF_Backend.exe`; servis kurulumunda da ayni ad).
+# Kapilar: tests/test_start_hotspot_YALNIZ_PEMF_ACIKKEN_kapat_ve_bekci.py · launcher/core/src/flow.rs `hotspot_kapat`.
+function Test-PemfBackendCalisiyor {
+    return (@(Get-Process -Name 'PEMF_Backend' -ErrorAction SilentlyContinue).Count -gt 0)
+}
+
+# Yonetici = NetworkOperatorTetheringManager (testte sahte nesne) · Bekle = IAsyncOperation'i sonuca ceviren betik blogu.
+# YALNIZ PEMF'in SSID'siyle acik hotspot kapatilir — kullanicinin baska adla actigi hotspot'a dokunulmaz.
+function Stop-PemfHotspot($Yonetici, [string]$Ssid, [scriptblock]$Bekle) {
+    if ("$($Yonetici.TetheringOperationalState)" -ne 'On') { return 'zaten kapali' }
+    try { $uygulanan = [string]$Yonetici.GetCurrentAccessPointConfiguration().Ssid } catch { return "SSID okunamadi ($_) — dokunulmadi" }
+    if ($uygulanan -ne $Ssid) { return "baska SSID ($uygulanan) — dokunulmadi" }
+    $r = & $Bekle ($Yonetici.StopTetheringAsync())
+    if ("$($r.Status)" -eq 'Success') { return "kapatildi (SSID=$uygulanan)" }
+    return "kapatilamadi: $($r.Status) $($r.AdditionalErrorMessage)"
+}
+
+if ($BekciKipi -and -not (Test-PemfBackendCalisiyor)) {
+    Log "Bekci: PEMF backend calismiyor — hotspot ACILMADI (yalniz PEMF acikken acik tutulur)."
+    exit 0
+}
+
 # ── SSID/parola çözümle (bkz. başlıktaki DENETİM notu) ──────────────────────
 if (-not $Ssid -and $env:PEMF_HOTSPOT_SSID) { $Ssid = $env:PEMF_HOTSPOT_SSID }
 if (-not $Pass -and $env:PEMF_HOTSPOT_PASS) { $Pass = $env:PEMF_HOTSPOT_PASS }
@@ -75,6 +105,32 @@ if (-not $Pass) {
 }
 # WPA2 asgari uzunluk (8) — kisa parola ConfigureAccessPointAsync'i sessizce dusurur.
 if ($Pass.Length -lt 8) { Log "UYARI: parola 8 karakterden kisa; WPA2 reddedebilir."; }
+
+# ── KAPAT (baslatici backend'i durdurduktan sonra; bkz. "HOTSPOT YALNIZ PEMF ACIKKEN") ─────────────
+# Baska bir PEMF backend'i hala calisiyorsa (ikinci baslatici / servis kurulumu) hotspot ONUNDUR → acik kalir.
+if ($Kapat) {
+    if (Test-PemfBackendCalisiyor) { Log "Kapat: PEMF backend hala calisiyor — hotspot ACIK birakildi."; exit 0 }
+    try {
+        Add-Type -AssemblyName System.Runtime.WindowsRuntime
+        $asTaskKapat = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+            $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
+        [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime] | Out-Null
+        [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime] | Out-Null
+        $sonucTuru = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult]
+        $cp = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
+        if (-not $cp) { $cp = ([Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() | Select-Object -First 1) }
+        if (-not $cp) { Log "Kapat: ag profili yok — hotspot yoneticisi kurulamadi, dokunulmadi."; exit 0 }
+        $mgr = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($cp)
+        $bekle = { param($t) $nt = $asTaskKapat.MakeGenericMethod($sonucTuru).Invoke($null, @($t)); $nt.Wait(-1) | Out-Null; $nt.Result }
+        Log "Kapat: $(Stop-PemfHotspot $mgr $Ssid $bekle)"
+    } catch {
+        # Acilisin netsh yedegiyle (eski surucu) acilmis olabilir → ayni yolla kapat (zararsiz: calismiyorsa yalniz bilgi doner).
+        Log "Kapat: Mobile Hotspot API hatasi ($_) → netsh denenecek."
+        $res = (netsh wlan stop hostednetwork 2>&1) -join ' '
+        Log "Kapat: netsh hostednetwork: $res"
+    }
+    exit 0
+}
 
 # ── Zaten aktif mi? ──────────────────────────────────────────────────────────
 # SAHA 2026-09-08: iki klinik makinesi AYNI SSID'yi yayinlar (sahip karari — ESP firmware sabit).

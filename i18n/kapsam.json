@@ -10970,6 +10970,27 @@
      "turler": [
       "rust-sablon"
      ]
+    },
+    {
+     "metin": "Hidden",
+     "gerekce": "PowerShell argümanı (-WindowStyle Hidden) — komut",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "-Kapat",
+     "gerekce": "PowerShell argümanı (start_hotspot.ps1 kapatma kipi, 2026-11-04) — komut",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "[launcher] hotspot_kapatilamadi: {{e}}",
+     "gerekce": "2026-11-04: hotspot.log tanı satırı (olay kimliği + işletim sistemi hatası) — ekranda görünmez, makine verisi",
+     "turler": [
+      "rust-sablon"
+     ]
     }
    ],
    "birlesikIstisna": [],
@@ -12166,7 +12187,22 @@
      ]
     }
    ],
-   "birlesikIstisna": [],
+   "birlesikIstisna": [
+    {
+     "once": "Başlatıcı düzeltmesi: kurulabilir paket varken “paket henüz yayınlanmadı” denip kurulumun ve güncellemenin kilitlenmesi bir daha olmaz.",
+     "sonra": [
+      "icerik.surum.n1"
+     ],
+     "gerekce": "YAYIN 2026-11-03 (Y248): sitenin 'Son güncelleme' notları launcher 1.9.52 CHANGELOG bölümüne çekildi (D6.65); göç öncesi 1.9.51 notunun yerini aynı konumdaki anahtar aldı — bilinçli içerik değişikliği, gerileme değil"
+    },
+    {
+     "once": "Klinik tarafında görünür bir değişiklik yok; 1.9.47 ve sonrası kurulu cihazlar bu sürüme kendiliğinden geçer.",
+     "sonra": [
+      "icerik.surum.n2"
+     ],
+     "gerekce": "YAYIN 2026-11-03 (Y248): sitenin 'Son güncelleme' notları launcher 1.9.52 CHANGELOG bölümüne çekildi (D6.65); göç öncesi 1.9.51 notunun yerini aynı konumdaki anahtar aldı — bilinçli içerik değişikliği, gerileme değil"
+    }
+   ],
    "not": "I18N-0 pilotu KISMİ (başlık / menü anahtarları) — kalanı bekliyor"
   },
   "apps/web/api/_lib/iyzico.ts": {

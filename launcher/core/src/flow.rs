@@ -1816,6 +1816,69 @@ fn hotspot_gunlugune_ekle(yol: &Path, satir: &str) {
 #[cfg(not(windows))]
 pub(crate) fn hotspot_gorevini_esitle(_install_root: &Path) {}
 
+/// Backend DURDURULDUKTAN sonra PEMF-Gateway kapatılmalı mı — backend'in AÇTIĞI durumla AYNI kural (sahip 2026-11-04).
+///
+/// Backend hotspot'u `PEMF_HOTSPOT` "0" / "false" / "False" değilse açar (`backend_service._start_hotspot_safe`); başlatıcı
+/// o değişkeni operatörün ortamından AYNEN, yoksa yalnız terapisiz kurulumda "0" geçirir (`install::backend_env_with` · Y234).
+/// Backend'in açmadığı hotspot (ev sahibi kurulumu / operatör kapattı) kullanıcınındır → KAPATILMAZ.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn hotspot_kapatma_gerekli_ile<F>(getenv: F, profiller: &[String]) -> bool
+where
+    F: Fn(&str) -> Option<String>,
+{
+    match getenv(install::ENV_HOTSPOT).filter(|v| !v.trim().is_empty()) {
+        Some(v) => !matches!(v.trim(), "0" | "false" | "False"),
+        None => !install::hotspot_kapatilmali(profiller),
+    }
+}
+
+/// PEMF-Gateway hotspot'unu kapat — başlatıcı KENDİ başlattığı backend'i durdurduktan SONRA çağırır (sahip 2026-11-04:
+/// "backend kapatılırken mobil etkin noktanın da kapanması lazım"). Eskiden kapatan yol YOKTU ve `PEMF-Hotspot` görevi
+/// hotspot'u her 3 dk yeniden açıyordu; görev artık `-BekciKipi` ile yalnız backend çalışırken açık tutar.
+/// Sahiplenilmez ve BEKLENMEZ: betik (`start_hotspot.ps1 -Kapat`) ayrı süreçte koşar, kapanışı geciktirmez; başlatılamazsa
+/// hotspot günlüğüne yazılır. Betik ayrıca hiçbir PEMF backend'i kalmadığını ve SSID'nin PEMF'inki olduğunu kendisi denetler.
+#[cfg(windows)]
+pub fn hotspot_kapat(install_root: &Path) {
+    let gunluk = std::env::var_os("LOCALAPPDATA")
+        .filter(|v| !v.is_empty())
+        .map(|d| PathBuf::from(d).join("PEMF_System").join("hotspot.log"));
+    hotspot_kapat_ile(install_root, |k| std::env::var(k).ok(), gunluk.as_deref(), |c| c.spawn().map(|_| ()));
+}
+
+/// `hotspot_kapat`ın test edilebilir hâli — ortam, günlük yolu ve başlatıcı ENJEKTE (`hotspot_gorevini_esitle_ile` deseni).
+#[cfg(windows)]
+pub(crate) fn hotspot_kapat_ile<F>(
+    install_root: &Path,
+    getenv: F,
+    gunluk: Option<&Path>,
+    baslat: impl FnOnce(&mut std::process::Command) -> std::io::Result<()>,
+) where
+    F: Fn(&str) -> Option<String>,
+{
+    let betik = install::runtime_dir(install_root)
+        .join("PEMF_Backend")
+        .join("start_hotspot.ps1");
+    if !betik.exists() {
+        return; // kaldırılmış / eski paket → sessizce geç
+    }
+    if !hotspot_kapatma_gerekli_ile(getenv, &install::read_installed_profiles(install_root)) {
+        return;
+    }
+    // `powershell` (5.1) ŞART — Mobile Hotspot WinRT API'si pwsh'ta YOK (bkz. `hotspot_gorevini_esitle_ile`).
+    let mut c = crate::platform::gizli_komut("powershell");
+    c.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File"])
+        .arg(&betik)
+        .arg("-Kapat");
+    if let Err(e) = baslat(&mut c) {
+        if let Some(yol) = gunluk {
+            hotspot_gunlugune_ekle(yol, &format!("[launcher] hotspot_kapatilamadi: {e}"));
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn hotspot_kapat(_install_root: &Path) {}
+
 /// Kurulu backend'i başlat (İNDİRME YOK). Hem ilk kurulum sonrası hem "Başlat" bunu kullanır.
 pub fn start_backend(
     install_root: &Path,
@@ -3526,6 +3589,65 @@ pub fn ").map(|k| i + k).unwrap_or(src.len());
             Ok(())
         });
         assert!(!cagrildi && !gunluk.exists());
+    }
+
+    /// Sahip 2026-11-04: kapatma kuralı backend'in AÇMA kuralıyla AYNI — `PEMF_HOTSPOT` "0" / "false" / "False" (boşluklu da)
+    /// = backend açmadı → kapatma; başka değer = kapat; değişken yoksa yalnız terapisiz (`home`) kurulumda kapatma (kayıt yok /
+    /// boş = backend varsayılanı açar → kapat).
+    #[test]
+    fn hotspot_kapatma_kurali_backendin_ACMA_kuraliyla_AYNI() {
+        let vet = vec!["vet".to_string()];
+        let ev = vec!["home".to_string()];
+        let ortam = |v: Option<&'static str>| move |k: &str| if k == install::ENV_HOTSPOT { v.map(str::to_string) } else { None };
+        for v in ["0", "false", "False", " 0 "] {
+            assert!(!hotspot_kapatma_gerekli_ile(ortam(Some(v)), &vet), "PEMF_HOTSPOT={v:?} — backend açmadı, kapatılmamalı");
+        }
+        assert!(hotspot_kapatma_gerekli_ile(ortam(Some("1")), &ev), "operatör açtıysa ev kurulumunda da kapatılır");
+        assert!(hotspot_kapatma_gerekli_ile(ortam(Some("   ")), &vet), "boş değer = tanımsız");
+        assert!(hotspot_kapatma_gerekli_ile(ortam(None), &vet));
+        assert!(hotspot_kapatma_gerekli_ile(ortam(None), &["research".to_string(), "home".to_string()]));
+        assert!(!hotspot_kapatma_gerekli_ile(ortam(None), &ev), "ev sahibi kurulumunda backend açmaz → kullanıcının hotspot'u");
+        assert!(hotspot_kapatma_gerekli_ile(ortam(None), &[]), "kayıt yok / boş = backend varsayılanı açar → kapat");
+    }
+
+    /// Sahip 2026-11-04: kapatma `start_hotspot.ps1 -Kapat`ı Windows PowerShell 5.1 ile GİZLİ çağırır; başlatma hatası günlüğe
+    /// yazılır; betik yoksa / ev sahibi kurulumunda başlatıcı ÇAĞRILMAZ. Gerçek süreç BAŞLATILMAZ — başlatıcı enjekte.
+    #[cfg(windows)]
+    #[test]
+    fn hotspot_kapat_PS51_ile_Kapat_kipini_cagirir_yoksa_ya_da_ev_kurulumunda_CAGIRMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("kok");
+        let betik = install::runtime_dir(&kok).join("PEMF_Backend").join("start_hotspot.ps1");
+        let gunluk = d.path().join("LocalAppData").join("PEMF_System").join("hotspot.log");
+        let ortam_yok = |_: &str| None::<String>;
+        let mut cagrildi = false;
+        hotspot_kapat_ile(&kok, ortam_yok, Some(&gunluk), |_| {
+            cagrildi = true;
+            Ok(())
+        });
+        assert!(!cagrildi && !gunluk.exists(), "betik yokken başlatıcı çağrıldı");
+        fs::create_dir_all(betik.parent().unwrap()).unwrap();
+        fs::write(&betik, "# sahte betik (calistirilmaz)").unwrap();
+        fs::write(install::installed_profiles_path(&kok), r#"["home"]"#).unwrap();
+        hotspot_kapat_ile(&kok, ortam_yok, Some(&gunluk), |_| {
+            cagrildi = true;
+            Ok(())
+        });
+        assert!(!cagrildi, "ev sahibi kurulumunda (backend hotspot açmaz) kapatma çağrıldı");
+        fs::write(install::installed_profiles_path(&kok), r#"["vet"]"#).unwrap();
+        let mut goruldu: Option<(std::ffi::OsString, Vec<std::ffi::OsString>)> = None;
+        hotspot_kapat_ile(&kok, ortam_yok, Some(&gunluk), |c| {
+            goruldu = Some((c.get_program().to_owned(), c.get_args().map(|a| a.to_owned()).collect()));
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "sahte-baslatici: powershell yok"))
+        });
+        let (program, args) = goruldu.expect("kapatma betiği hiç başlatılmak istenmedi");
+        assert_eq!(program, std::ffi::OsString::from("powershell"), "kapatma pwsh / başka yorumlayıcıyla — WinRT yalnız 5.1'de");
+        let i = args.iter().position(|a| a == "-File").expect("-File yok");
+        assert_eq!(args.get(i + 1).map(std::path::PathBuf::from), Some(betik.clone()), "-File start_hotspot.ps1'i göstermiyor");
+        assert_eq!(args.get(i + 2).map(|a| a.to_owned()), Some("-Kapat".into()), "betik -Kapat kipinde çağrılmıyor (AÇARDI)");
+        assert!(args.windows(2).any(|w| w[0] == "-WindowStyle" && w[1] == "Hidden"), "kapatma gizli değil");
+        let metin = fs::read_to_string(&gunluk).expect("başlatma hatası günlüğe YAZILMADI");
+        assert!(metin.contains("hotspot_kapatilamadi") && metin.contains("sahte-baslatici: powershell yok"), "{metin:?}");
     }
 }
 

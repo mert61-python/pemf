@@ -122,3 +122,15 @@ def test_KRITIK_gorev_wscript_ile_VBS_i_GIZLI_kaydeder(tmp_path):
     assert k["ad"] == "PEMF-Hotspot" and str(k["exe"]).lower() == "wscript.exe", k
     assert str(vbs) in str(k["arg"]), f"görev üretilen VBS'i çalıştırmıyor: {k}"
     assert k["gizli"] is True, f"görev gizli değil (her 3 dk pencere): {k}"
+
+
+def test_KRITIK_gorev_betigi_BEKCI_kipinde_cagirir_PEMF_kapaliyken_ACMAZ(tmp_path):
+    """Sahip 2026-11-04: görev (logon + her 3 dk) hotspot'u PEMF'e BAKMADAN açıyordu → PEMF kapatılınca da geri geliyordu.
+    VBS'in çalıştırdığı komut satırı start_hotspot.ps1'i `-BekciKipi` ile çağırmalı (backend yoksa betik dokunmadan çıkar)."""
+    r, vbs, _ps1, _ = _kos(tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    satir = [s for s in vbs.read_text(encoding="ascii").splitlines() if s.startswith("sh.Run ")]
+    assert len(satir) == 1, f"VBS'te tek bir sh.Run satırı olmalı:\n{vbs.read_text(encoding='ascii')}"
+    assert re.search(r'-File " & q & ps1 & q & " -BekciKipi", 0, False\s*$', satir[0]), (
+        f"görev betiği bekçi kipinde çağırmıyor (PEMF kapalıyken hotspot'u yeniden açar): {satir[0]}"
+    )
