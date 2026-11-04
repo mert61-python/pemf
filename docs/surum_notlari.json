@@ -1,6 +1,10 @@
 {
   "_aciklama": "Kullanıcıya görünen sürüm notları — TEK KAYNAK, iki dil (YH D1). `notes` Türkçe (eski istemciler yalnız bunu okur), `notes_en` İngilizce. Telefon: `python scripts/surum_notlari.py mobil <manifest.json>` manifest'in `mobile.android` bloğuna (APK yüklendikten ve blok elle güncellendikten SONRA) iki notu yazar. EXE / mobil yayın betiği: `publish_release.ps1 -Notes (… goster <kanal> <sürüm> tr) -NotesEn (… goster <kanal> <sürüm> en)` — ÖNCE `[Console]::OutputEncoding = [Text.Encoding]::UTF8` (PowerShell yerel komut çıktısını konsol kod sayfasıyla çözer; yapılmazsa Türkçe / İngilizce not bozulur ve betik bozuk notu reddeder — YLI-A2.2). Kapı: tests/test_YH_D1_surum_notlari_iki_dil.py (versions.json'daki her sürümün iki dilde notu olmalı; tıbbi iddia yok). Yayındaki sürümlerin (app 1.9.50 · launcher 1.9.51 · mobile 2.3.34) notları da durur: yayındaki manifest'in 2.3.34 notu ASCII yazılmıştı, buradaki Türkçe karakterli eşidir (yayındaki manifest DEĞİŞMEDİ).",
   "app": {
+    "1.9.52": {
+      "notes": "PEMF kapatılınca bilgisayarın mobil etkin noktası (PEMF-Gateway) da kapanır; uygulama kapalıyken etkin nokta artık kendiliğinden yeniden açılmaz. Sunucu programında başka değişiklik yok; kontrolcü yazılımı aynı (DDS v2.5).",
+      "notes_en": "Closing PEMF now also turns off the computer's mobile hotspot (PEMF-Gateway); while the app is closed the hotspot no longer turns itself back on. No other change in the server program; controller firmware unchanged (DDS v2.5)."
+    },
     "1.9.51": {
       "notes": "İngilizce dil seçeneği (Ayarlar › Dil / Language); seans raporunda \"Tedavi\" yerine \"Seans\"; sürüş biçimi (iki yönlü / tek yönlü) Manuel sekmesinden seçilir. 48 °C'de bobini otomatik durdurma kaldırıldı: sıcaklık 48 °C'yi geçince yalnız uyarı çıkar, bobini gerekirse operatör durdurur. Kontrolcü yazılımı da güncellenmelidir — ayrıntı değişiklik kaydında.",
       "notes_en": "English language option (Settings › Language / Dil); session report headings now consistently say \"Session\"; drive mode (bipolar / unipolar) is selected from the Manual tab. Automatic coil stop at 48 °C has been removed: above 48 °C only a warning is shown and the operator stops the coil if needed. The controller firmware must be updated as well — see the change log for details."
@@ -11,6 +15,10 @@
     }
   },
   "launcher": {
+    "1.9.53": {
+      "notes": "PEMF Vet Client kapanırken mobil etkin noktayı da kapatır (yalnız PEMF'in açtığı PEMF-Gateway'i; başka adla açtığınız etkin noktaya dokunmaz). Güncellemeden sonraki ilk oturumda destek için gösterilen paket kimliği artık doğru.",
+      "notes_en": "PEMF Vet Client now turns off the mobile hotspot when it closes (only the PEMF-Gateway hotspot that PEMF opened; a hotspot you opened under another name is left alone). The package ID shown for support is now correct in the first session after an update."
+    },
     "1.9.52": {
       "notes": "Açılışta pencere donması giderildi; boşta kapanış \"önceki oturumda ACİL DURDUR\" uyarısı bırakmıyor; \"Beni hatırla\" kaydı geçici bir hatada silinmiyor; kurulum ve kaldırma pencereleri Türkçe / İngilizce.",
       "notes_en": "Fixes the window freezing at start-up; closing while idle no longer leaves a \"previous session emergency stop\" warning; \"Remember me\" is no longer lost after a temporary error; setup and uninstall windows in Turkish or English."
