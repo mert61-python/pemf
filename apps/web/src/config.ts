@@ -123,7 +123,7 @@ export const DOWNLOAD_HOST = {
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
   launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
-  windowsTag: 'launcher-v1.9.52', // 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
+  windowsTag: 'launcher-v1.9.53', // 1.9.53 (2026-11-05) = PEMF kapanirken PEMF-Gateway etkin noktasini da kapatir; guncelleme sonrasi ilk oturumda buildId dogru. 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-10, sahip isteği). İndirilen dosya `PEMFVetClient-Setup.exe`
   // diye kaydediliyordu; İndirilenler klasöründe üç sürüm yan yana durunca hangisinin hangisi
   // olduğu anlaşılmıyordu ve destek çağrısında "hangi setup'ı kurdunuz?" sorusu cevapsız
@@ -181,10 +181,10 @@ export const CLIENT = {
   // ⚠️ `windowsTag` ile AYNI sürüm olmalı — sayfada "1.9.18" okuyup adında 1.9.20 yazan dosya
   // indirmek kullanıcıyı yanıltır ve destek çağrısını çözümsüz bırakır. Etiket yükseltilirken
   // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
-  version: '1.9.52',
+  version: '1.9.53',
   channel: 'Sürüm 2026.1',
   sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner). ⚠️ Windows 1.9.43'ten beri ~252 MB (WebView2 offline installer gömülü); mac/linux hâlâ küçük. Kart tek sizeMB gösteriyor — Windows'a özel boyut ayrı iş.
-  releaseDate: '3 Kas 2026',
+  releaseDate: '5 Kas 2026',
   ready: DOWNLOAD_HOST.ready,
   downloads: {
     windows: {
@@ -543,10 +543,10 @@ export const FEATURES = [
 export const PATCH = {
   version: CLIENT.version,
   date: CLIENT.releaseDate,
-  // 2026-11-03: launcher 1.9.52 notları (pemf CHANGELOG "## launcher 1.9.52 — 2026-11-03"); önceki notlar app 1.9.19'undu.
+  // 2026-11-05: launcher 1.9.53 notları (pemf CHANGELOG "## launcher 1.9.53 — 2026-11-05"); önceki notlar launcher 1.9.52'nindi.
   notes: [
-    'Açılışta pencerenin donması giderildi; boştayken kapatıldığında “önceki oturumda ACİL DURDUR” uyarısı yanlışlıkla bir sonraki açılışa kalmıyor.',
-    'Uygulamalar artık İngilizce de kullanılabiliyor (Ayarlar › “Dil / Language”); kurulum ve kaldırma pencereleri de Türkçe ya da İngilizce.',
+    'PEMF kapatılınca bilgisayarın mobil etkin noktası (PEMF-Gateway) da kapanır; uygulama kapalıyken etkin nokta artık kendiliğinden yeniden açılmaz.',
+    'Güncellemeden sonraki ilk oturumda destek için gösterilen paket kimliği artık doğru.',
   ],
 } as const
 
