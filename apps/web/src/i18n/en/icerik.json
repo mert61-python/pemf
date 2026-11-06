@@ -34,7 +34,7 @@
     "androidRol": "Connects to the device in your clinic: you can start and stop sessions, change coil settings, monitor the sensors and look at patient records. The clinic computer the device is connected to must be on.",
     "androidSurumNotu": "The phone app’s version number is separate from the computer app’s; the two are updated independently.",
     "kanal": "Version 2026.1",
-    "surumTarihi": "3 Nov 2026"
+    "surumTarihi": "5 Nov 2026"
   },
   "karsilastir": {
     "aiPro": "AI Pro automatic session",
@@ -221,8 +221,8 @@
     }
   },
   "surum": {
-    "n1": "Fixes the window freezing at start-up; closing while idle no longer wrongly carries a “previous session emergency stop” warning over to the next start.",
-    "n2": "The apps can now also be used in English (Settings › “Dil / Language”); the setup and uninstall windows are in Turkish or English too."
+    "n1": "Closing PEMF now also turns off the computer's mobile hotspot (PEMF-Gateway); while the app is closed the hotspot no longer turns itself back on.",
+    "n2": "The package ID shown for support is now correct in the first session after an update."
   },
   "uyari": {
     "tibbi": "PEMF Vet is clinical support software designed to be used under the supervision of a veterinarian. Smart diagnosis and AI analysis outputs are for information only; they do not replace the veterinarian’s medical diagnosis, decisions and treatment. Autonomous session (AI Pro) features are used under the veterinarian’s responsibility."

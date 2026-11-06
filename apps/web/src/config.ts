@@ -127,7 +127,7 @@ export const DOWNLOAD_HOST = {
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
   launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
-  windowsTag: 'launcher-v1.9.52', // 1.9.52 (2026-11-03) = acilista pencere donmasi giderildi (guvenlik duvari / yedek / guncelleme denetimi arka planda); bosta kapanis 'ACIL DURDUR' uyarisi birakmiyor; 'Beni hatirla' gecici hatada silinmiyor; kurulum / kaldirma pencereleri TR + EN. 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
+  windowsTag: 'launcher-v1.9.53', // 1.9.53 (2026-11-05) = PEMF kapanirken PEMF-Gateway etkin noktasini da kapatir; guncelleme sonrasi ilk oturumda buildId dogru. 1.9.52 (2026-11-03) = acilista pencere donmasi giderildi (guvenlik duvari / yedek / guncelleme denetimi arka planda); bosta kapanis 'ACIL DURDUR' uyarisi birakmiyor; 'Beni hatirla' gecici hatada silinmiyor; kurulum / kaldirma pencereleri TR + EN. 1.9.51 = PLATFORM KAPISI KATMANLARI DA SAYAR: tek-parca paket yayindan cikinca istemciler kurulabilir paket VARKEN 'Bu platform icin uygulama paketi henuz yayinlanmadi' deyip kilitleniyordu (kontrol yalniz tek-parcaya bakiyordu). Ayrica PEMF_ARASTIRMA_AIPRO bayragi artik launcher'dan backend'e geciriliyor (varsayilan 0, davranis degismedi).
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-10, sahip isteği). İndirilen dosya `PEMFVetClient-Setup.exe`
   // diye kaydediliyordu; İndirilenler klasöründe üç sürüm yan yana durunca hangisinin hangisi
   // olduğu anlaşılmıyordu ve destek çağrısında "hangi setup'ı kurdunuz?" sorusu cevapsız
@@ -186,7 +186,7 @@ export const CLIENT = {
   // ⚠️ `windowsTag` ile AYNI sürüm olmalı — sayfada "1.9.18" okuyup adında 1.9.20 yazan dosya
   // indirmek kullanıcıyı yanıltır ve destek çağrısını çözümsüz bırakır. Etiket yükseltilirken
   // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
-  version: '1.9.52',
+  version: '1.9.53',
   get channel() { return i18n.t('icerik.indir.kanal') },
   // D6.42 + D6.66: platformdan bağımsız `sizeMB: 3` ("NSIS launcher ~2.9 MB") KALDIRILDI — Windows kurulum dosyası 1.9.43'ten beri
   // WebView2 çevrimdışı kurucusunu gömer; boyut Windows'a özel alanda (`downloads.windows.sizeMB`), macOS / Linux boyutu ölçülmedi (Yakında).
@@ -205,7 +205,7 @@ export const CLIENT = {
       // için config yorumu zaten "kullanıcıyı yanıltır" diye tarif ediyor.
       version: `${DOWNLOAD_HOST.windowsTag.replace(/^launcher-v/, '')}`,
       // Kurulum dosyası boyutu (MB; Windows Gezgini'nin gösterdiği 1024 tabanı) — `pemf-app-packages/manifest.json` `launcher.size`
-      // 220.956.183 B ≈ 211 MiB (launcher 1.9.52). Kapı: `tests/test_site_paket_boyutlari.py` (±%10, tek kaynak manifest).
+      // 220.960.070 B ≈ 211 MiB (launcher 1.9.53). Kapı: `tests/test_site_paket_boyutlari.py` (±%10, tek kaynak manifest).
       sizeMB: 211,
     },
     macos: {

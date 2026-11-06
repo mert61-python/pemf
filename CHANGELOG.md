@@ -6,11 +6,10 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
-## launcher 1.9.53 — YAYIN ADAYI (YAYINLANMADI; app 1.9.52 ile birlikte — 📶 PEMF kapanınca etkin nokta da kapanır)
+## launcher 1.9.53 — 2026-11-05 (📶 PEMF kapanınca etkin nokta da kapanır; app 1.9.52 ile birlikte)
 
-> ⚠️ **BU SÜRÜMLER HENÜZ YAYINLANMADI** (hazırlık: 2026-11-04). Yayında: uygulama **1.9.51** · PEMF Vet Client **1.9.52** ·
-> telefon **2.3.35** (telefon uygulaması bu yayında DEĞİŞMİYOR). Yayınlandığında başlığa tarih ve paket kimliği (`buildId`)
-> satırı eklenecektir. Kontrolcü yazılımı DEĞİŞMEDİ (DDS v2.5) — "app 1.9.51" girdisindeki kontrolcü yazılımı uyarısı geçerlidir.
+> Uygulama **1.9.52** ve PEMF Vet Client **1.9.53** birlikte yayınlandı; telefon uygulaması **2.3.35** bu yayında DEĞİŞMEDİ.
+> Kontrolcü yazılımı DEĞİŞMEDİ (DDS v2.5) — "app 1.9.51" girdisindeki kontrolcü yazılımı uyarısı geçerlidir.
 
 **📶 PEMF kapatılınca bilgisayarın mobil etkin noktası da kapanır.** PEMF-Gateway etkin noktası uygulama açılınca açılıyor,
 ama kapatılınca açık kalıyordu; elle kapatılsa bile birkaç dakika içinde kendiliğinden geri geliyordu. Artık etkin nokta
@@ -21,13 +20,13 @@ PEMF etkin nokta açmaz).
 **PEMF Vet Client 1.9.53:** güncellemeden sonraki ilk oturumda destek için gösterilen paket kimliği (`buildId`) artık doğru
 (eskiden bir sonraki açılışa kadar önceki sürümün kimliği görünüyordu).
 
-## app 1.9.52 — YAYINLANMADI (hazırlanan sürüm; sahada 1.9.51 var — 📶 etkin nokta yalnız PEMF açıkken)
-
-> ⚠️ **BU SÜRÜM HENÜZ YAYINLANMADI.** Yayınlandığında başlığa tarih ve `buildId` satırı eklenecektir.
+## app 1.9.52 — 2026-11-05 (📶 etkin nokta yalnız PEMF açıkken)
 
 **Sunucu programında değişiklik yok** (`apps/backend` ve yapay zekâ kodu 1.9.51 ile aynı). Değişen yalnız etkin noktayı açık
 tutan arka plan görevinin betiği: görev artık yalnız PEMF çalışırken etkin noktayı açık tutar (ayrıntı yukarıdaki "launcher
 1.9.53" girdisinde).
+
+Paket kimliği (`buildId`): `13d967121f94`. Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞMEDİ (`527d40c3a0f7`, URL korundu).
 
 ## launcher 1.9.52 — 2026-11-03 · mobile 2.3.35 (🌐 İngilizce seçeneği; app 1.9.51 ile birlikte)
 

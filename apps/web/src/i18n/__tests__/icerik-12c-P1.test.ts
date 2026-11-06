@@ -63,7 +63,7 @@ const ALTIN: Record<string, unknown> = {
  },
  "CLIENT": {
   "channel": "Sürüm 2026.1",
-  "releaseDate": "3 Kas 2026",
+  "releaseDate": "5 Kas 2026",
   "androidOs": "Android 8.0 ve üzeri · telefona doğrudan kurulur"
  },
  "MODULES": [
@@ -242,10 +242,10 @@ const ALTIN: Record<string, unknown> = {
   }
  ],
  "PATCH": {
-  "date": "3 Kas 2026",
+  "date": "5 Kas 2026",
   "notes": [
-   "Açılışta pencerenin donması giderildi; boştayken kapatıldığında “önceki oturumda ACİL DURDUR” uyarısı yanlışlıkla bir sonraki açılışa kalmıyor.",
-   "Uygulamalar artık İngilizce de kullanılabiliyor (Ayarlar › “Dil / Language”); kurulum ve kaldırma pencereleri de Türkçe ya da İngilizce."
+   "PEMF kapatılınca bilgisayarın mobil etkin noktası (PEMF-Gateway) da kapanır; uygulama kapalıyken etkin nokta artık kendiliğinden yeniden açılmaz.",
+   "Güncellemeden sonraki ilk oturumda destek için gösterilen paket kimliği artık doğru."
   ]
  },
  "COMPARE": [
