@@ -11003,6 +11003,17 @@
    "birlesikIstisna": [],
    "not": ""
   },
+  "launcher/core/src/guncelleme_onayi.rs": {
+   "yuzey": "launcher",
+   "grup": "launcher-11c-rust-cekirdek",
+   "sira": 11,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GK (istem 41 A · Y253 / Y254): güncelleme onayı kararı + onay kaydı — kullanıcıya görünen metin YOK (onay penceresi metinleri launcher/i18n ui.onay*)"
+  },
   "launcher/core/src/install.rs": {
    "yuzey": "launcher",
    "grup": "launcher-11c-rust-cekirdek",
