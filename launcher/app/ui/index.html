@@ -1221,6 +1221,10 @@
         hayir.onclick = () => { clearNotice(); };
         eylem.appendChild(evet); eylem.appendChild(hayir); box.appendChild(eylem);
         box.hidden = false;
+        // Başlatıcı penceresi en çok 880 × 600: kart "Başlat"ın ALTINDA kalır ve düğmeler görünür alanın dışına düşer (kum havuzunda
+        // ölçüldü — kullanıcı soruyu hiç görmeyebilirdi). Kartın TAMAMI (düğmeler dahil) en az kaydırmayla görünür alana getirilir; kart 600 px
+        // pencereye sığar, "Başlat" da görünür kalır (kum havuzunda 880 × 600 ölçüldü).
+        if (typeof box.scrollIntoView === "function") box.scrollIntoView({ block: "nearest" });
       }
 
       /// Katman / profil paketlerini önbelleğe indir (Duraklat / İptal kartı AÇIK; kuruluma dokunmaz, seansı etkilemez).

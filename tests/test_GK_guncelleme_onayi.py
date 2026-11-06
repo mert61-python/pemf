@@ -77,7 +77,9 @@ class El {
   set textContent(v) { this._t = String(v); this.children = []; }
   appendChild(c) { this.children.push(c); return c; }
   querySelector() { return null; } querySelectorAll() { return []; } remove() {}
+  scrollIntoView(o) { KAYDIRILAN.push({ id: this.id, dugmeler: !!bul("onay-evet", this) && !!bul("onay-hayir", this), o }); }
 }
+const KAYDIRILAN = [];
 const _el = {};
 function $(id) { return _el[id] || (_el[id] = new El(id)); }
 const document = { createElement: () => new El(null) };
@@ -114,7 +116,7 @@ async function invoke(ad, args) {
 const bekle = async () => { for (let i = 0; i < 200; i++) await Promise.resolve(); };
 const kart = () => !!bul("onay-evet");
 const durum = () => ({ cagri: CAGRI.slice(), notlar: NOT.slice(), kart: kart(), kartMetni: $("notice").textContent,
-  ekran: curScreen(), dugmeKilitli: !!$("btn-start").disabled });
+  ekran: curScreen(), dugmeKilitli: !!$("btn-start").disabled, kaydirilan: KAYDIRILAN.slice() });
 __KOD__
 const OUT = {};
 (async () => {
@@ -470,3 +472,22 @@ def test_zorunlu_akis_kullanicinin_DURAKLAT_kararini_ezmez(tmp_path):
         tmp_path,
     )["a"]
     assert not (_INDIR_KUR & set(out["cagri"])), f"duraklatılmış indirme kendiliğinden yeniden başladı: {out['cagri']}"
+
+
+@_node_gerek
+def test_kart_dugmeleri_KUCUK_pencerede_gorunur_alana_kaydirilir(tmp_path):
+    """Başlatıcı penceresi en çok 880 × 600 (`ana_pencere_boyutu`): kart "Başlat"ın altında kalır ve [Güncelle] / [Şimdi değil] görünür
+    alanın DIŞINA düşer (kum havuzunda başsız Edge 880 × 600 ölçümü: düğme görünmüyor) — kullanıcı soruyu hiç görmeyebilirdi. Kart
+    gösterilince kartın TAMAMI (düğmeler dahil) en az kaydırmayla görünür alana getirilir."""
+    out = _kos(
+        f"""
+  OZ = {_oz("sor", True, True)};
+  await guncellemeyiDegerlendir({{}}); await bekle(); OUT.a = durum();
+""",
+        tmp_path,
+    )["a"]
+    k = out["kaydirilan"]
+    assert len(k) == 1 and k[0]["id"] == "notice" and k[0]["dugmeler"], (
+        f"kart (düğmeleriyle) görünür alana kaydırılmadı: {k}"
+    )
+    assert k[0]["o"] == {"block": "nearest"}, f"en az kaydırma değil (Başlat ekrandan çıkabilir): {k}"
