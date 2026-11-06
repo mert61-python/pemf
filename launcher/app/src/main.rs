@@ -106,6 +106,8 @@ struct Environment {
 /// Çalışan backend'i TIBBİ-GÜVENLİ durdur: ÖNCE bobinleri E-stop'la, SONRA süreci öldür.
 /// Yeniden-kurulum / onarım / kaldırma öncesi çağrılır (port çakışması + kilitli exe + enerjili
 /// bobin riskini keser). state.proc bu oturumda başlatılan backend'i tutar.
+use pemf_launcher_core::guncelleme_onayi;
+
 fn stop_tracked_backend(state: &tauri::State<'_, AppState>, root: &std::path::Path) {
     let tracked = state.proc.lock().unwrap().take();
     stop_backend_for_teardown(tracked, root, state.session.clone());
@@ -689,10 +691,10 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
     let mut profiles: Vec<&str> = manifest.models.keys().map(|s| s.as_str()).collect();
     profiles.sort_unstable();
 
-    // OTO-GÜNCELLEME: launcher thin-bootstrapper. Manifest'teki en son launcher sürümü kendi
-    // sürümümüzden yeniyse UI açılışta SESSİZCE güncellemeyi uygular (`installer_url` varsa →
-    // `apply_self_update`); yalnız sürüm/url varsa (eski manifest) UI "yeni sürüm var" bildirir.
-    // İnternet yoksa fetch_profiles zaten hata verir → kontrol hiç çalışmaz (sessiz atlama).
+    // OTO-GÜNCELLEME: launcher thin-bootstrapper. Manifest'teki en son launcher sürümü kendi sürümümüzden yeniyse UI onu onay
+    // penceresine koyar (`guncelleme_ozeti`; GÜNCELLEME ONAYI Y253 / Y254 — 2026-11-06'ya dek SESSİZCE kuruluyordu); kullanıcı
+    // onaylarsa (ya da güncelleme ZORUNLUYSA) `apply_self_update` indirir, kurar ve yeniden başlatır. Yalnız sürüm/url varsa
+    // (eski manifest) UI "yeni sürüm var" bildirir. İnternet yoksa fetch_profiles zaten hata verir → kontrol hiç çalışmaz.
     let current_launcher = env!("CARGO_PKG_VERSION");
     // DENETİM 2026-08-04 (P2 — sonsuz döngü): kayıtlı deneme hedefine ULAŞTIYSAK güncelleme
     // gerçekten uygulanmış → sayacı temizle. Ulaşamadıysak sayaç durur ve N denemeden sonra
@@ -711,7 +713,7 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
             "installer_url": l.installer_url,
             "sha256": l.sha256,
             "size": l.size,
-            // `false` ise UI SESSİZ kurulumu ATLAR (döngü kırıcı) ama bildirimi gösterir.
+            // `false` ise UI onay penceresine KOYMAZ (döngü kırıcı) ama bildirimi gösterir.
             //
             // ⚠️ 2026-08-09 (Tier 1): `rollout` KAPISI EKLENDİ. Runtime katmanlarında bu fren
             // vardı ama güncellemeyi YÖNETEN bileşenin kendisinde yoktu: bozuk bir launcher
@@ -1134,8 +1136,9 @@ fn plan_to_json(plan: &flow::UpdatePlan) -> serde_json::Value {
         "app": plan.app,
         "profiles": plan.profiles,
         "bytes": plan.bytes,
-        // true → paketler hazır, kurulum saniyeler sürer (açılışta yapılabilir).
-        // false → önce ARKA PLANDA inecek, kurulum SONRAKİ açılışta.
+        // true → paketler hazır, kurulum saniyeler sürer.
+        // false → önce ARKA PLANDA inecek (YALNIZ onaydan / zorunlu güncellemeden sonra — GÜNCELLEME ONAYI Y253 / Y254),
+        // indirme bitince kurulum seans kapısından geçip KENDİLİĞİNDEN sürer (2026-11-06'ya dek: SONRAKİ açılışta).
         "cached": plan.cached,
         "rolloutPending": plan.rollout_bekliyor,
         // GERİ ÇAĞIRMA: kurulu sürüm asgarinin altında → rollout ezildi, güncelleme zorunlu.
@@ -1171,10 +1174,97 @@ fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Val
     Ok(plan_to_json(&plan))
 }
 
+fn unix_simdi_s() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// GÜNCELLEME ONAYI (sahip Y253 / Y254, 2026-11-06 — SAHİP KARARI 2026-08-08'i değiştirir): onay penceresinin içeriği ve kararı
+/// (`yok` / `sor` / `onayli` / `zorunlu`). TEK pencere: başlatıcı X → Y + uygulama A → B + bağımlılık + kurulu profil paketleri, inecek
+/// toplam boyut, kısa sürüm notu. Karar çekirdekte (`guncelleme_onayi::ozet`, testli). AĞA ÇIKMAZ (manifest arayüzde çekildi); diske
+/// yalnız `adopt_unknown_models` kaydı ve yaşını aşmış onay kaydının silinmesi → pencere iş parçacığında koşmaz.
+#[tauri::command]
+async fn guncelleme_ozeti(manifest_raw: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || guncelleme_ozeti_blocking(manifest_raw))
+        .await
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeDenetimiGorevCoktu", &[("e", &e.to_string())]))?
+}
+
+fn guncelleme_ozeti_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
+    let root = install::default_install_root(&home_dir());
+    let manifest = pemf_launcher_core::Manifest::parse(&manifest_raw).map_err(|e| e.to_string())?;
+    // `check_runtime_update` ile AYNI sıra: kaydı olmayan eski kurulumda profil sha'ları önce benimsenir (yoksa ~2,2 GB boşuna sorulur).
+    let _ = flow::adopt_unknown_models(&manifest_raw, &root);
+    let plan = flow::pending_updates(&manifest_raw, &root).map_err(|e| e.to_string())?;
+    let kendi = env!("CARGO_PKG_VERSION");
+    // `fetch_profiles`in `auto` bayrağıyla AYNI ölçüt (deneme sınırı + kademeli yayın dilimi).
+    let launcher_otomatik = manifest.launcher_guncellemesi(kendi).is_some_and(|l| {
+        install::selfupdate_auto_allowed(&root, &l.version) && install::rollout_dilimi(&root) < l.rollout
+    });
+    let simdi = unix_simdi_s();
+    let kayit = guncelleme_onayi::oku(&root);
+    if kayit.as_ref().is_some_and(|k| !guncelleme_onayi::yas_gecerli(k, simdi)) {
+        guncelleme_onayi::temizle(&root); // haftalar önceki onay habersiz kurulum doğurmaz
+    }
+    let oz = guncelleme_onayi::ozet(
+        &manifest,
+        &plan,
+        kendi,
+        &install::kurulu_surum(&root),
+        launcher_otomatik,
+        kayit.as_ref().filter(|k| guncelleme_onayi::yas_gecerli(k, simdi)),
+        simdi,
+    );
+    serde_json::to_value(oz).map_err(|e| e.to_string())
+}
+
+/// GÜNCELLEME ONAYI: kullanıcı "Güncelle"ye bastı (ya da zorunlu güncelleme başladı) → onay kaydı. Başlatıcı kendini kurup YENİDEN
+/// başladığında katman kurulumu bu kayıtla SORULMADAN sürer (tek akış, tek yeniden başlatma) ve akış sonunda uygulama açılır.
+#[tauri::command]
+async fn guncelleme_onayini_kaydet(manifest_raw: String, launcher_hedefi: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = install::default_install_root(&home_dir());
+        let plan = flow::pending_updates(&manifest_raw, &root).map_err(|e| e.to_string())?;
+        let kayit = guncelleme_onayi::onay_kaydi_kur(&plan, launcher_hedefi.as_deref(), unix_simdi_s());
+        guncelleme_onayi::kaydet(&root, &kayit)
+            .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.onayKaydiYazilamadi", &[("e", &e.to_string())]))
+    })
+    .await
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))?
+}
+
+/// GÜNCELLEME ONAYI: taşınan onayla akış tamamlandı → kaydı sil (bir daha taşınmasın).
+#[tauri::command]
+async fn guncelleme_onayini_temizle() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(|| guncelleme_onayi::temizle(&install::default_install_root(&home_dir())))
+        .await
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))
+}
+
+/// GÜNCELLEME ONAYI · GÜVENLİK DEĞİŞMEZİ: etkin seans (`/api/health` `sessionActive`), kart yazılımı yükleme ya da yanıtsız backend
+/// varken yeniden başlatma YAPILMAZ. Onaylı / zorunlu akış kurulumdan ÖNCE bunu yoklar, engel kalkana dek bekler ve EKRANDA söyler.
+/// Kapı `aktif_seans_kapisi` (TEK yer — `apply_runtime_update` / `apply_self_update` da onu kullanır; bu yoklama onların YERİNE değil,
+/// ÖNÜNDE). Görev çökerse "engel VAR" (fail-safe: bilinmeyen durumda yeniden başlatma yok).
+#[tauri::command]
+async fn guncelleme_engeli() -> serde_json::Value {
+    tauri::async_runtime::spawn_blocking(|| guncelleme_engeli_json(aktif_seans_kapisi(&install::default_install_root(&home_dir()))))
+        .await
+        .unwrap_or_else(|e| guncelleme_engeli_json(Err(e.to_string())))
+}
+
+/// `guncelleme_engeli` sonucunun JSON'u (saf — testli).
+fn guncelleme_engeli_json(kapi: Result<(), String>) -> serde_json::Value {
+    match kapi {
+        Ok(()) => serde_json::json!({ "engel": false }),
+        Err(mesaj) => serde_json::json!({ "engel": true, "mesaj": mesaj }),
+    }
+}
+
 /// ARKA PLAN İNDİRME — paketleri önbelleğe çeker, kuruluma DOKUNMAZ, UI'ı BLOKLAMAZ.
 ///
-/// SAHİP KARARI 2026-08-08: "güncelleme açılışta kimseyi bekletmesin". Kullanıcı uygulamayı
-/// normal kullanırken paketler iner; kurulum bir sonraki açılışta, paketler hazırken yapılır.
+/// SAHİP KARARI 2026-08-08: "güncelleme açılışta kimseyi bekletmesin" — gerekçe KORUNUR: kullanıcı uygulamayı normal
+/// kullanırken paketler iner. GÜNCELLEME ONAYI (Y253 / Y254, 2026-11-06) bu kararı DEĞİŞTİRDİ: UI bu komutu YALNIZ kullanıcı
+/// onayından (ya da zorunlu güncellemeden) SONRA çağırır ve indirme bitince kurulum "bir sonraki açılışı" BEKLEMEZ —
+/// seans kapısından (`guncelleme_engeli`) geçip `apply_runtime_update` ile sürer, uygulama kendiliğinden yeniden açılır.
 #[tauri::command]
 async fn prefetch_runtime_update(
     state: tauri::State<'_, AppState>,
@@ -1392,6 +1482,9 @@ async fn apply_runtime_update(
     match sonuc? {
         GuncellemeSonucu::Hazir(child, url, port) => {
             hand_off_session(&state, port).await;
+            // GÜNCELLEME ONAYI (Y253 "oto yeniden başlasın uygulama"): açık uygulama penceresi YENİ arayüzü yükler; açık değilse
+            // `on_backend_ready` → `open_app_window` açar. Kurulum "bir sonraki açılışı" beklemez.
+            uygulama_penceresini_yenile(&app, port);
             on_backend_ready(&app, &state, child, &url, port);
             Ok(serde_json::json!({ "status": "ready", "url": url }))
         }
@@ -1405,6 +1498,17 @@ async fn apply_runtime_update(
             // LN L2: arayüz nedene göre doğru notu seçer (`firmware_uyumsuz` → "açılamadı" DEMEZ).
             "kod": kod,
         })),
+    }
+}
+
+/// GÜNCELLEME ONAYI: katman güncellemesinden sonra AÇIK uygulama penceresini önbellek kırıcılı URL'ye yönlendir (eski arayüz paketi
+/// yeni backend'le kalmasın). Pencere yoksa `false` (açmayı `open_app_window` yapar).
+fn uygulama_penceresini_yenile(app: &tauri::AppHandle, port: u16) -> bool {
+    let Some(win) = app.get_webview_window("app") else { return false };
+    let kurulu = install::read_installed_profiles(&install::default_install_root(&home_dir()));
+    match uygulama_url(port, &kurulu).parse::<tauri::Url>() {
+        Ok(u) => win.navigate(u).is_ok(),
+        Err(_) => false,
     }
 }
 
@@ -1868,8 +1972,9 @@ fn discard_pending_blocking(manifest_raw: Option<String>) -> Result<(), String> 
     Ok(())
 }
 
-/// OTO-GÜNCELLEME uygula: yeni launcher setup'ını indir (host-pinli) + SHA256 doğrula + SESSİZCE
-/// kur + yeniden başlat. Açılışta `fetch_profiles` `update.installer_url` döndürünce UI çağırır.
+/// OTO-GÜNCELLEME uygula: yeni launcher setup'ını indir (host-pinli) + SHA256 doğrula + sessiz (`/S`)
+/// kur + yeniden başlat. GÜNCELLEME ONAYI (Y253 / Y254, 2026-11-06): UI bunu YALNIZ kullanıcı onayından (ya da zorunlu
+/// güncellemeden) ve seans kapısı (`guncelleme_engeli`) açıldıktan SONRA çağırır — 2026-11-06'ya dek açılışta SORMADAN çağrılıyordu.
 /// İlerleme `get_progress` ile POLL edilir. Başarılıysa uygulamadan ÇIKAR (detached helper setup'ı
 /// çalıştırıp yeni launcher'ı başlatır); BAŞARISIZSA Err → UI normal boot'a düşer (güncelleme
 /// kullanıcıyı ASLA bloklamaz — internet kesik/indirme bozuksa uygulama yine açılır).
@@ -1952,7 +2057,9 @@ async fn apply_self_update(
                 CTL_PAUSE => net::Control::Pause,
                 _ => net::Control::Continue,
             };
-            {
+            // GÜNCELLEME ONAYI: onaylı akış etkin seans bitene dek bekleyip YENİDEN dener — doğrulanmış kurucu (adı sha'ya bağlı)
+            // zaten duruyorsa yeniden İNMEZ; bozuk / yarım dosya doğrulamadan geçemez → normal indirme.
+            if verify::verify_file(&dest2, &sha).is_err() {
                 let mut dl = |done, total| {
                     on(flow::Progress::Downloading { what: "Güncelleme".to_string(), done, total });
                 };
@@ -2674,6 +2781,10 @@ fn main() {
             check_runtime_update,
             apply_runtime_update,
             prefetch_runtime_update,
+            guncelleme_ozeti,
+            guncelleme_onayini_kaydet,
+            guncelleme_onayini_temizle,
+            guncelleme_engeli,
             uninstall,
             get_progress,
             get_prefetch_progress,
@@ -4578,6 +4689,41 @@ Connection: close
             !govde.contains("progress_reporter("),
             "remove_profiles ilerleme yayınlıyor — UI bunu 'Kuruluyor…/Installing…' diye gösterir (yanıltıcı)"
         );
+    }
+
+    /// GK (istem 41 A) · GÜNCELLEME ONAYI Y253 / Y254: seans engeli yoklamasının sözleşmesi — kapı açıksa `engel: false`; kapı reddederse
+    /// (etkin seans / kart yazılımı yükleme / yanıtsız backend / görev çöktü) `engel: true` + kapının seçili dildeki iletisi (arayüz
+    /// bekler ve EKRANDA söyler). Engeli `false`a çeviren bir değişiklik etkin seansta yeniden başlatmanın yolunu açar.
+    #[test]
+    fn KRITIK_GK_seans_engeli_JSON_kapi_reddinde_ENGEL_VAR() {
+        let acik = guncelleme_engeli_json(Ok(()));
+        assert_eq!(acik["engel"], serde_json::json!(false), "{acik}");
+        let red = guncelleme_engeli_json(Err("SEANS-SURUYOR".to_string()));
+        assert_eq!(red["engel"], serde_json::json!(true), "kapı reddi engel sayılmadı: {red}");
+        assert_eq!(red["mesaj"], serde_json::json!("SEANS-SURUYOR"), "kapının iletisi arayüze taşınmıyor: {red}");
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let g = &soy[soy.find(concat!("async fn guncelleme_", "engeli(")).expect("komut yok")..];
+        let g = &g[..g.find("\n}\n").expect("gövde sonu")];
+        assert!(g.contains("aktif_seans_kapisi(") && g.contains("guncelleme_engeli_json(Err("), "engel TEK kapıdan / fail-safe değil: {g}");
+    }
+
+    /// GK · Y253 "oto yeniden başlasın uygulama": katman güncellemesi HAZIR olunca açık uygulama penceresi yeni arayüzü yükler — oturum
+    /// devrinden SONRA, `on_backend_ready`den ÖNCE. Kurucu önbelleği: doğrulanmış kurucu varsa yeniden inmez, yoksa (doğrulama
+    /// düşerse) İNER — ve her durumda kurulumdan önce yeniden doğrulanır.
+    #[test]
+    fn KRITIK_GK_hazir_kolu_pencereyi_YENILER_kurucu_onbellegi_dogrulamaya_bagli() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
+        let k = &soy[soy.find(concat!("GuncellemeSonucu::Hazir(child, url, port) =", "> {")).expect("hazır kolu yok")..];
+        let k = &k[..k.find("\n        }").expect("kol sonu")];
+        let devir = k.find("hand_off_session(").expect("oturum devri yok");
+        let yenile = k.find("uygulama_penceresini_yenile(&app, port)").expect("hazır kolunda pencere yenileme yok");
+        let hazir = k.find("on_backend_ready(").expect("on_backend_ready yok");
+        assert!(devir < yenile && yenile < hazir, "sıra: oturum devri → pencere yenile → on_backend_ready olmalı");
+        let s = &soy[soy.find(concat!("async fn apply_", "self_update(")).expect("apply_self_update yok")..];
+        let kosul = s.find("if verify::verify_file(&dest2, &sha).is_err() {").expect("kurucu önbellek koşulu yok");
+        let indir = s.find("net::download_to_file(&u, &dest2").expect("indirme yok");
+        let dogrula = s.find("on(flow::Progress::Verifying").expect("indirme sonrası doğrulama yok");
+        assert!(kosul < indir && indir < dogrula, "kurucu yalnız doğrulama DÜŞERSE inmeli ve her durumda yeniden doğrulanmalı");
     }
 
 }

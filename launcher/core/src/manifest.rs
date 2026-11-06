@@ -73,6 +73,13 @@ pub struct LauncherInfo {
     /// Dilim kurulum kimliğinden türer → KARARLIDIR (aynı cihaz hep aynı dilimde).
     #[serde(default = "yuzde_yuz")]
     pub rollout: u8,
+    /// GÜNCELLEME ONAYI (Y254 a, 2026-11-06): onay penceresinin kısa sürüm notu — kaynak `docs/surum_notlari.json`
+    /// (`launcher.<sürüm>`), yayında `scripts/surum_notlari.py launcher` manifest'e yazar. `notes` Türkçe, `notes_en` İngilizce
+    /// (mobil bloğuyla AYNI adlar). Opsiyonel: yoksa pencere notsuz açılır (eski manifest kırılmaz).
+    #[serde(default)]
+    pub notes: Option<String>,
+    #[serde(default)]
+    pub notes_en: Option<String>,
 }
 
 /// Bir platformun KATMANLI runtime paketleri (2026-08-08).
@@ -133,6 +140,10 @@ pub struct Manifest {
     /// güncellemeye ZORLAMAKTIR. Bu alan doluysa ve kurulu sürüm ondan eskiyse güncelleme
     /// `rollout` dilimine BAKILMAKSIZIN uygulanır.
     pub min_supported_version: Option<String>,
+    /// GÜNCELLEME ONAYI (Y254 a): uygulama (`version`) için kısa sürüm notu — kaynak `docs/surum_notlari.json` (`app.<sürüm>`);
+    /// `notes` Türkçe, `notes_en` İngilizce. Opsiyonel (yoksa onay penceresi uygulama satırını notsuz gösterir).
+    pub notes: Option<String>,
+    pub notes_en: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -152,6 +163,10 @@ struct RawV2 {
     launcher: Option<LauncherInfo>,
     #[serde(default)]
     min_supported_version: Option<String>,
+    #[serde(default)]
+    notes: Option<String>,
+    #[serde(default)]
+    notes_en: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -195,6 +210,8 @@ impl Manifest {
                 launcher: v2.launcher,
                 schema: 2,
                 min_supported_version: v2.min_supported_version,
+                notes: v2.notes,
+                notes_en: v2.notes_en,
             }
         } else {
             let v1: RawV1 = serde_json::from_str(raw)?;
@@ -220,6 +237,8 @@ impl Manifest {
                 schema: 1,
                 // v1'de geri çağırma kavramı yok — o manifest'ler zaten çok eski.
                 min_supported_version: None,
+                notes: None,
+                notes_en: None,
             }
         };
 

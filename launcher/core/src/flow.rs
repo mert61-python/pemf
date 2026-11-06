@@ -1301,6 +1301,9 @@ pub struct UpdatePlan {
     /// yayınlanabilir (`--clobber`) ve numaraya bağlanan bir sayaç düzeltme yayınını da bloklardı.
     /// Sha değişince kimlik değişir → sayaç kendiliğinden sıfırlanır.
     pub hedef: String,
+    /// GÜNCELLEME ONAYI (Y253 / Y254, 2026-11-06): onay penceresinin "inecek toplam boyut"u — `bytes`ın önbellekte HENÜZ
+    /// OLMAYAN paketlere düşen kısmı (yarım kalmış / önceden inmiş paket yeniden sayılmaz).
+    pub indirilecek: u64,
 }
 
 impl UpdatePlan {
@@ -1410,17 +1413,17 @@ pub fn pending_updates(manifest_raw: &str, install_root: &Path) -> Result<Update
     let cache = install::cache_dir(install_root);
     let mut hepsi = true;
     if let Some(l) = manifest.layers_for_current_platform() {
-        if plan.deps && !paket_onbellekte_hazir(&l.deps, &cache, "deps") { hepsi = false; }
-        if plan.app && !paket_onbellekte_hazir(&l.app, &cache, "app") { hepsi = false; }
+        if plan.deps && !paket_onbellekte_hazir(&l.deps, &cache, "deps") { hepsi = false; plan.indirilecek += l.deps.size; }
+        if plan.app && !paket_onbellekte_hazir(&l.app, &cache, "app") { hepsi = false; plan.indirilecek += l.app.size; }
     } else if plan.base {
         if let Ok(p) = manifest.runtime_for_current_platform() {
-            if !paket_onbellekte_hazir(p, &cache, "base") { hepsi = false; }
+            if !paket_onbellekte_hazir(p, &cache, "base") { hepsi = false; plan.indirilecek += p.size; }
         }
     }
     for name in &plan.profiles {
         if let Ok(ciftler) = profil_paketleri(&manifest, name) {
             for (pkg, etiket) in ciftler {
-                if !paket_onbellekte_hazir(pkg, &cache, &etiket) { hepsi = false; }
+                if !paket_onbellekte_hazir(pkg, &cache, &etiket) { hepsi = false; plan.indirilecek += pkg.size; }
             }
         }
     }

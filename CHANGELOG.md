@@ -6,6 +6,21 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.54 — YAYIN ADAYI (YAYINLANMADI; 🔔 güncellemeler artık onayla; app 1.9.52 ile)
+
+> Yalnız PEMF Vet Client değişti: uygulama **1.9.52** ve telefon uygulaması **2.3.35** AYNI kalır. Kontrolcü yazılımı DEĞİŞMEDİ (DDS v2.5).
+
+**🔔 Güncellemeler artık sorulmadan indirilmez.** Yeni sürüm bulununca PEMF Vet Client neyin güncelleneceğini (PEMF Vet Client,
+uygulama ve profil paketleri — sürüm numaralarıyla), inecek toplam boyutu ve kısa bir notu TEK pencerede gösterip onayınızı ister.
+"Güncelle" derseniz güncelleme indirilir, kurulur ve uygulama kendiliğinden yeniden başlar — artık "bir sonraki açılışta kurulur"
+beklemesi yok. Seans sürüyorsa yeniden başlatma seans bitince yapılır ve bu ekranda yazılır. "Şimdi değil" derseniz hiçbir şey
+inmez; bir sonraki açılışta yeniden sorulur (uygulama açık kalırsa en çok günde bir hatırlatılır). Soru açılışı bekletmez: "Başlat"
+hemen kullanılabilir. **Zorunlu güvenlik güncellemeleri** (desteklenmeyen sürüm) sorulmadan iner, ekranda bildirilir ve etkin seans
+bitince kurulur.
+
+> Bu sürüme geçiş bir kez daha SORULMADAN olur: 1.9.53 ve öncesi PEMF Vet Client kendini eski kurala göre günceller. 1.9.54'ten
+> sonraki güncellemeler onayla gelir.
+
 ## launcher 1.9.53 — 2026-11-05 (📶 PEMF kapanınca etkin nokta da kapanır; app 1.9.52 ile birlikte)
 
 > Uygulama **1.9.52** ve PEMF Vet Client **1.9.53** birlikte yayınlandı; telefon uygulaması **2.3.35** bu yayında DEĞİŞMEDİ.

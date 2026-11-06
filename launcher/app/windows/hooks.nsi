@@ -334,6 +334,9 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
     Delete "$INSTDIR\pending_install.json"
     Delete "$INSTDIR\selfupdate_attempt.json"
     Delete "$INSTDIR\selfupdate_inprogress.json"
+    ; GK · güncelleme onayı kaydı (Y253 / Y254; core/src/guncelleme_onayi.rs) + atomik yazımın geçici dosyası.
+    Delete "$INSTDIR\guncelleme_onayi.json"
+    Delete "$INSTDIR\guncelleme_onayi.json.tmp"
     Delete "$INSTDIR\backend.port"
     ; DENETİM 2026-08-06: "Beni hatırla" oturumu (DPAPI ile şifreli Supabase access+refresh
     ; jetonu) bu denetimde eklendi ve listeye ALINMAMIŞTI. İki sonucu vardı: (1) özyinelemesiz

@@ -183,6 +183,18 @@ LN L6 · İG-8.21: `backend.port`'taki dinleyici TCP kabul ediyor ama 2 sn'lik k
 port KESİN ölüyse (bağlantı reddi) ve varsayılan portta kimliği doğrulanan backend yoksa kapı serbesttir. Varsayılan port katı kalır
 (yanıtsız yabancı bir servis güncellemeyi kilitlemesin).
 
+**Güncelleme onayı (GK · sahip Y253 / Y254, 2026-11-06 — 2026-08-08 "arka planda indir, sonraki açılışta kur" kararını DEĞİŞTİRİR):**
+sürüm denetiminden sonra güncelleme varsa kullanıcıya TEK pencerede sorulur (`guncelleme_ozeti` → `core::guncelleme_onayi::ozet`:
+başlatıcı X → Y, uygulama A → B, bağımlılık paketi, kurulu profil paketleri, inecek toplam boyut, manifest `notes` / `notes_en`
+kısa notu). Soru açılışı BLOKLAMAZ (bilgi kutusunda kart; "Başlat" açık). Onaysız İNDİRME YOK; tek istisna ZORUNLU güncelleme
+(`min_supported_version` kurulu sürümden yeni): sorulmadan iner, ekranda bildirilir. "Şimdi değil" → indirme yok; sonraki açılışta
+yeniden sorulur, uygulama açıkken en çok günde bir hatırlatılır. Onaylanınca: katmanlar önbelleğe iner → kurulumdan ÖNCE
+`guncelleme_engeli` (= `aktif_seans_kapisi`) engel kalkana dek yoklanır ve bekleme ekranda söylenir → kurulum (sağlık kapısı /
+geri alma / atomik takas / döngü kırıcı / `buildId` AYNEN) → açık uygulama penceresi yeni arayüzü yükler ya da açılır ("sonraki
+açılışta kurulur" YOK). Başlatıcı + katman birlikteyse TEK akış: önce katmanlar iner, `guncelleme_onayi.json` (kurulum kökü;
+profil paketi ezemez, kaldırıcı siler) yazılır, başlatıcı kendini kurup yeniden başlar; yeni başlatıcı kaydı görür (hedef sürüme
+ULAŞILDIYSA ve katman hedefi aynıysa, ≤ 7 gün) ve önbellekteki katmanları SORMADAN kurup uygulamayı açar.
+
 ## Firmware ↔ client uyumsuzluğunda client geri alma (Y16) — backend'in bildirdiği durum
 
 Sahip kararı **Y16**: "client güncellenip STM güncellenmezse client geri döner" kuralını **launcher** (sağlık kapılı

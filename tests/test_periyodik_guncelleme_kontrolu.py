@@ -45,9 +45,14 @@ def flow() -> str:
 
 
 def _recheck(ui: str) -> str:
+    """Periyodik turun gövdesi + KARAR işlevi. GK (istem 41 · Y253 / Y254, 2026-11-06): tur kararı `guncellemeyiDegerlendir`e devreder
+    (başlatıcı + katman + profil TEK yerde) — turun sözleşmesi ikisinin birleşimidir."""
     m = re.search(r"async function recheckUpdates\(\)\s*\{(.*?)\n      \}", ui, re.S)
     assert m, "recheckUpdates bulunamadı"
-    return m.group(1)
+    k = re.search(r"async function guncellemeyiDegerlendir\(info\)\s*\{(.*?)\n      \}", ui, re.S)
+    assert k, "guncellemeyiDegerlendir bulunamadı"
+    assert "guncellemeyiDegerlendir(info)" in m.group(1), "periyodik tur karar işlevine devretmiyor"
+    return m.group(1) + k.group(1)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,14 +100,25 @@ def test_aralik_makul(ui):
 def test_KRITIK_periyodik_tur_GUNCELLEMEYI_UYGULAMAZ(ui):
     """🔴 Uygulamak backend'i durdurur → süren seans kesilir (hasta güvenliği).
 
-    Periyodik tur yalnız indirir ve bildirir; kurulum kullanıcı uygulamayı kapatıp açtığında
-    yapılır. `apply_runtime_update` buraya SIZARSA veteriner çalışırken cihaz durur.
+    GK (istem 41 · Y253 / Y254, 2026-11-06 — 2026-08-08'i değiştirir): periyodik tur ONAYSIZ ne indirir ne kurar. Normal güncellemeyi
+    (en çok günde bir) SORAR; indirme / kurulum YALNIZ onaylı ya da zorunlu akışta (`guncellemeyiUygula`) ve kurulum seans kapısından
+    (`seansBitenekadarBekle` → `aktif_seans_kapisi`) SONRA yapılır — davranışı `test_GK_guncelleme_onayi.py` ölçer.
     """
     g = _recheck(ui)
-    assert "apply_runtime_update" not in g, (
-        "periyodik tur güncellemeyi UYGULUYOR — süren seansı keser; yalnız indirmeli ve bildirmeli"
+    for yasak in (
+        "apply_runtime_update",
+        "prefetch_runtime_update",
+        "apply_self_update",
+        "trySelfUpdate(",
+        "tryRuntimeUpdate(",
+    ):
+        assert yasak not in g, f"periyodik tur onaysız indirme / kurma yolu açıyor: {yasak}"
+    assert re.search(r'if \(oz\.karar === "zorunlu" \|\| oz\.karar === "onayli"\)', g), (
+        "indirme yalnız zorunlu / onaylı kararla başlamalı"
     )
-    assert "prefetch_runtime_update" in g, "arka plan indirme yapılmıyor → paketler hiç inmez"
+    assert re.search(r'if \(oz\.karar === "sor"\) \{\s*if \(onaySorulmali\(', g), "normal güncelleme sorulmuyor"
+    uygula = re.search(r"async function guncellemeyiUygula\(oz, kip\)\s*\{(.*?)\n      \}", ui, re.S).group(1)
+    assert uygula.index("seansBitenekadarBekle()") < uygula.index("tryRuntimeUpdate()"), "kurulum seans kapısından ÖNCE"
 
 
 def test_KRITIK_kurulum_surerken_ARAYA_GIRMEZ(ui):
@@ -144,17 +160,25 @@ def test_KRITIK_geri_cagirma_UI_ya_bildirilir(rs, flow):
 def test_geri_cagirmada_mesaj_YUKSELTILIR(ui):
     """Sıradan 'güncelleme var' notu ile güvenlik geri çağırması AYNI görünmemeli."""
     g = _recheck(ui)
-    assert "plan.recall" in g, "geri çağırma bayrağı hiç okunmuyor"
-    assert g.count("rtRecall") >= 2, "hem indirme hem hazır durumunda yükseltilmiş mesaj olmalı"
+    # GK (Y254 c): geri çağırma = çekirdeğin `zorunlu` kararı → sormadan iner ve yükseltilmiş mesajla BİLDİRİLİR.
+    assert 'oz.karar === "zorunlu"' in g, "geri çağırma (zorunlu) kararı hiç okunmuyor"
+    uygula = re.search(r"async function guncellemeyiUygula\(oz, kip\)\s*\{(.*?)\n      \}", ui, re.S).group(1)
+    assert re.search(r'if \(kip === "zorunlu"\) notice\(t\(\)\.rtRecall\)', uygula), (
+        "zorunlu akışta yükseltilmiş mesaj yok"
+    )
 
 
 def test_geri_cagirma_metni_ne_YAPILACAGINI_soyler(ui):
     """'Desteklenmiyor' demek yetmez; kullanıcı ne yapacağını okumalı."""
-    # I18N-P1 · 11a: sözlük kataloğa taşındı — eylem ipucu `rtRecall` metninde (her dil kendi metninde)
-    for dil, dil_ipucu in (("tr", "KAPATIP AÇIN"), ("en", "CLOSE AND REOPEN")):
-        assert dil_ipucu in katalog_ui(dil)["rtRecall"], f"geri çağırma metni eylem söylemiyor ({dil_ipucu})"
-    # Seans sürüyorsa beklemesi gerektiği de yazmalı (kesme YOK).
-    assert "Seans sürüyorsa" in katalog_ui("tr")["rtRecall"]
+    # I18N-P1 · 11a: sözlük kataloğa taşındı — eylem ipucu `rtRecall` metninde (her dil kendi metninde).
+    # GK (Y254 c, TR DEĞİŞTİ): zorunlu güncelleme artık SORULMADAN iner ve etkin seans bitince kendisi kurar → metin kullanıcıdan
+    # "KAPATIP AÇIN" istemez, NE OLACAĞINI söyler (seans kesilmez; uygulama kendiliğinden yeniden başlar).
+    for dil, ipuclari in (
+        ("tr", ("etkin seans bitince", "otomatik yeniden başlatılacak")),
+        ("en", ("session ends", "restart automatically")),
+    ):
+        for ipucu in ipuclari:
+            assert ipucu in katalog_ui(dil)["rtRecall"], f"geri çağırma metni ne olacağını söylemiyor ({dil}: {ipucu})"
 
 
 def test_i18n_iki_dilde_TAM(ui):
@@ -278,7 +302,7 @@ def test_KRITIK_periyodik_tur_LAUNCHER_guncellemesini_de_gorur(ui):
     # geçişini kaplıyor ve sabit genişlikli bir pencere yorumun içinde kalıyordu (ilk yazımda
     # doğru kodu yanlış-KIRMIZI gösterdi).
     assert "luReady" in g, "launcher güncellemesi görülüyor ama kullanıcıya SÖYLENMİYOR (bildirim metni çağrılmıyor)"
-    assert re.search(r"if\s*\(info\.update", g), "bildirim gerçek bir koşula bağlı değil"
+    assert re.search(r"if\s*\((?:info\s*&&\s*)?info\.update", g), "bildirim gerçek bir koşula bağlı değil"
     # ⚠️ Kurulum YAPILMAMALI: tur sırasında yeniden başlatmak süren seansı keserdi.
     # ⚠️ ÇAĞRI biçimini ara, kelimeyi değil: açıklama yorumunda fonksiyonun ADI geçebilir
     # (ve geçiyor — ilk yazımda kendi yorumuma takıldı).

@@ -278,6 +278,15 @@
       #notice .bgbtn:hover { color: var(--text); border-color: var(--teal-d); background: var(--surface); }
       #notice .bgbtn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
       #notice .bgbtn-danger:hover { color: #fca5a5; border-color: #b91c1c; }
+      /* GÜNCELLEME ONAYI (Y253 / Y254, 2026-11-06): BLOKLAMAYAN onay kartı — bilgi kutusunun içinde (modal DEĞİL; "Başlat"
+         açık kalır). "Güncelle" vurgulu, "Şimdi değil" ikincil. */
+      #notice .onay-baslik { color: var(--fg); font-weight: 700; font-size: 13.5px; }
+      #notice .onay-liste { margin: 8px 0 0 18px; padding: 0; }
+      #notice .onay-liste li { margin: 2px 0; }
+      #notice .onay-boyut { margin-top: 6px; font-variant-numeric: tabular-nums; }
+      #notice .onay-not { margin-top: 6px; font-size: 12px; opacity: 0.9; white-space: pre-line; }
+      #notice .onay-acik { margin-top: 6px; font-size: 12px; }
+      #notice .bgbtn.onay-evet { color: var(--fg); border-color: var(--teal-d); background: var(--surface); }
 
       /* progress */
       .pct { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; margin: 2px 0 12px;
@@ -951,6 +960,18 @@
       // bir indirmeyi kendiliğinden yeniden başlatmamalı — kullanıcı "dur" dediyse durur.
       let prefetchDuraklatildi = false, prefetchIptalEdildi = false;
 
+      // ── GÜNCELLEME ONAYI (sahip Y253 / Y254, 2026-11-06 — SAHİP KARARI 2026-08-08'i DEĞİŞTİRİR) ─────────────────────────────
+      // Sürüm denetiminden sonra güncelleme varsa kullanıcıya SORULUR — TEK pencere: başlatıcı + uygulama / bağımlılık katmanları +
+      // profil paketleri, inecek toplam boyut, kısa sürüm notu (seçili dilde). Onaysız İNDİRME YOK; tek istisna ZORUNLU güvenlik
+      // güncellemesi (`min_supported_version`): sormadan iner, ekranda bildirilir. Onaylanınca süreç KENDİLİĞİNDEN sürer: indir →
+      // (etkin seans / kart yazılımı yükleme bitene dek bekle, ekranda söyle) → kur → uygulama OTOMATİK yeniden başlar ("bir sonraki
+      // açılışta kurulur" YOK). 2026-08-08'in gerekçesi KORUNUR: soru açılışı BLOKLAMAZ (modal değil, bilgi kutusunda kart).
+      const HATIRLATMA_MS = 24 * 60 * 60 * 1000;   // "Şimdi değil" → uygulama açık kaldıkça en çok GÜNDE BİR (Y254 b)
+      const ENGEL_YOKLAMA_MS = 30 * 1000;          // kurulum öncesi etkin seans / yakma yoklaması
+      let sonOnaySorusu = 0;      // bu oturumda son sorulduğu an (ms); 0 = hiç sorulmadı → açılışta HER ZAMAN sorulur (Y254 b)
+      let onayAkisiSuruyor = false;
+      let onayDevam = null;       // duraklatılan indirme "Devam et" ile bitince onaylı akışın KALANI
+
       function stopPrefetchPoll() {
         if (prefetchTimer) { clearInterval(prefetchTimer); prefetchTimer = null; }
       }
@@ -972,10 +993,14 @@
       function prefetchSonucIsle(r) {
         sonBildirim = "";
         const durum = r && r.status;
-        if (durum === "prefetched") { prefetchDuraklatildi = false; notice(t().rtBgDone); bgTemizle(); }
+        if (durum === "prefetched") {
+          prefetchDuraklatildi = false; notice(t().rtBgDone); bgTemizle();
+          // GÜNCELLEME ONAYI: "Devam et" ile biten indirme → onaylı akış KALDIĞI YERDEN sürer (kurulum + yeniden başlatma).
+          if (onayDevam) { const devam = onayDevam; onayDevam = null; devam(); }
+        }
         else if (durum === "paused") { notice(t().rtBgPaused); bgButonlariYaz(); }
-        else if (durum === "cancelled") { notice(t().rtBgCancelled); bgTemizle(); }
-        else notice(t().rtBgFail);
+        else if (durum === "cancelled") { onayDevam = null; notice(t().rtBgCancelled); bgTemizle(); }
+        else { onayDevam = null; notice(t().rtBgFail); }
       }
 
       /// İlerleme kartını (çubuk + düğmeler) kaldır — indirme bitti/iptal edildi.
@@ -1097,10 +1122,10 @@
       // (GERİ ÇAĞIRMA) — kodun kendi yorumuyla "bobin-güvenliği hatasında mevcut kurulumları
       // güncellemeye ZORLAMAK" için var ve `rollout`u ezer — hep-açık cihaza ULAŞAMIYORDU.
       //
-      // 🔴 TASARIM SINIRI: burada güncelleme UYGULANMAZ. Uygulamak backend'i durdurur; süren bir
-      // seansı kesmek hasta güvenliği kararına aykırıdır (`aktif_seans_kapisi` zaten engeller).
-      // Bu yüzden periyodik tur YALNIZ (a) paketleri arka planda indirir, (b) durumu BİLDİRİR.
-      // Kurulum, kullanıcı uygulamayı kapatıp açtığında — yani zaten güvenli olan anda — yapılır.
+      // 🔴 TASARIM SINIRI (GÜNCELLEME ONAYI Y253 / Y254, 2026-11-06 ile güncellendi): periyodik tur ONAYSIZ hiçbir şey İNDİRMEZ
+      // ve KURMAZ — kararı `guncellemeyiDegerlendir` verir: normal güncellemeyi en çok GÜNDE BİR sorar (Y254 b), zorunlu güncellemeyi
+      // sormadan indirir. Kurulum (backend'i durdurur) YALNIZ onaydan / zorunluluktan sonra ve seans kapısı açılınca yapılır
+      // (`seansBitenekadarBekle` → `aktif_seans_kapisi`): süren bir seans ASLA kesilmez (hasta güvenliği kararı AYNEN).
       const GUNCELLEME_KONTROL_MS = 6 * 60 * 60 * 1000;   // 6 saat
       let guncellemeTimer = null, sonBildirim = "";
 
@@ -1112,57 +1137,163 @@
         catch (_) { return; }
         if (!info || !info.raw) return;
         manifestRaw = info.raw;
-
-        // ── LAUNCHER GÜNCELLEMESİ (denetim 2026-08-23, C7) ────────────────────────────────
-        // `info.update` YALNIZ gerçekten yeni bir launcher sürümü varsa dolar (Rust tarafı
-        // `is_newer` ile karar verir). Bu tur eskiden yalnız runtime planına bakıyordu;
-        // `trySelfUpdate` ise yalnız `bootNetwork` içinde, sayfa yüklenirken BİR KEZ koşuyor.
-        // Sonuç: haftalarca kapatılmayan klinik makinesi yeni launcher yayınını ne alıyor ne de
-        // duyuyordu — runtime için 2026-08-16'da kapatılan boşluğun launcher katmanındaki ikizi.
-        //
-        // ⚠️ BURADA KURULUM YAPILMAZ: kurulum uygulamayı yeniden başlatır ve süren bir seansı
-        // keserdi (turun kendi sözleşmesi). Yalnız haber verilir; kurulum kullanıcı uygulamayı
-        // kapatıp açtığında — zaten güvenli olan anda — yapılır.
-        if (info.update && info.update.version && sonBildirim !== "launcher") {
-          sonBildirim = "launcher";
-          notice(tf("luReady", { surum: info.update.version }));
-        }
-
-        let plan;
-        try { plan = await invoke("check_runtime_update", { manifestRaw }); }
-        catch (_) { return; }
-        if (!plan || !plan.needed) return;
-
-        if (!plan.cached) {
-          // Paketler eksik → arka planda indir (kuruluma DOKUNMAZ, seansı etkilemez).
-          //
-          // ⚠️ KULLANICI KARARINA SAYGI (saha bildirimi 2026-08-28): periyodik tur 6 saatte bir
-          // koşar; duraklatan ya da iptal eden kullanıcının indirmesini kendiliğinden yeniden
-          // BAŞLATMAZ — yoksa "Duraklat" düğmesi birkaç saat sonra sessizce geri alınır ve
-          // kullanıcı neden yine indiğini anlayamaz. Karar oturum boyunca geçerlidir; bir
-          // sonraki açılışta (yeni oturum) indirme normal şekilde yeniden denenir.
-          if (prefetchDuraklatildi || prefetchIptalEdildi) return;
-          if (sonBildirim !== "indiriyor") {
-            sonBildirim = "indiriyor";
-            notice(plan.recall ? t().rtRecall : t().rtBg);
-            startPrefetchPoll();
-            invoke("prefetch_runtime_update", { manifestRaw })
-              .then((r) => { stopPrefetchPoll(); prefetchSonucIsle(r); })
-              .catch(() => { stopPrefetchPoll(); sonBildirim = ""; notice(t().rtBgFail); });
-          }
-          return;
-        }
-        // Paketler HAZIR → kurulum bir sonraki açılışta saniyeler sürer. Kullanıcıya söyle.
-        const mesaj = plan.recall ? "recall" : "hazir";
-        if (sonBildirim !== mesaj) {
-          sonBildirim = mesaj;
-          notice(plan.recall ? t().rtRecall : t().rtReady);
-        }
+        // GÜNCELLEME ONAYI (Y253 / Y254): başlatıcı + katman + profil kararı TEK yerde. Eskiden bu tur sormadan arka planda
+        // indiriyordu (2026-08-08); artık normal güncelleme SORULUR (açıkken en çok günde bir), yalnız zorunlu olan sormadan iner.
+        await guncellemeyiDegerlendir(info);
       }
 
       function startUpdateWatch() {
         if (guncellemeTimer) return;
         guncellemeTimer = setInterval(() => { recheckUpdates().catch(() => {}); }, GUNCELLEME_KONTROL_MS);
+      }
+
+      /// "Şimdi değil"den sonra yeniden sorma zamanı geldi mi (saf)? Açılışta (`son` = 0) HER ZAMAN — Y254 b: bir sonraki
+      /// açılışta yeniden sorulur; uygulama açık kaldıkça en çok GÜNDE BİR.
+      function onaySorulmali(son, simdi) {
+        return !son || simdi - son >= HATIRLATMA_MS;
+      }
+
+      /// Sürüm denetiminden SONRA TEK karar noktası (açılış + periyodik tur). Dönüş "ac": önceki açılışta onaylanan akış bitti
+      /// (başlatıcı yeniden başladı, kurulacak başka şey yok) → uygulama OTOMATİK yeniden açılsın (Y253).
+      async function guncellemeyiDegerlendir(info) {
+        if (busy || onayAkisiSuruyor || !manifestRaw || !baseInstalled) return "";
+        let oz;
+        try { oz = await invoke("guncelleme_ozeti", { manifestRaw }); }
+        catch (_) { return ""; }                           // eski / bozuk manifest → boot sürsün (güncelleme ASLA kilitlemez)
+        if (!oz) return "";
+        // DÖNGÜ KIRICI (C2): bu hedef sağlık kapısından geçemedi, otomatik kurulum durdu → kurulmaz ama BİLDİRİLİR.
+        if (oz.katmanDurduruldu && sonBildirim !== "durduruldu") { sonBildirim = "durduruldu"; notice(t().rtBlocked); }
+        // Başlatıcı yayında ama otomatik kuruluma izinsiz (deneme sınırı / kademeli yayın) → pencereye girmez, bildirilir (C4).
+        if (info && info.update && info.update.version && !oz.baslatici && sonBildirim !== "launcher") {
+          sonBildirim = "launcher";
+          notice(tf("luReady", { surum: info.update.version }));
+        }
+        if (oz.karar === "zorunlu" || oz.karar === "onayli") {
+          // Kullanıcı bu oturumda indirmeyi DURAKLATTI / İPTAL ETTİ → tur onu kendiliğinden yeniden BAŞLATMAZ (saha bildirimi
+          // 2026-08-28: "Duraklat" birkaç saat sonra sessizce geri alınmasın). Karar oturumluktur; sonraki açılışta yeniden iner.
+          if (prefetchDuraklatildi || prefetchIptalEdildi) return "";
+          guncellemeyiUygula(oz, oz.karar);
+          return "";
+        }
+        if (oz.karar === "sor") {
+          if (onaySorulmali(sonOnaySorusu, Date.now())) { sonOnaySorusu = Date.now(); onayKartiGoster(oz); }
+          return "";
+        }
+        if (oz.tasinan) { invoke("guncelleme_onayini_temizle").catch(() => {}); return "ac"; }
+        return "";
+      }
+
+      /// Onay kartının satırları (saf): başlatıcı X → Y · uygulama A → B · bağımlılık paketi · profil paketleri.
+      function onaySatirlari(oz) {
+        const x = t(), satir = [];
+        if (oz.baslatici) satir.push(tf("onayBaslatici", { eski: oz.baslatici.suanki, yeni: oz.baslatici.yeni }));
+        if (oz.uygulama) satir.push(tf("onayUygulama", { eski: oz.uygulama.suanki, yeni: oz.uygulama.yeni }));
+        if (oz.bagimliliklar) satir.push(x.onayBagimlilik);
+        if (oz.profiller && oz.profiller.length) satir.push(tf("onayProfiller", { adlar: oz.profiller.map(profName).join(", ") }));
+        return satir;
+      }
+
+      /// Kısa sürüm notu SEÇİLİ DİLDE (Y254 a) — TR ekranda `notTr`, EN ekranda `notEn`; o dilde not yoksa gösterilmez (karışık dil YOK).
+      function onayNotu(oz) {
+        const sec = (o) => (o ? (LANG === "en" ? o.notEn : o.notTr) : "") || "";
+        return [sec(oz.baslatici), sec(oz.uygulama)].filter(Boolean).join("\n");
+      }
+
+      /// Onay kartı — BLOKLAMAZ (modal değil): "Başlat" açık kalır, kullanıcı uygulamayı kullanmaya devam eder.
+      function onayKartiGoster(oz) {
+        const x = t();
+        yedekNotuDurum = null; paylasimNotu = false;
+        const box = $("notice"); box.textContent = "";
+        const ekle = (sinif, metin) => { const d = document.createElement("div"); d.className = sinif; d.textContent = metin; box.appendChild(d); return d; };
+        ekle("onay-baslik", x.onayBaslik);
+        const liste = document.createElement("ul"); liste.className = "onay-liste";
+        for (const metin of onaySatirlari(oz)) { const li = document.createElement("li"); li.textContent = metin; liste.appendChild(li); }
+        box.appendChild(liste);
+        ekle("onay-boyut", tf("onayBoyut", { boyut: fmtBytes(oz.toplamBayt || 0) }));
+        const not = onayNotu(oz);
+        if (not) ekle("onay-not", not);
+        ekle("onay-acik", x.onayAciklama);
+        const eylem = document.createElement("div"); eylem.className = "bgact";
+        const evet = document.createElement("button"); evet.className = "bgbtn onay-evet"; evet.id = "onay-evet"; evet.textContent = x.onayGuncelle;
+        const hayir = document.createElement("button"); hayir.className = "bgbtn"; hayir.id = "onay-hayir"; hayir.textContent = x.onaySimdiDegil;
+        // "Güncelle" → akış KENDİLİĞİNDEN sürer. "Şimdi değil" → İNDİRME YOK; sonraki açılışta / açıkken en erken bir gün sonra sorulur.
+        evet.onclick = () => { clearNotice(); guncellemeyiUygula(oz, "onay"); };
+        hayir.onclick = () => { clearNotice(); };
+        eylem.appendChild(evet); eylem.appendChild(hayir); box.appendChild(eylem);
+        box.hidden = false;
+      }
+
+      /// Katman / profil paketlerini önbelleğe indir (Duraklat / İptal kartı AÇIK; kuruluma dokunmaz, seansı etkilemez).
+      /// Sonuç: "prefetched" | "paused" | "cancelled" | "failed" | "skipped".
+      async function katmanlariIndir() {
+        // Açık onay yeni bir karardır: önceki "Duraklat" bayrağı (Rust `state.control`) bu indirmeyi ilk yığında durdurmasın.
+        if (prefetchDuraklatildi) { prefetchDuraklatildi = false; try { await invoke("resume_install"); } catch (_) {} }
+        prefetchIptalEdildi = false;
+        sonBildirim = "indiriyor";
+        notice(t().rtBg);
+        startPrefetchPoll();
+        return invoke("prefetch_runtime_update", { manifestRaw })
+          .then((r) => { stopPrefetchPoll(); prefetchSonucIsle(r); return (r && r.status) || "failed"; })
+          .catch(() => { stopPrefetchPoll(); sonBildirim = ""; notice(t().rtBgFail); return "failed"; });
+      }
+
+      /// GÜVENLİK DEĞİŞMEZİ: etkin seans / kart yazılımı yükleme / yanıtsız backend varken yeniden başlatma YAPILMAZ — engel kalkana dek
+      /// bekle ve EKRANDA söyle (Rust'ın seçili dildeki iletisi). Yoklama hata verirse ENGEL VAR sayılır (bilinmeyende yeniden başlatma yok).
+      async function seansBitenekadarBekle() {
+        for (;;) {
+          let e = null;
+          try { e = await invoke("guncelleme_engeli"); } catch (_) { e = null; }
+          if (e && e.engel === false) return;
+          notice((e && e.mesaj) || t().rtBusy);
+          await new Promise((r) => setTimeout(r, ENGEL_YOKLAMA_MS));
+        }
+      }
+
+      /// Başlatıcının kendi güncellemesi (onaydan / zorunluluktan SONRA): seans bitene dek bekle → indir + doğrula + kur + yeniden başlat
+      /// (`apply_self_update`; başarıda Rust çıkar). Kapının TOCTOU yoklaması araya giren seansı yakalarsa bekleyip YENİDEN dener
+      /// (doğrulanmış kurucu önbellekte — yeniden inmez); başka sebep (ağ / doğrulama / İptal) → bu oturumda bırakır.
+      async function baslaticiyiGuncelle(b) {
+        const u = { installer_url: b.installerUrl, sha256: b.sha256, size: b.boyut, version: b.yeni, auto: true };
+        for (;;) {
+          await seansBitenekadarBekle();
+          if (await trySelfUpdate(u)) return true;
+          let e = null;
+          try { e = await invoke("guncelleme_engeli"); } catch (_) { e = null; }
+          if (!e || e.engel !== true) return false;
+        }
+      }
+
+      /// Onaylı ("onay"), önceki açılışta onaylanıp başlatıcı yeniden başladıktan sonra süren ("onayli") ya da ZORUNLU ("zorunlu") akış:
+      /// indir → seans bitene dek bekle → kur → uygulama OTOMATİK yeniden başlar. Başlatıcı + katman birlikteyse TEK akış, TEK yeniden
+      /// başlatma: önce katmanlar önbelleğe iner, onay kaydı yazılır, başlatıcı kurulup yeniden başlar; yeni başlatıcı önbellekteki
+      /// katmanları SORMADAN kurar (sağlık kapısı / geri alma / döngü kırıcı / buildId AYNEN) ve uygulamayı açar.
+      async function guncellemeyiUygula(oz, kip) {
+        if (onayAkisiSuruyor || !oz) return;
+        onayAkisiSuruyor = true;
+        try {
+          if (kip === "zorunlu") notice(t().rtRecall);
+          if (oz.katmanGerekli && !oz.katmanOnbellekte) {
+            const durum = await katmanlariIndir();
+            if (durum !== "prefetched") {
+              // Duraklatıldı → "Devam et" ile indirme bitince akış KALDIĞI YERDEN sürer. İptal / hata → bu oturumda durur
+              // (sonraki açılışta yeniden sorulur; zorunluysa yeniden iner).
+              onayDevam = durum === "paused" ? () => guncellemeyiUygula(Object.assign({}, oz, { katmanOnbellekte: true }), kip) : null;
+              return;
+            }
+          }
+          if (oz.baslatici) {
+            try { await invoke("guncelleme_onayini_kaydet", { manifestRaw, launcherHedefi: oz.baslatici.yeni }); } catch (_) {}
+            await baslaticiyiGuncelle(oz.baslatici);
+            return;
+          }
+          if (oz.katmanGerekli) {
+            await seansBitenekadarBekle();
+            await tryRuntimeUpdate();
+          }
+          if (oz.tasinan) invoke("guncelleme_onayini_temizle").catch(() => {});
+        } finally {
+          onayAkisiSuruyor = false;
+        }
       }
 
       function startPrefetchPoll() {
@@ -1825,7 +1956,9 @@
       }
       /**
        * RUNTIME OTO-GÜNCELLEME (2026-08-08 sahip kararı: "Onar'a basmadan, client'ı kapatıp
-       * açınca backend dâhil her şey gelmeli; siteye deploy etmem yetmeli").
+       * açınca backend dâhil her şey gelmeli; siteye deploy etmem yetmeli"). GÜNCELLEME ONAYI (Y253 / Y254, 2026-11-06):
+       * bu işlev artık YALNIZ onaylı / zorunlu / taşınan akıştan (`guncellemeyiUygula`, seans kapısından SONRA) ve "Devam Et"ten
+       * (`resumeOp`) çağrılır — açılışta kendiliğinden ÇAĞRILMAZ.
        *
        * Launcher zaten KENDİNİ güncelliyordu (`trySelfUpdate`) ama base.zip'i (backend + web
        * arayüzü) yalnız "Onar" tazeliyordu → yayınlanan backend düzeltmeleri kullanıcıya
@@ -1858,10 +1991,10 @@
           return false;
         }
 
-        // ── ARKA PLAN İNDİRME (2026-08-08 sahip kararı) ────────────────────────────────────
-        // Paketler henüz inmemişse KULLANICIYI BEKLETME: hayvanı masada bekleyen veteriner
-        // uygulamayı açtığında 45 dakikalık indirmeye takılmamalı. Sessizce indir, kurulumu
-        // BİR SONRAKİ açılışa bırak (o zaman paketler hazır → kurulum saniyeler sürer).
+        // ── ARKA PLAN İNDİRME (2026-08-08 sahip kararı; GÜNCELLEME ONAYI Y253 / Y254 ile değişti) ────────────────────────
+        // Paketler henüz inmemişse KULLANICIYI BEKLETME: hayvanı masada bekleyen veteriner 45 dakikalık indirmeye takılmamalı
+        // (gerekçe KORUNUR). Bu dala artık yalnız onaydan SONRA gelinir (onaylı akış önce indirir; buraya ancak manifest araya
+        // yeni bir sürümle girerse düşülür) — indirme biter, kurulum bir sonraki onaylı turda / açılışta sorulur.
         if (!plan.cached) {
           // ⚠️ (A) EKRANI GERİ AL (denetim 2026-08-17). Buraya "Devam Et" ile de gelinir
           // (`resumeOp = tryRuntimeUpdate`): duraklatılmış kurulum ekranı açıkken 6 saatlik
@@ -2050,8 +2183,8 @@
       $("confirm-no").onclick = () => { closeModal("confirm"); const cb = confirmNoCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
       $("confirm-yes").onclick = () => { closeModal("confirm"); const cb = confirmCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
 
-      // OTO-GÜNCELLEME: yeni client sürümü (installer_url'li) varsa açılışta SESSİZCE indir + SHA doğrula
-      // + kur + yeniden başlat. Başarılıysa Rust uygulamadan çıkar (true döner, boot durur). Başarısızsa
+      // OTO-GÜNCELLEME: yeni client sürümünü (installer_url'li) indir + SHA doğrula + kur + yeniden başlat. GÜNCELLEME ONAYI
+      // (Y253 / Y254): YALNIZ onaylı / zorunlu akıştan (`baslaticiyiGuncelle`, seans kapısından SONRA) çağrılır — açılışta SORMADAN değil. Başarılıysa Rust uygulamadan çıkar (true döner, boot durur). Başarısızsa
       // (indirme/doğrulama hatası) false → normal boot sürer; güncelleme kullanıcıyı ASLA bloklamaz.
       // İnternet yoksa fetch_profiles zaten patlar → buraya hiç gelinmez (güncelleme sessizce atlanır).
       async function trySelfUpdate(u) {
@@ -2297,9 +2430,8 @@
         $("ver").textContent = ver;
         clearNotice();
 
-        // Oto-güncelleme: manifest GELDİKTEN sonra (çevrimdışıyken zaten sessizce atlanır).
-        // Kullanıcı bu arada kuruluma/başlatmaya girmişse ARAYA GİRME.
-        if (info.update && !busy && (await trySelfUpdate(info.update))) return;
+        // GÜNCELLEME ONAYI (Y253 / Y254, 2026-11-06): başlatıcının kendi güncellemesi artık burada SORMADAN kurulmaz — aşağıda
+        // `guncellemeyiDegerlendir` uygulama / profil güncellemesiyle TEK pencerede sorar (2026-11-06'ya dek `trySelfUpdate` buradaydı).
 
         if (!info.platform_supported) {
           startKapisiAc();
@@ -2333,11 +2465,13 @@
         // yeni base'i eski launcher kurar ve hemen ardından yeniden başlayıp işi tekrarlardı.
         // Güncelleme yapıldıysa aşağıdaki "yarım kalan kurulum" sorusuna GİRME (ekran zaten değişti).
         startUpdateWatch();   // hep-açık makine de güncelleme alsın (bkz. recheckUpdates)
-        // Güncelleme kararı BURADA veriliyor. `true` dönerse kurulum ekranı devraldı; iş bitince
-        // `s-ready` yeniden gösterilecek ve kapı orada açılacak (aşağıdaki `show` sarmalayıcısı).
-        // `false` = kurulacak bir şey yok ya da arka planda iniyor → Başlat artık GÜVENLE açılır.
-        if (await tryRuntimeUpdate()) return;
+        // GÜNCELLEME ONAYI (Y253 / Y254): karar BURADA — tek pencere; soru BLOKLAMAZ (kart), onaysız indirme / kurulum YOK (zorunlu
+        // hariç). Onaylı / zorunlu / taşınan akış arka planda sürer; kurulum adımında ekranı kendisi devralır → Başlat GÜVENLE açılır.
+        const guncellemeKarari = await guncellemeyiDegerlendir(info);
         startKapisiAc();
+        // Önceki açılışta onaylanan güncelleme tamamlandı (başlatıcı yeniden başladı, kurulacak başka şey yok) → uygulama OTOMATİK
+        // yeniden açılır (Y253: "oto yeniden başlasın uygulama").
+        if (guncellemeKarari === "ac" && !busy && curScreen() === "s-ready") $("btn-start").onclick();
 
         // Yarım kalan kurulum (internet kesildi / laptop kapandı) → kaldığın yerden devam et?
         // Manifest gerektirir → GEÇ de olsa burada sorulur.

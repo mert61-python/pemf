@@ -19,6 +19,7 @@ pub mod auth;
 pub mod backend;
 pub mod extract;
 pub mod flow;
+pub mod guncelleme_onayi;
 pub mod install;
 pub mod manifest;
 pub mod net;

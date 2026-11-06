@@ -15,6 +15,10 @@
     }
   },
   "launcher": {
+    "1.9.54": {
+      "notes": "Güncellemeler artık sorulmadan indirilmez: yeni sürüm bulununca PEMF Vet Client neyin güncelleneceğini, inecek boyutu ve kısa notu gösterip onayınızı ister. \"Güncelle\" derseniz güncelleme indirilir, kurulur ve uygulama kendiliğinden yeniden başlar (seans sürüyorsa bitmesi beklenir); \"Şimdi değil\" derseniz bir sonraki açılışta yeniden sorulur. Zorunlu güvenlik güncellemeleri sorulmadan iner ve ekranda bildirilir.",
+      "notes_en": "Updates are no longer downloaded without asking: when a new version is found, PEMF Vet Client shows what will be updated, the download size and a short note, and asks for your approval. If you choose \"Update\", it is downloaded and installed and the app restarts by itself (if a session is running, it waits for the session to end); if you choose \"Not now\", you will be asked again on the next launch. Mandatory safety updates download without asking and are announced on screen."
+    },
     "1.9.53": {
       "notes": "PEMF Vet Client kapanırken mobil etkin noktayı da kapatır (yalnız PEMF'in açtığı PEMF-Gateway'i; başka adla açtığınız etkin noktaya dokunmaz). Güncellemeden sonraki ilk oturumda destek için gösterilen paket kimliği artık doğru.",
       "notes_en": "PEMF Vet Client now turns off the mobile hotspot when it closes (only the PEMF-Gateway hotspot that PEMF opened; a hotspot you opened under another name is left alone). The package ID shown for support is now correct in the first session after an update."

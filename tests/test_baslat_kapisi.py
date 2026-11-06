@@ -99,7 +99,8 @@ def test_KRITIK_desteklenmeyen_platformda_kapi_ACILIR(ui):
 def test_KRITIK_guncelleme_karari_sonrasi_kapi_ACILIR(ui):
     """Güncelleme yoksa ya da arka planda iniyorsa Başlat hemen açılmalı."""
     g = _bootnetwork(ui)
-    m = re.search(r"if \(await tryRuntimeUpdate\(\)\) return;\n(.*?)\n", g, re.S)
+    # GK (Y253 / Y254): karar `guncellemeyiDegerlendir`de (soru BLOKLAMAZ); hemen ardından kapı açılır.
+    m = re.search(r"const guncellemeKarari = await guncellemeyiDegerlendir\(info\);\n(.*?)\n", g, re.S)
     assert m and "startKapisiAc()" in m.group(1), (
         "güncelleme kararından sonra kapı açılmıyor → güncelleme gerekmese bile Başlat kilitli"
     )

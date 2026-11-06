@@ -3431,6 +3431,34 @@
    "tur": "seans",
    "kaynak": "launcher/app/ui/index.html",
    "aciklama": "seans sürerken güncelleme yapılmaz (launcher bandı)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "ui.onayGuncelle",
+   "tur": "seans",
+   "kaynak": "launcher/app/ui/index.html",
+   "aciklama": "güncelleme onayı düğmesi (Y253 / Y254) — onaylanınca indirilir, kurulur, uygulama yeniden başlatılır (etkin seans bitince)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "ui.onaySimdiDegil",
+   "tur": "seans",
+   "kaynak": "launcher/app/ui/index.html",
+   "aciklama": "güncelleme onayı reddi (Y254 b) — indirme YOK, sonraki açılışta / açıkken en çok günde bir yeniden sorulur"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "ui.onayAciklama",
+   "tur": "seans",
+   "kaynak": "launcher/app/ui/index.html",
+   "aciklama": "onay kartı: güncelleme sonrası otomatik yeniden başlatma ve seans sürerken beklenmesi (Y253 / Y254)"
+  },
+  {
+   "yuzey": "launcher",
+   "anahtar": "ui.rtRecall",
+   "tur": "seans",
+   "kaynak": "launcher/app/ui/index.html",
+   "aciklama": "zorunlu güvenlik güncellemesi bildirimi (Y254 c) — sorulmadan iner, etkin seans bitince kurulur ve yeniden başlatılır"
   }
  ],
  "bekleyen": [

@@ -7,6 +7,7 @@ için `notes_en`in bir kaynağı yoktu; ayrıca `publish_release.ps1` yalnız T�
 
     python scripts/surum_notlari.py goster <app|launcher|mobile> <sürüm> <tr|en>   # metni yazdırır (publish_release.ps1 -Notes / -NotesEn)
     python scripts/surum_notlari.py mobil <manifest.json>                           # mobile.android.notes + notes_en'i yazar
+    python scripts/surum_notlari.py baslatici <manifest.json>                       # launcher.notes + notes_en'i yazar (GK · Y254 a)
 
 `mobil` komutu bloğun KENDİ sürümünün notunu yazar (APK dosyası yüklenip blok elle güncellendikten SONRA çalıştırılır); o sürümün
 notu yoksa hiçbir şey yazmadan durur — eski sürümün notu yeni APK'nın üstüne yazılmaz. Ağ yok; yalnız verilen dosyaya dokunur.
@@ -55,6 +56,20 @@ def mobil_notlarini_yaz(manifest_yolu: Path, yol: Path = NOTLAR) -> str:
     return surum
 
 
+def baslatici_notlarini_yaz(manifest_yolu: Path, yol: Path = NOTLAR) -> str:
+    """GK (istem 41 · Y254 a): başlatıcının onay penceresi kısa sürüm notunu manifest'in `launcher` bloğundan okur
+    (`launcher/core/src/manifest.rs` `LauncherInfo.notes` / `notes_en`). Bloğun KENDİ sürümünün iki notunu yazar; not yoksa
+    hiçbir şey yazmadan durur (eski sürümün notu yeni başlatıcının üstüne yazılmaz). Yazılan sürümü döndürür."""
+    manifest = json.loads(manifest_yolu.read_text(encoding="utf-8"))
+    blok = manifest.get("launcher")
+    if not isinstance(blok, dict) or not blok.get("version"):
+        raise NotYok(f"{manifest_yolu.name}: launcher.version yok")
+    surum = str(blok["version"])
+    blok.update(notlari_oku("launcher", surum, yol))
+    manifest_yolu.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return surum
+
+
 def main(argv: list[str]) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # gömülü Python'un cp1254 konsolu Türkçe karakterde düşmesin
@@ -67,6 +82,10 @@ def main(argv: list[str]) -> int:
         if len(argv) == 2 and argv[0] == "mobil":
             surum = mobil_notlarini_yaz(Path(argv[1]))
             print(f"[surum_notlari] mobile.android {surum}: notes + notes_en yazıldı → {argv[1]}")
+            return 0
+        if len(argv) == 2 and argv[0] == "baslatici":
+            surum = baslatici_notlarini_yaz(Path(argv[1]))
+            print(f"[surum_notlari] launcher {surum}: notes + notes_en yazıldı → {argv[1]}")
             return 0
     except NotYok as e:
         print(f"[surum_notlari] HATA: {e}", file=sys.stderr)

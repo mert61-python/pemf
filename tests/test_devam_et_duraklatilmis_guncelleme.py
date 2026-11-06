@@ -53,7 +53,11 @@ def _kos(senaryo: str, tmp_path: Path) -> dict:
     recheck = _fonksiyon(ham, "async function recheckUpdates()")
     # ⚠️ ÇIKARIM TAMLIĞI: sentinel yarım keserse testler sessizce anlamsızlaşır.
     assert "apply_runtime_update" in try_rt and "prefetch_runtime_update" in try_rt, "tryRuntimeUpdate cikarimi YARIM"
-    assert "sonBildirim" in recheck, "recheckUpdates cikarimi YARIM"
+    # GK (Y253 / Y254): periyodik tur kararı `guncellemeyiDegerlendir`e devreder — sahte ozet `null` (karar yok) döner, tur yalnız
+    # manifesti DEĞİŞTİRİR (bu dosyanın kurduğu yol: duraklatılmış ekran açıkken yeni sürüm).
+    assert "guncellemeyiDegerlendir(info)" in recheck, "recheckUpdates cikarimi YARIM"
+    karar = _fonksiyon(ham, "async function guncellemeyiDegerlendir(info)")
+    assert "guncelleme_ozeti" in karar, "guncellemeyiDegerlendir cikarimi YARIM"
 
     kod = "\n".join(
         [
@@ -73,6 +77,8 @@ def _kos(senaryo: str, tmp_path: Path) -> dict:
             # için burada da tanımlanmalı — aksi hâlde ReferenceError.
             'let guncellemeTimer = null, sonBildirim = "";'
             ' let prefetchDuraklatildi = false, prefetchIptalEdildi = false;',
+            "let sonOnaySorusu = 0, onayAkisiSuruyor = false;",
+            karar,
             recheck,
             try_rt,
         ]
@@ -122,6 +128,8 @@ async function refreshEnv() {{ return {{}}; }}
 // dakikalar sürer, yani asla-çözülmeyen mock gerçeğe DAHA yakındır.
 async function invoke(ad, args) {{
   if (ad === "check_runtime_update") {{ sonCheck = args && args.manifestRaw; return PLAN; }}
+  // GK (Y253 / Y254): periyodik tur artık karar işlevine (`guncelleme_ozeti`) gider — tur YENİ manifesti oraya taşır; karar yok (null).
+  if (ad === "guncelleme_ozeti") {{ sonCheck = args && args.manifestRaw; return null; }}
   if (ad === "apply_runtime_update") return {{ status: "paused" }};
   if (ad === "fetch_profiles") return {{ raw: RAW }};
   if (ad === "prefetch_runtime_update") {{ prefetch += 1; return new Promise(() => {{}}); }}

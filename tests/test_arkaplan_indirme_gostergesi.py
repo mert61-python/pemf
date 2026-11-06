@@ -116,7 +116,8 @@ def test_KRITIK_arka_plan_indirmede_kurulum_EKRANI_ACILMAZ(ui):
     `show("s-install")` çağrılırsa ekran ele geçer ve "Başlat" kullanılamaz hâle gelir —
     2026-08-08 sahip kararının tam tersi.
     """
-    m = re.search(r"if \(!plan\.cached\) \{(.*?)\n        \}", ui, re.S)
+    # GK (Y253 / Y254): arka plan indirmesi onaylı / zorunlu akışın `katmanlariIndir` adımı (gerekçe KORUNUR: ekran ele geçmez).
+    m = re.search(r"async function katmanlariIndir\(\)\s*\{(.*?)\n      \}", ui, re.S)
     assert m, "arka plan indirme dalı bulunamadı"
     dal = m.group(1)
     assert "startPrefetchPoll" in dal, "arka plan dalında yoklama başlatılmıyor"

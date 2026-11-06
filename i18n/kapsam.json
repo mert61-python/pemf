@@ -10266,6 +10266,13 @@
      ]
     },
     {
+     "metin": "bgbtn onay-evet",
+     "gerekce": "CSS sınıf adı — metin değil (GK · güncelleme onayı kartının vurgulu düğmesi)",
+     "turler": [
+      "atama"
+     ]
+    },
+    {
      "metin": "kaldı",
      "gerekce": "HTML'deki varsayılan Türkçe metin — `applyLang()` çalışma anında `ui.etaLeft` ile dile göre ÜZERİNE YAZAR (sözlük kataloğa taşındı; TR bayt bayt aynı)",
      "turler": [

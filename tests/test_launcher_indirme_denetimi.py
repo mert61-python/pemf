@@ -165,9 +165,15 @@ def test_KRITIK_periyodik_tur_KULLANICI_kararini_EZMIYOR():
     """Periyodik tur 6 saatte bir koşar; duraklatan kullanıcının indirmesini kendiliğinden
     yeniden başlatmamalı — yoksa "Duraklat" birkaç saat sonra sessizce geri alınır."""
     m = _ui()
-    assert re.search(r"if \(prefetchDuraklatildi \|\| prefetchIptalEdildi\) return;", m), (
-        "periyodik tur duraklatılmış/iptal edilmiş indirmeyi yeniden başlatabiliyor"
-    )
+    # GK (Y253 / Y254): periyodik tur normal güncellemeyi artık hiç kendiliğinden indirmez; kendiliğinden inen tek yol zorunlu / taşınan
+    # akış — o da bu oturumdaki Duraklat / İptal kararını EZMEZ (karar işlevinde, akış başlamadan).
+    k = re.search(r"async function guncellemeyiDegerlendir\(info\)\s*\{(.*?)\n      \}", m, re.S)
+    assert k, "guncellemeyiDegerlendir bulunamadı"
+    g = k.group(1)
+    i = g.find('if (oz.karar === "zorunlu" || oz.karar === "onayli")')
+    assert i >= 0 and re.search(
+        r"if \(prefetchDuraklatildi \|\| prefetchIptalEdildi\) return\b", g[i : g.find("guncellemeyiUygula(", i)]
+    ), "periyodik tur duraklatılmış/iptal edilmiş indirmeyi yeniden başlatabiliyor"
 
 
 @pytest.mark.parametrize(

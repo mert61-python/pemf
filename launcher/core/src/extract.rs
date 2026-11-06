@@ -54,7 +54,7 @@ const MAX_SYMLINK_LEN: u64 = 4096;
 /// Listenin bir daha eskimemesi `tests/test_profil_paketi_kok_dosyalari.py` ile sağlanır: kapı
 /// adları değil KAYNAĞI ölçer — `install_root.join("...")` ile üretilen her kök girdisi ya bu
 /// listede olmalı ya da açıkça meşru sayılmalı (tek istisna `ai_models`, profillerin hedefi).
-const PROFILE_FORBIDDEN_TOP: [&str; 18] = [
+const PROFILE_FORBIDDEN_TOP: [&str; 19] = [
     "runtime",
     // Sahneleme/geri-dönüş kardeşleri: `runtime` korunup bunların açıkta kalması korumayı
     // anlamsız kılıyordu — özellikle `runtime.old`, sağlık kapısı düştüğünde dönülecek sürüm.
@@ -92,6 +92,9 @@ const PROFILE_FORBIDDEN_TOP: [&str; 18] = [
     "auth_remember.flag",
     // LN L7 · D2.76: launcher'ın backend'e verdiği hasta veri kökü — profil paketi ezerse kaldırma iletisi YANLIŞ klasörü gösterir.
     "veri_koku.txt",
+    // GK · GÜNCELLEME ONAYI (Y253 / Y254): onay kaydı (`guncelleme_onayi`) — profil paketi kök seviyeye koyarsa kullanıcının vermediği
+    // onayı "taşınmış" gösterip katman kurulumunu SORMADAN başlatabilirdi.
+    "guncelleme_onayi.json",
 ];
 
 /// `archive` içeriğini `dest` altına açar. Girdi yolları `dest` dışına çıkamaz.
