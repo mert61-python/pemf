@@ -172,7 +172,8 @@ test("KRITIK: sabitler NATIVE shrinkForUpload ile AYNI", () => {
 });
 
 test("KRITIK: TUM web secicileri kucultmeden GECIYOR", () => {
-  // ⚠️ 14 seçici var; biri atlanırsa o modülde ham dosya yüklenmeye devam eder ve
+  // ⚠️ 12 seçici var (KP-3 C12: KidneyCT + Histopath'teki hiçbir düğmeye bağlı OLMAYAN iki `takePhoto` ölü kod olarak
+  // silindi → 14 → 12; o iki modülde yalnız "Galeriden Seç" vardır). Biri atlanırsa o modülde ham dosya yüklenmeye devam eder ve
   // arıza SESSİZCE yaşamaya devam ederdi (yalnız bir modülde).
   //
   // MUTASYON: bir `webIcinKucult(` çağrısını `setImageFile(file)`a geri çevir → KIRMIZI.
@@ -186,7 +187,7 @@ test("KRITIK: TUM web secicileri kucultmeden GECIYOR", () => {
   ) as string;
 
   const kucultme = (src.match(/webIcinKucult\(file\)/g) || []).length;
-  expect(kucultme).toBe(14);
+  expect(kucultme).toBe(12);
   // Ham dosyayı doğrudan state'e koyan hiçbir yol KALMAMALI.
   expect(src).not.toContain("setImageFile(file)");
 });
