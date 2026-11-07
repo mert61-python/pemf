@@ -248,8 +248,7 @@ class SeansAlanKaydi:
                 lo, hi = u.get(f"mag_{eksen}_min"), u.get(f"mag_{eksen}_max")
                 satir.append("" if (lo is None or hi is None) else round(float(hi) - float(lo), 3))
             yazici, dosya = self._yazici, self._dosya
-        if yazici is None or satir is None:
-            return
+        # KP-3 (Y242): `_aktif` iken yazıcı HEP kurulu (ikisi `seans_basladi`da aynı kilitle) → eski "yazıcı/satır yok" dalı ulaşılamazdı
         try:
             yazici.writerow(satir)
             if dosya is not None:
