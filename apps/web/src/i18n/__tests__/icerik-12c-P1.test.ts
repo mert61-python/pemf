@@ -63,7 +63,7 @@ const ALTIN: Record<string, unknown> = {
  },
  "CLIENT": {
   "channel": "Sürüm 2026.1",
-  "releaseDate": "5 Kas 2026",
+  "releaseDate": "7 Kas 2026",
   "androidOs": "Android 8.0 ve üzeri · telefona doğrudan kurulur"
  },
  "MODULES": [
@@ -242,10 +242,10 @@ const ALTIN: Record<string, unknown> = {
   }
  ],
  "PATCH": {
-  "date": "5 Kas 2026",
+  "date": "7 Kas 2026",
   "notes": [
-   "PEMF kapatılınca bilgisayarın mobil etkin noktası (PEMF-Gateway) da kapanır; uygulama kapalıyken etkin nokta artık kendiliğinden yeniden açılmaz.",
-   "Güncellemeden sonraki ilk oturumda destek için gösterilen paket kimliği artık doğru."
+   "Güncellemeler artık sorulmadan indirilmez: yeni sürüm bulununca neyin güncelleneceği, inecek boyut ve kısa bir not gösterilip onayınız istenir.",
+   "“Güncelle” derseniz güncelleme kurulur ve uygulama kendiliğinden yeniden başlar (seans sürüyorsa bitmesi beklenir); “Şimdi değil” derseniz bir sonraki açılışta yeniden sorulur."
   ]
  },
  "COMPARE": [

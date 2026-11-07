@@ -6,7 +6,7 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
-## launcher 1.9.54 — YAYIN ADAYI (YAYINLANMADI; 🔔 güncellemeler artık onayla; app 1.9.52 ile)
+## launcher 1.9.54 — 2026-11-07 (🔔 güncellemeler artık onayla; app 1.9.52 ile)
 
 > Yalnız PEMF Vet Client değişti: uygulama **1.9.52** ve telefon uygulaması **2.3.35** AYNI kalır. Kontrolcü yazılımı DEĞİŞMEDİ (DDS v2.5).
 

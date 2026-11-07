@@ -19,7 +19,7 @@ Hiçbir toolchain, repo, sır, komut satırı **gerekmez**. Cihaz yazılımı ke
 
 1. Klinik bilgisayarında tarayıcıyı aç → **indirme sitesi:** https://pemf-vet-web.vercel.app
 2. **Windows İçin İndir** → `PEMFVetClient-Setup-*.exe` iner → çalıştır.
-   - Kurulum dosyası ~221 MB (manifest `launcher.size` = 220.960.070 B, launcher 1.9.53 — WebView2 çevrimdışı kurucusu
+   - Kurulum dosyası ~221 MB (manifest `launcher.size` = 220.893.572 B, launcher 1.9.54 — WebView2 çevrimdışı kurucusu
      dahil: `launcher/app/tauri.conf.json` `webviewInstallMode: offlineInstaller`); ~~Kurulum ~11 MB'lık launcher'ı yazar;~~
      launcher'ı yazar; **runtime + AI profilleri kurulum sırasında iner**
      (internet gerekir, ilk sefer birkaç GB — sabırlı olun, ilerleme çubuğu var).

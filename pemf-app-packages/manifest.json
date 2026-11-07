@@ -74,12 +74,14 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.53",
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.53/PEMFVetClient-Setup.exe",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.53/PEMFVetClient-Setup-1.9.53.exe",
-    "sha256": "70fc9b8abc236f444aedf3fc267d8f487ce900a1e98651167e1c9ecd540debcc",
-    "size": 220960070,
-    "rollout": 100
+    "version": "1.9.54",
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.54/PEMFVetClient-Setup.exe",
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.54/PEMFVetClient-Setup-1.9.54.exe",
+    "sha256": "ec096e4ad9be1c41e2879f90e15feb87083de7e329f78c72632f9d272ebb4cd2",
+    "size": 220893572,
+    "rollout": 100,
+    "notes": "Güncellemeler artık sorulmadan indirilmez: yeni sürüm bulununca PEMF Vet Client neyin güncelleneceğini, inecek boyutu ve kısa notu gösterip onayınızı ister. \"Güncelle\" derseniz güncelleme indirilir, kurulur ve uygulama kendiliğinden yeniden başlar (seans sürüyorsa bitmesi beklenir); \"Şimdi değil\" derseniz bir sonraki açılışta yeniden sorulur. Zorunlu güvenlik güncellemeleri sorulmadan iner ve ekranda bildirilir.",
+    "notes_en": "Updates are no longer downloaded without asking: when a new version is found, PEMF Vet Client shows what will be updated, the download size and a short note, and asks for your approval. If you choose \"Update\", it is downloaded and installed and the app restarts by itself (if a session is running, it waits for the session to end); if you choose \"Not now\", you will be asked again on the next launch. Mandatory safety updates download without asking and are announced on screen."
   },
   "mobile": {
     "android": {
