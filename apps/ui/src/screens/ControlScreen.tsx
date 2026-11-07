@@ -916,15 +916,6 @@ function StartButton({
   );
 }
 
-function StatChip({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statChip}>
-      <Text style={styles.statChipLabel}>{label}</Text>
-      <Text style={styles.statChipValue}>{value}</Text>
-    </View>
-  );
-}
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
@@ -1071,15 +1062,6 @@ const styles = StyleSheet.create({
 
 
 
-  statChip: {
-    flex: 1,
-    backgroundColor: "#1e293b",
-    borderRadius: 8,
-    padding: spacing.sm,
-    alignItems: "center",
-  },
-  statChipLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700" },
-  statChipValue: { color: colors.primary, fontSize: typography.body, fontWeight: "800" },
 
   emergencyBtn: {
     backgroundColor: "#7f1d1d",

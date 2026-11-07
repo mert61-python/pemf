@@ -255,18 +255,6 @@ async function localSubnets(): Promise<string[]> {
   return subs.filter((v, i, a) => !!v && a.indexOf(v) === i);
 }
 
-/** Telefon WiFi'de mi? — WiFi'de YEREL keşif (mDNS/subnet) önce; aksi halde REMOTE önce denenir. */
-async function _isOnWifi(): Promise<boolean> {
-  try {
-    // @ts-ignore - opsiyonel native modül
-    const NetInfo = require("@react-native-community/netinfo").default;
-    const st = await NetInfo.fetch();
-    return st?.type === "wifi";
-  } catch {
-    return true; // bilinmiyorsa yerel-önce (eski davranış, güvenli)
-  }
-}
-
 /** Tarama sırasında bulunan aday — YAN ETKİSİZ. Kimlik/token yazımı KAZANAN adaya uygulanır. */
 interface ProbeHit { ip: string; deviceId: string | null }
 
@@ -293,7 +281,7 @@ async function probeHost(ip: string, timeoutMs: number): Promise<ProbeHit | null
 async function discoverSubnet(requireDeviceId?: string | null, gecersiz: () => boolean = () => false): Promise<string | null> {
   // Web'de tarayıcı keyfi IP'lere health bağlantısı yapamaz (CORS) → atla; web'de origin zaten doğru.
   if (Platform.OS === "web") return null;
-  // NOT: isOnWifi() ile ATLANMAZ — açılışta NetInfo henüz hazır değilken false dönüp aynı-WiFi yerel
+  // NOT: WiFi denetimiyle (NetInfo `type`) ATLANMAZ — KP-3 (Y242): kullanılmayan `_isOnWifi` yardımcısı silindi; açılışta NetInfo henüz hazır değilken false dönüp aynı-WiFi yerel
   // keşfini KIRIYORDU (regresyon). Subnet farklı ağda zaten EN SON denendiğinden (remote'tan sonra)
   // ekstra maliyet sadece remote da başarısızken oluşur — kabul edilebilir.
   const subs = await localSubnets();

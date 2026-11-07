@@ -53,7 +53,6 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
   // Klavye "Git/Bitti" tuşu devre-dışı butonu ATLAYIP submit'i çağırabildiği için senkron kilit.
   const submittingRef = useRef(false);
   const [error, setError] = useState("");
-  const [suggestRegister, setSuggestRegister] = useState(false); // (Supabase jenerik hata → nadir)
   const [notice, setNotice] = useState("");                      // olumlu mesaj (yeşil)
   const pwRef = useRef<TextInput>(null);       // klavye "İleri" → şifreye odak
   const confirmRef = useRef<TextInput>(null);  // klavye "İleri" → şifre-tekrara odak
@@ -90,7 +89,6 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
     setMode(m);
     setError("");
     setConfirm("");
-    setSuggestRegister(false);
     // Mod değişince kayıt profil alanlarını temizle (giriş↔kayıt geçişinde eski değerler kalmasın).
     setFirstName(""); setLastName(""); setTitle(""); setPhone("");
     setClinicName(""); setClinicPhone(""); setCity(""); setDistrict(""); setAddress("");
@@ -283,7 +281,7 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                 ref={emailRef}
                 style={styles.input}
                 value={email}
-                onChangeText={(t) => { setEmail(t); setError(""); setSuggestRegister(false); }}
+                onChangeText={(t) => { setEmail(t); setError(""); }}
                 placeholder={t("giris.alan.eposta")}
                 placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
@@ -407,13 +405,6 @@ export function AuthScreen({ hesapEkleme = false, onVazgec }: { hesapEkleme?: bo
                 Supabase autoconfirm açık → gönderilecek doğrulama e-postası YOK. Düğme
                 "gönderildi" deyip hiçbir şey yapmıyor, kullanıcıyı gelmeyen bir e-postayı
                 beklemeye itiyordu. Şifre unutulduysa "Şifremi unuttum" akışı zaten var. */}
-
-            {/* Kayıtsız e-posta → tek dokunuşla Kayıt Ol'a geç (e-posta/şifre korunur) */}
-            {suggestRegister && !isRegister ? (
-              <TouchableOpacity style={styles.suggestBtn} onPress={() => switchMode("register")} accessibilityRole="button">
-                <Text style={styles.suggestText}>{t("giris.oneri.buEpostayla")}<Text style={styles.suggestLink}>{t("giris.oneri.hesapOlustur")}</Text></Text>
-              </TouchableOpacity>
-            ) : null}
 
             {/* Gönder */}
             <TouchableOpacity
@@ -587,10 +578,6 @@ const styles = StyleSheet.create({
 
   error: { color: colors.danger, fontSize: typography.small, textAlign: "center" },
   notice: { color: colors.success, fontSize: typography.small, textAlign: "center" },
-  suggestBtn: { alignItems: "center", paddingVertical: spacing.xs },
-  suggestText: { color: colors.textMuted, fontSize: typography.small },
-  suggestLink: { color: colors.primary, fontWeight: "800" },
-
   submit: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
     backgroundColor: colors.primary, borderRadius: radius.md, minHeight: rs(54),

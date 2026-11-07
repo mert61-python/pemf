@@ -79,10 +79,6 @@
   "marka": {
     "altBaslik": "Manyetik Alan Seans Sistemi"
   },
-  "oneri": {
-    "buEpostayla": "Bu e-postayla ",
-    "hesapOlustur": "hesap oluştur →"
-  },
   "sifirlama": {
     "aciklama": "E-postana bir sıfırlama bağlantısı göndereceğiz.",
     "baslik": "Şifre Sıfırlama",

@@ -3848,21 +3848,6 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
     return () => clearTimeout(t);
   }, [loading]);
 
-  const takePhoto = async () => {
-    if (Platform.OS === 'web') {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*'; (input as any).capture = 'environment';
-      input.onchange = (e: Event) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
-      };
-      input.click();
-    } else {
-      const res = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.8, base64: true });
-      if (!res.canceled) { const shrunk = await shrinkForUpload(res.assets[0].uri); setImageUri(shrunk.uri); setImageBase64(shrunk.base64); setImageFile((res.assets[0] as any).file || null); setResult(null); }
-    }
-  };
-
   const pickImage = async () => {
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
@@ -4076,21 +4061,6 @@ function HistopathModule({ patientName }: { patientName: string }) {
     const t = setTimeout(() => setLongLoading(true), 8000);
     return () => clearTimeout(t);
   }, [loading]);
-
-  const takePhoto = async () => {
-    if (Platform.OS === 'web') {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*'; (input as any).capture = 'environment';
-      input.onchange = (e: Event) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
-      };
-      input.click();
-    } else {
-      const res = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.8, base64: true });
-      if (!res.canceled) { const shrunk = await shrinkForUpload(res.assets[0].uri); setImageUri(shrunk.uri); setImageBase64(shrunk.base64); setImageFile((res.assets[0] as any).file || null); setResult(null); }
-    }
-  };
 
   const pickImage = async () => {
     if (Platform.OS === 'web') {

@@ -150,7 +150,7 @@
    "aciklama": "ortak bileşenler + kabuk (AppShell, bildirim, toast, hata sınırı, sayfa başlıkları, tema)",
    "durum": "tamam",
    "metin": 140,
-   "dosyaSayisi": 41
+   "dosyaSayisi": 40
   },
   {
    "ad": "arayuz-02-giris-hesap",
@@ -667,17 +667,6 @@
    "sira": 1,
    "durum": "tamam",
    "metin": 7,
-   "kritik": false,
-   "muaf": [],
-   "birlesikIstisna": [],
-   "not": ""
-  },
-  "apps/ui/src/components/ui/Skeleton.tsx": {
-   "yuzey": "arayuz",
-   "grup": "arayuz-01-ortak-kabuk",
-   "sira": 1,
-   "durum": "tamam",
-   "metin": 0,
    "kritik": false,
    "muaf": [],
    "birlesikIstisna": [],

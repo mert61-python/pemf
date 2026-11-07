@@ -79,10 +79,6 @@
   "marka": {
     "altBaslik": "Magnetic Field Session System"
   },
-  "oneri": {
-    "buEpostayla": "With this email, ",
-    "hesapOlustur": "create an account →"
-  },
   "sifirlama": {
     "aciklama": "We will send a reset link to your email.",
     "baslik": "Password Reset",
