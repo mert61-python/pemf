@@ -119,18 +119,14 @@ function GatewayRow({
   testID,
 }: {
   label: string;
-  state: RowState | boolean;
+  state: RowState;
   /** T-e: bu satırda `devre_disi` için metin (varsayılan "Kurulu değil"); ESP bilinçli kapalıyken "Devre dışı". */
   devreDisiMetni?: string;
   testID?: string;
 }) {
   const { t } = useTranslation();
-  let resolvedState: RowState;
-  if (typeof state === "boolean") {
-    resolvedState = state ? "online" : "offline";
-  } else {
-    resolvedState = state;
-  }
+  // KP-3 (Y242): `boolean` kolu ÖLÜYDÜ — tüm çağıranlar `RowState` verir (gated / internetDurumu / sabitler).
+  const resolvedState: RowState = state;
 
   const cfg = {
     online:  { color: "#22c55e", text: t("ayarlar.sistemDurumu.aktif"),      dot: "#22c55e" },
