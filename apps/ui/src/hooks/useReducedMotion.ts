@@ -4,7 +4,7 @@ import { AccessibilityInfo } from "react-native";
 
 /**
  * #118: Sistem "hareketi azalt" (Reduce Motion) tercihi açık mı?
- * Açıkken animasyonlu primitifler (Skeleton shimmer, FadeInView, Button spring) hareketi ATLAMALI
+ * Açıkken animasyonlu primitifler (FadeInView, Button spring) hareketi ATLAMALI
  * — vestibüler rahatsızlık/erişilebilirlik (WCAG 2.3.3). Değişimi canlı dinler.
  */
 export function useReducedMotion(): boolean {
