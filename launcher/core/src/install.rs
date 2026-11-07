@@ -3098,4 +3098,57 @@ mod guncelleme_isareti_testleri {
         assert!(!guncelleme_bosluguna_dusen_eski_exe_mi(&d, "1.9.44", 120));
         let _ = std::fs::remove_dir_all(&d);
     }
+
+    // ═══ KP-3 C · yarım kurulum kaydı, sağlık nonce desteği göstergesi, günlük yolu ═══
+    /// Yarım kurulum kaydı: yazılan profiller AYNEN okunur ("kurulum yarım kaldı — devam et?"); silinince boş; bozuk / yok → boş.
+    #[test]
+    fn kp3_yarim_kurulum_kaydi_yaz_oku_sil_bozuk_bos() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("kurulum");
+        assert!(read_pending(&kok).is_empty());
+        write_pending(&kok, &["vet".to_string(), "research".to_string()]);
+        assert_eq!(pending_path(&kok), kok.join("pending_install.json"));
+        assert_eq!(read_pending(&kok), vec!["vet".to_string(), "research".to_string()]);
+        clear_pending(&kok);
+        assert!(!pending_path(&kok).exists());
+        assert!(read_pending(&kok).is_empty());
+        std::fs::write(pending_path(&kok), "{bozuk").unwrap();
+        assert!(read_pending(&kok).is_empty(), "bozuk kayıt profil listesi sayıldı");
+    }
+
+    /// `_internal/VERSION` varlığı = backend sağlık nonce'unu yansıtır (eski base.zip'te yok → hoşgörülü kip).
+    #[test]
+    fn kp3_saglik_nonce_destegi_version_dosyasindan_okunur() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(!backend_supports_health_nonce(d.path()));
+        let v = runtime_dir(d.path()).join("PEMF_Backend").join("_internal");
+        std::fs::create_dir_all(&v).unwrap();
+        assert!(!backend_supports_health_nonce(d.path()), "VERSION yokken destek var sayıldı");
+        std::fs::write(v.join("VERSION"), "1.9.52").unwrap();
+        assert!(backend_supports_health_nonce(d.path()));
+    }
+
+    /// Günlük yolu: `PEMF_LOG_DIR` (boşluk kırpılır) varsa o; boş / yoksa `<uygulama verisi>/logs`.
+    #[test]
+    fn kp3_backend_gunluk_yolu_ortam_dizini_once() {
+        let ev = Path::new("/ev");
+        let dizin = |k: &str| (k == ENV_LOG_DIR).then(|| "  /kayit/dizin  ".to_string());
+        assert_eq!(backend_log_path_with(dizin, ev), PathBuf::from("/kayit/dizin").join("backend_service.log"));
+        let bos = |k: &str| (k == ENV_LOG_DIR).then(|| "   ".to_string());
+        assert_eq!(backend_log_path_with(bos, ev), app_data_dir_with(bos, ev).join("logs").join("backend_service.log"));
+    }
+
+    // ═══ KP-3 C (2. tur) · backend ortamı: kurulu paket kimliği (filo envanteri);  sarmalayıcısı L11 gereği test edilmez ═══
+    /// Kurulu paket kimliği backend'e geçer (bulut cihaz kaydı "hangi klinik hangi sürümde"): katmanlıda `app` (bizim kodumuz),
+    /// katmansızda `base`; kayıt yoksa değişken HİÇ verilmez (boş dize "bilinen sürüm" sanılmasın).
+    #[test]
+    fn kp3_backend_ortamina_kurulu_paket_kimligi_gecer_katmanli_app_oncelikli() {
+        let d = tempfile::tempdir().unwrap();
+        let yok = |_: &str| -> Option<String> { None };
+        assert!(!backend_env_with(yok, d.path(), 8000, "").contains_key(ENV_BASE_SHA));
+        std::fs::write(installed_packages_path(d.path()), r#"{"base":"b-sha"}"#).unwrap();
+        assert_eq!(backend_env_with(yok, d.path(), 8000, "").get(ENV_BASE_SHA).map(String::as_str), Some("b-sha"));
+        std::fs::write(installed_packages_path(d.path()), r#"{"base":"b-sha","app":"a-sha"}"#).unwrap();
+        assert_eq!(backend_env_with(yok, d.path(), 8000, "").get(ENV_BASE_SHA).map(String::as_str), Some("a-sha"));
+    }
 }

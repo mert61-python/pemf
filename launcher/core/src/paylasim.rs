@@ -319,4 +319,20 @@ mod tests {
         let sid = surec_hesabi_sid().expect("sürecin hesabı okunamadı");
         assert!(sid.starts_with("S-1-") && sid.bytes().all(|b| b.is_ascii_digit() || b == b'-' || b == b'S'), "{sid}");
     }
+
+    // ═══ KP-3 C · `durum_icin` veri kökünü ENJEKTE edilen ortamdan çözer (gerçek ProgramData'ya bakmaz) ═══
+    /// Makine kökü yoksa sus · veri dizini yoksa (ilk hesap) sus · veri var ve bu hesap erişebiliyorsa sus — yönetici istemi YOK.
+    #[test]
+    fn kp3_durum_icin_enjekte_kokten_karar_verir_erisen_hesaba_istem_yok() {
+        assert_eq!(durum_icin(|_| None), Durum::Gereksiz, "makine kökü yokken paylaşım istendi");
+        let d = tempfile::tempdir().unwrap();
+        let pd = d.path().to_string_lossy().to_string();
+        let ortam = |k: &str| (k == "PROGRAMDATA").then(|| pd.clone());
+        assert_eq!(durum_icin(ortam), Durum::Gereksiz, "veri dizini yokken (ilk hesap) paylaşım istendi");
+        let veri = veri_dizini(ortam).unwrap();
+        assert!(veri.starts_with(d.path()), "veri dizini enjekte kökten çözülmedi: {}", veri.display());
+        std::fs::create_dir_all(&veri).unwrap();
+        assert!(veri_var_mi(&veri));
+        assert_eq!(durum_icin(ortam), Durum::Gereksiz, "erişilebilen veri dizini için yönetici istemi");
+    }
 }

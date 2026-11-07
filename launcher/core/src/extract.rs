@@ -872,4 +872,156 @@ mod tests {
         let mode = fs::metadata(out.path().join("PEMF_Backend")).unwrap().permissions().mode();
         assert_eq!(mode & 0o111, 0o111, "calistirma biti kaybolmus — backend baslatilamaz");
     }
+
+    // ═══ KP-3 C · Windows'ta symlink girdisi, açılım bütçesinin sınırları, dizin girdisi, yol yüklemlerinin kenarları ═══
+    fn kp3_zip(yaz: impl FnOnce(&mut zip::ZipWriter<fs::File>, zip::write::SimpleFileOptions)) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("kp3.zip");
+        let mut w = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        yaz(&mut w, zip::write::FileOptions::default());
+        w.finish().unwrap();
+        (dir, path)
+    }
+
+    /// Windows'ta symlink ayrıcalık ister ve Windows paketinde symlink YOKTUR → kök içinde kalan hedef bile AÇIKÇA reddedilir; hedef
+    /// metni düz dosya olarak YAZILMAZ (yazılsaydı kurulum "başarılı" görünür, macOS'taki gibi backend açılmazdı).
+    #[cfg(not(unix))]
+    #[test]
+    fn kp3_windowsta_kok_icindeki_symlink_bile_reddedilir_duz_dosya_yazilmaz() {
+        let (_d, z) = kp3_zip(|w, o| w.add_symlink("PEMF_Backend/_internal/Python", "Python.framework/Python", o).unwrap());
+        let out = tempfile::tempdir().unwrap();
+        match extract_zip(&z, out.path()).unwrap_err() {
+            ExtractError::PathEscape(m) => {
+                assert_eq!(m, crate::dil::t_ile("rust.acma.symlinkDesteklenmiyor", &[("ad", "PEMF_Backend/_internal/Python")]))
+            }
+            e => panic!("beklenen PathEscape(symlinkDesteklenmiyor), gelen {e:?}"),
+        }
+        assert!(fs::symlink_metadata(out.path().join("PEMF_Backend/_internal/Python")).is_err(), "symlink düz dosya olarak yazıldı");
+    }
+
+    /// Mutlak hedef (sürücü yolu) ve kökten çıkan göreli hedef, platform reddinden ÖNCE kendi iletileriyle reddedilir (zip-slip'in
+    /// ikinci yüzü — hangi saldırının durdurulduğu iletiden okunur).
+    #[cfg(not(unix))]
+    #[test]
+    fn kp3_windowsta_mutlak_ve_kokten_cikan_symlink_hedefi_kendi_iletisiyle_reddedilir() {
+        let mutlak = r"C:\Windows\System32\drivers\etc\hosts";
+        let (_d, z) = kp3_zip(|w, o| w.add_symlink("link", mutlak, o).unwrap());
+        let out = tempfile::tempdir().unwrap();
+        match extract_zip(&z, out.path()).unwrap_err() {
+            ExtractError::PathEscape(m) => assert_eq!(m, crate::dil::t_ile("rust.acma.mutlakHedef", &[("ad", "link"), ("hedef", mutlak)])),
+            e => panic!("{e:?}"),
+        }
+        let (_d2, z2) = kp3_zip(|w, o| w.add_symlink("a/b/link", "../../../../disari.txt", o).unwrap());
+        let out2 = tempfile::tempdir().unwrap();
+        match extract_zip(&z2, out2.path()).unwrap_err() {
+            ExtractError::PathEscape(m) => assert_eq!(
+                m,
+                crate::dil::t_ile("rust.acma.dizinDisinaCikiyor", &[("ad", "a/b/link"), ("hedef", "../../../../disari.txt")])
+            ),
+            e => panic!("{e:?}"),
+        }
+    }
+
+    /// #110: symlink gövdesi de açılım bütçesine SAYILIR — aşılınca link kurulmadan (platform kararından ÖNCE) ResourceLimit.
+    #[test]
+    fn kp3_symlink_govdesi_butceye_sayilir_asim_reddedilir() {
+        let (_d, z) = kp3_zip(|w, o| w.add_symlink("link", "hedef-8b", o).unwrap());
+        let out = tempfile::tempdir().unwrap();
+        let mut used = MAX_TOTAL_UNCOMPRESSED - 7; // 8 baytlık hedef → tavan + 1
+        match extract_zip_cancellable(&z, out.path(), &mut used, false, &|| false).unwrap_err() {
+            ExtractError::ResourceLimit(m) => assert_eq!(m, crate::dil::t("rust.acma.butceSymlink")),
+            e => panic!("{e:?}"),
+        }
+        assert_eq!(used, MAX_TOTAL_UNCOMPRESSED + 1, "symlink gövdesi bütçeye sayılmadı");
+        assert!(fs::symlink_metadata(out.path().join("link")).is_err(), "bütçe aşımında link yine de kuruldu");
+    }
+
+    /// Düz dosya: bütçe TAM dolarsa kabul (sınır dahil); BİR bayt aşarsa yazılan dosya SİLİNİR + ResourceLimit (yalan başlıklı
+    /// zip-bomb'a karşı gerçekten yazılan bayt sayılır).
+    #[test]
+    fn kp3_duz_dosya_butce_siniri_tam_dolu_kabul_bir_bayt_asimda_dosya_silinir() {
+        let (_d, z) = kp3_zip(|w, o| {
+            w.start_file("veri.bin", o).unwrap();
+            w.write_all(&[7u8; 10]).unwrap();
+        });
+        let out = tempfile::tempdir().unwrap();
+        let mut used = MAX_TOTAL_UNCOMPRESSED - 10;
+        assert_eq!(extract_zip_cancellable(&z, out.path(), &mut used, false, &|| false).unwrap(), 1);
+        assert_eq!(used, MAX_TOTAL_UNCOMPRESSED);
+        assert_eq!(fs::read(out.path().join("veri.bin")).unwrap(), vec![7u8; 10]);
+
+        let out2 = tempfile::tempdir().unwrap();
+        let mut used2 = MAX_TOTAL_UNCOMPRESSED - 9;
+        match extract_zip_cancellable(&z, out2.path(), &mut used2, false, &|| false).unwrap_err() {
+            ExtractError::ResourceLimit(m) => assert_eq!(m, crate::dil::t("rust.acma.butce")),
+            e => panic!("{e:?}"),
+        }
+        assert!(!out2.path().join("veri.bin").exists(), "bütçeyi aşan dosya diskte bırakıldı");
+    }
+
+    /// Dizin girdisi dizin olarak KURULUR (boş dizin de) ama yazılan dosya sayısına GİRMEZ.
+    #[test]
+    fn kp3_dizin_girdisi_kurulur_sayilmaz() {
+        let (_d, z) = kp3_zip(|w, o| {
+            w.add_directory("bos/", o).unwrap();
+            w.add_directory("a/b/", o).unwrap();
+            w.start_file("a/b/c.txt", o).unwrap();
+            w.write_all(b"c").unwrap();
+        });
+        let out = tempfile::tempdir().unwrap();
+        assert_eq!(extract_zip(&z, out.path()).unwrap(), 1);
+        assert!(out.path().join("bos").is_dir(), "boş dizin girdisi kurulmadı");
+        assert_eq!(fs::read(out.path().join("a/b/c.txt")).unwrap(), b"c");
+    }
+
+    /// Girdi sayısı tavanı: bir fazlası açılmaya BAŞLAMADAN reddedilir (hedefte hiçbir şey yazılmaz).
+    #[test]
+    fn kp3_girdi_sayisi_tavanini_asan_arsiv_yazmadan_reddedilir() {
+        let (_d, z) = kp3_zip(|w, o| {
+            for i in 0..=MAX_ENTRIES {
+                w.add_directory(format!("{i}/"), o).unwrap();
+            }
+        });
+        let out = tempfile::tempdir().unwrap();
+        match extract_zip(&z, out.path()).unwrap_err() {
+            ExtractError::ResourceLimit(m) => {
+                assert_eq!(m, crate::dil::t_ile("rust.acma.cokGirdi", &[("adet", &(MAX_ENTRIES + 1).to_string())]))
+            }
+            e => panic!("{e:?}"),
+        }
+        assert_eq!(fs::read_dir(out.path()).unwrap().count(), 0, "tavan aşılmışken yazmaya başlandı");
+    }
+
+    /// `stays_within` dosya sistemine dokunmadan sadeleştirir: `.` yok sayılır; yığın boşken `..` kökten TAŞAR (false).
+    #[test]
+    fn kp3_stays_within_nokta_yok_sayilir_bos_yigindan_ust_dizin_tasar() {
+        let kok = Path::new("/kok");
+        assert!(stays_within(kok, Path::new("/kok/a"), Path::new("./b/./c")));
+        assert!(!stays_within(kok, Path::new("/kok"), Path::new("../disari")));
+        assert!(!stays_within(kok, Path::new(""), Path::new("..")), "boş yığından `..` kök altında sayıldı");
+    }
+
+    /// `is_within` FAIL-CLOSED: hiçbir atası çözümlenemeyen (göreli, var olmayan) aday kök altında SAYILMAZ.
+    #[test]
+    fn kp3_is_within_var_olan_atasi_olmayan_aday_reddedilir() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(!is_within(d.path(), Path::new("kp3_hic_olmayan_goreli_kok/x/y")));
+    }
+
+    /// UTF-8 olmayan yol parçası ayrıca kısıtlanmaz (kök altında kalır) — düşmanca SAYILMAZ, panik de etmez.
+    #[test]
+    fn kp3_utf8_olmayan_yol_parcasi_dusmanca_sayilmaz() {
+        #[cfg(windows)]
+        let s = {
+            use std::os::windows::ffi::OsStringExt;
+            std::ffi::OsString::from_wide(&[0xD800, 0x41])
+        };
+        #[cfg(unix)]
+        let s = {
+            use std::os::unix::ffi::OsStringExt;
+            std::ffi::OsString::from_vec(vec![0xff, b'A'])
+        };
+        assert!(s.to_str().is_none());
+        assert!(!segment_is_hostile(&s));
+    }
 }

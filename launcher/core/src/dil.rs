@@ -263,4 +263,26 @@ mod tests {
             assert_eq!(etkin(), Dil::Tr);
         }
     }
+
+    // ═══ KP-3 C · dil kodu gidiş-dönüş, etkin dil kurulumu, Windows arayüz dili sorgusu ═══
+    #[test]
+    fn kp3_kod_coz_gidis_donus_ve_etkin_dil_tr_kurulur() {
+        assert_eq!(Dil::Tr.kod(), "tr");
+        assert_eq!(Dil::En.kod(), "en");
+        for d in [Dil::Tr, Dil::En] {
+            assert_eq!(Dil::coz(d.kod()), Some(d));
+        }
+        assert_eq!(Dil::coz(" EN "), Some(Dil::En));
+        assert_eq!(Dil::coz("de"), None);
+        // Küresel etkin dil YALNIZ Tr'ye kurulur: aynı süreçteki diğer testler Türkçe metin bekler (En'e çekmek yarış doğurur).
+        assert_eq!(ayarla(Dil::Tr), Dil::Tr);
+        assert_eq!(etkin(), Dil::Tr);
+    }
+
+    /// GetUserDefaultUILanguage yan etkisiz bir sorgudur ve dil kimliği 0 dönmez → her Windows'ta bir dil (tr / en) çıkar.
+    #[cfg(windows)]
+    #[test]
+    fn kp3_windows_arayuz_dili_bir_dil_doner() {
+        assert!(windows_arayuz_dili().is_some());
+    }
 }

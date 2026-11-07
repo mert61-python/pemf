@@ -423,4 +423,17 @@ mod tests {
         assert!(t.trim_end().ends_with(&format!("olay 2999 {}", "x".repeat(40))), "en yeni satir kayboldu");
         assert!(t.lines().all(|s| s.len() > 20 && s.as_bytes()[4] == b'-'), "yarim satir kaldi");
     }
+
+    // ═══ KP-3 C (2. tur) · "beni hatırla" kaydı yazılamazsa (kurulum kökü dosya) false — kullanıcı girişli kalır, sonraki açılışta parola ═══
+    /// Geçici blob yazılamazsa `save` false döner (best-effort; panik / istisna yok) ve kalıcı blob OLUŞMAZ.
+    #[cfg(windows)]
+    #[test]
+    fn kp3_gecici_blob_yazilamazsa_kayit_basarisiz_blob_olusmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let kok = d.path().join("kok_aslinda_dosya");
+        std::fs::write(&kok, b"dosya").unwrap();
+        assert!(!save(&kok, &ornek()), "yazılamayan köke kayıt başarılı sayıldı");
+        assert!(load(&kok).is_none());
+        assert_eq!(std::fs::read(&kok).unwrap(), b"dosya", "kök dosyası bozuldu");
+    }
 }

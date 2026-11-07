@@ -895,4 +895,46 @@ mod tests {
             assert_eq!(&kilit[i..i + kilit[i..].find('"').unwrap()], kendi, "Cargo.lock {paket} sürümü ≠ Cargo.toml");
         }
     }
+
+    // ═══ KP-3 C · v1 macOS eşlemesi, boş sürüm, katman digest kapısının anahtarı ═══
+    #[test]
+    fn kp3_v1_base_mac_mac_arm64_anahtarina_eslenir() {
+        let raw = v1_json(&format!(r#", "base_mac": {{"url":"https://x/base-mac.zip","sha256":"{D1}","size":4,"kind":"zip"}}"#));
+        let m = Manifest::parse(&raw).unwrap();
+        assert_eq!(m.runtimes[platform::MAC_ARM64].url, "https://x/base-mac.zip");
+        assert_eq!(m.runtimes.len(), 2, "base (win) + base_mac beklenir");
+    }
+
+    /// Boş sürüm (v1 ve v2) → MissingField("version"): sürümsüz manifest'le "güncel mi" kararı verilemez.
+    #[test]
+    fn kp3_bos_surum_eksik_alan_sayilir_v1_ve_v2() {
+        let v2 = r#"{"schema":2,"version":"","runtimes":{},"layers":{},"models":{}}"#;
+        assert!(matches!(Manifest::parse(v2).unwrap_err(), ManifestError::MissingField("version")));
+        let v1 = v1_json("").replace(r#""version": "1.8.0""#, r#""version": """#);
+        assert_ne!(v1, v1_json(""));
+        assert!(matches!(Manifest::parse(&v1).unwrap_err(), ManifestError::MissingField("version")));
+    }
+
+    /// Katman (deps / app) digest'i İNDİRMEDEN önce doğrulanır; hata anahtarı `<platform>.<katman>` — hangi paketin bozuk olduğu
+    /// iletiden okunur.
+    #[test]
+    fn kp3_katman_digesti_indirmeden_once_dogrulanir_anahtar_platform_ve_katman() {
+        let iyi = yalniz_katman_json();
+        let plat = platform::current();
+        let bozuk_app = iyi.replace(&format!(r#""sha256":"{D2}","size":10"#), r#""sha256":"BOZUK","size":10"#);
+        assert_ne!(bozuk_app, iyi);
+        match Manifest::parse(&bozuk_app).unwrap_err() {
+            ManifestError::BadDigest { key, got } => {
+                assert_eq!(key, format!("{plat}.app"));
+                assert_eq!(got, "BOZUK");
+            }
+            e => panic!("{e:?}"),
+        }
+        let bozuk_deps = iyi.replace(&format!(r#""sha256":"{D1}","size":100"#), r#""sha256":"abc","size":100"#);
+        assert_ne!(bozuk_deps, iyi);
+        match Manifest::parse(&bozuk_deps).unwrap_err() {
+            ManifestError::BadDigest { key, .. } => assert_eq!(key, format!("{plat}.deps")),
+            e => panic!("{e:?}"),
+        }
+    }
 }

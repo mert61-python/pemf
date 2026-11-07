@@ -787,4 +787,31 @@ mod tests {
         let o = yenileme_reddi_ozeti(400, r#"{"error_code":"a@b.com eyJ\n<x>"}"#);
         assert!(!o.contains('@') && !o.contains('\n') && !o.contains('<'), "kod temizlenmedi: {o}");
     }
+
+    // ═══ KP-3 C · ağa ÇIKMAYAN kollar: duvar saati bütçesinin geçişi, boş girdiler, boş jetonla çıkış, yenileme reddi özeti ═══
+    /// Bütçeli sarmalayıcılar sonucu AYNEN taşır: boş e-posta / parola → MissingInput; boş yenileme jetonu → SessionRevoked
+    /// (sunucuya sorulacak bir şey yok). Hiçbiri ağa çıkmaz.
+    #[test]
+    fn kp3_butceli_sarmalayicilar_agsiz_kararlari_aynen_tasir() {
+        assert!(matches!(login_budgeted("  ", "parola"), Err(AuthError::MissingInput)));
+        assert!(matches!(login_budgeted("vet@ornek.test", ""), Err(AuthError::MissingInput)));
+        assert!(matches!(refresh_budgeted("   ", "vet@ornek.test"), Err(AuthError::SessionRevoked)));
+    }
+
+    /// Boş erişim jetonuyla çıkış ağa ÇIKMADAN başarılı (yerel temizlik yine yapılır; "çıkış yapamıyorum" yok).
+    #[test]
+    fn kp3_bos_jetonla_cikis_agsiz_tamam() {
+        assert!(logout("  ").is_ok());
+    }
+
+    /// Yenileme reddi: karar `yenileme_hatasi` ile AYNI; özet (HTTP durumu + temizlenmiş kod) saklanır, okununca TEMİZLENİR.
+    #[test]
+    fn kp3_yenileme_reddi_ozeti_saklanir_okununca_temizlenir() {
+        let govde = r#"{"error_code":"session_not_found","msg":"Session from session_id claim in JWT does not exist"}"#;
+        assert!(matches!(yenileme_hatasi_kaydet(403, govde), AuthError::SessionRevoked));
+        assert_eq!(son_yenileme_reddi().as_deref(), Some("HTTP 403 session_not_found"));
+        assert_eq!(son_yenileme_reddi(), None, "özet okununca temizlenmedi");
+        assert!(matches!(yenileme_hatasi_kaydet(503, "<html>"), AuthError::Server(503)));
+        assert_eq!(son_yenileme_reddi().as_deref(), Some("HTTP 503"));
+    }
 }
