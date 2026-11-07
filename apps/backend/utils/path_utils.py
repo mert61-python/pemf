@@ -61,15 +61,6 @@ def resource_path(relative_path):
     return str(path)
 
 
-def get_icon_path(icon_name):
-    """
-    Constructs the full path for an icon.
-    This helps centralize the logic for locating icons, especially when dealing with
-    PyInstaller's bundled application structure.
-    """
-    return str(resource_path(os.path.join('pemf_gui', 'resources', 'icons', icon_name)))
-
-
 #: Kullanıcı-başına eski konumdan makine-geneline taşınacak dosyalar.
 #
 # ⚠️ YALNIZ tıbbi kayıt. Cihaz kimliği/eşleştirme dosyaları BİLEREK dışarıda: onlar makineye

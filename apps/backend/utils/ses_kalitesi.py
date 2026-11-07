@@ -116,9 +116,9 @@ def normalize_entropi(olasiliklar: Iterable[float]) -> float:
     p = [float(v) for v in olasiliklar if float(v) > 0.0]
     if len(p) < 2:
         return 0.0
-    toplam = sum(p)
-    if toplam <= 0.0:
-        return 1.0
+    toplam = sum(
+        p
+    )  # KP-3 (Y242): `p` yalnız > 0 öğe tutar ve en az 2 öğelidir → toplam > 0 (eski `<= 0` dalı ulaşılamazdı)
     p = [v / toplam for v in p]
     h = -sum(v * math.log(v) for v in p)
     return h / math.log(len(p))

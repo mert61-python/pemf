@@ -32,7 +32,7 @@ try:
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import cm, inch
+    from reportlab.lib.units import cm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -542,15 +542,7 @@ class PDFReportGenerator:
             baslik = ceviri.t("pdf.baslik.varsayilan")
         if alt_baslik is None:
             alt_baslik = ceviri.t("pdf.baslik.altVarsayilan")
-        # Logo (eğer varsa)
-        logo_path = Path(__file__).parent / "assets" / "pemf_logo.png"
-        if logo_path.exists():
-            try:
-                logo = Image(str(logo_path), width=2 * inch, height=1 * inch)
-                story.append(logo)
-                story.append(Spacer(1, 12))
-            except Exception:
-                pass
+        # KP-3 (Y242): `utils/assets/pemf_logo.png` depoda / pakette HİÇ yoktu → logo kolu ölüydü, silindi.
 
         # Ana başlık
         if baslik:
@@ -1033,27 +1025,3 @@ def get_pdf_generator(app_data_dir=None):
     if not hasattr(get_pdf_generator, '_instance') or get_pdf_generator._instance is None:
         get_pdf_generator._instance = PDFReportGenerator(app_data_dir)
     return get_pdf_generator._instance
-
-
-# Test fonksiyonu
-if __name__ == "__main__":
-    try:
-        from pathlib import Path
-
-        # Test için varsayılan app_data_dir
-        test_app_data_dir = Path.home() / ".pemf_gui"
-        test_app_data_dir.mkdir(parents=True, exist_ok=True)
-
-        generator = PDFReportGenerator(app_data_dir=test_app_data_dir)
-
-        # Test raporu oluştur
-        test_sessions = [1, 2, 3]  # Test seans ID'leri
-        output_file = generator.generate_session_report(session_ids=test_sessions, output_path="test_report.pdf")
-
-        print(f"Test raporu oluşturuldu: {output_file}")
-
-    except Exception as e:
-        print(f"Test hatası: {e}")
-        import traceback
-
-        traceback.print_exc()
