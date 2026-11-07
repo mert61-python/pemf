@@ -5,7 +5,8 @@
  *  - Pricing: satın alma yönü (aylık / yıllık, araştırma eklentisi → /odeme adresi; ücretsiz dönemde indirmeye),
  *  - AuthRoute: hazır değilken sessiz, girişliyse ana sayfaya, girişsizse doğru sekmede pencere + düğme,
  *  - indirme kapısı: girişli doğrudan indirir, girişsiz pencere (geri çağrı indirir), okuma asılırsa 8 sn sonra kilit açılır, işletim
- *    sistemi algılanır, indirme sayfasının birincil ve Linux alt paket düğmeleri,
+ *    sistemi algılanır, indirme sayfasının birincil ve Linux alt paket düğmeleri; istemci yayında değilse düğme yok, "Yakında" + haber
+ *    bağlantısı,
  *  - DownloadStats: hesap + aktif cihaz (toplam gösterilmez), sıfır / hata → bölüm yok, ayrılınca iptal,
  *  - AppScreenshots kaydırma · PackageBuilder seçimi · ErrorBoundary kurtarma ekranı · Menu simgesi · dil düğmesi.
  * Düzenek: KP2 mini çizici (KP2-AuthModal.test.tsx'teki blok, AYNEN).
@@ -631,6 +632,24 @@ describe('KP-3 · indirme kapısı (DownloadButtons / DownloadPage)', () => {
       expect(konum.assign).toHaveBeenLastCalledWith(CLIENT.downloads.linux.rpmUrl)
     } finally {
       Object.assign(linux, once)
+    }
+  })
+  it('istemci YAYINDA DEĞİLSE (CLIENT.ready=false) indirme düğmesi YOK: devre dışı "Yakında <sürüm>" + haber bağlantısı (mailto)', async () => {
+    const istemci = CLIENT as { ready: boolean }
+    const once = istemci.ready
+    istemci.ready = false
+    try {
+      durum.session = { user: {} }
+      await ciz(<DownloadButtons size="lg" />)
+      expect(hepsi(c.agac, (d) => d.tip === 'button')).toHaveLength(0)
+      const yakinda = tek(c.agac, (d) => d.tip === 'span' && d.props['aria-disabled'] === true, 'yakında')
+      expect(metin(yakinda)).toContain(t('indirme.yakindaSurum', { surum: CLIENT.version }))
+      expect(String(yakinda.props.className)).toContain('cursor-not-allowed')
+      const a = tek(c.agac, (d) => d.tip === 'a' && String(d.props.href).startsWith('mailto:'), 'haber bağlantısı')
+      expect(metin(a)).toBe(t('indirme.haberBaglanti'))
+      expect(konum.assign).not.toHaveBeenCalled()
+    } finally {
+      istemci.ready = once
     }
   })
 })

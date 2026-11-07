@@ -47,9 +47,6 @@ export const Linux = ({ className }: P) => (
 export const Android = ({ className }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85a.637.637 0 0 0-.83.22l-1.88 3.24a11.43 11.43 0 0 0-8.94 0L5.65 5.67a.643.643 0 0 0-.87-.2c-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z" /></svg>
 )
-export const Bluetooth = ({ className }: P) => (
-  <svg {...base(className)}><path d="m7 8 10 8-5 4V4l5 4L7 16" /></svg>
-)
 /** D6.65 (B-7.17): "Otomatik cihaz bağlantısı" kartı (`FEATURES` f1, `icon: 'wifi'`) bu simgeyi ister — eskiden `ICONS`ta yoktu, kart simgesiz çiziliyordu. */
 export const Wifi = ({ className }: P) => (
   <svg {...base(className)}><path d="M2 8.8a15 15 0 0 1 20 0M5 12.3a10 10 0 0 1 14 0M8.5 15.8a5 5 0 0 1 7 0" /><circle cx="12" cy="19" r="1" /></svg>
@@ -82,5 +79,5 @@ export const Close = ({ className }: P) => (
   <svg {...base(className)}><path d="M6 6l12 12M18 6 6 18" /></svg>
 )
 
-export const ICONS = { bluetooth: Bluetooth, wifi: Wifi, database: Database, refresh: Refresh, brain: Brain, shield: Shield, monitor: Monitor }
+export const ICONS = { wifi: Wifi, database: Database, refresh: Refresh, brain: Brain, shield: Shield, monitor: Monitor }
 export type IconName = keyof typeof ICONS

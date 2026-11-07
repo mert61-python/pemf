@@ -82,14 +82,12 @@ export default function Odeme() {
     // günlüğe gider, kullanıcıya Türkçe ve eylem söyleyen karşılık döner. D6.30: sunucunun makine-okur
     // kodu (409 zaten abone, hangi kutu eksik / hatalı) KORUNUR; metin koddan kataloğdan kurulur.
     if (error) return setErr(odemeBaslatmaHatasi({ error, kod, alan, sebep }))
-    if (content) {
-      // scriptHost.current'a burada DOKUNMA (henüz render olmadı → null). İçeriği sakla + paying'e
-      // geç; enjeksiyonu yukarıdaki useEffect div render olunca yapar.
-      setCheckoutContent(content)
-      setPaying(true)
-    } else {
-      setErr(t('odeme.baslatilamadi'))
-    }
+    // KP-3 (Y242): buradaki "içerik yok" `else` kolu ULAŞILAMAZDI ve silindi — `initCheckout` içeriksiz başarıyı
+    // KENDİSİ hataya çevirir (`!j.content` → error; KP2-checkout.test.ts "200 ama içerik yok → hata" sabitler).
+    // scriptHost.current'a burada DOKUNMA (henüz render olmadı → null). İçeriği sakla + paying'e
+    // geç; enjeksiyonu yukarıdaki useEffect div render olunca yapar.
+    setCheckoutContent(content as string)
+    setPaying(true)
   }
 
   // FREE_MODE yalnız İSTEMCİ butonlarını gizliyordu; /odeme rotası App.tsx'te koşulsuz kayıtlı
