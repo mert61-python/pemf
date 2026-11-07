@@ -3138,7 +3138,7 @@ mod guncelleme_isareti_testleri {
         assert_eq!(backend_log_path_with(bos, ev), app_data_dir_with(bos, ev).join("logs").join("backend_service.log"));
     }
 
-    // ═══ KP-3 C (2. tur) · backend ortamı: kurulu paket kimliği (filo envanteri);  sarmalayıcısı L11 gereği test edilmez ═══
+    // ═══ KP-3 C (2. tur) · backend ortamı: kurulu paket kimliği (filo envanteri); `backend_env` sarmalayıcısı L11 gereği test edilmez (gerçek ortamı okur) ═══
     /// Kurulu paket kimliği backend'e geçer (bulut cihaz kaydı "hangi klinik hangi sürümde"): katmanlıda `app` (bizim kodumuz),
     /// katmansızda `base`; kayıt yoksa değişken HİÇ verilmez (boş dize "bilinen sürüm" sanılmasın).
     #[test]
