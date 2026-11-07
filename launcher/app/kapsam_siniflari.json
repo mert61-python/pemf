@@ -1,0 +1,532 @@
+{
+ "aciklama": "KP-3 B1 / B4 (istem 38 + 41 C): launcher/app/src/main.rs üst düzey işlevlerinin kapsam sınıfı — T test edilebilir · Y yeniden düzenleme gerekir · S sınırda (pencere / Tauri çalışma zamanı / gerçek platform API'si — test edilemez) · K kapsanıyor. `eksik` = AŞAMA 0 (d45d9cf2) cargo-llvm-cov eksik satırı. Kapı: tests/test_KP3_main_rs_kapsam_siniflari.py — main.rs'teki HER üst düzey işlev TAM BİR sınıfta, S / Y gerekçeli, S listesi SAYILIR (`s_sayisi`). Y242: test yazılabilen satıra S YASAK. #[coverage(off)] bu derleyicide (rustc 1.98.1) kararlı DEĞİL (E0658, ölçüldü) ve S işlevlerini ayrı dosyaya taşımak main.rs'i metin olarak okuyan 111 testi kırar → S ölçümden DIŞLANMAZ, gerekçeli LİSTE + sayan kapı (dışlama KP-4).",
+ "olcum": "d45d9cf2 · main.rs 2840 satır · 1411 eksik",
+ "s_sayisi": 44,
+ "ozet": {
+  "K": {
+   "islev": 22,
+   "eksik_satir": 0
+  },
+  "S": {
+   "islev": 44,
+   "eksik_satir": 429
+  },
+  "T": {
+   "islev": 4,
+   "eksik_satir": 36
+  },
+  "Y": {
+   "islev": 27,
+   "eksik_satir": 727
+  }
+ },
+ "islevler": {
+  "stop_tracked_backend": {
+   "sinif": "Y",
+   "eksik": 4,
+   "neden": "GÜVENLİK YOLU — State + stop_backend_for_teardown; KP-4."
+  },
+  "stop_backend_for_teardown": {
+   "sinif": "Y",
+   "eksik": 24,
+   "neden": "GÜVENLİK YOLU (bobin STOP → kill, kapanis_durdur); gerçek süreç + HTTP. Sıra kaynak-testleriyle kilitli; davranış koruyan ayrım KP-4 (sahip onayıyla)."
+  },
+  "yakma_bitene_kadar_bekle": {
+   "sinif": "Y",
+   "eksik": 6,
+   "neden": "GÜVENLİK YOLU (yakma bekleme); gerçek HTTP yoklama; bütçe ayrı ve testli; KP-4."
+  },
+  "kapanis_yakma_siniri": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "son_oturumu_yakala": {
+   "sinif": "Y",
+   "eksik": 11,
+   "neden": "HTTP + DPAPI yazımı; sıra testli; KP-4."
+  },
+  "pencere_cikisini_uygula": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "bellek_rotasyonu_gerekli": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "bellek_rotasyonu_uygula": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "clear_port_if_stopped": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "snapshot_yazici": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "progress_reporter": {
+   "sinif": "S",
+   "eksik": 10,
+   "neden": "`AppHandle::emit` (arayüze olay).",
+   "neden_T_Y_degil": "Kısma kararı `snapshot_yazici`da testli; kalan olay yayını."
+  },
+  "on_backend_ready": {
+   "sinif": "S",
+   "eksik": 16,
+   "neden": "`AppHandle` + `State` + iş parçacığı + pencere açma.",
+   "neden_T_Y_degil": "Bileşenleri (`senkron_baslamali`, `rotasyon_ardisik`, `uygulama_url`) ayrı ve testli."
+  },
+  "senkron_baslamali": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "rotasyon_ardisik": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "oturum_rotasyon_senkronu_baslat": {
+   "sinif": "Y",
+   "eksik": 27,
+   "neden": "İş parçacığı + HTTP döngüsü; kararlar (`senkron_baslamali`, `rotasyon_ardisik`) testli; KP-4."
+  },
+  "hand_off_session": {
+   "sinif": "S",
+   "eksik": 8,
+   "neden": "`tauri::State` + backend'e HTTP.",
+   "neden_T_Y_degil": "`push_desktop_session` çekirdekte testli."
+  },
+  "uygulama_url": {
+   "sinif": "T",
+   "eksik": 7,
+   "neden": "Saf (zaman damgası dışında) — B2'de test."
+  },
+  "open_app_window": {
+   "sinif": "S",
+   "eksik": 34,
+   "neden": "`WebviewWindowBuilder` ile uygulama penceresi.",
+   "neden_T_Y_degil": "URL ve boyut kararları (`uygulama_url`, `uygulama_pencere_boyutu`) ayrı ve testli."
+  },
+  "yerel_koken_mi": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "indirme_karari": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "indirme_olayi": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "`tauri::webview::DownloadEvent` (yapılamaz test nesnesi).",
+   "neden_T_Y_degil": "Karar `indirme_karari` testli."
+  },
+  "home_var_order": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "home_dir": {
+   "sinif": "S",
+   "eksik": 8,
+   "neden": "Gerçek ortam değişkenleri (USERPROFILE / HOME — süreç geneli; paralel testte yarış).",
+   "neden_T_Y_degil": "Sıra kararı `home_var_order` testli."
+  },
+  "detect_environment": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "detect_environment_blocking": {
+   "sinif": "Y",
+   "eksik": 7,
+   "neden": "home_dir(); gövde `ortam_ozeti`(kök) ayrı → T."
+  },
+  "ortam_ozeti": {
+   "sinif": "T",
+   "eksik": 14,
+   "neden": "Kök parametreli — sahte kökle B2'de test."
+  },
+  "fetch_profiles": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "fetch_profiles_blocking": {
+   "sinif": "Y",
+   "eksik": 37,
+   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. Ağdan manifest; saf JSON kurma kısmı ayrılabilir."
+  },
+  "dil_bilgisi": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "dil_ayarla": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "open_url": {
+   "sinif": "S",
+   "eksik": 2,
+   "neden": "Varsayılan tarayıcıyı açar (görünür pencere).",
+   "neden_T_Y_degil": "URL denetimi testli; kalan 2 satır tarayıcı çağrısı."
+  },
+  "install_and_launch": {
+   "sinif": "Y",
+   "eksik": 49,
+   "neden": "State + ağ + backend başlatma; kurulum mantığı `flow`ta. Kök enjeksiyonuyla ayrılabilir (KP-4)."
+  },
+  "start_installed": {
+   "sinif": "Y",
+   "eksik": 51,
+   "neden": "State + backend başlatma / sahiplenme; ayrım KP-4."
+  },
+  "repair": {
+   "sinif": "Y",
+   "eksik": 47,
+   "neden": "State + ağ + takas; ayrım KP-4."
+  },
+  "remove_profiles": {
+   "sinif": "Y",
+   "eksik": 35,
+   "neden": "State + pencere kapatma + disk; sıra kaynak-testiyle kilitli; ayrım KP-4."
+  },
+  "aktif_seans_kapisi": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Varsayılan port 8000'e gider (gerçek port yasak).",
+   "neden_T_Y_degil": "Gövde `aktif_seans_kapisi_portla` enjekte portla testli."
+  },
+  "aktif_seans_kapisi_portla": {
+   "sinif": "Y",
+   "eksik": 1,
+   "neden": "1 satır (yakma yanıtsız kolu) — gerçek HTTP; çekirdekte `yakma_suruyor_mu` testli; KP-4."
+  },
+  "plan_to_json": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "check_runtime_update": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "check_runtime_update_blocking": {
+   "sinif": "Y",
+   "eksik": 6,
+   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir()."
+  },
+  "unix_simdi_s": {
+   "sinif": "T",
+   "eksik": 3,
+   "neden": "Saf — B2'de test."
+  },
+  "guncelleme_ozeti": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "guncelleme_ozeti_blocking": {
+   "sinif": "Y",
+   "eksik": 24,
+   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); karar çekirdekte %100."
+  },
+  "guncelleme_onayini_kaydet": {
+   "sinif": "Y",
+   "eksik": 11,
+   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); kayıt çekirdekte %100."
+  },
+  "guncelleme_onayini_temizle": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "guncelleme_engeli": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "guncelleme_engeli_json": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "prefetch_runtime_update": {
+   "sinif": "Y",
+   "eksik": 40,
+   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. State + ağ."
+  },
+  "apply_runtime_update": {
+   "sinif": "Y",
+   "eksik": 86,
+   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. AppHandle / State + sağlık kapısı + gerçek backend süreci."
+  },
+  "uygulama_penceresini_yenile": {
+   "sinif": "S",
+   "eksik": 7,
+   "neden": "`WebviewWindow::navigate` (GK, katman güncellemesinden sonra).",
+   "neden_T_Y_degil": "Yalnız pencere çağrısı; sıra kaynak-testiyle kilitli (`KRITIK_GK_hazir_kolu_…`)."
+  },
+  "firmware_uyumsuz_geri_al": {
+   "sinif": "Y",
+   "eksik": 17,
+   "neden": "GÜVENLİK / güncelleme yolu (Y16 geri alma) — KP-4."
+  },
+  "uninstall": {
+   "sinif": "Y",
+   "eksik": 29,
+   "neden": "State + kaldırıcı süreci; ayrım KP-4."
+  },
+  "auth_status": {
+   "sinif": "Y",
+   "eksik": 50,
+   "neden": "State + DPAPI + ağ yenileme; karar `oturum_karari` testli; ayrım KP-4."
+  },
+  "oturum_gunlugu_olayi": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "oturum_karari": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "auth_login": {
+   "sinif": "Y",
+   "eksik": 32,
+   "neden": "State + ağ; hata kodu yolu testli; ayrım KP-4."
+  },
+  "auth_logout": {
+   "sinif": "Y",
+   "eksik": 17,
+   "neden": "State + DPAPI silme; ayrım KP-4."
+  },
+  "calisan_backend_portu": {
+   "sinif": "Y",
+   "eksik": 8,
+   "neden": "State + çekirdek tespit; KP-4."
+  },
+  "app_window_open": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "get_progress": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "get_prefetch_progress": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "pause_install": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "cancel_install": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "resume_install": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "discard_pending": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "discard_pending_blocking": {
+   "sinif": "Y",
+   "eksik": 8,
+   "neden": "home_dir(); `clear_pending` / `clear_partials` çekirdekte testli; kök enjeksiyonu KP-4."
+  },
+  "apply_self_update": {
+   "sinif": "Y",
+   "eksik": 85,
+   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. Ağ + NSIS + süreç çıkışı."
+  },
+  "guncelleme_modu": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "guncelleme_penceresini_ac": {
+   "sinif": "S",
+   "eksik": 15,
+   "neden": "`current_exe` kopyası + süreç başlatma (Windows).",
+   "neden_T_Y_degil": "Günlük satırı `pencere_gunluk_satiri` testli; kalan gerçek süreç."
+  },
+  "pencere_gunluk_satiri": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "yardimci_batch_baslat": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Gerçek ayrık süreç (bayraklar `YARDIMCI_BATCH_BAYRAKLARI` testli).",
+   "neden_T_Y_degil": "Bayrak seçimi sabit + testli; kalan `Command::spawn`."
+  },
+  "build_relaunch_script": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "spawn_update_relauncher": {
+   "sinif": "S",
+   "eksik": 17,
+   "neden": "Gerçek ayrık yardımcı süreç (cmd) başlatma.",
+   "neden_T_Y_degil": "Betik içeriği `build_relaunch_script` testli."
+  },
+  "build_uninstall_script": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "spawn_uninstaller_detached": {
+   "sinif": "S",
+   "eksik": 8,
+   "neden": "Gerçek ayrık kaldırıcı süreci.",
+   "neden_T_Y_degil": "Betik içeriği `build_uninstall_script` testli."
+  },
+  "firewall_durumu": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "firewall_durumu_blocking": {
+   "sinif": "S",
+   "eksik": 9,
+   "neden": "Gerçek güvenlik duvarı PowerShell okuması (hafıza: Rust testi gerçek durum() okur).",
+   "neden_T_Y_degil": "Karar çekirdek `firewall` modülünde testli."
+  },
+  "ps_b64": {
+   "sinif": "T",
+   "eksik": 12,
+   "neden": "Saf (UTF-16LE + base64) — B2'de test."
+  },
+  "ps_yukselterek_kos_kodlu": {
+   "sinif": "S",
+   "eksik": 9,
+   "neden": "UAC yükseltmesi (`Start-Process -Verb RunAs`).",
+   "neden_T_Y_degil": "Çıkış kodu yorumu (`izin_ver_sonucu`) ve betik metni testli; UAC penceresi testte açılamaz."
+  },
+  "paylasim_durumu": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "paylasim_durumu_blocking": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Gerçek hesap / grup PowerShell okuması.",
+   "neden_T_Y_degil": "Karar çekirdekte testli."
+  },
+  "paylasim_kur": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "paylasim_kur_blocking": {
+   "sinif": "S",
+   "eksik": 7,
+   "neden": "Gerçek paylaşım grubu / ACL kurulumu (UAC).",
+   "neden_T_Y_degil": "Betik ve karar çekirdek `paylasim` modülünde testli."
+  },
+  "firewall_kurali_ekle": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "firewall_kurali_ekle_blocking": {
+   "sinif": "S",
+   "eksik": 8,
+   "neden": "Gerçek güvenlik duvarı kuralı yazımı (UAC).",
+   "neden_T_Y_degil": "Sonuç yorumu `izin_ver_sonucu` testli."
+  },
+  "izin_ver_sonucu": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "yedek_hedefi_durumu": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "kaldirma_veri_konumu": {
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "kaldirma_veri_konumu_blocking": {
+   "sinif": "Y",
+   "eksik": 7,
+   "neden": "home_dir(); `kaldirma_veri_konumu_with` çekirdekte testli; kök enjeksiyonu KP-4."
+  },
+  "yedek_hedefi_durumu_blocking": {
+   "sinif": "Y",
+   "eksik": 8,
+   "neden": "home_dir(); kök enjeksiyonu KP-4."
+  },
+  "klasor_secici_sonucu": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "yedek_hedefi_sec": {
+   "sinif": "S",
+   "eksik": 5,
+   "neden": "Tauri komut kabuğu: `tauri::State` / async çalışma zamanı ister; gövde `*_blocking` ya da çekirdek işlevde (o tarafta testli).",
+   "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
+  },
+  "yedek_hedefi_sec_blocking": {
+   "sinif": "S",
+   "eksik": 18,
+   "neden": "Klasör seçici penceresi (GUI).",
+   "neden_T_Y_degil": "Sonucu yorumlayan `klasor_secici_sonucu` testli."
+  },
+  "ana_pencere_boyutu": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "uygulama_pencere_boyutu": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "main": {
+   "sinif": "S",
+   "eksik": 109,
+   "neden": "Tauri Builder + olay döngüsü + pencere / tepsi olayları (gerçek pencere ve WebView2).",
+   "neden_T_Y_degil": "İçindeki saf kararlar zaten ayrı ve testli (`ana_pencere_boyutu`, `pencere_cikisini_uygula`, `kapanis_yakma_siniri` …); kalan Tauri kablolaması."
+  },
+  "guncelleme_ekranini_calistir": {
+   "sinif": "S",
+   "eksik": 37,
+   "neden": "Ayrı güncelleme bilgi penceresi kipi (ikinci Tauri Builder).",
+   "neden_T_Y_degil": "Saf parça (`pencere_gunluk_satiri`, işaret dosyası çekirdekte) testli; kalan pencere yaşam döngüsü."
+  }
+ }
+}

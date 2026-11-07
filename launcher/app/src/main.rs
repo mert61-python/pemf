@@ -4726,4 +4726,72 @@ Connection: close
         assert!(kosul < indir && indir < dogrula, "kurucu yalnız doğrulama DÜŞERSE inmeli ve her durumda yeniden doğrulanmalı");
     }
 
+    // ==== KP-3 B2 (istem 38 / 41 C): main.rs "T" sınıfı işlevlerin testleri — dosya sonuna (üstteki satırlar KAYMAZ) ====
+
+    /// KP-3 B2 · `ps_b64`: PowerShell `-EncodedCommand` UTF-16LE + base64 kodlaması — Python `base64.b64encode(s.encode("utf-16-le"))` ile
+    /// birebir (1 / 2 / 3 karakterlik dolgu kolları + Türkçe / BMP dışı olmayan çok baytlı karakter). Yanlış kodlama yükseltilmiş betiği
+    /// sessizce bozar (UAC penceresi açılır ama komut çalışmaz).
+    #[test]
+    fn kp3_b2_ps_b64_UTF16LE_base64_python_ile_BIREBIR() {
+        for (girdi, beklenen) in [
+            ("a", "YQA="),
+            ("ab", "YQBiAA=="),
+            ("abc", "YQBiAGMA"),
+            ("Get-Date", "RwBlAHQALQBEAGEAdABlAA=="),
+            ("şİ€", "XwEwAawg"),
+            // alfabenin son iki karakteri (`+` = 62, `/` = 63) — ilk turda hiçbir vektör üretmiyordu, alfabe mutantı YAŞADI
+            ("ûÿ", "+wD/AA=="),
+            ("ÿû", "/wD7AA=="),
+            ("", ""),
+        ] {
+            assert_eq!(ps_b64(girdi), beklenen, "girdi {girdi:?}");
+        }
+    }
+
+    /// KP-3 B2 · `uygulama_url`: çekirdeğin profil URL'si + önbellek kırıcı (`_=<ms>`) — WebView2 eski index.html'i önbellekten
+    /// yüklemesin. Kırıcı GERÇEK zaman damgası taşır (iki çağrı arası azalmaz) ve kurulu profiller URL'ye girer.
+    #[test]
+    fn kp3_b2_uygulama_url_profil_listesi_ve_ZAMAN_DAMGALI_onbellek_kirici() {
+        let kurulu = vec!["vet".to_string(), "home".to_string()];
+        let taban = flow::uygulama_url(8123, &kurulu);
+        let once = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+        let u = uygulama_url(8123, &kurulu);
+        let sonra = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+        assert!(u.starts_with(&taban), "çekirdek URL'si korunmadı: {u} / {taban}");
+        assert!(u.contains("8123") && u.contains("vet") && u.contains("home"), "{u}");
+        let ts: u128 = u.rsplit("_=").next().and_then(|x| x.parse().ok()).unwrap_or_else(|| panic!("önbellek kırıcı yok: {u}"));
+        assert!(once <= ts && ts <= sonra, "kırıcı gerçek zaman değil: {ts} ∉ [{once}, {sonra}]");
+    }
+
+    /// KP-3 B2 · `unix_simdi_s`: saniye cinsinden duvar saati (onay kaydının yaşı buna göre ölçülür — milisaniye ya da 0 dönerse
+    /// 7 günlük sınır anlamsızlaşır).
+    #[test]
+    fn kp3_b2_unix_simdi_s_SANIYE_ve_GERCEK_zaman() {
+        let a = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let s = unix_simdi_s();
+        let b = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        assert!(a <= s && s <= b, "{s} ∉ [{a}, {b}] (saniye değil ya da sabit)");
+    }
+
+    /// KP-3 B2 · `ortam_ozeti`: arayüzün açılış ekranı kararı (kurulu mu / profiller / yarım kurulum) KÖKTEN okunur — sahte kökle,
+    /// gerçek kuruluma dokunmadan. Kurulu olmayan kökte "kurulu" DENMEZ (yoksa Başlat anlaşılmaz hatayla düşer).
+    #[test]
+    fn kp3_b2_ortam_ozeti_KOKTEN_okur_kurulu_degilse_kurulu_DEMEZ() {
+        // app crate'inde `tempfile` yok (yeni bağımlılık EKLENMEZ) → süreç + zaman damgalı geçici dizin, sonda silinir.
+        let ns = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let kok = std::env::temp_dir().join(format!("kp3_ortam_ozeti_{}_{ns}", std::process::id()));
+        std::fs::create_dir_all(&kok).unwrap();
+        let e = ortam_ozeti(&kok);
+        assert!(!e.already_installed, "boş kök kurulu sayıldı");
+        assert!(e.installed_profiles.is_empty() && e.pending_profiles.is_empty());
+        assert_eq!(e.install_root, kok.to_string_lossy());
+        assert_eq!(e.launcher_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(e.platform, platform::current());
+        install::add_installed_profiles(&kok, &["vet".to_string()]);
+        let e2 = ortam_ozeti(&kok);
+        let _ = std::fs::remove_dir_all(&kok);
+        assert_eq!(e2.installed_profiles, vec!["vet".to_string()], "kurulu profil kaydı okunmadı");
+        assert!(!e2.already_installed, "yalnız profil kaydı varken (exe / frontend yok) kurulu sayıldı");
+    }
+
 }
