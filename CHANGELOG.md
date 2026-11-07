@@ -6,6 +6,12 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## mobile 2.3.35 — 2026-11-03 (🌐 İngilizce dil seçeneği)
+
+> Bu dal (`production-hardening`) sitenin yayın dalıdır; telefon sürümü site indirme bağlantısıyla hizalandı (APK `client-app-v1.9.51/PEMF_Vet_Mobil-2.3.35.apk`, Android sürüm kodu 42). Ayrıntılı değişiklik kaydı ana depoda (`duzeltme/dalga-2`).
+
+İngilizce dil seçeneği eklendi (Ayarlar › Dil / Language). Android güncelleme bildirimi Türkçe karakterlerle doğru yazılıyor.
+
 ## app 1.9.51 — 2026-09-11 (🔀 sürüş biçimi artık ekrandan seçiliyor)
 
 > ⚠️⚠️ **KONTROLCÜ YAZILIMI MUTLAKA YENİDEN YÜKLENMELİ — YALNIZ UYGULAMAYI GÜNCELLEMEK
