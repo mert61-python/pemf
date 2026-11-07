@@ -167,7 +167,8 @@ jobs:
       # Y243 (KP-2 A5): başlatıcı satır kapsamı eşiği. Araç sürümü SABİT (cargo-llvm-cov 0.9.1, `--locked`); payda launcher/core/src +
       # launcher/app/src (entegrasyon testleri `tests/` hariç; bağımlılıklar aracın varsayılanıyla hariç). Eşik ölçülenin ~1 puan
       # altı (KP-1 / KP-2: satır %80,77) — yalnız YÜKSELTİLİR. KP-2 kapanış (2026-11-03): %82,16 (dosya içi #[cfg(test)]
-      # modülleri paydada; ürün satırları %81,43) → 81.
+      # modülleri paydada; ürün satırları %81,48 — KP-3 A2: burada %81,43 yazıyordu, kesin ölçüm %81,48) → 81. KP-3 AŞAMA 0
+      # (2026-11-07, d45d9cf2): %82,04 (bu adımın ölçüsü — llvm toplam).
       - name: llvm-tools (kapsam)
         run: rustup component add llvm-tools-preview
       - name: cargo-llvm-cov kur (sabit sürüm)
