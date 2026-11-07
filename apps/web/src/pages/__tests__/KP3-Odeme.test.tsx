@@ -596,7 +596,7 @@ describe('KP-3 · Odeme — onay ve gönderim', () => {
     expect(yazi).toContain(t('odeme.bugunTahsil'))
     expect(yazi).toContain(t('odeme.aylikEsdeger'))
     expect(yazi).toContain(t('odeme.arastirmaEklendi'))
-    expect(yazi).toContain(tl(plan.yearly + RESEARCH_ADDON.yearly))
+    expect(yazi).toContain(tl(plan.yearly! + RESEARCH_ADDON.yearly))
   })
 
   it('aylık Pro (araştırmasız) → tahsil = aylık plan; aylık eşdeğer satırı YOK', async () => {
@@ -605,7 +605,7 @@ describe('KP-3 · Odeme — onay ve gönderim', () => {
     await ciz()
     const plan = PLANS.find((p) => p.tier === 'pro')!
     const yazi = metin(c.agac)
-    expect(yazi).toContain(tl(plan.monthly))
+    expect(yazi).toContain(tl(plan.monthly!))
     expect(yazi).not.toContain(t('odeme.aylikEsdeger'))
     expect(yazi).not.toContain(t('odeme.arastirmaEklendi'))
   })

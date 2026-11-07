@@ -467,7 +467,7 @@ let istekler: { url: string; o: Record<string, any> }[]
 let jetonYaniti: { ok: boolean; govde: unknown }
 let iptalYaniti: { ok: boolean; govde: unknown }
 let kapi: Promise<void> | null
-let gezindi: ReturnType<typeof vi.fn>
+let gezindi: ReturnType<typeof vi.fn<() => void>>
 
 function fetchKur() {
   vi.stubGlobal('fetch', async (url: string, o: Record<string, any> = {}) => {
@@ -504,7 +504,7 @@ beforeEach(async () => {
   durum.ucretsiz = false
   durum.requireAuth = vi.fn()
   durum.signOut = vi.fn()
-  gezindi = vi.fn()
+  gezindi = vi.fn<() => void>()
   belge.dinleyici.clear()
   fetchKur()
   await ciz()
