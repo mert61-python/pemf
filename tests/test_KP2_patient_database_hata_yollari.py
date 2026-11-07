@@ -692,14 +692,11 @@ def test_pemf_gui_dogrudan_ALINAMAZSA_depo_koku_sys_path_basina_eklenir(monkeypa
     assert kopya.get_config is pgc.get_config
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="[SAHİBE] yedek veri kökü ~/.pemf_gui OLUŞTURULMUYOR → hasta DB 'unable to open database file' ile açılmaz — "
-    "apps/backend/database/patient_database.py:1276",
-)
 def test_veri_koku_cozulemez_ve_EV_pemf_gui_YOKSA_dizin_kurulur_DB_acilir(tmp_path, monkeypatch, tekil_temiz):
-    """`get_app_data_directory` düştü, yedek kök `~/.pemf_gui` henüz YOK (temiz makine) → beklenen: dizin kurulur, DB açılır.
-    Gerçek (HEAD 4033cafe): mkdir yok → RuntimeError 'Database initialization failed: unable to open database file'."""
+    """`get_app_data_directory` düştü, yedek kök `~/.pemf_gui` henüz YOK (temiz makine) → dizin kurulur, DB açılır.
+    KP-3 A1 · sahip Y245 (03.11): H-1 düzeltildi — KP-2'de `xfail(strict=True)` belge testiydi (4033cafe: mkdir yok → RuntimeError
+    'unable to open database file'); artık normal sözleşme testi. Kapsam YALNIZ "kök çözülemedi → yedek kök" yolu; Y200 göç kuralı
+    (göç bir dosyayı atlarsa boş DB kurulmaz) `utils/path_utils` göçünde AYNEN. Dizin yalnız sahte EV altında kurulur."""
     import utils.path_utils as pu
 
     def _patlar():
@@ -723,3 +720,36 @@ def test_veri_koku_cozulemez_ve_EV_pemf_gui_YOKSA_dizin_kurulur_DB_acilir(tmp_pa
         tekil_temiz.append(d)
     assert hata is None, f"hasta DB açılmadı: {hata}"
     assert (ev / ".pemf_gui" / "patients.db").exists()
+
+
+def test_KP3_A1_yedek_kok_KURULAMAZSA_eski_davranis_RuntimeError_izin_hatasi_SIZMAZ(tmp_path, monkeypatch, tekil_temiz):
+    """KP-3 A1 (Y245): yedek kök `~/.pemf_gui` kurulamazsa (izin / salt-okunur ev) davranış ESKİSİ GİBİ — DB açılışı `RuntimeError` ile düşer
+    (çağıranlar bunu bekler: backend DB'siz kısıtlı kip, ACİL DURDUR etkilenmez); `mkdir`in `PermissionError`ı dışarı SIZMAZ ve dizin YOK."""
+    import utils.path_utils as pu
+
+    def _patlar():
+        raise PermissionError(13, "Erisim engellendi")
+
+    monkeypatch.setattr(pu, "get_app_data_directory", _patlar)
+    ev = tmp_path / "ev"
+    ev.mkdir()
+    monkeypatch.setenv("USERPROFILE", str(ev))
+    monkeypatch.setenv("HOME", str(ev))
+    _kasa_anahtari(monkeypatch, "")
+    gercek_mkdir = Path.mkdir
+
+    def _mkdir_red(self, *a, **k):
+        if self.name == ".pemf_gui":
+            raise PermissionError(13, "Erisim engellendi")
+        return gercek_mkdir(self, *a, **k)
+
+    monkeypatch.setattr(Path, "mkdir", _mkdir_red)
+    try:
+        d = pdb.get_patient_database()
+    except RuntimeError as e:
+        hata = str(e)
+    else:
+        hata = None
+        tekil_temiz.append(d)
+    assert hata is not None, "yedek kök kurulamadığı hâlde DB açıldı"
+    assert not (ev / ".pemf_gui").exists()

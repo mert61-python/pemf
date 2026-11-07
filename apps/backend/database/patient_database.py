@@ -1274,6 +1274,14 @@ def get_patient_database(app_data_dir=None) -> PatientDatabase:
                     app_data_dir = get_app_data_directory()
                 except Exception:
                     app_data_dir = Path.home() / ".pemf_gui"
+                    # KP-3 A1 · sahip Y245 (H-1): yedek kök YOKSA kurulur (temiz makinede dizin yoktu → hasta DB "unable to open
+                    # database file" ile açılmıyor, backend DB'siz kısıtlı kipe düşüyordu). YALNIZ bu "kök çözülemedi" yolu; Y200 göç
+                    # kuralı (göç bir dosyayı atlarsa boş DB kurulmaz) `utils.path_utils` göçünde AYNEN. Kurulamazsa eski davranış
+                    # (DB açılışı RuntimeError ile düşer; ACİL DURDUR etkilenmez).
+                    try:
+                        app_data_dir.mkdir(parents=True, exist_ok=True)
+                    except OSError:
+                        pass
 
             db_file = app_data_dir / "patients.db"
             kilit = _acilis_kilidi.get(_kilit_anahtari(db_file))
