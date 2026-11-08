@@ -34,9 +34,10 @@ import {
 import { useTranslation } from "react-i18next";
 
 
-/** S-F2-1.1: denetim izinin UTC ISO zamanını yerel tarih-saate çevirir; okunamazsa ham metin. */
-function sonTurZamani(at: string | null | undefined): string {
-  if (!at) return "bilinmiyor";
+/** S-F2-1.1: denetim izinin UTC ISO zamanını yerel tarih-saate çevirir; okunamazsa ham metin; YOKSA `bilinmiyor` (çevrilmiş metin).
+ *  KP-3 (11-08): eskiden sabit Türkçe "bilinmiyor" döndürüyordu → İngilizce arayüzde "Last run: bilinmiyor". */
+function sonTurZamani(at: string | null | undefined, bilinmiyor: string): string {
+  if (!at) return bilinmiyor;
   const t = new Date(at);
   return Number.isNaN(t.getTime()) ? String(at) : t.toLocaleString("tr-TR");
 }
@@ -996,7 +997,7 @@ export function SettingsScreen() {
               <Text style={styles.intro}>
                 {t("ayarlar.saklama.anonimOnayli", { gun: retention.anonymization.days })}
                 {retention.anonymization.lastRun
-                  ? t("ayarlar.saklama.sonTur", { zaman: sonTurZamani(retention.anonymization.lastRun.at), sayi: retention.anonymization.lastRun.count ?? 0 })
+                  ? t("ayarlar.saklama.sonTur", { zaman: sonTurZamani(retention.anonymization.lastRun.at, t("ayarlar.sistemDurumu.bilinmiyor")), sayi: retention.anonymization.lastRun.count ?? 0 })
                   : t("ayarlar.saklama.henuzTurYok")}
               </Text>
               <TouchableOpacity style={[styles.btnOutline, { minHeight: touch.min }]}

@@ -1102,7 +1102,22 @@
    "durum": "tamam",
    "metin": 53,
    "kritik": false,
-   "muaf": [],
+   "muaf": [
+    {
+     "metin": "Bu e-postayla",
+     "gerekce": "KP-3 · Y242 (98052917): ölü 'Bu e-postayla hesap oluştur →' öneri dalı (suggestRegister — hiç çizilmiyordu) SİLİNDİ; metin artık kullanıcıya ULAŞMIYOR → TR taban karşılaştırmasında gerileme değil. `turler` bilerek çıkarıcı türü DEĞİL: metin bu dosyaya JSX olarak geri eklenirse K-2 yine KIRMIZI.",
+     "turler": [
+      "silindi-olu-kod"
+     ]
+    },
+    {
+     "metin": "hesap oluştur →",
+     "gerekce": "KP-3 · Y242 (98052917): ölü 'Bu e-postayla hesap oluştur →' öneri dalı (suggestRegister — hiç çizilmiyordu) SİLİNDİ; metin artık kullanıcıya ULAŞMIYOR → TR taban karşılaştırmasında gerileme değil. `turler` bilerek çıkarıcı türü DEĞİL: metin bu dosyaya JSX olarak geri eklenirse K-2 yine KIRMIZI.",
+     "turler": [
+      "silindi-olu-kod"
+     ]
+    }
+   ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu"
   },
