@@ -1195,7 +1195,7 @@ class PatientDatabase:
         normalized = self._normalize_search_value(term)
         tokens = sorted(t for t in all_tokens if t != normalized) or sorted(all_tokens)
         if not tokens:
-            return []
+            return []  # pragma: no cover — ULASILAMAZ: boş terim yukarıda döner; katlama aynı kırpmayı yapar
         token_hashes = [self._hmac_token(token) for token in tokens]
 
         with self.lock:

@@ -31,8 +31,10 @@ ETIKETLI = re.compile(r"# pragma: no cover — (?P<etiket>[A-Z]+): (?P<neden>\S.
 #:   secrets_manager :430 Linux / macOS makine deposu (Windows'ta `os.name` sahtesi gerçek `C:\var\lib\pemf` yazar; :428-429 Windows
 #:     kolu test EDİLİR) · hybrid_recommender :735 `__main__` tanıtım girdisi protokol tablosuyla sözcük paylaşmaz (benzer listesi boş)
 #:   production_config_manager :34 göreli içe aktarma yedeği · :47 `pemf_gui` kök sys.path'te değilse — yalnız doğrudan betik koşumu
+#:   patient_database :1198 (KP-3) arama belirteci boş — boş terim yukarıda döner, `arama_katla` aynı kırpmayı yapar
 BEKLENEN = {
     "ai/hybrid_recommender.py": [("ULASILAMAZ", 2)],
+    "apps/backend/database/patient_database.py": [("ULASILAMAZ", 1)],
     "apps/backend/servers/api_server.py": [("SAVUNMA", 2), ("SAVUNMA", 2)],
     "apps/backend/servers/history_router.py": [("SAVUNMA", 2)],
     "apps/backend/servers/sync_worker.py": [("SAVUNMA", 2), ("SAVUNMA", 2)],
