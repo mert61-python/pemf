@@ -13,8 +13,8 @@ interface State {
 // YÜKSEK fix — GLOBAL (React-DIŞI) hata ağı: ErrorBoundary yalnız RENDER-fazı hatalarını yakalar.
 // Event-handler / setTimeout / promise içindeki uncaught throw sınırı ATLAR → tıbbi cihazda tedavi
 // sırasında tüm app çökebilir + /client/error raporu GİTMEZDİ. Aşağıdaki handler bunları da yakalayıp
-// aynı sink'e best-effort raporlar. Yalnız BİR KEZ kurulur; native'de mevcut RN handler'ı KORUNUR.
-let _globalHandlerInstalled = false;
+// aynı sink'e best-effort raporlar. Modül yüklenirken BİR KEZ kurulur (aşağıdaki tek çağrı; KP-3 · Y242: yeniden kurulumu engelleyen
+// bayrak ÖLÜYDÜ — işlev başka yerden çağrılmıyor); native'de mevcut RN handler'ı KORUNUR.
 // #93 (KVKK): hata mesajı/stack'i düz-metin kalıcı /client/error jsonl'ine yazılıyor → hasta PII
 // (e-posta/telefon/TC) sızabilir. Rapordan ÖNCE bilinen PII kalıplarını maskele + kırp.
 function _redactPII(s: string): string {
@@ -30,8 +30,6 @@ function reportGlobalError(message: string, stack: string) {
   } catch { /* raporlama best-effort — asla akışı bozma */ }
 }
 function installGlobalErrorHandler() {
-  if (_globalHandlerInstalled) return;
-  _globalHandlerInstalled = true;
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener("error", (e: any) => reportGlobalError(e?.message || "window.onerror", e?.error?.stack || ""));
     window.addEventListener("unhandledrejection", (e: any) => reportGlobalError("unhandledrejection: " + String(e?.reason?.message ?? e?.reason ?? ""), e?.reason?.stack || ""));

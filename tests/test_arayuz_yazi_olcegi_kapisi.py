@@ -139,7 +139,8 @@ def test_rf_9_ve_10_puntolari_azaliyor():
             if re.search(r"fontSize:\s*rf\(\s*(9|10)\s*\)", satir):
                 kalan.append(f"{p.relative_to(_PF).as_posix()}:{no}")
     # 2026-09-05: 17 → 9 (S6) → 7 (S7 adım 10: liveText, serverCamNote).
-    assert len(kalan) == 7, (
-        f"rf(9|10) punto sayısı {len(kalan)}, sabit 7.\nARTTIYSA: typography.small (11) kullanın.\n"
+    # 2026-11-08 (KP-3 · Y242): 7 → 6 — Kontrol ekranının ÖLÜ `StatChip` bileşeni (hiç çizilmiyordu) silindi; `statChipLabel` rf(10) taşıyordu.
+    assert len(kalan) == 6, (
+        f"rf(9|10) punto sayısı {len(kalan)}, sabit 6.\nARTTIYSA: typography.small (11) kullanın.\n"
         "AZALDIYSA: bu sabiti düşürün.\n" + "\n".join(kalan)
     )

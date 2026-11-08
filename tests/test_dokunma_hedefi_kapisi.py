@@ -43,8 +43,10 @@ _PF = _KOK / "apps" / "ui" / "src"
 # GenisletilebilirMetin) sayıyı ARTIRMADI: hepsi `touch.min` tabanıyla yazıldı.
 # 2026-10-14 (SG.G3): 117 → 116. Ayarlar → Veri Saklama Süresi seçenekleri `styles.btnOutline` + `flex: 0` yerine `touch.min`
 # tabanlı `styles.saklamaSecenek` kullanıyor (web'de taşan / kırılan düğmeler düzeldi).
+# 2026-11-08 (KP-3 · Y242): 116 → 115. Giriş ekranındaki ÖLÜ "Kayıt ol" öneri düğmesi (`suggestBtn`, hiç görünmeyen dal)
+# silindi; dokunma-hedefi tabanı taşımıyordu → ihlal kendiliğinden düştü.
 # Faz D hedefi: 0. Düşürdükçe bu sayıyı da düşürün.
-KALAN_IHLAL = 116
+KALAN_IHLAL = 115
 # Gerekçeli muafiyetler (perde/kart gibi dokunuş yutucular).
 MUAF_SAYISI = 2
 
