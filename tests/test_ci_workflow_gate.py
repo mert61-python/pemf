@@ -446,7 +446,8 @@ def _fail_under() -> float:
 #: (2026-10-10): genişlemiş kaynakla ölçülen %79,14 → eşik 75; taban da 75'e çekildi (50'de kalsaydı 75→51 düşürmesi YEŞİLDİ).
 #: KP-2 A5 (Y243, 2026-11-03): CI eşdeğeri ölçülen %96,58 → eşik 95; taban 95 (75'te kalsaydı 95→76 düşürmesi YEŞİLDİ).
 #: KP-2 kapanış (2026-11-03): KP-2 C testleriyle ölçülen %97,41 → eşik ve taban 96.
-_FAIL_UNDER_TABANI = 96
+#: KP-3 AŞAMA D (2026-11-08): KP-3 C testleriyle ölçülen %99,88 (@ c83b47e9; C18 kalan 30 satırı kapattı + 1 ULASILAMAZ etiketi) → eşik ve taban 98.
+_FAIL_UNDER_TABANI = 98
 
 
 def test_KRITIK_fail_under_SAHIP_KARARI_TABANIN_ALTINA_DUSMEZ():

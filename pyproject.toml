@@ -166,7 +166,9 @@ omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 # `precision` 0 → karşılaştırma yuvarlanmış tam sayıyla). Taban artık 95.
 # KP-2 KAPANIŞ (2026-11-03, uç 937525bd; ürün kodu 1436a587 ile aynı): 1436a587 tam süiti (modeller açık) ∪ 8 yeni KP-2 testi →
 # TOPLAM %97,41 (25940 ifade, 673 kapsanmayan). Eşik 95 → 96. Taban artık 96.
-fail_under = 96
+# KP-3 AŞAMA D (2026-11-08, uç 6c7d4f10): tam süit (modeller açık, @argsfile) TOPLAM %99,88 (@ c83b47e9; C18 kalan 30 satırı kapattı + 1 ULASILAMAZ etiketi) (25865 ifade, 31 kapsanmayan); CI eşdeğeri
+# (modelsiz) tahmini ~%99 (KP-2'de modelli ↔ CI farkı 0,83 puan) → yuvarlama payıyla temkinli. Eşik 96 → 98. Taban artık 98.
+fail_under = 98
 show_missing = false
 
 [tool.mypy]
