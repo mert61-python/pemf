@@ -112,6 +112,11 @@ export interface ApiOpts {
 /** AI çıkarım uçları için zaman aşımı — ilk çağrıdaki model yükleme + JIT derlemesini kapsar. */
 export const AI_TIMEOUT_MS = 120000;
 
+/** KD madde 0 (sahip 2026-11-10: "istemcideki 8 saniye sınırını kaldıralım, kamera bağlı değil zanneder kullanıcı"): kabin kamerası
+ *  uçları (tarama) genel 8 sn sınırına BAĞLI DEĞİL. ÖLÇÜLDÜ: donanım dönüşümleri açıkken bir kamera 8–9 sn'de açılıp çözünürlük isteği
+ *  15–24 sn sürüyordu (tarama 25 sn); sunucu düzeltmesiyle ~2 sn — üst sınır yalnız ASILI isteğe karşı (AI uçlarıyla aynı). */
+export const KAMERA_TIMEOUT_MS = 120000;
+
 /** SAHA HATASI 2026-08-12 — "signal is aborted" kullanıcıya GÖSTERİLİYORDU.
  *
  * Ev kullanıcısı fps + hastalık + ses analizlerini PEŞ PEŞE başlattı; ilk ikisi döndü, ses

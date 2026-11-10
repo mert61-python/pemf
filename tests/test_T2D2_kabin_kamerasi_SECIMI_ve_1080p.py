@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""T2D-2 (Tezgâh-2 #3) — kabin kamerası SEÇİLİR, 1920×1080 ilk okumadan ÖNCE istenir, kalibrasyon kenar oranı farklı karede REDDEDİLİR.
+"""T2D-2 (Tezgâh-2 #3) — kabin kamerası SEÇİLİR, çözünürlük ilk okumadan ÖNCE istenir, kalibrasyon kenar oranı farklı karede REDDEDİLİR.
 
 ÖLÇÜLEN KUSUR (Tezgâh-2, 2026-10-23): `ai_router.py` hazırlık önizlemesi ve AI Pro döngüsü sabit `cv2.VideoCapture(0)` açıyordu →
 dahili kameralı dizüstünde kabin kamerası (Pusat "FHD Camera", OpenCV indeks 1) DEĞİL dahili kamera (indeks 0) açıldı; çözünürlük
@@ -10,7 +10,9 @@ kare boyutuna ölçeklemiyordu.
 SÖZLEŞME:
   * seçim cihaz düzeyinde (`<veri kökü>/kabin_kamerasi.json`; Ayarlar ▸ Kabin kamerası); seçim yoksa kamera AÇILMAZ ve eylem
     söyleyen 409 / hazırlık hatası (dahili kameraya sessiz düşüş YOK);
-  * açılışta `set(W, 1920)` + `set(H, 1080)` İLK `read()`'den ÖNCE (MSMF akış başladıktan sonra çözünürlük değişimi hata verir);
+  * açılışta çözünürlük isteği İLK `read()`'den ÖNCE (MSMF akış başladıktan sonra çözünürlük değişimi hata verir) — KD madde 0 (b,
+    2026-11-10): sabit 1920×1080 DEĞİL; kalibrasyon yoksa `set(W, 9999)` + `set(H, 9999)` = kameranın EN YÜKSEK kendi modu (sürücü
+    desteklediğine indirir; ölçülen Pusat / HP: 1920×1080), sabit düzlem kalibrasyonu varsa onun boyutu (`test_KD_*`);
   * kenar oranı farklı karede K ölçeklemesi REDDİ → yaklaşık K;
   * 1080p kalibrasyonu `ai_hub/cv_ortak/kalibrasyon/` altında; üç YAML aynı dizgeyle ona çözülür;
   * taban işareti (normal "+Y", `up_cabin [0,0,1]`, `qr_to_origin_cm`, `hedef_duzlem_eksen "Y"`) uçtan uca doğru konum verir.
@@ -39,7 +41,11 @@ KEDI_YAML = KOK / "ai_hub" / "inference_cat_organ" / "cabin_config_example.yaml"
 
 class _SahteCv2:
     """En alt kat: `VideoCapture(i)` çağrılarını ve kamera üzerindeki çağrı SIRASINI kaydeder. MSMF gibi: ilk `read()`'den SONRA
-    çözünürlük değişimi hata verir. `acik` = açılabilen indeksler."""
+    çözünürlük değişimi hata verir. `acik` = açılabilen indeksler.
+    KD madde 0 (ölçülen sürücü davranışı, Pusat + dahili HP): istemeden kare 640×480; istenen boyut desteklenen modlardan İSTEĞİ AŞMAYAN
+    en büyüğüne iner (9999×9999 → 1920×1080; yükseltme YOK)."""
+
+    MODLAR = ((640, 480), (1280, 720), (1920, 1080))
 
     CAP_PROP_FRAME_WIDTH = 3
     CAP_PROP_FRAME_HEIGHT = 4
@@ -58,6 +64,7 @@ class _SahteCv2:
             def __init__(self):
                 self.indeks, self.sira, self.okundu = i, [], False
                 self.boyut = [640, 480]
+                self.istek = [10**6, 10**6]  # yalnız bir eksen istenirse diğeri sınırlamaz
 
             def isOpened(self):  # noqa: N802
                 return i in cv.acik
@@ -66,7 +73,9 @@ class _SahteCv2:
                 if self.okundu:
                     raise RuntimeError("(-215) _step >= minstep — akış başladıktan sonra çözünürlük değişimi")
                 self.sira.append(("set", prop, deger))
-                self.boyut[0 if prop == 3 else 1] = int(deger)
+                self.istek[0 if prop == 3 else 1] = int(deger)
+                uygun = [m for m in cv.MODLAR if m[0] <= self.istek[0] and m[1] <= self.istek[1]]
+                self.boyut = list(max(uygun) if uygun else cv.MODLAR[0])
                 return True
 
             def get(self, prop):
@@ -114,7 +123,8 @@ def test_KRITIK_secim_YOKSA_kamera_ACILMAZ_dahiliye_dusmez(veri):
     assert cv.acilan == [], f"seçim yokken kamera açıldı (dahili kameraya sessiz düşüş): {cv.acilan}"
 
 
-def test_KRITIK_secilen_indeks_acilir_ve_1080p_ILK_okumadan_ONCE_istenir(veri):
+def test_KRITIK_secilen_indeks_acilir_ve_EN_YUKSEK_mod_ILK_okumadan_ONCE_istenir(veri):
+    """KD madde 0 (b): kalibrasyon YOKKEN sabit 1920×1080 değil, kameranın en yüksek kendi modu (büyük istek, gelen boyut)."""
     kk, kok = veri
     assert kk.kamera_sec(1) == {"indeks": 1, "kaynak": "ayar"}
     assert json.loads((kok / kk.KAMERA_DOSYASI).read_text(encoding="utf-8")) == {"indeks": 1}
@@ -122,8 +132,8 @@ def test_KRITIK_secilen_indeks_acilir_ve_1080p_ILK_okumadan_ONCE_istenir(veri):
     cap, indeks = kk.kamera_ac(cv)
     assert (indeks, cv.acilan) == (1, [1]), cv.acilan
     ok, kare = cap.read()
-    assert cap.sira[:3] == [("set", 3, 1920.0), ("set", 4, 1080.0), ("read",)], cap.sira
-    assert kare.shape[:2] == (1080, 1920)
+    assert cap.sira[:3] == [("set", 3, 9999.0), ("set", 4, 9999.0), ("read",)], cap.sira
+    assert kare.shape[:2] == (1080, 1920), "sürücünün en yüksek modu gelmeli"
 
 
 def test_KARSIT_ortam_degiskeni_ayarin_ONUNDE(veri, monkeypatch):
@@ -149,7 +159,7 @@ def test_bozuk_secim_dosyasi_SECILMEDI_sayilir(veri):
     assert kk.secili_kamera() is None
 
 
-def test_tarama_acilanlari_listeler_onizlemeli_ve_1080p_okumadan_ONCE(veri):
+def test_tarama_acilanlari_listeler_onizlemeli_ve_EN_YUKSEK_mod_okumadan_ONCE(veri):
     kk, _ = veri
     cv = _SahteCv2(acik=(0, 2))
     liste = kk.kameralari_tara(cv, sayi=4)
@@ -158,7 +168,7 @@ def test_tarama_acilanlari_listeler_onizlemeli_ve_1080p_okumadan_ONCE(veri):
     for c in cv.capler:
         assert c.sira[-1] == ("release",), "tarama kamerayı bırakmadı"
         if c.isOpened():
-            assert c.sira.index(("read",)) > c.sira.index(("set", 4, 1080.0)), c.sira
+            assert c.sira.index(("read",)) > c.sira.index(("set", 4, 9999.0)), c.sira
 
 
 # ── ayar uçları ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -177,7 +187,8 @@ def ayar_istemcisi(veri):
 
 def test_uc_secim_yok_null_sonra_POST_ile_hatirlanir(ayar_istemcisi):
     ist, kk, _sr = ayar_istemcisi
-    assert ist.get("/api/settings/kabin-kamerasi").json() == {"secili": None, "istenenCozunurluk": [1920, 1080]}
+    # KD madde 0 (b): kalibrasyon yok → `null` (kameranın en yüksek kendi modu).
+    assert ist.get("/api/settings/kabin-kamerasi").json() == {"secili": None, "istenenCozunurluk": None}
     r = ist.post("/api/settings/kabin-kamerasi", json={"indeks": 1})
     assert r.status_code == 200 and r.json()["secili"]["indeks"] == 1
     assert ist.get("/api/settings/kabin-kamerasi").json()["secili"] == {"indeks": 1, "kaynak": "ayar"}
@@ -241,7 +252,7 @@ def test_KRITIK_hazirlik_dongusu_secim_YOKSA_kamera_acmaz_EYLEM_hatasi(hazirlik)
     )
 
 
-def test_KRITIK_hazirlik_dongusu_SECILI_kamerayi_1080p_ile_acar(hazirlik, monkeypatch):
+def test_KRITIK_hazirlik_dongusu_SECILI_kamerayi_EN_YUKSEK_mod_ile_acar(hazirlik, monkeypatch):
     air, cv, kk = hazirlik
     kk.kamera_sec(1)
     monkeypatch.setattr(air, "_AI_HAZIRLIK_TAVAN_S", 0.0)  # ilk turda tavan → döngü çıkar, kamera bırakılır
@@ -249,7 +260,7 @@ def test_KRITIK_hazirlik_dongusu_SECILI_kamerayi_1080p_ile_acar(hazirlik, monkey
     air._ai_hazirlik_active = True
     air._ai_hazirlik_loop()
     assert cv.acilan == [1], cv.acilan
-    assert cv.capler[0].sira[:2] == [("set", 3, 1920.0), ("set", 4, 1080.0)], cv.capler[0].sira
+    assert cv.capler[0].sira[:2] == [("set", 3, 9999.0), ("set", 4, 9999.0)], cv.capler[0].sira
     assert cv.capler[0].sira[-1] == ("release",)
 
 

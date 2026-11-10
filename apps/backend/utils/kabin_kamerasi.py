@@ -12,7 +12,8 @@ SÖZLEŞME:
     Ayarlar'dan kaldırıldı) ve `<veri kökü>/kabin_kamerasi.json`'da hatırlanır — hesaptan / profilden bağımsız (dil seçimi gibi, Y161).
   * Seçim yoksa kamera AÇILMAZ: `KameraSecilmedi` (çağıran eylem söyleyen iletiyi verir). 0 numaralı (çoğu dizüstünde dahili)
     kameraya SESSİZ düşüş YOK.
-  * Açılır açılmaz, İLK okumadan ÖNCE 1920×1080 istenir — MSMF'de akış başladıktan sonra çözünürlük değiştirmek `(-215)
+  * Açılır açılmaz, İLK okumadan ÖNCE çözünürlük istenir (KD madde 0: sabit düzlem kalibrasyonu varsa ONUN boyutu, yoksa kameranın
+    EN YÜKSEK kendi modu — `istenen_cozunurluk`; eskiden sabit 1920×1080) — MSMF'de akış başladıktan sonra çözünürlük değiştirmek `(-215)
     _step >= minstep` hatası verir (Tezgâh-2 ölçümü). Kamera başka boyut verirse kare o boyutta gelir; K ölçeklemesi kenar
     oranı farklıysa reddedilir (`cv_ortak.coord_transform.olcekli_intrinsics`).
   * CANLI oturum (T3 · Y190, petri / fantom canlı önizleme + otomatik analiz): seçili kamera arka planda AÇIK tutulur, son kare
@@ -36,8 +37,6 @@ KAMERA_DOSYASI = "kabin_kamerasi.json"
 ORTAM_DEGISKENI = "PEMF_KABIN_KAMERASI"
 #: OpenCV `CAP_PROP_FRAME_WIDTH` / `HEIGHT` (kararlı sayılar; cv2 sabiti yoksa).
 _CAP_GENISLIK, _CAP_YUKSEKLIK = 3, 4
-#: Tezgâh-2 sahip kararı (12:5x): "1080p kullanacağız" — kalibrasyon `ai_hub/cv_ortak/kalibrasyon/` bu boyutta.
-ISTENEN_COZUNURLUK = (1920, 1080)
 #: Ayarlar'daki taramada denenecek indeksler (0..N-1). OpenCV kamera ADI vermez; kullanıcı küçük önizlemeden tanır.
 TARAMA_INDEKS_SAYISI = 4
 _AZAMI_INDEKS = 63
@@ -107,9 +106,33 @@ def kamera_sec(indeks) -> dict:
     return {"indeks": i, "kaynak": "ayar"}
 
 
+#: KD madde 0 (2026-11-10): kalibrasyon YOKSA kameranın EN YÜKSEK kendi modu — büyük değer istenir, sürücü desteklediği en büyük
+#: modu verir (ölçüldü: Pusat ve dahili HP, 9999×9999 → 1920×1080; yükseltme / ölçekleme YOK). Gelen kare boyutu kullanılır.
+AZAMI_ISTEK = (9999, 9999)
+
+
+def istenen_cozunurluk() -> tuple[int, int] | None:
+    """SABİT DÜZLEM kalibrasyonu (veri kökü) varsa ONUN çözünürlüğü — kalibrasyon yalnız o boyutta geçerlidir; yoksa / okunamazsa None
+    (= kameranın en yüksek kendi modu). Bozuk kalibrasyon çözünürlük SEÇMEZ (hat onu zaten "bozuk" diye reddeder)."""
+    try:
+        from ai_hub.cv_ortak import sabit_duzlem as sd
+
+        kal, hata = sd.yukle(_veri_koku())
+    except Exception:
+        logging.getLogger(__name__).debug("kabin kamerasi: kalibrasyon cozunurlugu okunamadi", exc_info=True)
+        return None
+    if kal is None or hata:
+        return None
+    try:
+        return int(kal["kamera"]["genislik"]), int(kal["kamera"]["yukseklik"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def _cozunurluk_iste(cap, cv2) -> None:
-    """1920×1080 isteği (ilk okumadan ÖNCE). Kamera desteklemezse OpenCV yok sayar; istek hatası kamerayı DÜŞÜRMEZ (günlük)."""
-    w, h = ISTENEN_COZUNURLUK
+    """Çözünürlük isteği (ilk okumadan ÖNCE — sonra değiştirmek MSMF `_step >= minstep`): kalibrasyon varsa onun boyutu, yoksa
+    `AZAMI_ISTEK` (kameranın en yüksek modu). Kamera desteklemezse OpenCV yok sayar; istek hatası kamerayı DÜŞÜRMEZ (günlük)."""
+    w, h = istenen_cozunurluk() or AZAMI_ISTEK
     try:
         cap.set(getattr(cv2, "CAP_PROP_FRAME_WIDTH", _CAP_GENISLIK), float(w))
         cap.set(getattr(cv2, "CAP_PROP_FRAME_HEIGHT", _CAP_YUKSEKLIK), float(h))
@@ -118,7 +141,7 @@ def _cozunurluk_iste(cap, cv2) -> None:
 
 
 def kamera_ac(cv2=None, *, canliyi_kapat: bool = True):
-    """Seçili kabin kamerasını açar ve (açıldıysa) ilk okumadan ÖNCE 1920×1080 ister. @return (cap, indeks) — açılıp
+    """Seçili kabin kamerasını açar ve (açıldıysa) ilk okumadan ÖNCE çözünürlük ister (`_cozunurluk_iste`). @return (cap, indeks) — açılıp
     açılmadığını çağıran `cap.isOpened()` ile denetler. Seçim yoksa `KameraSecilmedi` (kamera hiç açılmaz).
     Y190: açık CANLI oturum önce kapatılır (AI Pro / tek kare kamerayı devralır); canlı oturumun kendisi `canliyi_kapat=False`."""
     secim = secili_kamera()
@@ -155,7 +178,7 @@ KARE_ISINMA = 5
 
 def kare_al(cv2=None) -> dict | None:
     """T3 · Y189 / Y190 (petri / fantom analizi "Fotoğraf Çek", bu makinede): SEÇİLİ kabin kamerasından TAM çözünürlüklü tek kare (JPEG,
-    base64). `kamera_ac` ile açılır (1920×1080 ilk okumadan ÖNCE), ilk `KARE_ISINMA` kare atılır, son kare kodlanır, kamera
+    base64). `kamera_ac` ile açılır (çözünürlük ilk okumadan ÖNCE), ilk `KARE_ISINMA` kare atılır, son kare kodlanır, kamera
     HER durumda bırakılır. Seçim yok → `KameraSecilmedi`; açılamaz / okunamaz → None.
     D3I-A3.2: eşzamanlı çağrılar (çift dokunuş, iki istemci) SIRAYLA — aynı kameraya iki `VideoCapture` açılmaz."""
     with _kisa_acilis_kilit:
@@ -326,7 +349,7 @@ def canli_durdur(bekle_sn: float = 3.0) -> None:
 
 
 def kameralari_tara(cv2=None, sayi: int = TARAMA_INDEKS_SAYISI) -> list[dict]:
-    """Analiz / AI Pro paneli ▸ Kabin kamerası ▸ "Kameraları tara": 0..sayi-1 indekslerini KISA açar, 1920×1080 ister, bir kare okur, bırakır.
+    """Analiz / AI Pro paneli ▸ Kabin kamerası ▸ "Kameraları tara": 0..sayi-1 indekslerini KISA açar, çözünürlük ister (`_cozunurluk_iste`), bir kare okur, bırakır.
     @return açılanların listesi `[{"indeks", "genislik", "yukseklik", "onizleme"}]` (önizleme: küçük JPEG, base64; kare
     okunamazsa None). Yalnız kullanıcı eylemiyle çağrılır (açılış / arka plan taraması YOK). D3I-A3.2: tek kare ile sırayla."""
     with _kisa_acilis_kilit:

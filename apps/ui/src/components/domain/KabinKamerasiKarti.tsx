@@ -14,7 +14,7 @@ import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } fr
 import { useTranslation } from "react-i18next";
 import { Camera } from "lucide-react-native";
 import { colors, radius, spacing, touch, typography } from "@/theme/tokens";
-import { apiGet, apiPost } from "@/services/apiClient";
+import { apiGet, apiPost, KAMERA_TIMEOUT_MS } from "@/services/apiClient";
 // T3 · Y190: bölüm AI Pro panelinde de çizilir; panel ToastProvider gerektirmez → bildirim köprüden (sağlayıcı yoksa sessiz;
 // seçimin kendisi bölümdeki "Seçili kamera" satırında zaten görünür).
 import { emitToast } from "@/services/toastBridge";
@@ -51,7 +51,12 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
     if (kilitli) return;
     setTaraniyor(true);
     try {
-      const r = await apiPost<{ kameralar: Aday[]; secili: Secim | null } | null>("/settings/kabin-kamerasi/tara", {}, null);
+      // KD madde 0: kamera açılışı genel 8 sn sınırına bağlı değil (yavaş sürücüde "bağlı değil" sanılıyordu); zaman aşımı metni
+      // KAMERAYA özgü ("model yüklemesi" DEĞİL).
+      const r = await apiPost<{ kameralar: Aday[]; secili: Secim | null } | null>("/settings/kabin-kamerasi/tara", {}, null, {
+        timeoutMs: KAMERA_TIMEOUT_MS,
+        zamanAsimiMesaji: t("ayarlar.kabinKamerasi.taramaZamanAsimi"),
+      });
       if (r) {
         setAdaylar(r.kameralar);
         setSecili(r.secili);
@@ -98,6 +103,11 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
       >
         {taraniyor ? <ActivityIndicator color="#fff" /> : <Text style={styles.dugmeMetni}>{t("ayarlar.kabinKamerasi.tara")}</Text>}
       </TouchableOpacity>
+      {taraniyor ? (
+        <Text style={styles.aciklama} testID="kabin-kamerasi-taraniyor">
+          {t("ayarlar.kabinKamerasi.taraniyor")}
+        </Text>
+      ) : null}
       {adaylar && adaylar.length === 0 ? <Text style={styles.aciklama}>{t("ayarlar.kabinKamerasi.bulunamadi")}</Text> : null}
       {adaylar?.map((a) => (
         <View key={a.indeks} style={styles.aday} testID={`kabin-kamerasi-aday-${a.indeks}`}>

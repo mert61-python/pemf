@@ -36,13 +36,21 @@ class _SahteCv2:
         class _Cap:
             def __init__(self):
                 self.indeks, self.sira, self.boyut = i, [], [640, 480]
+                self.istek = [10**6, 10**6]
 
             def isOpened(self):  # noqa: N802
                 return True
 
             def set(self, prop, deger):
+                # KD madde 0: ölçülen sürücü davranışı — istek, desteklenen modlardan isteği AŞMAYAN en büyüğüne iner (9999 → 1920×1080).
                 self.sira.append(("set", prop, deger))
-                self.boyut[0 if prop == 3 else 1] = int(deger)
+                self.istek[0 if prop == 3 else 1] = int(deger)
+                uygun = [
+                    m
+                    for m in ((640, 480), (1280, 720), (1920, 1080))
+                    if m[0] <= self.istek[0] and m[1] <= self.istek[1]
+                ]
+                self.boyut = list(max(uygun) if uygun else (640, 480))
                 return True
 
             def get(self, prop):

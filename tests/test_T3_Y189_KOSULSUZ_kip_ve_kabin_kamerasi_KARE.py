@@ -221,7 +221,8 @@ def test_KRITIK_kare_al_SECILI_kameradan_1080p_ve_HER_durumda_birakir(veri):
     kk.kamera_sec(1)
     k = kk.kare_al(cv)
     cap = cv.capler[-1]
-    assert cv.acilan == [1] and cap.sira[:2] == [("set", 3, 1920.0), ("set", 4, 1080.0)], cap.sira
+    # KD madde 0 (b): kalibrasyon yokken kameranın EN YÜKSEK modu istenir (9999 → sürücü 1920×1080 verir).
+    assert cv.acilan == [1] and cap.sira[:2] == [("set", 3, 9999.0), ("set", 4, 9999.0)], cap.sira
     assert (k["indeks"], k["genislik"], k["yukseklik"]) == (1, 1920, 1080) and base64.b64decode(k["image_base64"])
     assert cap.sira[-1] == ("release",) and cap.sira.count(("read",)) == kk.KARE_ISINMA + 1
     cv2 = _SahteCv2(acik=())

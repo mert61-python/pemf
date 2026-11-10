@@ -9,6 +9,14 @@ import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+# ── KAMERA AÇILIŞI (KD madde 0 · sahip bildirimi 2026-11-10) — HER ÜÇÜNCÜ TARAF İÇE AKTARMADAN ÖNCE ─────────────────────────
+# "Kameraları tara" istemcide zaman aşımına düşüyordu, Canlı Kamera / Fotoğraf Çek 30–40 sn. ÖLÇÜLDÜ (bu makine, OpenCV 4.11 =
+# paketteki, MSMF, dahili kamera): donanım dönüşümleri AÇIKKEN `VideoCapture` açılışı 7,8–9,1 sn + çözünürlük isteği 15–24 sn
+# (tarama 25 sn, Fotoğraf Çek 23,6 sn); değişken "0" iken açılış 0,27 sn + istek ~0 sn. cv2 İÇE AKTARILDIKTAN SONRA kurmak ETKİSİZ
+# (ölçüldü: 7,8 + 23,9 sn) → yalnız burada, giriş noktasında. `setdefault`: kullanıcının / kurulumun açık değeri EZİLMEZ.
+# Kapı: tests/test_KD_kamera_acilisi_MSMF_giris_noktasi.py
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
+
 # ── IMPORT KOKU (2026-09-19, klasor duzeni F-E) ───────────────────────────────
 # Bu dosya `apps/backend/` altina tasindi. Kendi dizini zaten `sys.path[0]` oldugu
 # icin `servers/ services/ database/ utils/ controllers/` DOGRUDAN import edilir.
@@ -1315,6 +1323,11 @@ def main(argv: list[str] | None = None) -> int:
     if _port_uyarisi:
         logger.warning(_port_uyarisi)
     logger.info("PEMF backend service starting: host=%s port=%s", args.host, args.port)
+    # KD madde 0: kamera açılış ayarının ETKİN değeri (donmuş EXE'de de dosyanın başındaki `setdefault` geçerli mi — saha tanısı).
+    logger.info(
+        "kamera: OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=%s",
+        os.environ.get("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"),
+    )
     _veri_koku_ag_uyarisi(app_data_dir, logger)  # Y118: ağ paylaşımındaki veri kökü — günlük (+ arayüz: /api/health)
 
     # Opsiyonel uzaktan hata-izleme (audit B-5.1) — yalnız PEMF_SENTRY_DSN set + sentry-sdk varsa.

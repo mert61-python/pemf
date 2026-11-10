@@ -187,10 +187,12 @@ def _ai_kamerasi_mesgul() -> bool:
 
 @router.get("/kabin-kamerasi")
 def kabin_kamerasi_al():
-    """Seçili kabin kamerası (`null` = seçilmedi → AI Pro kamerası açılmaz) ve istenen çözünürlük."""
+    """Seçili kabin kamerası (`null` = seçilmedi → AI Pro kamerası açılmaz) ve istenen çözünürlük (KD madde 0: sabit düzlem
+    kalibrasyonunun boyutu; `null` = kalibrasyon yok → kameranın en yüksek kendi modu)."""
     from utils import kabin_kamerasi as kk
 
-    return {"secili": kk.secili_kamera(), "istenenCozunurluk": list(kk.ISTENEN_COZUNURLUK)}
+    istenen = kk.istenen_cozunurluk()
+    return {"secili": kk.secili_kamera(), "istenenCozunurluk": list(istenen) if istenen else None}
 
 
 @router.post("/kabin-kamerasi")
@@ -231,7 +233,7 @@ def kabin_kamerasi_tara():
 
 @router.post("/kabin-kamerasi/kare")
 def kabin_kamerasi_kare():
-    """T3 · Y189 (sahip): petri / fantom analizine SEÇİLİ kabin kamerasından tam çözünürlüklü TEK kare (1920×1080 isteği —
+    """T3 · Y189 (sahip): petri / fantom analizine SEÇİLİ kabin kamerasından tam çözünürlüklü TEK kare (kalibrasyon boyutu ya da kameranın en yüksek modu —
     kalibrasyonla aynı). AI Pro kamerayı tutuyorsa 409; seçim yoksa 409 (dahili kameraya düşüş YOK); kare alınamazsa 503."""
     from utils import ceviri
     from utils import kabin_kamerasi as kk

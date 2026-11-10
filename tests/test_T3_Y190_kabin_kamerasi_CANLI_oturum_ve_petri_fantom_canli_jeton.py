@@ -62,7 +62,8 @@ def test_KRITIK_canli_SECIMSIZ_kamera_ACMAZ_secimle_TEK_VideoCapture_ve_1080p(ca
     assert d == {"indeks": 1, "acik": True} and kk.canli_acik()
     assert kk.canli_baslat(cv) == {"indeks": 1, "acik": True}, "ikinci başlatma aynı oturum olmalı"
     assert cv.acilan == [1], f"canlı oturum kamerayı {len(cv.acilan)} kez açtı"
-    assert cv.capler[0].sira[:2] == [("set", 3, 1920.0), ("set", 4, 1080.0)], cv.capler[0].sira[:3]
+    # KD madde 0 (b): kalibrasyon yokken kameranın EN YÜKSEK modu istenir (9999 → sürücü 1920×1080 verir).
+    assert cv.capler[0].sira[:2] == [("set", 3, 9999.0), ("set", 4, 9999.0)], cv.capler[0].sira[:3]
 
 
 def test_KRITIK_canli_kare_ONIZLEME_kucuk_TAM_kalibrasyon_boyutu_ve_kamera_KAPANINCA_birakilir(canli):

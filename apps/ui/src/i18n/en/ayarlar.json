@@ -149,7 +149,7 @@
   },
   "iptal": "Cancel",
   "kabinKamerasi": {
-    "aciklama": "The camera that sees the cabin for analysis (Take Photo, Live Camera) and AI Pro. Your choice is remembered on this device; the camera opens at 1920×1080.",
+    "aciklama": "The camera that sees the cabin for analysis (Take Photo, Live Camera) and AI Pro. Your choice is remembered on this device; the camera opens at its highest resolution (at the cabin calibration's resolution if one exists).",
     "baslik": "Cabin camera",
     "bulunamadi": "No camera was found on this computer. Check the camera cable and scan again.",
     "bunuSec": "Choose this",
@@ -159,7 +159,9 @@
     "seciliEtiket": "Selected",
     "seciliKamera": "Selected camera: Camera {{indeks}}",
     "secilmedi": "No cabin camera selected — photos, the live camera and AI Pro cannot open the cabin camera. Scan the cameras and choose the one that shows the cabin.",
-    "tara": "Scan for cameras"
+    "tara": "Scan for cameras",
+    "taramaZamanAsimi": "The camera scan did not finish in time — the cameras did not respond while opening. Check the camera cable, close any other app that is using the camera (e.g., Windows Camera) and scan again.",
+    "taraniyor": "Opening the cameras — this may take a few seconds."
   },
   "kaydedildi": "Settings saved successfully.",
   "kaydediliyor": "Saving...",

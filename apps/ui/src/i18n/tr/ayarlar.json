@@ -149,7 +149,7 @@
   },
   "iptal": "İptal",
   "kabinKamerasi": {
-    "aciklama": "Analizin (Fotoğraf Çek, Canlı Kamera) ve AI Pro'nun kabini gördüğü kamera. Seçiminiz bu cihazda hatırlanır; kamera 1920×1080 açılır.",
+    "aciklama": "Analizin (Fotoğraf Çek, Canlı Kamera) ve AI Pro'nun kabini gördüğü kamera. Seçiminiz bu cihazda hatırlanır; kamera en yüksek çözünürlüğünde (kabin kalibrasyonu varsa onun çözünürlüğünde) açılır.",
     "baslik": "Kabin kamerası",
     "bulunamadi": "Bu bilgisayarda kamera bulunamadı. Kamera kablosunu kontrol edip yeniden tarayın.",
     "bunuSec": "Bunu seç",
@@ -159,7 +159,9 @@
     "seciliEtiket": "Seçili",
     "seciliKamera": "Seçili kamera: Kamera {{indeks}}",
     "secilmedi": "Kabin kamerası seçilmedi — fotoğraf, canlı kamera ve AI Pro için kabin kamerası açılmaz. Kameraları tarayıp kabini gösteren kamerayı seçin.",
-    "tara": "Kameraları tara"
+    "tara": "Kameraları tara",
+    "taramaZamanAsimi": "Kamera taraması zamanında bitmedi — kameralar açılırken yanıt vermedi. Kamera kablosunu kontrol edin, kamerayı kullanan başka bir uygulama (ör. Windows Kamera) açıksa kapatın ve yeniden tarayın.",
+    "taraniyor": "Kameralar açılıyor — bu birkaç saniye sürebilir."
   },
   "kaydedildi": "Ayarlar başarıyla kaydedildi.",
   "kaydediliyor": "Kaydediliyor...",
