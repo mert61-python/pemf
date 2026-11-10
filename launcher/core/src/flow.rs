@@ -190,6 +190,25 @@ pub fn ensure_package(
     on: &mut dyn FnMut(Progress),
     control: &dyn Fn() -> net::Control,
 ) -> Result<PathBuf, FlowError> {
+    let uyu = |ms: u64| std::thread::sleep(std::time::Duration::from_millis(ms));
+    ensure_package_ile(pkg, cache, label, on, control, &net::download_to_file, &uyu)
+}
+
+/// Paket indirici — `net::download_to_file` ile AYNI imza (url, hedef, beklenen boyut, beklenen sha, ilerleme, denetim).
+pub(crate) type Indirici<'a> =
+    dyn Fn(&str, &Path, u64, &str, net::ProgressFn<'_>, &dyn Fn() -> net::Control) -> Result<u64, net::NetError> + 'a;
+
+/// `ensure_package`'ın gövdesi — indirici ve denemeler arası bekleme ENJEKTE (KP-4 A2; üretimde `net::download_to_file` +
+/// `thread::sleep`). Önbellek doğrulaması, 6 deneme, geçici-hata ayrımı, Duraklat / İptal yanıtı ve tek temiz yeniden indirme AYNEN.
+pub(crate) fn ensure_package_ile(
+    pkg: &crate::Package,
+    cache: &Path,
+    label: &str,
+    on: &mut dyn FnMut(Progress),
+    control: &dyn Fn() -> net::Control,
+    indir: &Indirici<'_>,
+    uyu: &dyn Fn(u64),
+) -> Result<PathBuf, FlowError> {
     fs::create_dir_all(cache)?;
     // #131/#139: dosya adı SALDIRGAN-ETKİLİ pkg.url'den türüyor. Yol-kaçış karakteri (Windows '\',
     // sürücü ':', '/', '..', NUL) içeriyorsa cache DIŞINA yazabilir → güvenli ada düş. İlk güvenli
@@ -212,7 +231,7 @@ pub fn ensure_package(
             let mut cb = |done, total| {
                 on(Progress::Downloading { what: label.to_string(), done, total });
             };
-            net::download_to_file(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)
+            indir(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)
         };
         match result {
             Ok(_) => break,
@@ -231,7 +250,7 @@ pub fn ensure_package(
                         net::Control::Pause => return Err(net::NetError::Paused.into()),
                         net::Control::Continue => {}
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    uyu(200);
                     waited += 200;
                 }
             }
@@ -244,7 +263,7 @@ pub fn ensure_package(
         let mut cb = |done, total| {
             on(Progress::Downloading { what: label.to_string(), done, total });
         };
-        net::download_to_file(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)?;
+        indir(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)?;
         Ok(())
     };
     dogrula_ya_da_bir_kez_temiz_indir(&dest, &pkg.sha256, label, on, control, &mut temiz_yeniden_indir)?;
@@ -4265,5 +4284,170 @@ mod kp2_testleri {
             ],
             "ensure_package sırası bozuk",
         );
+    }
+
+    // ── KP-4 A2 (Y257 a): `ensure_package_ile` DAVRANIŞI — sahte indirici + sahte bekleme (ağ / gerçek uyku YOK) ─────────────
+    use std::cell::{Cell, RefCell};
+
+    const ENS_URL: &str = "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/base.zip";
+
+    struct EnsDurum {
+        cagri: Cell<u32>,
+        bekleme: RefCell<Vec<u64>>,
+        olaylar: RefCell<Vec<String>>,
+    }
+    impl EnsDurum {
+        fn yeni() -> Self {
+            EnsDurum { cagri: Cell::new(0), bekleme: RefCell::new(vec![]), olaylar: RefCell::new(vec![]) }
+        }
+    }
+    fn ens_paket(govde: &[u8]) -> crate::Package {
+        crate::Package { url: ENS_URL.into(), sha256: sha_hex(govde), size: govde.len() as u64, kind: "zip".into() }
+    }
+    fn olay_adi(p: &Progress) -> String {
+        match p {
+            Progress::Downloading { done, total, .. } => format!("indir {done}/{total}"),
+            Progress::Reconnecting { attempt, max, .. } => format!("yeniden {attempt}/{max}"),
+            diger => format!("{diger:?}").split([' ', '{']).next().unwrap_or_default().to_lowercase(),
+        }
+    }
+
+    /// `davranis(cagri_no, hedef)` her indirme çağrısında ne olacağını söyler (dosyayı yazar ya da hata döner).
+    fn ens_kos(
+        pkg: &crate::Package,
+        cache: &Path,
+        durum: &EnsDurum,
+        kontrol: &dyn Fn() -> net::Control,
+        davranis: &dyn Fn(u32, &Path) -> Result<u64, net::NetError>,
+    ) -> Result<PathBuf, FlowError> {
+        let indir = |url: &str, dest: &Path, boyut: u64, sha: &str, ilerle: net::ProgressFn<'_>, _k: &dyn Fn() -> net::Control| {
+            assert_eq!((url, boyut, sha), (pkg.url.as_str(), pkg.size, pkg.sha256.as_str()), "indiriciye yanlış paket");
+            durum.cagri.set(durum.cagri.get() + 1);
+            ilerle(1, boyut);
+            davranis(durum.cagri.get(), dest)
+        };
+        let uyu = |ms: u64| durum.bekleme.borrow_mut().push(ms);
+        let mut on = |p: Progress| durum.olaylar.borrow_mut().push(olay_adi(&p));
+        ensure_package_ile(pkg, cache, "base", &mut on, kontrol, &indir, &uyu)
+    }
+    fn surdur() -> net::Control {
+        net::Control::Continue
+    }
+    fn kopma() -> net::NetError {
+        net::NetError::Transport("connection reset".into())
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_ensure_GECICI_hatada_KALDIGI_YERDEN_yeniden_dener_artan_bekleme() {
+        let d = tempfile::tempdir().unwrap();
+        let govde = b"BASE-ZIP".to_vec();
+        let pkg = ens_paket(&govde);
+        let durum = EnsDurum::yeni();
+        let r = ens_kos(&pkg, d.path(), &durum, &surdur, &|n, dest| {
+            if n < 3 {
+                Err(kopma())
+            } else {
+                std::fs::write(dest, &govde).unwrap();
+                Ok(govde.len() as u64)
+            }
+        });
+        let yol = r.unwrap();
+        assert_eq!(std::fs::read(&yol).unwrap(), govde);
+        assert_eq!(durum.cagri.get(), 3);
+        // 1. bekleme 1500 ms (200'lük dilimlerle 8 kez), 2. bekleme 3000 ms (15 kez) — her dilimde Duraklat / İptal yoklanır
+        assert_eq!(durum.bekleme.borrow().len(), 8 + 15, "artan bekleme (1,5 sn → 3 sn) değişti");
+        assert!(durum.bekleme.borrow().iter().all(|ms| *ms == 200));
+        let o = durum.olaylar.borrow();
+        assert!(o.contains(&"yeniden 1/6".to_string()) && o.contains(&"yeniden 2/6".to_string()), "{o:?}");
+        assert_eq!(o.last().map(String::as_str), Some("verifying"));
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_ensure_ALTI_denemeden_sonra_ve_KALICI_hatada_hemen_vazgecer() {
+        let d = tempfile::tempdir().unwrap();
+        let pkg = ens_paket(b"x");
+        let durum = EnsDurum::yeni();
+        let r = ens_kos(&pkg, d.path(), &durum, &surdur, &|_, _| Err(kopma()));
+        assert!(matches!(r, Err(FlowError::Net(net::NetError::Transport(_)))), "{r:?}");
+        assert_eq!(durum.cagri.get(), 6, "geçici hatada deneme sayısı 6 değil");
+        let durum = EnsDurum::yeni();
+        let r = ens_kos(&pkg, d.path(), &durum, &surdur, &|_, _| Err(net::NetError::HttpStatus { status: 404, url: ENS_URL.into() }));
+        assert!(matches!(r, Err(FlowError::Net(net::NetError::HttpStatus { status: 404, .. }))));
+        assert_eq!(durum.cagri.get(), 1, "kalıcı (404) hata yeniden denendi");
+        assert!(durum.bekleme.borrow().is_empty());
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_ensure_bekleme_SIRASINDA_duraklat_ve_iptal_HEMEN_doner() {
+        let d = tempfile::tempdir().unwrap();
+        let pkg = ens_paket(b"x");
+        for (istenen, beklenen_duraklat) in [(net::Control::Pause, true), (net::Control::Cancel, false)] {
+            let durum = EnsDurum::yeni();
+            let yoklama = Cell::new(0);
+            let kontrol = || {
+                yoklama.set(yoklama.get() + 1);
+                if yoklama.get() > 2 { istenen } else { net::Control::Continue }
+            };
+            let r = ens_kos(&pkg, d.path(), &durum, &kontrol, &|_, _| Err(kopma()));
+            if beklenen_duraklat {
+                assert!(matches!(r, Err(FlowError::Net(net::NetError::Paused))), "{r:?}");
+            } else {
+                assert!(matches!(r, Err(FlowError::Net(net::NetError::Cancelled))), "{r:?}");
+            }
+            assert_eq!(durum.cagri.get(), 1, "bekleme sırasında gelen karara rağmen yeniden indirildi");
+            assert_eq!(durum.bekleme.borrow().len(), 2, "karar ilk yoklamada uygulanmadı (asılı kalma)");
+        }
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_ensure_sha_UYUSMAZSA_part_SILINIP_TEK_temiz_indirme() {
+        let d = tempfile::tempdir().unwrap();
+        let govde = b"DOGRU-ICERIK".to_vec();
+        let pkg = ens_paket(&govde);
+        let durum = EnsDurum::yeni();
+        let part = net::part_path(&cache_path_for(&pkg, d.path(), "base"), &pkg.sha256);
+        let r = ens_kos(&pkg, d.path(), &durum, &surdur, &|n, dest| {
+            if n == 1 {
+                std::fs::write(dest, b"BOZUK").unwrap();
+                std::fs::write(&part, b"bozuk-devam").unwrap(); // yarım baytlar Range ile yeniden eklenmesin
+            } else {
+                assert!(!part.exists(), "temiz yeniden indirmeden önce .part SİLİNMEDİ (yine bozuk baytlara eklenir)");
+                std::fs::write(dest, &govde).unwrap();
+            }
+            Ok(0)
+        });
+        assert_eq!(std::fs::read(r.unwrap()).unwrap(), govde);
+        assert_eq!(durum.cagri.get(), 2, "sha uyuşmazlığında TEK telafi bekleniyordu");
+        // ikinci kez de tutmazsa hata gerçektir: yukarı çıkar, bozuk dosya bırakılmaz
+        let d2 = tempfile::tempdir().unwrap();
+        let durum = EnsDurum::yeni();
+        let r = ens_kos(&pkg, d2.path(), &durum, &surdur, &|_, dest| {
+            std::fs::write(dest, b"HEP-BOZUK").unwrap();
+            Ok(0)
+        });
+        assert!(r.is_err() && durum.cagri.get() == 2);
+        assert!(!cache_path_for(&pkg, d2.path(), "base").exists(), "bozuk dosya önbellekte kaldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_ensure_ONBELLEKTE_dogrulanan_paket_INDIRILMEZ() {
+        let d = tempfile::tempdir().unwrap();
+        let govde = b"ONBELLEK".to_vec();
+        let pkg = ens_paket(&govde);
+        std::fs::write(cache_path_for(&pkg, d.path(), "base"), &govde).unwrap();
+        let durum = EnsDurum::yeni();
+        let r = ens_kos(&pkg, d.path(), &durum, &surdur, &|_, _| Ok(0));
+        assert!(r.is_ok());
+        assert_eq!(durum.cagri.get(), 0, "önbellekteki doğru paket yeniden indirildi");
+        assert_eq!(*durum.olaylar.borrow(), vec!["cached".to_string()]);
+    }
+
+    /// Üretim sarmalayıcısı gerçek indiriciyi bağlar: pinli olmayan paket URL'si ağa ÇIKMADAN reddedilir (kalıcı → tek deneme).
+    #[test]
+    fn KRITIK_KP4_A2_ensure_uretim_sarmalayicisi_pinsiz_URLde_aga_CIKMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let pkg = crate::Package { url: "https://evil.example.com/base.zip".into(), sha256: "0".repeat(64), size: 1, kind: "zip".into() };
+        let r = ensure_package(&pkg, d.path(), "base", &mut |_| {}, &|| net::Control::Continue);
+        assert!(matches!(r, Err(FlowError::Net(net::NetError::HostNotAllowed(_)))), "{r:?}");
     }
 }

@@ -269,6 +269,56 @@ pub enum Control {
     Cancel,
 }
 
+// ── KP-4 A2 (Y257 a, sahip 08.11): TAŞIYICI — ağ G/Ç'si ENJEKTE edilir, güvenlik mantığı bu dosyada AYNEN kalır ──────────
+//
+// Kaynak repo-yolu pini, yönlendirme SONRASI host pini, Range / `Content-Range` ofset doğrulaması, boyut ve süre tavanları,
+// `.part` yönetimi ve hata sınıflandırması (`ureq_hatasi`) ÇAĞIRANDA (`download_to_file_ile`, `fetch_string_pinned_ile`)
+// kalır; taşıyıcı YALNIZ isteği yapar. Üretim taşıyıcısı gerçek ureq ajanıdır (`build_agent` / `build_text_agent` — HTTPS-only
+// ve zaman aşımları DEĞİŞMEDİ); testler sahte taşıyıcıyla gerçek TLS / gerçek sunucu OLMADAN bütün kolları koşar.
+
+/// Bir GET yanıtı. Yöntem adları `ureq::Response` ile AYNI (üretimde doğrudan o döner).
+pub trait Yanit {
+    fn status(&self) -> u16;
+    /// Yönlendirmeler SONRASI son URL (host pini buna uygulanır).
+    fn get_url(&self) -> &str;
+    fn header(&self, ad: &str) -> Option<&str>;
+    fn into_reader(self: Box<Self>) -> Box<dyn Read + Send + Sync + 'static>;
+    fn into_string(self: Box<Self>) -> io::Result<String>;
+}
+
+/// HTTP taşıyıcısı: `url`'ye GET; `aralik` verilirse `Range` başlığı. Hata ham `ureq::Error` döner — sınıflandırma çağıranda.
+pub trait Tasiyici {
+    fn al(&self, url: &str, aralik: Option<&str>) -> Result<Box<dyn Yanit>, ureq::Error>;
+}
+
+impl Yanit for ureq::Response {
+    fn status(&self) -> u16 {
+        ureq::Response::status(self)
+    }
+    fn get_url(&self) -> &str {
+        ureq::Response::get_url(self)
+    }
+    fn header(&self, ad: &str) -> Option<&str> {
+        ureq::Response::header(self, ad)
+    }
+    fn into_reader(self: Box<Self>) -> Box<dyn Read + Send + Sync + 'static> {
+        ureq::Response::into_reader(*self)
+    }
+    fn into_string(self: Box<Self>) -> io::Result<String> {
+        ureq::Response::into_string(*self)
+    }
+}
+
+impl Tasiyici for ureq::Agent {
+    fn al(&self, url: &str, aralik: Option<&str>) -> Result<Box<dyn Yanit>, ureq::Error> {
+        let mut req = self.get(url);
+        if let Some(a) = aralik {
+            req = req.set("Range", a);
+        }
+        Ok(Box::new(req.call()?))
+    }
+}
+
 
 /// ureq hatasını sınıflandır. DNS ayrı varyanta düşer (kullanıcıya farklı cümle kurulur).
 ///
@@ -352,7 +402,7 @@ fn parse_content_range_start(value: &str) -> Option<u64> {
     rest.split(['-', '/']).next()?.trim().parse::<u64>().ok()
 }
 
-fn content_range_start(resp: &ureq::Response) -> Option<u64> {
+fn content_range_start(resp: &dyn Yanit) -> Option<u64> {
     parse_content_range_start(resp.header("Content-Range")?)
 }
 
@@ -368,6 +418,22 @@ pub type ProgressFn<'a> = &'a mut dyn FnMut(u64, u64);
 /// Cancel → `.part` silinir + `Cancelled`. Bütünlük ÇAĞIRANDA (`verify::verify_file`) SHA ile
 /// denetlenir → yanlış-ofset/bozuk devam yakalanır ve `.zip` reddedilip taze inilir.
 pub fn download_to_file(
+    url: &str,
+    dest: &Path,
+    expected_size: u64,
+    expected_sha: &str,
+    progress: ProgressFn<'_>,
+    control: &dyn Fn() -> Control,
+) -> Result<u64, NetError> {
+    let sure = Duration::from_secs(MAX_DOWNLOAD_DURATION_S);
+    download_to_file_ile(&build_agent(), sure, url, dest, expected_size, expected_sha, progress, control)
+}
+
+/// `download_to_file`'ın gövdesi — taşıyıcı ve küresel süre tavanı ENJEKTE (KP-4 A2; üretimde ureq ajanı + 6 sa).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn download_to_file_ile(
+    tasiyici: &dyn Tasiyici,
+    sure_siniri: Duration,
     url: &str,
     dest: &Path,
     expected_size: u64,
@@ -427,11 +493,8 @@ pub fn download_to_file(
         done = 0;
     }
 
-    let mut req = build_agent().get(url);
-    if done > 0 {
-        req = req.set("Range", &format!("bytes={done}-"));
-    }
-    let resp = req.call().map_err(|e| ureq_hatasi(e, url))?;
+    let aralik = if done > 0 { Some(format!("bytes={done}-")) } else { None };
+    let resp = tasiyici.al(url, aralik.as_deref()).map_err(|e| ureq_hatasi(e, url))?;
 
     // Redirect host-pin: SON URL'nin host'u allowlist içinde olmalı.
     validate_url(resp.get_url())?;
@@ -444,7 +507,7 @@ pub fn download_to_file(
     // aralıktan olan MELEZ dosya. (SHA sonunda yakalar ama gigabaytlarca trafik boşa gider ve
     // kullanıcı sahte bir "kurcalanma" hatası görür.) Artık ofset DOĞRULANIR.
     if resp.status() == 206 && done > 0 {
-        let got = content_range_start(&resp);
+        let got = content_range_start(resp.as_ref());
         if got != Some(done) {
             let _ = fs::remove_file(&part); // bozuk devam noktası → bir sonraki deneme SIFIRDAN
             return Err(NetError::Transport(crate::dil::t_ile("rust.ag.aralikVerilmedi", &[("beklenen", &(done).to_string()), ("gelen", &format!("{:?}", got))])));
@@ -503,9 +566,9 @@ pub fn download_to_file(
     loop {
         // Slowloris koruması: sunucu sürekli AZ ama SIFIR-OLMAYAN veri gönderirse hiçbir okuma
         // zaman aşımına uğramaz. Duraklat/İptal'de `.part` korunur, saat sonraki denemede sıfırlanır.
-        if started.elapsed() > Duration::from_secs(MAX_DOWNLOAD_DURATION_S) {
+        if started.elapsed() > sure_siniri {
             let _ = out.flush(); // `.part` KORUNUR → sonraki deneme Range ile sürer
-            return Err(NetError::PolicyLimit(crate::dil::t_ile("rust.ag.sureSiniri", &[("sn", &(MAX_DOWNLOAD_DURATION_S).to_string())])));
+            return Err(NetError::PolicyLimit(crate::dil::t_ile("rust.ag.sureSiniri", &[("sn", &(sure_siniri.as_secs()).to_string())])));
         }
         match control() {
             Control::Pause => {
@@ -551,9 +614,14 @@ pub fn download_to_file(
 /// ⚠️ Bu çağrı YİNE bloklar (DNS'e deadline uygulanamıyor). Açılış yolundan çağırıyorsan
 /// `fetch_string_pinned_budgeted` kullan — o, duvar-saati bütçesiyle sarmalar.
 pub fn fetch_string_pinned(url: &str) -> Result<String, NetError> {
+    fetch_string_pinned_ile(&build_text_agent(), url)
+}
+
+/// `fetch_string_pinned`'ın gövdesi — taşıyıcı ENJEKTE (KP-4 A2; üretimde kısa bütçeli metin ajanı).
+pub(crate) fn fetch_string_pinned_ile(tasiyici: &dyn Tasiyici, url: &str) -> Result<String, NetError> {
     validate_download_source(url)?;
     // Aynı sınıflandırıcı (DNS ayrı varyanta düşer) — indirme yoluyla tek kaynak.
-    let resp = build_text_agent().get(url).call().map_err(|e| ureq_hatasi(e, url))?;
+    let resp = tasiyici.al(url, None).map_err(|e| ureq_hatasi(e, url))?;
     validate_url(resp.get_url())?;
     resp.into_string().map_err(NetError::from)
 }
@@ -634,15 +702,22 @@ where
 }
 
 pub fn fetch_string_pinned_budgeted(url: &str) -> Result<String, NetError> {
+    let butce = Duration::from_secs(TEXT_WALL_BUDGET_S);
+    fetch_string_pinned_budgeted_ile(build_text_agent, url, butce, |ms| std::thread::sleep(Duration::from_millis(ms)))
+}
+
+/// `fetch_string_pinned_budgeted`'ın gövdesi — HER denemede taze taşıyıcı (`yeni_tasiyici`), duvar bütçesi ve bekleme ENJEKTE
+/// (KP-4 A2; üretimde `build_text_agent` + 20 sn + `thread::sleep`).
+pub(crate) fn fetch_string_pinned_budgeted_ile<F, T, B>(yeni_tasiyici: F, url: &str, butce: Duration, bekle: B) -> Result<String, NetError>
+where
+    F: Fn() -> T + Send + 'static,
+    T: Tasiyici,
+    B: FnMut(u64) + Send + 'static,
+{
     // Host pinini bütçeden ÖNCE uygula: güvenlik reddi ağ beklemeden, deterministik olsun.
     validate_download_source(url)?;
     let u = url.to_string();
-    with_wall_budget(Duration::from_secs(TEXT_WALL_BUDGET_S), "manifest", move || {
-        denemeli_cek(
-            || fetch_string_pinned(&u),
-            |ms| std::thread::sleep(Duration::from_millis(ms)),
-        )
-    })
+    with_wall_budget(butce, "manifest", move || denemeli_cek(|| fetch_string_pinned_ile(&yeni_tasiyici(), &u), bekle))
 }
 
 #[cfg(test)]
@@ -679,30 +754,34 @@ mod tests {
     fn KALICI_hata_TEKRARLANMAZ() {
         // HTTP 404 / pin reddi tekrarda AYNI sonucu verir; denemek kullanıcıyı bekletir.
         let mut sayac = 0;
+        let mut bekleme = 0;
         let r = denemeli_cek(
             || {
                 sayac += 1;
                 Err(NetError::HttpStatus { status: 404, url: "https://x/y".into() })
             },
-            |_| panic!("kalıcı hatada BEKLENMEMELİ"),
+            |_| bekleme += 1,
         );
         assert!(r.is_err());
         assert_eq!(sayac, 1, "kalıcı hata {sayac} kez denendi — 1 olmalı");
+        assert_eq!(bekleme, 0, "kalıcı hatada BEKLENMEMELİ");
     }
 
     #[test]
     fn politika_siniri_TEKRARLANMAZ() {
         // Deterministik politika iptali (bkz. NetError::PolicyLimit, 2026-08-04 P2).
         let mut sayac = 0;
+        let mut bekleme = 0;
         let r = denemeli_cek(
             || {
                 sayac += 1;
                 Err(NetError::PolicyLimit("boyut tavanı".into()))
             },
-            |_| panic!("politika sınırında BEKLENMEMELİ"),
+            |_| bekleme += 1,
         );
         assert!(r.is_err());
         assert_eq!(sayac, 1);
+        assert_eq!(bekleme, 0, "politika sınırında BEKLENMEMELİ");
     }
 
     #[test]
@@ -725,23 +804,19 @@ mod tests {
     /// güncelleme denetimini 6 saat erteliyordu); 503 de geçici, 404 kalıcı (tek kaynak `gecici_hata_mi`).
     #[test]
     fn KRITIK_L10_D415_DNS_kacirmasinda_manifest_3_KEZ_denenir() {
-        for (hata, beklenen) in [
-            (NetError::Dns("resolve dns name 'github.com:443'".into()), MANIFEST_DENEME),
-            (NetError::HttpStatus { status: 503, url: "https://x/y".into() }, MANIFEST_DENEME),
-            (NetError::HttpStatus { status: 404, url: "https://x/y".into() }, 1),
-            (NetError::LocalIo("disk dolu".into()), 1),
-        ] {
+        let durumlar: [(fn() -> NetError, u32); 4] = [
+            (|| NetError::Dns("resolve dns name 'github.com:443'".into()), MANIFEST_DENEME),
+            (|| NetError::HttpStatus { status: 503, url: "https://x/y".into() }, MANIFEST_DENEME),
+            (|| NetError::HttpStatus { status: 404, url: "https://x/y".into() }, 1),
+            (|| NetError::LocalIo("disk dolu".into()), 1),
+        ];
+        for (hata, beklenen) in durumlar {
             let mut sayac = 0;
-            let ad = format!("{hata:?}");
+            let ad = format!("{:?}", hata());
             let r = denemeli_cek(
                 || {
                     sayac += 1;
-                    Err(match &hata {
-                        NetError::Dns(m) => NetError::Dns(m.clone()),
-                        NetError::HttpStatus { status, url } => NetError::HttpStatus { status: *status, url: url.clone() },
-                        NetError::LocalIo(m) => NetError::LocalIo(m.clone()),
-                        _ => unreachable!(),
-                    })
+                    Err(hata())
                 },
                 |_| {},
             );
@@ -1104,5 +1179,404 @@ mod tests {
             &["validate_download_source(url)?;", "ureq_hatasi(e, url)", "validate_url(resp.", "into_string()"],
             "metin çekimi: kaynak pini → istek → yönlendirme pini → gövde",
         );
+    }
+
+    // ── KP-4 A2 (Y257 a): SAHTE TAŞIYICI ile indirme / metin çekimi DAVRANIŞI (gerçek TLS / sunucu / ağ YOK) ────────────────
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
+
+    const SHA: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+    const KAYNAK: &str = "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/base.zip";
+    const CDN: &str = "https://objects.githubusercontent.com/github-production-release-asset/1/base.zip";
+
+    /// Okuma: verilen baytları (yığın yığın) verir; `kopma` ise o noktada G/Ç hatası (internet kesildi).
+    struct SahteOkuyucu {
+        veri: Vec<u8>,
+        konum: usize,
+        kopma: Option<usize>,
+    }
+    impl Read for SahteOkuyucu {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if let Some(k) = self.kopma {
+                if self.konum >= k {
+                    return Err(io::Error::new(io::ErrorKind::ConnectionReset, "baglanti koptu"));
+                }
+            }
+            let son = self.kopma.unwrap_or(self.veri.len()).min(self.veri.len()).min(self.konum + buf.len().min(4096));
+            let n = son - self.konum;
+            buf[..n].copy_from_slice(&self.veri[self.konum..son]);
+            self.konum = son;
+            Ok(n)
+        }
+    }
+
+    struct SahteYanit {
+        durum: u16,
+        url: String,
+        basliklar: Vec<(&'static str, String)>,
+        govde: Vec<u8>,
+        kopma: Option<usize>,
+    }
+    impl Yanit for SahteYanit {
+        fn status(&self) -> u16 {
+            self.durum
+        }
+        fn get_url(&self) -> &str {
+            &self.url
+        }
+        fn header(&self, ad: &str) -> Option<&str> {
+            self.basliklar.iter().find(|(a, _)| a.eq_ignore_ascii_case(ad)).map(|(_, v)| v.as_str())
+        }
+        fn into_reader(self: Box<Self>) -> Box<dyn Read + Send + Sync + 'static> {
+            Box::new(SahteOkuyucu { veri: self.govde, konum: 0, kopma: self.kopma })
+        }
+        fn into_string(self: Box<Self>) -> io::Result<String> {
+            String::from_utf8(self.govde).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        }
+    }
+    fn yanit(durum: u16, url: &str, basliklar: &[(&'static str, &str)], govde: &[u8]) -> SahteYanit {
+        let basliklar = basliklar.iter().map(|(a, v)| (*a, v.to_string())).collect();
+        SahteYanit { durum, url: url.to_string(), basliklar, govde: govde.to_vec(), kopma: None }
+    }
+
+    /// Sıralı yanıt kuyruğu + gelen isteklerin (url, Range) kaydı.
+    #[derive(Clone, Default)]
+    struct SahteTasiyici {
+        kuyruk: Arc<Mutex<VecDeque<Result<SahteYanit, ureq::Error>>>>,
+        istekler: Arc<Mutex<Vec<(String, Option<String>)>>>,
+    }
+    impl SahteTasiyici {
+        fn ile(yanitlar: Vec<Result<SahteYanit, ureq::Error>>) -> Self {
+            let t = SahteTasiyici::default();
+            t.kuyruk.lock().unwrap().extend(yanitlar);
+            t
+        }
+        fn istekler(&self) -> Vec<(String, Option<String>)> {
+            self.istekler.lock().unwrap().clone()
+        }
+    }
+    impl Tasiyici for SahteTasiyici {
+        fn al(&self, url: &str, aralik: Option<&str>) -> Result<Box<dyn Yanit>, ureq::Error> {
+            self.istekler.lock().unwrap().push((url.to_string(), aralik.map(str::to_string)));
+            let y = self.kuyruk.lock().unwrap().pop_front().expect("beklenmeyen ek istek");
+            y.map(|y| Box::new(y) as Box<dyn Yanit>)
+        }
+    }
+
+    fn indir(t: &SahteTasiyici, dest: &Path, boyut: u64, sure: Duration, kontrol: &dyn Fn() -> Control) -> (Result<u64, NetError>, Vec<(u64, u64)>) {
+        let mut ilerleme = Vec::new();
+        let mut cb = |a, b| ilerleme.push((a, b));
+        let r = download_to_file_ile(t, sure, KAYNAK, dest, boyut, SHA, &mut cb, kontrol);
+        (r, ilerleme)
+    }
+    const UZUN: Duration = Duration::from_secs(3600);
+    fn devam() -> Control {
+        Control::Continue
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_taze_indirme_part_uzerinden_hedefe_TASINIR_Range_YOK() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("alt").join("base.zip");
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[("Content-Length", "10")], b"0123456789"))]);
+        let (r, ilerleme) = indir(&t, &dest, 10, UZUN, &devam);
+        assert_eq!(r.unwrap(), 10);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"0123456789");
+        assert!(!part_path(&dest, SHA).exists(), "tamamlanan .part hedefe taşınmadı");
+        assert_eq!(t.istekler(), vec![(KAYNAK.to_string(), None)], "devam yokken Range gönderildi");
+        assert_eq!(ilerleme.first(), Some(&(0, 10)), "devam noktası hemen bildirilmedi");
+        assert_eq!(ilerleme.last(), Some(&(10, 10)));
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_kesinti_sonrasi_KALDIGI_YERDEN_Range_ile_surer() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let part = part_path(&dest, SHA);
+        std::fs::write(&part, b"01234").unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(206, CDN, &[("Content-Range", "bytes 5-9/10"), ("Content-Length", "5")], b"56789"))]);
+        let (r, ilerleme) = indir(&t, &dest, 10, UZUN, &devam);
+        assert_eq!(r.unwrap(), 10, "toplam = eski 5 + yeni 5");
+        assert_eq!(std::fs::read(&dest).unwrap(), b"0123456789", "devam eden baytlar SONA eklenmedi");
+        assert_eq!(t.istekler()[0].1.as_deref(), Some("bytes=5-"), "Range devam noktasından istenmedi");
+        assert_eq!(ilerleme.first(), Some(&(5, 10)), "devam noktası (5 / 10) bildirilmedi");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_206_YANLIS_ofset_part_SILINIR_melez_dosya_YOK() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let part = part_path(&dest, SHA);
+        std::fs::write(&part, b"01234").unwrap();
+        for aralik in ["bytes 0-9/10", "biçimsiz"] {
+            std::fs::write(&part, b"01234").unwrap();
+            let t = SahteTasiyici::ile(vec![Ok(yanit(206, CDN, &[("Content-Range", aralik)], b"0123456789"))]);
+            let (r, _) = indir(&t, &dest, 10, UZUN, &devam);
+            assert!(matches!(r, Err(NetError::Transport(_))), "{aralik}: {r:?}");
+            assert!(!part.exists(), "{aralik}: bozuk devam noktası silinmedi (sonraki deneme yine melez olur)");
+            assert!(!dest.exists());
+        }
+        // Content-Range başlığı HİÇ yoksa da fail-closed
+        std::fs::write(&part, b"01234").unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(206, CDN, &[], b"56789"))]);
+        assert!(matches!(indir(&t, &dest, 10, UZUN, &devam).0, Err(NetError::Transport(_))));
+        assert!(!part.exists());
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_sunucu_Range_i_YOK_SAYARSA_bastan_yazilir() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        std::fs::write(part_path(&dest, SHA), b"XXXXX").unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[], b"0123456789"))]);
+        let (r, ilerleme) = indir(&t, &dest, 10, UZUN, &devam);
+        assert_eq!(r.unwrap(), 10);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"0123456789", "200'de eski .part baytları kaldı (melez)");
+        assert_eq!(t.istekler()[0].1.as_deref(), Some("bytes=5-"));
+        assert_eq!(ilerleme.first(), Some(&(0, 10)), "Content-Length yokken toplam manifest boyutu olmalı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_supheli_devam_noktasi_SIFIRLANIR_ve_yetim_part_TEMIZLENIR() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let bizim = part_path(&dest, SHA);
+        std::fs::write(&bizim, b"0123456789AB").unwrap(); // beklenen boyuttan büyük → şüpheli
+        let eski = d.path().join("base.aaaaaaaaaaaa.part");
+        let alakasiz = d.path().join("baska.dddddddddddd.part");
+        let bos_ad = d.path().join("base.part");
+        std::fs::write(&eski, b"bayat").unwrap();
+        std::fs::write(&alakasiz, b"baska").unwrap();
+        std::fs::write(&bos_ad, b"kisa-sha").unwrap();
+        std::fs::create_dir(d.path().join("klasor")).unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[("Content-Length", "10")], b"0123456789"))]);
+        assert_eq!(indir(&t, &dest, 10, UZUN, &devam).0.unwrap(), 10);
+        assert_eq!(t.istekler()[0].1, None, "şüpheli devam noktasıyla Range istendi (416 riski)");
+        assert!(!eski.exists() && !bos_ad.exists(), "farklı-sha yetim .part temizlenmedi");
+        assert!(alakasiz.exists(), "BAŞKA hedefin .part'ı silindi");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_yonlendirme_YABANCI_hosta_giderse_reddedilir_dosya_ACILMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, "https://evil.example.com/base.zip", &[], b"zararli"))]);
+        let (r, ilerleme) = indir(&t, &dest, 7, UZUN, &devam);
+        assert!(matches!(r, Err(NetError::HostNotAllowed(ref h)) if h == "evil.example.com"), "{r:?}");
+        assert!(!part_path(&dest, SHA).exists() && !dest.exists(), "reddedilen yanıt diske yazıldı");
+        assert!(ilerleme.is_empty());
+        // Kaynak URL pini: yabancı kaynak hiç İSTENMEZ
+        let t2 = SahteTasiyici::default();
+        let mut cb = |_, _| {};
+        let r2 = download_to_file_ile(&t2, UZUN, "https://evil.example.com/base.zip", &dest, 1, SHA, &mut cb, &devam);
+        assert!(r2.is_err() && t2.istekler().is_empty(), "pinsiz kaynak için istek yapıldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_boyut_tavani_sunucu_ve_manifest_boyutunun_KUCUGU() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let buyuk = vec![7u8; (1 << 20) + 64];
+        // sunucu 10 bayt diyor ama 1 MB + 64 gönderiyor → tavan 10 + 1 MB aşılır
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[("Content-Length", "10")], &buyuk))]);
+        assert!(matches!(indir(&t, &dest, 0, UZUN, &devam).0, Err(NetError::PolicyLimit(_))), "Content-Length tavanı uygulanmadı");
+        // sunucu başlık göndermiyor, manifest 10 bayt diyor → manifest tavanı (10 + 1 MB)
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[], &buyuk))]);
+        assert!(matches!(indir(&t, &dest, 10, UZUN, &devam).0, Err(NetError::PolicyLimit(_))), "manifest boyut tavanı uygulanmadı");
+        // ikisi de yok → mutlak tavan (4 GB) — küçük gövde geçer
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[], b"abc"))]);
+        assert_eq!(indir(&t, &dest, 0, UZUN, &devam).0.unwrap(), 3);
+        assert!(!part_path(&dest, SHA).exists());
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_kuresel_SURE_tavani_part_KORUNUR_kalici_hata() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[], b"0123456789"))]);
+        let (r, _) = indir(&t, &dest, 10, Duration::ZERO, &devam);
+        let e = r.unwrap_err();
+        assert!(matches!(e, NetError::PolicyLimit(_)) && !gecici_hata_mi(&e), "süre aşımı kalıcı politika hatası değil: {e:?}");
+        assert!(part_path(&dest, SHA).exists(), "süre aşımında .part silindi (sonraki deneme baştan iner)");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_duraklat_part_KORUR_iptal_part_SILER_bastan_iptal_ISTEK_YAPMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let part = part_path(&dest, SHA);
+        let sayac_hucre = std::cell::Cell::new(0);
+        let sayac = &sayac_hucre;
+        let ikinci_yigindan_sonra = |istenen: Control| {
+            move || {
+                sayac.set(sayac.get() + 1);
+                if sayac.get() > 2 { istenen } else { Control::Continue }
+            }
+        };
+        let govde = vec![1u8; 9000]; // 3 yığın (sahte okuyucu 4096'lık verir)
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[], &govde))]);
+        let duraklat = ikinci_yigindan_sonra(Control::Pause);
+        assert!(matches!(indir(&t, &dest, 9000, UZUN, &duraklat).0, Err(NetError::Paused)));
+        assert_eq!(std::fs::metadata(&part).unwrap().len(), 4096, "duraklatmada .part korunmadı / yarım yazıldı");
+        sayac.set(0);
+        let t = SahteTasiyici::ile(vec![Ok(yanit(206, CDN, &[("Content-Range", "bytes 4096-8999/9000")], &govde[4096..]))]);
+        let iptal = ikinci_yigindan_sonra(Control::Cancel);
+        assert!(matches!(indir(&t, &dest, 9000, UZUN, &iptal).0, Err(NetError::Cancelled)));
+        assert!(!part.exists(), "iptalde .part silinmedi");
+        std::fs::write(&part, b"yarim").unwrap();
+        let t = SahteTasiyici::default();
+        assert!(matches!(indir(&t, &dest, 9000, UZUN, &|| Control::Cancel).0, Err(NetError::Cancelled)));
+        assert!(t.istekler().is_empty() && !part.exists(), "baştan iptalde istek yapıldı ya da .part kaldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_okuma_KOPARSA_part_KORUNUR_ve_hata_GECICI() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let mut y = yanit(200, CDN, &[("Content-Length", "10")], b"0123456789");
+        y.kopma = Some(4);
+        let t = SahteTasiyici::ile(vec![Ok(y)]);
+        let e = indir(&t, &dest, 10, UZUN, &devam).0.unwrap_err();
+        assert!(matches!(e, NetError::Io(_)) && gecici_hata_mi(&e), "kopma geçici G/Ç hatası değil: {e:?}");
+        assert_eq!(std::fs::read(part_path(&dest, SHA)).unwrap(), b"0123", "kopmada inen baytlar korunmadı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_aktarim_hatasi_TEK_siniflandiricidan_DNS_ayri_durum_kodu_korunur() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let durum = ureq::Error::from(ureq::Response::new(503, "Service Unavailable", "").unwrap()); // durum kodlu hata (Status)
+        let dns = ureq::Error::from(io::Error::new(io::ErrorKind::Other, "dns error: no such host"));
+        let kopma = ureq::Error::from(io::Error::new(io::ErrorKind::Other, "connection reset"));
+        let t = SahteTasiyici::ile(vec![Err(durum), Err(dns), Err(kopma)]);
+        assert!(matches!(indir(&t, &dest, 1, UZUN, &devam).0, Err(NetError::HttpStatus { status: 503, ref url }) if url == KAYNAK));
+        assert!(matches!(indir(&t, &dest, 1, UZUN, &devam).0, Err(NetError::Dns(_))), "DNS ayrı varyanta düşmedi");
+        assert!(matches!(indir(&t, &dest, 1, UZUN, &devam).0, Err(NetError::Transport(_))));
+        assert!(!part_path(&dest, SHA).exists(), "istek düşünce boş .part kaldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_YEREL_disk_hatalari_LocalIo_yeniden_DENENMEZ() {
+        let d = tempfile::tempdir().unwrap();
+        // (a) hedef dizini kurulamaz (üst yol bir DOSYA)
+        let dosya = d.path().join("dosya");
+        std::fs::write(&dosya, b"x").unwrap();
+        let t = SahteTasiyici::default();
+        let e = indir(&t, &dosya.join("base.zip"), 1, UZUN, &devam).0.unwrap_err();
+        assert!(matches!(e, NetError::LocalIo(_)) && !gecici_hata_mi(&e), "{e:?}");
+        assert!(t.istekler().is_empty(), "yerel hata varken ağa çıkıldı");
+        // (b) .part açılamaz (o adda DİZİN var) — taze ve devam kolları
+        let dest = d.path().join("base.zip");
+        std::fs::create_dir(part_path(&dest, SHA)).unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[], b"abc"))]);
+        assert!(matches!(indir(&t, &dest, 3, UZUN, &devam).0, Err(NetError::LocalIo(_))));
+        // (b2) DEVAM kolunda .part EKLEMEYE açılamaz (salt-okunur) → LocalIo, baytlar korunur
+        let dest2 = d.path().join("ikinci.zip");
+        let p2 = part_path(&dest2, SHA);
+        std::fs::write(&p2, b"01234").unwrap();
+        let mut izin = std::fs::metadata(&p2).unwrap().permissions();
+        izin.set_readonly(true);
+        std::fs::set_permissions(&p2, izin.clone()).unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(206, CDN, &[("Content-Range", "bytes 5-9/10")], b"56789"))]);
+        let e = indir(&t, &dest2, 10, UZUN, &devam).0;
+        izin.set_readonly(false);
+        std::fs::set_permissions(&p2, izin).unwrap();
+        assert!(matches!(e, Err(NetError::LocalIo(_))), "{e:?}");
+        assert_eq!(std::fs::read(&p2).unwrap(), b"01234");
+        // (c) tamamlanan indirme hedefe TAŞINAMAZ (hedef dolu bir dizin) → .part KORUNUR
+        std::fs::remove_dir(part_path(&dest, SHA)).unwrap();
+        std::fs::create_dir(&dest).unwrap();
+        std::fs::write(dest.join("icerik"), b"x").unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(200, CDN, &[], b"abc"))]);
+        let e = indir(&t, &dest, 3, UZUN, &devam).0.unwrap_err();
+        assert!(matches!(e, NetError::LocalIo(_)), "{e:?}");
+        assert_eq!(std::fs::read(part_path(&dest, SHA)).unwrap(), b"abc", "taşıma düşünce tamamlanan .part kayboldu");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_metin_cekimi_pinli_yonlendirme_ve_govde() {
+        let manifest = "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/manifest.json";
+        let t = SahteTasiyici::ile(vec![
+            Ok(yanit(200, CDN, &[], b"{\"schema\":2}")),
+            Ok(yanit(200, "https://evil.example.com/m.json", &[], b"{}")),
+            Ok(yanit(200, CDN, &[], &[0xff, 0xfe])),
+        ]);
+        assert_eq!(fetch_string_pinned_ile(&t, manifest).unwrap(), "{\"schema\":2}");
+        assert_eq!(t.istekler()[0], (manifest.to_string(), None), "metin çekiminde Range gönderildi");
+        assert!(matches!(fetch_string_pinned_ile(&t, manifest), Err(NetError::HostNotAllowed(_))), "yönlendirme pini yok");
+        assert!(matches!(fetch_string_pinned_ile(&t, manifest), Err(NetError::Io(_))), "bozuk UTF-8 gövde kabul edildi");
+        let bos = SahteTasiyici::default();
+        assert!(fetch_string_pinned_ile(&bos, "https://evil.example.com/m.json").is_err());
+        assert!(bos.istekler().is_empty(), "pinsiz kaynak için istek yapıldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_butceli_cekim_HER_denemede_TAZE_tasiyici_ve_bekleme() {
+        let manifest = "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/manifest.json";
+        let ortak = SahteTasiyici::ile(vec![
+            Err(ureq::Error::from(io::Error::new(io::ErrorKind::Other, "connection reset"))),
+            Ok(yanit(200, CDN, &[], b"ok")),
+        ]);
+        let uretilen = Arc::new(Mutex::new(0u32));
+        let (o, u) = (ortak.clone(), uretilen.clone());
+        let bekleme = Arc::new(Mutex::new(Vec::new()));
+        let b = bekleme.clone();
+        let r = fetch_string_pinned_budgeted_ile(
+            move || {
+                *u.lock().unwrap() += 1;
+                o.clone()
+            },
+            manifest,
+            Duration::from_secs(5),
+            move |ms| b.lock().unwrap().push(ms),
+        );
+        assert_eq!(r.unwrap(), "ok");
+        assert_eq!(*uretilen.lock().unwrap(), 2, "her deneme taze taşıyıcıyla yapılmadı");
+        assert_eq!(*bekleme.lock().unwrap(), vec![250], "denemeler arası bekleme");
+        // pin reddi bütçeye girmeden, taşıyıcı ÜRETİLMEDEN
+        let r = fetch_string_pinned_budgeted_ile(|| -> SahteTasiyici { panic!("üretilmemeli") }, "https://evil.example.com/x", Duration::from_secs(5), |_| {});
+        assert!(matches!(r, Err(NetError::HostNotAllowed(_))));
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_duvar_butcesi_gorev_COKERSE_gecici_aktarim_hatasi() {
+        let r: Result<(), NetError> = with_wall_budget(Duration::from_secs(5), "deneme", || panic!("görev çöktü"));
+        assert!(matches!(r, Err(NetError::Transport(_))), "{r:?}");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_bos_hostlu_url_reddedilir() {
+        assert!(matches!(validate_url("https://:443/x"), Err(NetError::Malformed(_))));
+    }
+
+    /// Üretim taşıyıcısının kendisi (ureq) — AĞA ÇIKMADAN: `Response::new` ve ayrıştırılamayan URL (istek gönderilmeden düşer).
+    #[test]
+    fn KRITIK_KP4_A2_uretim_tasiyicisi_ureq_ADAPTORU_agsiz() {
+        let r: Box<dyn Yanit> = Box::new(ureq::Response::new(206, "Partial", "govde").unwrap());
+        assert_eq!(r.status(), 206);
+        assert_eq!(r.header("Content-Range"), None);
+        let _ = r.get_url();
+        assert_eq!(r.into_string().unwrap(), "govde");
+        let r: Box<dyn Yanit> = Box::new(ureq::Response::new(200, "OK", "abc").unwrap());
+        let mut s = String::new();
+        r.into_reader().read_to_string(&mut s).unwrap();
+        assert_eq!(s, "abc");
+        for aralik in [None, Some("bytes=5-")] {
+            let e = build_agent().al("https://", aralik).err().expect("ayrıştırılamayan URL kabul edildi");
+            assert!(matches!(ureq_hatasi(e, "https://"), NetError::Transport(_)));
+        }
+        let e = build_text_agent().al("https://", None).err().expect("ayrıştırılamayan URL kabul edildi");
+        assert!(matches!(ureq_hatasi(e, "https://"), NetError::Transport(_)));
+    }
+
+    /// Üretim sarmalayıcıları pinden ÖNCE ağa çıkmaz; baştan iptalde istek yapılmaz (gerçek ajan kurulur, istek GÖNDERİLMEZ).
+    #[test]
+    fn KRITIK_KP4_A2_uretim_sarmalayicilari_pin_ve_iptalde_AGA_CIKMAZ() {
+        assert!(matches!(fetch_string_pinned("https://evil.example.com/m.json"), Err(NetError::HostNotAllowed(_))));
+        assert!(matches!(fetch_string_pinned_budgeted("https://evil.example.com/m.json"), Err(NetError::HostNotAllowed(_))));
+        let d = tempfile::tempdir().unwrap();
+        let mut cb = |_, _| {};
+        let r = download_to_file(KAYNAK, &d.path().join("base.zip"), 1, SHA, &mut cb, &|| Control::Cancel);
+        assert!(matches!(r, Err(NetError::Cancelled)));
     }
 }
