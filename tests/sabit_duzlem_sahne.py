@@ -52,8 +52,9 @@ def poz(kamera_mm=KAMERA_MM, egim_deg=EGIM_DEG, sapma_deg=0.0, yuvarlanma_deg=0.
     return R, -R @ np.asarray(kamera_mm, dtype=np.float64)
 
 
-def kuyu_merkezleri(cx, cz, y=TABAN_Y + PLAKA_YUK):
+def kuyu_merkezleri(cx, cz, y=TABAN_Y + PLAKA_YUK, yukseltme=0.0):
     """A1…D6 (satır A–D, sütun 1–6) kabin mm. Plaka uzun kenarı sol↔sağ; A1 önden bakınca ARKA-SOL (+X, +Z)."""
+    y = y + yukseltme
     out = {}
     for i, harf in enumerate("ABCD"):
         for j in range(6):
@@ -61,8 +62,9 @@ def kuyu_merkezleri(cx, cz, y=TABAN_Y + PLAKA_YUK):
     return out
 
 
-def koseler(cx, cz, y=TABAN_Y + PLAKA_YUK):
+def koseler(cx, cz, y=TABAN_Y + PLAKA_YUK, yukseltme=0.0):
     """Plaka üst kenarının dış köşeleri — sıra: ön-sol, ön-sağ, arka-sağ, arka-sol."""
+    y = y + yukseltme
     u, k = PLAKA_UZUN / 2.0, PLAKA_KISA / 2.0
     return np.array([[cx + u, y, cz - k], [cx - u, y, cz - k], [cx - u, y, cz + k], [cx + u, y, cz + k]])
 
@@ -97,8 +99,8 @@ def _zemin(X, Z):
     return g
 
 
-def ciz(R, t, K, D, *, plaka=(115.0, -32.5), plaka_var=True):
-    """Ham (bozulmalı) BGR kare. `plaka` = (cx, cz) mm, plaka üst yüzeyi Y = taban + 20 mm."""
+def ciz(R, t, K, D, *, plaka=(115.0, -32.5), plaka_var=True, yukseltme=0.0):
+    """Ham (bozulmalı) BGR kare. `plaka` = (cx, cz) mm, plaka üst yüzeyi Y = taban + 20 mm (+ `yukseltme`: altlık; zemin aynı)."""
     import cv2
 
     uu, vv = np.meshgrid(np.arange(W, dtype=np.float64), np.arange(H, dtype=np.float64))
@@ -115,15 +117,39 @@ def ciz(R, t, K, D, *, plaka=(115.0, -32.5), plaka_var=True):
     img[:] = np.column_stack([g * 0.95, g, g * 1.05])
     if plaka_var:
         cx, cz = plaka
-        yp = TABAN_Y + PLAKA_YUK
+        yp = TABAN_Y + PLAKA_YUK + yukseltme
         s2 = (yp - C[1]) / r[:, 1]
         X2 = C[0] + s2 * r[:, 0]
         Z2 = C[2] + s2 * r[:, 2]
         icinde = (np.abs(X2 - cx) <= PLAKA_UZUN / 2.0) & (np.abs(Z2 - cz) <= PLAKA_KISA / 2.0)
         img[icinde] = (236.0, 238.0, 240.0)
         kuyu = np.zeros(len(n), dtype=bool)
-        for P in kuyu_merkezleri(cx, cz).values():
+        for P in kuyu_merkezleri(cx, cz, yukseltme=yukseltme).values():
             kuyu |= (X2 - P[0]) ** 2 + (Z2 - P[2]) ** 2 <= KUYU_R**2
         img[icinde & kuyu] = (180.0, 105.0, 255.0)  # BGR pembe besiyeri (HSV h≈165, s≈150, v=255)
     out = np.clip(img, 0, 255).reshape(H, W, 3).astype(np.uint8)
     return cv2.GaussianBlur(out, (0, 0), 0.7)
+
+
+def konum(R, t, K, D, cx, cz, *, yukseltme=0.0, piksel_gurultu=None):
+    """KD-2 çok konumlu kalibrasyon girdisi — ÇİZMEDEN (izdüşümle): plakanın kuyu merkezleri → DÜZELTİLMİŞ piksel (ürünün `_yeni_K`'si),
+    ızgara homografisi (plaka mm → piksel; A1 = (0, 0), x → A6, y → D) → `sabit_duzlem.konum_hazirla`. Köşelerin GERÇEK cetvel ölçüsü
+    (sol, ön cm) `olcum_cm` olarak döner (görüntü adlandırmasından BAĞIMSIZ — plaka mm → kabin dönüşümüyle)."""
+    import cv2
+
+    from ai_hub.cv_ortak import sabit_duzlem as sd
+
+    gercek = kuyu_merkezleri(cx, cz, yukseltme=yukseltme)
+    P = np.array(list(gercek.values()))
+    pl = np.array([[j * ARALIK, i * ARALIK] for i in range(4) for j in range(6)], dtype=np.float64)
+    Kn = sd._yeni_K(K, D, (W, H))
+    ham = izdusum(R, t, P, K, D)
+    duz = cv2.undistortPoints(ham.reshape(-1, 1, 2), K, D, P=Kn).reshape(-1, 2)
+    if piksel_gurultu is not None:
+        duz = duz + piksel_gurultu(duz.shape)
+    Hm, _ = cv2.findHomography(pl.reshape(-1, 1, 2), duz.reshape(-1, 1, 2))
+    k = sd.konum_hazirla(Hm, pl, (PLAKA_UZUN, PLAKA_KISA))
+    a1x, a1z = cx + 2.5 * ARALIK, cz + 1.5 * ARALIK
+    kabin = [(a1x - u, TABAN_Y, a1z - v) for u, v in k["kose_plaka_mm"]]
+    k["olcum_cm"] = olcum_cm(kabin)
+    return k

@@ -203,7 +203,7 @@
    "kritik": true,
    "aciklama": "ACİL DURDUR, mandal bandı, seans ilerleme, söküm koruması, ana ekran (KRİTİK)",
    "durum": "tamam",
-   "metin": 141,
+   "metin": 140,
    "dosyaSayisi": 14
   },
   {
@@ -212,7 +212,7 @@
    "kritik": false,
    "aciklama": "AiHubScreen (TEK dosya ~770 metin — KURALLAR §Büyük dosya)",
    "durum": "tamam",
-   "metin": 766,
+   "metin": 758,
    "dosyaSayisi": 1
   },
   {
@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 24
+   "dosyaSayisi": 25
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -339,7 +339,7 @@
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
    "durum": "tamam",
    "metin": 136,
-   "dosyaSayisi": 37
+   "dosyaSayisi": 38
   },
   {
    "ad": "launcher-11a-ui",
@@ -347,7 +347,7 @@
    "kritik": false,
    "aciklama": "launcher arayüzü (index.html TEK dosya — mevcut TR/EN sözlüğü kataloğa)",
    "durum": "tamam",
-   "metin": 421,
+   "metin": 420,
    "dosyaSayisi": 1
   },
   {
@@ -366,7 +366,7 @@
    "aciklama": "launcher Rust iletileri — çekirdek (launcher/core)",
    "durum": "tamam",
    "metin": 139,
-   "dosyaSayisi": 15
+   "dosyaSayisi": 16
   },
   {
    "ad": "launcher-11d-nsis",
@@ -401,7 +401,7 @@
    "kritik": false,
    "aciklama": "site içerik yapılandırması (config.ts: marka, planlar, özellikler, SSS, menü — modül düzeyi)",
    "durum": "tamam",
-   "metin": 181,
+   "metin": 180,
    "dosyaSayisi": 1
   },
   {
@@ -2189,7 +2189,7 @@
    "grup": "arayuz-05b-guvenlik-kritik",
    "sira": 5,
    "durum": "tamam",
-   "metin": 27,
+   "metin": 26,
    "kritik": true,
    "muaf": [
     {
@@ -2319,7 +2319,7 @@
    "grup": "arayuz-06a-ai-hub",
    "sira": 6,
    "durum": "tamam",
-   "metin": 766,
+   "metin": 758,
    "kritik": false,
    "muaf": [
     {
@@ -3350,6 +3350,17 @@
    "not": ""
   },
   "apps/ui/src/components/domain/DilSecici.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/ui/src/components/domain/KabinKalibrasyonuKarti.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-09-yardimci",
    "sira": 9,
@@ -5269,7 +5280,7 @@
    "grup": "sunucu-10c-ai",
    "sira": 10,
    "durum": "tamam",
-   "metin": 13,
+   "metin": 10,
    "kritik": false,
    "muaf": [
     {
@@ -8846,6 +8857,17 @@
    "birlesikIstisna": [],
    "not": ""
   },
+  "apps/backend/servers/kabin_kalibrasyonu.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
   "apps/backend/servers/sync_worker.py": {
    "yuzey": "sunucu",
    "grup": "sunucu-10h-servis",
@@ -9866,7 +9888,7 @@
    "grup": "launcher-11a-ui",
    "sira": 11,
    "durum": "tamam",
-   "metin": 421,
+   "metin": 420,
    "kritik": false,
    "muaf": [
     {
@@ -12121,7 +12143,7 @@
    "grup": "site-12c-icerik",
    "sira": 12,
    "durum": "tamam",
-   "metin": 181,
+   "metin": 180,
    "kritik": false,
    "muaf": [
     {

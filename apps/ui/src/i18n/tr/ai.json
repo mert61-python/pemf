@@ -619,17 +619,22 @@
     "hata": "Kabin kamerasından görüntü alınamadı. Bu ekrandaki \"Kabin kamerası\" bölümünden kamerayı seçip yeniden deneyin."
   },
   "kalibrasyon": {
-    "aciklama": "Kamera üst kapağa sabitken bir kez kalibre edin: 24'lük plakayı kabine koyun, kare alın, plakanın 4 üst dış köşesine sırayla dokunun ve her köşenin sol cama ve ön cama uzaklığını cetvelle girin. Kamera oynarsa uygulama uyarır ve bobin hedeflenmez.",
+    "aciklama": "Kamera üst kapağa sabitken bir kez kalibre edin: kuyuları dolu 24'lük plakayı kabinin bir yanına (ör. sol halka) koyun, kare alın, görüntüde numaralı köşelerden en az ikisini cetvelle ölçün; sonra plakayı öbür yana (sağ halka) koyup tekrarlayın.",
     "baslik": "Kabin kalibrasyonu",
+    "devam": {
+      "aciklama": "Yalnız \"Kamera oynamış olabilir\" uyarısı çıktıysa: yeniden kalibre edin ya da kayma küçükse (~2 cm'ye kadar) kalibre etmeden devam edin — konumlar ~1–2 cm sapabilir.",
+      "baslik": "Kamera oynadıysa",
+      "dugme": "Kalibre etmeden devam et",
+      "tamam": "Sahne yenilendi (kayma {{px}} px) — kalibrasyon \"eski\" olarak işaretlendi."
+    },
     "dogrula": "Doğrula",
-    "dogrulaAciklama": "Plakayı başka bir yere koyun; 2 üst dış köşesine dokunup sol / ön cam uzaklıklarını girin. Fark 1 cm'den küçük olmalı.",
+    "dogrulaAciklama": "Plakayı başka bir yere koyun; numaralı köşelerden ölçtüklerinizi girin. Plaka merkezindeki fark 1 cm'den küçükse kalibrasyon doğrulanır.",
     "dogrulaHesapla": "Farkı ölç",
-    "dogrulamaGecti": "Doğrulama GEÇTİ — farklar {{farklar}} cm, en büyük {{maks}} cm (sınır {{esik}} cm).",
-    "dogrulamaKaldi": "Doğrulama KALDI — farklar {{farklar}} cm, en büyük {{maks}} cm (sınır {{esik}} cm). Ölçüleri kontrol edin ya da yeniden kalibre edin.",
-    "dokunAciklama": "Plakanın üst dış köşelerine sırayla dokunun (1 ön-sol, 2 ön-sağ, 3 arka-sağ, 4 arka-sol); büyüteçle ve oklarla 1 piksel düzeltin. Her köşe için sol cama ve ön cama uzaklığı (cm) girin.",
-    "dokunulmadi": "henüz dokunulmadı",
-    "durumVar": "Kalibrasyon: {{tarih}} · yeniden izdüşüm {{px}} px · lens farkı {{cm}} cm",
+    "dogrulamaGecti": "Doğrulama GEÇTİ — plaka merkezinde fark {{merkez}} cm (sınır {{esik}} cm); köşeler: {{farklar}} cm.",
+    "dogrulamaKaldi": "Doğrulama KALDI — plaka merkezinde fark {{merkez}} cm (sınır {{esik}} cm); köşeler: {{farklar}} cm. Ölçüleri kontrol edin ya da yeniden kalibre edin.",
+    "durumVar": "Kalibrasyon: {{tarih}} · {{n}} konum · izdüşüm {{px}} px · lens farkı {{cm}} cm",
     "durumYok": "Kalibrasyon yok — petri / fantom AI Pro bobin sürüşü kalibrasyon olmadan başlamaz.",
+    "eski": "Kalibrasyon ESKİ ({{tarih}}): kamera oynadıktan sonra kalibre etmeden devam edildi — konumlar ~1–2 cm sapabilir; fırsat bulunca yeniden kalibre edin.",
     "fantom": {
       "aciklama": "Fantom tabanda durur; tümörler üst yüzeyde görünür. Kalınlığı (tabandan üst yüzeye) ve tümör derinliğini (üst yüzeyden) cetvelle ölçüp girin; boy / en isteğe bağlı (boş kabin denetimi için).",
       "baslik": "Fantom ayarı",
@@ -640,20 +645,28 @@
       "kaydedildi": "Fantom ayarı kaydedildi.",
       "kaydet": "Fantom ayarını kaydet"
     },
+    "gorusAlani": "Kamera tabanda ön camdan ilk ~{{on}} cm'yi görmüyor (kör bölge) — numuneyi halkaların içine koyun.",
     "hata": "Kalibrasyon isteği başarısız — yeniden deneyin.",
     "hesapla": "Hesapla",
-    "inceAyar": "İnce ayar (1 px)",
     "kalibreEt": "Kalibre et",
+    "kamera": "Kalibrasyon kamerası: {{ad}} ({{vidpid}})",
     "kareAliniyor": "Kabin kamerasından kare alınıyor…",
-    "kareEtiketi": "Kalibrasyon karesi — köşeye dokunun",
+    "kareEtiketi": "Kalibrasyon karesi — plaka çerçevesi ve numaralı köşeler",
     "kareZamanAsimi": "Kabin kamerası zamanında kare vermedi — kamera kablosunu kontrol edin, kamerayı kullanan başka uygulamayı kapatın ve yeniden deneyin.",
     "kaydedildi": "Kalibrasyon kaydedildi.",
     "kaydet": "Kalibrasyonu kaydet",
     "kilitli": "AI Pro hazırlığı / seansı sürerken kalibrasyon değiştirilemez.",
+    "konum": {
+      "baslik": "Konumlar: {{n}} (en az {{asgari}})",
+      "ekle": "Konumu ekle",
+      "ipucu": "İlk konum kabinin bir yanında, ikincisi öbür yanında olmalı (merkezler arası en az 20 cm) — aynı yandaki iki konum karşı yanı ölçemez.",
+      "kareAl": "Kare al (konum {{n}})",
+      "satir": "Konum {{n}}: {{kose}} köşe ölçüldü",
+      "sil": "Sil"
+    },
     "kose": {
       "arkaSag": "Arka-sağ",
       "arkaSol": "Arka-sol",
-      "dogrulama": "Köşe {{sira}}",
       "onSag": "Ön-sağ",
       "onSol": "Ön-sol"
     },
@@ -662,29 +675,33 @@
       "sol": "Sol cama (cm)",
       "taban": "Taban camına (cm)"
     },
-    "lensBaslik": "Lens konumu (ölçü, cm) — kalibrasyonu denetler",
+    "lensBaslik": "Lens konumu ve yüksekliği (ölçü, cm) — kalibrasyonu denetler; taban yüksekliği ayarı da buna göre",
+    "olcuAciklama": "Görüntüdeki numaralı köşelerden en az ikisinin (tercihen çapraz: 1 ve 3 ya da 2 ve 4) sol cama ve ön cama uzaklığını cm olarak girin.",
     "onCm": "Ön cama (cm)",
-    "piksel": "{{u}}, {{v}} px",
     "plakaYuksekligi": "Plaka yüksekliği (cm)",
     "sahneYok": "Kalibrasyon karesinde sabit sahne zayıf — kamera kayması yalnız kuyu aralığından denetlenir; fantom sürülemez. Kabin tabanına desenli bir bant yapıştırıp yeniden kalibre edin.",
     "solCm": "Sol cama (cm)",
-    "sonrakiKose": "Sıradaki köşe: {{kose}} →",
     "sonuc": {
+      "capraz": "Çapraz doğrulama (her konum kalanlarla): {{liste}} cm",
       "gecerli": "Kalibrasyon geçerli.",
       "gecersiz": "Kalibrasyon REDDEDİLDİ.",
-      "izdusum": "Yeniden izdüşüm hatası: {{px}} px (sınır {{esik}} px)",
-      "kuyu": "Kuyu aralığı: {{sutun}} / {{satir}} mm (beklenen {{beklenen}} mm, sapma %{{yuzde}})",
-      "kuyuYok": "Kuyu aralığı bu karede ölçülemedi (24 kuyu dolu değil ya da ızgara bulunamadı).",
-      "lens": "Lens (kabin X / Y / Z, cm): hesaplanan {{h}} · ölçülen {{o}} · fark {{cm}} cm",
-      "lensOlcumsuz": "Hesaplanan lens (kabin X / Y / Z, cm): {{h}} — ölçülen lens girilmedi.",
-      "lensOnay": "Lens farkı 2 cm'den büyük — ölçüleri kontrol ettim, yine de kaydet."
+      "izdusum": "Kuyu izdüşüm hatası: {{px}} px (sınır {{esik}} px)",
+      "konumSapma": "Konum {{n}} köşe sapmaları (mm): {{liste}}",
+      "lens": "Lens (sol / ön / taban, cm): hesaplanan {{h}} · ölçülen {{o}} · fark yatayda {{yatay}} cm, yükseklikte {{dikey}} cm",
+      "lensOlcumsuz": "Hesaplanan lens (sol / ön / taban, cm): {{h}} — ölçülen lens girilmedi.",
+      "lensOnay": "Lens farkı sınırı aşıyor — ölçüleri kontrol ettim, yine de kaydet.",
+      "uyum": "Ölçüm uyumu: {{mm}} mm (sınır {{esik}} mm) · konum yayılımı {{cm}} cm"
     },
-    "yon": {
-      "asagi": "Aşağı 1 piksel",
-      "sag": "Sağa 1 piksel",
-      "sol": "Sola 1 piksel",
-      "yukari": "Yukarı 1 piksel"
-    }
+    "taban": {
+      "aciklama": "Petri / fantom bir altlığın üstündeyse lensten numune tabanına uzaklığı ölçüp girin (kalibrasyonda lens yüksekliği {{lens}} cm; altlık yoksa bu değer).",
+      "baslik": "Numune tabanı",
+      "durum": "Taban yükseltmesi: {{cm}} cm",
+      "kaydedildi": "Taban yüksekliği kaydedildi (yükseltme {{cm}} cm).",
+      "lensYok": "Kalibrasyonda lens yüksekliği yok — taban yüksekliğini ayarlamak için lens ölçüsüyle yeniden kalibre edin.",
+      "uygula": "Uygula",
+      "uzaklik": "Lens → numune tabanı (cm)"
+    },
+    "yenidenKare": "Yeniden kare al"
   },
   "kopru": {
     "etiket": "Bu {{hedef}} için AI Pro seansı: Kontrol ekranına git",

@@ -2,21 +2,24 @@
 # Author: mertaygn, cglrgrkn
 """SABİT DÜZLEM KALİBRASYONU — ArUco'suz kabin konumu (KD · sahip kararları Y258–Y261, 2026-11-10).
 
-YÖNTEM (Y258): kamera üst kapağa SABİT; petri / fantom tabanda SABİT yükseklikte durur, yalnız kabin X / Z değişir. Bir kez:
-24'lük plakanın 4 dış köşesi (ön-sol, ön-sağ, arka-sağ, arka-sol) sol camdan + ön camdan ölçülür ve o anki karede bu köşelere
-dokunulur → kameranın KABİN çerçevesindeki duruşu (R, t) çözülür (K / D + 4 eş düzlemli nokta → `solvePnP` IPPE) ve VERİ KÖKÜNE
+YÖNTEM (Y258; KD-2 ile ÇOK KONUMLU): kamera üst kapağa SABİT; petri / fantom tabanda SABİT yükseklikte durur, yalnız kabin X / Z
+değişir. Bir kez: 24'lük plaka kabinin İKİ YANINA (≥ 2 konum, merkezler arası ≥ `KONUM_YAYILIM_ESIGI_MM`) sırayla konur; her konumda
+kuyular OTOMATİK bulunur (dokunma yok) ve görüntüde numaralanan dış köşelerden en az ikisi (çapraz) sol camdan + ön camdan ölçülür →
+kamera duruşu (R, t) + her konumun kabin içi yeri ORTAK en küçük kareler çözümüyle bulunur (`kalibrasyon_coz`) ve VERİ KÖKÜNE
 saklanır (uygulama güncellemesi ezmez). Sonra her karede piksel → ışın → hedef düzlemi → kabin mm; ArUco ARANMAZ (ArUco kodu
 SİLİNMEDİ — dosya yoksa bugünkü ArUco kipi aynen çalışır).
+
+KD-2 ÖLÇÜMÜ (kayıtlı tezgâh kareleri, rapor S-KD.4): sahibin cetvel ölçüleri köşe başına σ ≈ 5–8 mm; tek konumlu 4 köşe çözümü
+başka konumda 0,8–2,5 cm (eğim tek küçük plakadan ±4° oynar, dönüş 128 mm'lik kenardan ~3°) → ≤ 1 cm TUTMAZ. İki yana yayılmış
+iki konumla dışarıda bırakılan plakalarda MERKEZ farkı 0,33–0,91 cm; aynı yanda iki konum (14,5 cm) karşı yanda 1,9 cm → yayılım şartı.
 
 Kabin çerçevesi (ürün kuralı, T2B): orijin iç hacmin merkezi, +X = önden bakanın SOLU, +Y yukarı, +Z arkaya. Ölçüm camların İÇ
 yüzünden: X = ext_x/2 − sol, Y = −ext_y/2 + taban, Z = −ext_z/2 + ön (ext = `geometry.cabin_extent_cm`; bugün 55,5 × 35 × 40,5).
 
 ÖLÇÜLEN İKİ KARAR (rapor `DENETIM\\KAMERA-DUZLEM.md` S-KD.1 / S-KD.2):
-  * Köşe ölçüleri önce plakanın BİLİNEN dış dikdörtgenine (SBS 127,76 × 85,48 mm) oturtulur (Procrustes: yalnız yer + dönüş).
-    Benzetim (gerçek M2 K/D, T2B kamera duruşu, 400 deneme): cetvel ±0,5 cm (σ 2,5 mm) okumasıyla HAM 4 köşede yeniden izdüşüm
-    medyanı 5,8 px (%83'ü 3 px eşiğini aşar) ve lens 4,6 cm sapar; oturtunca 0,6 px (%0) ve lens ~5 mm — düzlemdeki hedef hatası
-    iki yolda da ~2 mm. 3 px / 2 cm eşikleri ancak böyle anlamlıdır. Ölçümler dikdörtgenden RMS > `OLCUM_UYUM_ESIGI_MM` saparsa
-    (bir köşe yanlış yazılmış / köşe sırası karışmış) RET.
+  * Plaka geometrisi ÖLÇÜLMEZ, bilinir: kuyu ızgarası (19,3 mm) + SBS dış ölçüsü (127,76 × 85,48 mm, ızgara ortada). Cetvel yalnız
+    plakanın kabindeki YERİNİ söyler; ölçüler ortak çözümden RMS > `OLCUM_UYUM_ESIGI_MM` ya da tek köşe > `OLCUM_TEK_KOSE_ESIGI_MM`
+    saparsa (köşe yanlış yazılmış / sıra karışmış) RET. 3 px eşiği kuyu merkezlerinin izdüşümüne uygulanır.
   * Kuyu aralığı denetimi (19,3 mm, %3) yalnız kameranın YÜKSEKLİK / büyük eğim değişimini görür: yatay 2 cm kayma aralığı HİÇ
     değiştirmez, 2° dönüş kadraj ortasında ~%0,1 değiştirir (plaka kaymasından ayırt edilemez). Bu yüzden kalibrasyon karesi
     (plaka maskelenmiş) REFERANS olarak saklanır ve her karede SABİT SAHNE kayması ölçülür (ORB + RANSAC) — 2 cm / 2° ≈ 45–70 px,
@@ -43,22 +46,40 @@ import numpy as np
 
 from .coord_transform import KesisimGecersiz
 
-SURUM = 1
+SURUM = 2
 #: Veri kökü altındaki klasör ve dosyalar (uygulama katmanı DEĞİL — güncelleme ezmez).
 KLASOR = "kabin_kalibrasyonu"
 DOSYA_ADI = "duzlem_kalibrasyonu.json"
 REFERANS_ADI = "duzlem_referans.png"
 
-#: Sahip (istem 44 §1a): yeniden izdüşüm hatası bunu aşarsa kalibrasyon REDDEDİLİR.
+#: Sahip (istem 44 §1a): yeniden izdüşüm hatası bunu aşarsa kalibrasyon REDDEDİLİR (çok konumlu çözümde: kuyu merkezleri RMS).
 IZDUSUM_ESIGI_PX = 3.0
-#: Sahip (istem 44 §1a): hesaplanan ↔ ölçülen lens farkı bunu aşarsa UYARI (kaydetmeden önce onay ister).
+#: Sahip (istem 44 §1a): hesaplanan ↔ ölçülen lens farkı bunu aşarsa UYARI (kaydetmeden önce onay ister) — YATAY (sol / ön).
 LENS_UYARI_ESIGI_MM = 20.0
-#: Ölçülen köşelerin plaka dikdörtgeninden RMS sapması bunu aşarsa RET (cetvel ±0,5 cm → ~3 mm; 1 cm = kaba hata).
+#: Lens YÜKSEKLİĞİ ayrı eşik: ölçü "tavan camının üstünden, cam kalınlığı hariç" alınır ve optik merkez merceğin birkaç mm İÇİNDEDİR
+#: → hesaplanan yükseklik ölçüden sistematik ~1,5–2,5 cm fazla çıkar (KD-2 kayıtlı karelerde 38,2–38,5 cm ↔ ölçü 36,5).
+LENS_DIKEY_UYARI_ESIGI_MM = 30.0
+#: Ölçülen köşelerin çözümden RMS sapması bunu aşarsa RET (cetvel σ ≈ 5–8 mm ölçüldü; 1 cm RMS = kaba hata).
 OLCUM_UYUM_ESIGI_MM = 10.0
+#: Tek bir köşe çözümden bunu aşarsa RET (RMS'i çok köşede seyrelen yanlış yazılmış köşe).
+OLCUM_TEK_KOSE_ESIGI_MM = 20.0
+#: Çok konumlu çözüm: en az konum sayısı ve konum merkezleri arası en büyük uzaklık (aynı yandaki iki konum karşı yanı 1,9 cm kaçırdı).
+KONUM_ASGARI = 2
+KONUM_YAYILIM_ESIGI_MM = 200.0
+#: Ortak çözümde artık ağırlıkları: kuyu merkezi pikseli ve cetvel ölçüsü (ölçülen gürültüler).
+KUYU_PIKSEL_SIGMA = 0.7
+OLCU_SIGMA_MM = 6.0
 #: Sahip (istem 44 §1c): eşlenen kuyu aralığı 19,3 mm'den bundan fazla saparsa kamera oynamış sayılır.
 KUYU_ARALIGI_TOLERANSI = 0.03
 #: Sabit sahne kayması (tam çözünürlük pikseli) bunu aşarsa kamera oynamış sayılır.
 SAHNE_KAYMA_ESIGI_PX = 12.0
+#: Sahip kararı (KD-1, "kalibre etmeden devam"): kamera oynamışsa kullanıcı yeniden kalibre etmeden SÜRDÜREBİLİR — yalnız kayma ~≤ 2 cm
+#: ise (sahne ≤ 70 px ≈ 2 cm / 2°; kuyu aralığı ≤ %10). O andaki kare yeni sahne referansı olur, kuyu aralığı toleransı %10'a çıkar ve
+#: her karede "kalibrasyon eski (~1–2 cm)" uyarısı kalır. Daha büyük kayma → yalnız yeniden kalibrasyon.
+SAHNE_YENILEME_ESIGI_PX = 70.0
+KUYU_ARALIGI_TOLERANSI_ESKI = 0.10
+#: Sahip kararı (KD-1): numune tabanı yükseltmesi (kutu / altlık) 0–20 cm.
+TABAN_YUKSELTME_AZAMI_MM = 200.0
 #: Sahne ölçümünün çalıştığı genişlik (ORB hızı); sonuç tam çözünürlüğe ölçeklenir.
 SAHNE_GENISLIK = 960
 #: Referans karede bu kadar öznitelik yoksa sahne denetimi YAPILAMAZ (kalibrasyon bunu söyler, kare denetimi uyarı verir).
@@ -70,13 +91,14 @@ FANTOM_BOY_TOLERANSI = 0.20
 #: ÖLÇÜLDÜ (göreli — aydınlatmadan bağımsız): tümör ortanca V / gövde ortanca V hocanın 9 fantom fotoğrafında 0,36–0,71; T2B boş kabin
 #: karelerindeki mavi IŞIK YANSIMASI "fantomu" 1,01–1,28 (boyu ayara %17 yakın çıkabildiği için boy denetimi tek başına yetmedi).
 FANTOM_KOYULUK_ORANI = 0.85
-#: Sahip (istem 44 §4): doğrulama ölçütü — 2 köşede hedef ≤ 1 cm.
+#: Sahip (istem 44 §4): doğrulama ölçütü — hedef ≤ 1 cm. Ölçüt plaka MERKEZİ (ölçülen köşelerin ortalaması ↔ hesaplanan): köşe başına
+#: cetvel gürültüsü σ ≈ 5–8 mm olduğundan tek köşe kusursuz kalibrasyonda da 1 cm'yi aşabilir (köşe farkları bilgi olarak gösterilir).
 DOGRULAMA_ESIGI_MM = 10.0
 
-#: SBS / ANSI SLAS 1-2004 plaka DIŞ ölçüsü (mm, uzun × kısa) — köşeler bu dikdörtgene oturtulur.
+#: SBS / ANSI SLAS 1-2004 plaka DIŞ ölçüsü (mm, uzun × kısa) — kuyu ızgarası bu dikdörtgenin ortasındadır.
 PLAKA_DIS_MM = {12: (127.76, 85.48), 24: (127.76, 85.48), 48: (127.76, 85.48), 96: (127.76, 85.48)}
-#: Köşelere dokunulan nokta = plakanın ÜST kenarının dış köşesi (tepeden her köşede görünür; alt flanş uzak kenarda gizlenir).
-#: Yükseklik tabandan; 24'lük plaka (kapaksız) ~20 mm — sahip ölçüp ekranda değiştirebilir.
+#: Kuyu ızgarasının görüldüğü düzlem = plaka ÜST yüzü (analiz de aynı düzlemi kullanır → kalibrasyonla tutarlı). Tabandan; 24'lük
+#: plaka (kapaksız) ~20 mm — sahip ölçüp ekranda değiştirebilir.
 VARSAYILAN_PLAKA_YUKSEKLIGI_MM = 20.0
 #: Fantom ayarı yoksa referans yerleşimin kutu ölçüsü (`phantom_layout_2026-10-02.json` → `phantom_box.size_mm`).
 VARSAYILAN_FANTOM_BOY_MM = (104.1, 65.0)
@@ -115,29 +137,6 @@ def kabin_icinde_mi(p_mm, ext_cm) -> bool:
     return all(abs(float(a)) <= h for a, h in zip(p_mm, yari))
 
 
-def dikdortgene_oturt(olculen_xz_mm: np.ndarray, uzun_mm: float, kisa_mm: float):
-    """Ölçülen 4 köşe (X, Z; sıra `KOSE_ADLARI`) → bilinen ölçülü dikdörtgene EN YAKIN yerleşim (yalnız öteleme + dönüş).
-
-    Ön kenar (ön-sol → ön-sağ) ölçümde yan kenardan uzunsa plaka YATAY (uzun kenar sol↔sağ) kabul edilir, değilse DİKEY.
-    @return (oturtulmuş (4, 2), köşe başına sapma mm (4,), RMS mm)."""
-    P = np.asarray(olculen_xz_mm, dtype=np.float64).reshape(4, 2)
-    on = float(np.linalg.norm(P[0] - P[1]))
-    yan = float(np.linalg.norm(P[1] - P[2]))
-    w, h = (uzun_mm, kisa_mm) if on >= yan else (kisa_mm, uzun_mm)
-    # Şablon (X, Z): ön-sol (+X, −Z) · ön-sağ (−X, −Z) · arka-sağ (−X, +Z) · arka-sol (+X, +Z)
-    Q = np.array([[w / 2, -h / 2], [-w / 2, -h / 2], [-w / 2, h / 2], [w / 2, h / 2]], dtype=np.float64)
-    mp, mq = P.mean(axis=0), Q.mean(axis=0)
-    A = (Q - mq).T @ (P - mp)
-    U, _S, Vt = np.linalg.svd(A)
-    Rm = (U @ Vt).T
-    if np.linalg.det(Rm) < 0:  # yansıma YOK — köşe sırası ters dolanıyorsa uyum zaten kötüleşir (RET)
-        Vt[-1] *= -1
-        Rm = (U @ Vt).T
-    fit = (Q - mq) @ Rm.T + mp
-    sapma = np.linalg.norm(fit - P, axis=1)
-    return fit, sapma, float(np.sqrt(np.mean(sapma**2)))
-
-
 def _yeni_K(K, D, boyut) -> np.ndarray:
     """`coord_transform.undistort_image` ile AYNI yeni K (alpha 0) — hatlar düzeltilmiş karede çalışır."""
     w, h = (int(v) for v in boyut)
@@ -145,97 +144,257 @@ def _yeni_K(K, D, boyut) -> np.ndarray:
     return np.asarray(yeni, dtype=np.float64)
 
 
-# ── kalibrasyon çözümü ───────────────────────────────────────────────────────────────────────────────────────────────────
-def kalibrasyon_hesapla(
+# ── kalibrasyon çözümü (çok konumlu) ───────────────────────────────────────────────────────────────────────────────────────
+def konum_hazirla(H_img_from_plate, kuyu_plaka_mm, plaka_dis_mm=PLAKA_DIS_MM[24]) -> dict:
+    """Kuyu ızgarası (homografi: plaka mm → DÜZELTİLMİŞ kare pikseli) → kuyu pikselleri + plakanın 4 DIŞ köşesi (plaka mm + piksel).
+
+    Dış dikdörtgen kuyu ızgarasının ortasındadır (SBS; ızgaranın uzun ekseni = 127,76 mm). Köşeler GÖRÜNTÜYE göre adlanır (alttaki iki
+    köşe ön, soldaki sol — görüntünün üstü ARKA cam; ters takılı kamerada adlar yer değiştirir ama kullanıcı görüntüde İŞARETLİ köşeyi
+    ölçtüğü için eşleşme yine doğrudur). Sıra `KOSE_ADLARI`."""
+    H = np.asarray(H_img_from_plate, dtype=np.float64).reshape(3, 3)
+    W = np.asarray(kuyu_plaka_mm, dtype=np.float64).reshape(-1, 2)
+    kuyu_px = cv2.perspectiveTransform(W.reshape(-1, 1, 2), H).reshape(-1, 2)
+    orta = (W.min(axis=0) + W.max(axis=0)) / 2.0
+    yay = W.max(axis=0) - W.min(axis=0)
+    uzun, kisa = float(plaka_dis_mm[0]) / 2.0, float(plaka_dis_mm[1]) / 2.0
+    dx, dy = (uzun, kisa) if yay[0] >= yay[1] else (kisa, uzun)
+    kose_pl = orta + np.array([[-dx, -dy], [dx, -dy], [dx, dy], [-dx, dy]], dtype=np.float64)
+    kose_px = cv2.perspectiveTransform(kose_pl.reshape(-1, 1, 2), H).reshape(-1, 2)
+    sira = np.argsort(kose_px[:, 1])
+    arka = sorted(sira[:2].tolist(), key=lambda i: kose_px[i, 0])
+    on = sorted(sira[2:].tolist(), key=lambda i: kose_px[i, 0])
+    idx = [on[0], on[1], arka[1], arka[0]]
+    return {"kuyu_px": kuyu_px, "kuyu_plaka_mm": W, "kose_plaka_mm": kose_pl[idx], "kose_px": kose_px[idx]}
+
+
+def _lm(f, x0, adim, *, azami: int = 200):
+    """Küçük Levenberg–Marquardt (sayısal Jacobian). scipy.optimize dondurulmuş EXE'de AÇIKÇA toplanmadığı için bağımlılıksız."""
+    x = np.asarray(x0, dtype=np.float64).copy()
+    r = f(x)
+    c = float(r @ r)
+    lam = 1e-3
+    for _ in range(azami):
+        J = np.empty((r.size, x.size))
+        for j in range(x.size):
+            d = np.zeros_like(x)
+            d[j] = adim[j]
+            J[:, j] = (f(x + d) - r) / adim[j]
+        A = J.T @ J
+        g = J.T @ r
+        ilerledi = False
+        while lam < 1e10:
+            try:
+                dx = -np.linalg.solve(A + lam * np.diag(np.diag(A) + 1e-12), g)
+            except np.linalg.LinAlgError:
+                lam *= 10.0
+                continue
+            xn = x + dx
+            rn = f(xn)
+            cn = float(rn @ rn)
+            if np.isfinite(cn) and cn < c:
+                ilerledi = (c - cn) > 1e-12 * max(c, 1.0)
+                x, r, c = xn, rn, cn
+                lam = max(lam / 10.0, 1e-12)
+                break
+            lam *= 10.0
+        if not ilerledi:
+            break
+    return x, r
+
+
+def _yon_isareti(kose_pl, kose_px) -> float:
+    """Plaka mm → görüntü yönelimi (+1 / −1). Aşağı bakan kamerada görüntü (x, y) → kabin (X, Z) yönelimi KORUR (X̂ × Ẑ = −Ŷ)."""
+    a = np.asarray(kose_pl, np.float64)
+    b = np.asarray(kose_px, np.float64)
+    d_pl = np.cross(a[1] - a[0], a[3] - a[0])
+    d_px = np.cross(b[1] - b[0], b[3] - b[0])
+    return 1.0 if d_pl * d_px > 0 else -1.0
+
+
+def _plaka_kabin(c, th, sgn, merkez_pl, pl) -> np.ndarray:
+    """Plaka mm → kabin (X, Z): yansıma işareti `sgn` (görüntü yönelimi) + düzlem içi dönüş `th` + öteleme `c`."""
+    d = np.asarray(pl, np.float64).reshape(-1, 2) - merkez_pl
+    d = np.column_stack([d[:, 0], sgn * d[:, 1]])
+    co, si = math.cos(th), math.sin(th)
+    return np.column_stack([c[0] + co * d[:, 0] - si * d[:, 1], c[1] + si * d[:, 0] + co * d[:, 1]])
+
+
+def _olculen(konum, ext) -> list[tuple[int, np.ndarray]]:
+    out = []
+    for i, o in enumerate(konum["olcum_cm"]):
+        if o is not None:
+            out.append((i, kabin_noktasi_mm(o[0], o[1], 0.0, ext)[[0, 2]]))
+    return out
+
+
+def _ortak_coz(konumlar, K_yeni, duzlem_y, ext):
+    """Kamera duruşu (6) + konum başına (X, Z, θ) → kuyu izdüşümü / σp + ölçülen köşe / σm en küçük kareler. → (rv, tv, yerler) | None."""
+    hazir = []
+    for k in konumlar:
+        merkez = (k["kose_plaka_mm"].min(axis=0) + k["kose_plaka_mm"].max(axis=0)) / 2.0
+        sgn = _yon_isareti(k["kose_plaka_mm"], k["kose_px"])
+        olc = _olculen(k, ext)
+        idx = [i for i, _ in olc]
+        M = np.array([m for _, m in olc])
+        P = _plaka_kabin((0.0, 0.0), 0.0, sgn, merkez, k["kose_plaka_mm"][idx])
+        pc, mc = P.mean(axis=0), M.mean(axis=0)
+        Hm = (P - pc).T @ (M - mc)
+        th = math.atan2(Hm[0, 1] - Hm[1, 0], Hm[0, 0] + Hm[1, 1])
+        co, si = math.cos(th), math.sin(th)
+        c0 = mc - np.array([[co, -si], [si, co]]) @ pc
+        hazir.append({"merkez": merkez, "sgn": sgn, "olc": olc, "x0": [c0[0], c0[1], th], **k})
+    # Başlangıç duruşu: ölçüyle yerleştirilmiş BÜTÜN kuyular (eş düzlemli) → IPPE (iki çözüm; kamera düzlemin ÜSTÜNDE olan).
+    nesne, img = [], []
+    for h in hazir:
+        XZ = _plaka_kabin(h["x0"][:2], h["x0"][2], h["sgn"], h["merkez"], h["kuyu_plaka_mm"])
+        nesne.append(np.column_stack([XZ[:, 0], np.full(len(XZ), duzlem_y), XZ[:, 1]]))
+        img.append(h["kuyu_px"])
+    nesne = np.vstack(nesne).astype(np.float64)
+    img = np.vstack(img).astype(np.float64)
+    try:
+        n, rvs, tvs, _e = cv2.solvePnPGeneric(nesne.reshape(-1, 1, 3), img.reshape(-1, 1, 2), K_yeni, None, flags=cv2.SOLVEPNP_IPPE)
+    except cv2.error:
+        n, rvs, tvs = 0, [], []
+    bas = []
+    for rv, tv in zip(rvs[: int(n)], tvs[: int(n)]):
+        R, _ = cv2.Rodrigues(rv)
+        if float((-R.T @ tv.reshape(3))[1]) > duzlem_y:
+            bas.append((rv.reshape(3), tv.reshape(3)))
+    if not bas:
+        return None, ("kamera_duzlem_altinda" if int(n) else "cozum_yok")
+
+    def artik(x):
+        rv, tv = x[:3], x[3:6]
+        r = []
+        for j, h in enumerate(hazir):
+            c, th = x[6 + 3 * j: 8 + 3 * j], x[8 + 3 * j]
+            XZ = _plaka_kabin(c, th, h["sgn"], h["merkez"], h["kuyu_plaka_mm"])
+            P3 = np.column_stack([XZ[:, 0], np.full(len(XZ), duzlem_y), XZ[:, 1]])
+            pp, _ = cv2.projectPoints(P3.reshape(-1, 1, 3), rv, tv, K_yeni, None)
+            r.append(((pp.reshape(-1, 2) - h["kuyu_px"]) / KUYU_PIKSEL_SIGMA).ravel())
+            KZ = _plaka_kabin(c, th, h["sgn"], h["merkez"], h["kose_plaka_mm"])
+            for i, m in h["olc"]:
+                r.append((KZ[i] - m) / OLCU_SIGMA_MM)
+        return np.concatenate(r)
+
+    adim = np.array([1e-6] * 3 + [1e-3] * 3 + [1e-3, 1e-3, 1e-6] * len(hazir))
+    en_iyi = None
+    for rv0, tv0 in bas:
+        x0 = np.concatenate([rv0, tv0] + [np.asarray(h["x0"], np.float64) for h in hazir])
+        x, r = _lm(artik, x0, adim)
+        maliyet = float(r @ r)
+        if np.all(np.isfinite(x)) and (en_iyi is None or maliyet < en_iyi[0]):
+            en_iyi = (maliyet, x)
+    if en_iyi is None:
+        return None, "cozum_yok"
+    x = en_iyi[1]
+    R, _ = cv2.Rodrigues(x[:3])
+    if float((-R.T @ x[3:6])[1]) <= duzlem_y:
+        return None, "kamera_duzlem_altinda"
+    yerler = []
+    for j, h in enumerate(hazir):
+        c, th = x[6 + 3 * j: 8 + 3 * j], x[8 + 3 * j]
+        XZ = _plaka_kabin(c, th, h["sgn"], h["merkez"], h["kuyu_plaka_mm"])
+        P3 = np.column_stack([XZ[:, 0], np.full(len(XZ), duzlem_y), XZ[:, 1]])
+        pp, _ = cv2.projectPoints(P3.reshape(-1, 1, 3), x[:3], x[3:6], K_yeni, None)
+        e_px = np.linalg.norm(pp.reshape(-1, 2) - h["kuyu_px"], axis=1)
+        KZ = _plaka_kabin(c, th, h["sgn"], h["merkez"], h["kose_plaka_mm"])
+        sap = [None] * 4
+        for i, m in h["olc"]:
+            sap[i] = float(np.linalg.norm(KZ[i] - m))
+        yerler.append({"merkez_xz": np.asarray(c, np.float64), "kose_xz": KZ, "kuyu_px_hata": e_px, "kose_sapmasi_mm": sap})
+    return (x[:3].copy(), x[3:6].copy(), yerler), None
+
+
+def kalibrasyon_coz(
     *,
-    kose_px,
-    kose_olcum_cm,
+    konumlar,
     K,
     D,
     boyut,
     ext_cm,
     plaka_yuksekligi_mm: float = VARSAYILAN_PLAKA_YUKSEKLIGI_MM,
-    plaka_dis_mm=PLAKA_DIS_MM[24],
     lens_cm=None,
+    capraz: bool = True,
 ) -> dict:
-    """4 köşe (HAM kare pikseli, sıra `KOSE_ADLARI`) + köşe başına (sol_cm, on_cm) + K / D → kamera duruşu (KABİN çerçevesinde).
+    """ÇOK KONUMLU kalibrasyon. `konumlar`: her biri `konum_hazirla()` çıktısı + `olcum_cm` (4 öğe, sıra `KOSE_ADLARI`; ölçülmeyen
+    köşe None; konum başına ≥ 2 köşe). Pikseller DÜZELTİLMİŞ karede (`undistort_image` / `_yeni_K`).
 
-    @return {"gecerli": bool, "nedenler": [kod…], "lens_uyarisi": bool, …ölçümler}. `gecerli` False ise KAYDEDİLMEZ.
-    Neden kodları: `girdi_gecersiz`, `olcum_tutarsiz`, `cozum_yok`, `kamera_duzlem_altinda`, `izdusum_yuksek`."""
+    @return {"gecerli", "nedenler", "lens_uyarisi", …ölçümler}. Neden kodları: `girdi_gecersiz`, `konum_az`, `olcum_eksik`,
+    `cozum_yok`, `kamera_duzlem_altinda`, `olcum_tutarsiz`, `izdusum_yuksek`, `konum_yayilimi_az`. `gecerli` False ise KAYDEDİLMEZ.
+    `capraz` (≥ 3 konum): her konum dışarıda bırakılıp kalanlarla çözülür → o plakanın MERKEZ farkı (çapraz doğrulama, bilgi)."""
     sonuc: dict = {"gecerli": False, "nedenler": [], "lens_uyarisi": False}
     try:
-        px = np.asarray(kose_px, dtype=np.float64).reshape(4, 2)
-        olc = np.asarray(kose_olcum_cm, dtype=np.float64).reshape(4, 2)
         K = np.asarray(K, dtype=np.float64).reshape(3, 3)
         D = np.asarray(D, dtype=np.float64).ravel()
         w, h = (int(v) for v in boyut)
         ext = [float(v) for v in ext_cm]
         ph = float(plaka_yuksekligi_mm)
-    except (TypeError, ValueError):
+        kl = []
+        for k in konumlar:
+            olc = list(k["olcum_cm"])
+            if len(olc) != 4:
+                raise ValueError("olcum_cm")
+            kl.append(
+                {
+                    "kuyu_px": np.asarray(k["kuyu_px"], np.float64).reshape(-1, 2),
+                    "kuyu_plaka_mm": np.asarray(k["kuyu_plaka_mm"], np.float64).reshape(-1, 2),
+                    "kose_plaka_mm": np.asarray(k["kose_plaka_mm"], np.float64).reshape(4, 2),
+                    "kose_px": np.asarray(k["kose_px"], np.float64).reshape(4, 2),
+                    "olcum_cm": [None if o is None else (float(o[0]), float(o[1])) for o in olc],
+                }
+            )
+    except (TypeError, ValueError, KeyError, IndexError):
         sonuc["nedenler"].append("girdi_gecersiz")
         return sonuc
-    if (
-        not np.all(np.isfinite(px))
-        or not np.all(np.isfinite(olc))
-        or not _sonlu(ph, *ext)
-        or w <= 0
-        or h <= 0
-        or np.any(px < 0)
-        or np.any(px[:, 0] > w)
-        or np.any(px[:, 1] > h)
-        or not (0.0 <= ph <= 100.0)
-    ):
-        sonuc["nedenler"].append("girdi_gecersiz")
-        return sonuc
-    duzlem_y = (-ext[1] / 2.0) * 10.0 + ph
-    olculen = np.array([kabin_noktasi_mm(s, o, 0.0, ext)[[0, 2]] for s, o in olc])
-    fit, sapma, rms = dikdortgene_oturt(olculen, float(plaka_dis_mm[0]), float(plaka_dis_mm[1]))
-    sonuc.update(
-        {
-            "duzlem_y_mm": round(duzlem_y, 3),
-            "olcum_uyumu_mm": round(rms, 2),
-            "kose_olcum_sapmasi_mm": [round(float(v), 2) for v in sapma],
-        }
+    sayisal = all(
+        np.all(np.isfinite(k["kuyu_px"])) and np.all(np.isfinite(k["kose_px"])) and len(k["kuyu_px"]) == len(k["kuyu_plaka_mm"]) >= 4
+        and all(o is None or _sonlu(*o) for o in k["olcum_cm"])
+        for k in kl
     )
-    if rms > OLCUM_UYUM_ESIGI_MM:
-        sonuc["nedenler"].append("olcum_tutarsiz")
+    if not sayisal or not _sonlu(ph, *ext) or w <= 0 or h <= 0 or not (0.0 <= ph <= 100.0):
+        sonuc["nedenler"].append("girdi_gecersiz")
         return sonuc
-    nesne = np.column_stack([fit[:, 0], np.full(4, duzlem_y), fit[:, 1]]).astype(np.float64)
-    try:
-        n, rvecs, tvecs, _hatalar = cv2.solvePnPGeneric(
-            nesne.reshape(-1, 1, 3), px.reshape(-1, 1, 2), K, D, flags=cv2.SOLVEPNP_IPPE
-        )
-    except cv2.error:
-        n, rvecs, tvecs = 0, [], []
-    adaylar = []
-    for rv, tv in zip(rvecs[: int(n)], tvecs[: int(n)]):
-        try:
-            rv, tv = cv2.solvePnPRefineLM(nesne.reshape(-1, 1, 3), px.reshape(-1, 1, 2), K, D, rv.copy(), tv.copy())
-        except cv2.error:
-            pass
-        R, _ = cv2.Rodrigues(rv)
-        C = (-R.T @ tv.reshape(3)).astype(np.float64)
-        pp, _ = cv2.projectPoints(nesne.reshape(-1, 1, 3), rv, tv, K, D)
-        e = np.linalg.norm(pp.reshape(-1, 2) - px, axis=1)
-        adaylar.append((float(np.sqrt(np.mean(e**2))), e, rv.reshape(3), tv.reshape(3), R, C))
-    if not adaylar:
-        sonuc["nedenler"].append("cozum_yok")
+    if len(kl) < KONUM_ASGARI:
+        sonuc["nedenler"].append("konum_az")
         return sonuc
-    # IPPE iki çözüm verir; kamera düzlemin ÜSTÜNDE olmalı (kapak) — altındaki çözüm ayna görüntüsüdür.
-    ustte = [a for a in adaylar if a[5][1] > duzlem_y]
-    if not ustte:
-        sonuc["nedenler"].append("kamera_duzlem_altinda")
+    if any(sum(o is not None for o in k["olcum_cm"]) < 2 for k in kl):
+        sonuc["nedenler"].append("olcum_eksik")
         return sonuc
-    izd, e, rv, tv, R, C = min(ustte, key=lambda a: a[0])
+    K_yeni = _yeni_K(K, D, (w, h))
+    duzlem_y = (-ext[1] / 2.0) * 10.0 + ph
+    sonuc["duzlem_y_mm"] = round(duzlem_y, 3)
+    cozum, neden = _ortak_coz(kl, K_yeni, duzlem_y, ext)
+    if cozum is None:
+        sonuc["nedenler"].append(neden)
+        return sonuc
+    rv, tv, yerler = cozum
+    R, _ = cv2.Rodrigues(rv)
+    C = (-R.T @ tv).astype(np.float64)
+    kuyu_hata = np.concatenate([y["kuyu_px_hata"] for y in yerler])
+    sapmalar = [s for y in yerler for s in y["kose_sapmasi_mm"] if s is not None]
+    izd = float(np.sqrt(np.mean(kuyu_hata**2)))
+    rms = float(np.sqrt(np.mean(np.square(sapmalar))))
+    merkezler = np.array([y["merkez_xz"] for y in yerler])
+    yayilim = max(float(np.linalg.norm(a - b)) for i, a in enumerate(merkezler) for b in merkezler[i + 1:])
     sonuc.update(
         {
             "izdusum_hatasi_px": round(izd, 3),
-            "kose_izdusum_px": [round(float(v), 3) for v in e],
+            "olcum_uyumu_mm": round(rms, 2),
+            "yayilim_mm": round(yayilim, 1),
             "R": R.tolist(),
             "rvec": rv.tolist(),
             "t_mm": tv.tolist(),
             "kamera_konumu_mm": [round(float(v), 2) for v in C],
-            "kose_kabin_mm": [[round(float(v), 2) for v in p] for p in nesne],
+            "konumlar": [
+                {
+                    "merkez_kabin_mm": [round(float(y["merkez_xz"][0]), 2), round(duzlem_y, 2), round(float(y["merkez_xz"][1]), 2)],
+                    "kose_kabin_mm": [[round(float(p[0]), 2), round(duzlem_y, 2), round(float(p[1]), 2)] for p in y["kose_xz"]],
+                    "kose_sapmasi_mm": [None if s is None else round(s, 2) for s in y["kose_sapmasi_mm"]],
+                    "kuyu_izdusum_px": round(float(np.sqrt(np.mean(y["kuyu_px_hata"] ** 2))), 3),
+                }
+                for y in yerler
+            ],
         }
     )
     if lens_cm is not None:
@@ -243,19 +402,101 @@ def kalibrasyon_hesapla(
             L = kabin_noktasi_mm(lens_cm[0], lens_cm[1], lens_cm[2], ext)
         except (TypeError, ValueError, IndexError):
             L = None
-        if L is not None and np.all(np.isfinite(L)):
-            fark = float(np.linalg.norm(C - L))
-            sonuc["olculen_lens_mm"] = [round(float(v), 2) for v in L]
-            sonuc["lens_farki_mm"] = round(fark, 2)
-            sonuc["lens_uyarisi"] = fark > LENS_UYARI_ESIGI_MM
-        else:
+        if L is None or not np.all(np.isfinite(L)):
             sonuc["nedenler"].append("girdi_gecersiz")
             return sonuc
+        yatay = float(np.hypot(C[0] - L[0], C[2] - L[2]))
+        dikey = float(C[1] - L[1])
+        sonuc.update(
+            {
+                "olculen_lens_mm": [round(float(v), 2) for v in L],
+                "lens_farki_mm": round(float(np.linalg.norm(C - L)), 2),
+                "lens_yatay_farki_mm": round(yatay, 2),
+                "lens_dikey_farki_mm": round(dikey, 2),
+                "lens_uyarisi": bool(yatay > LENS_UYARI_ESIGI_MM or abs(dikey) > LENS_DIKEY_UYARI_ESIGI_MM),
+            }
+        )
+    if capraz and len(kl) >= 3:
+        cd = []
+        for i in range(len(kl)):
+            kalan = kl[:i] + kl[i + 1:]
+            c2, _n = _ortak_coz(kalan, K_yeni, duzlem_y, ext)
+            if c2 is None:
+                cd.append(None)
+                continue
+            R2, _ = cv2.Rodrigues(c2[0])
+            hm = DuzlemHaritasi.durustan(K, D, (w, h), R2, c2[1], ext, duzlem_y)
+            olc = _olculen(kl[i], ext)
+            try:
+                tah = np.array([hm.kabin_noktasi(kl[i]["kose_px"][j], duzlem_y, kabin_siniri=False)[[0, 2]] for j, _ in olc])
+            except KesisimGecersiz:
+                cd.append(None)
+                continue
+            cd.append(round(float(np.linalg.norm(tah.mean(axis=0) - np.mean([m for _, m in olc], axis=0))), 2))
+        sonuc["capraz_dogrulama_mm"] = cd
+    if rms > OLCUM_UYUM_ESIGI_MM or (sapmalar and max(sapmalar) > OLCUM_TEK_KOSE_ESIGI_MM):
+        sonuc["nedenler"].append("olcum_tutarsiz")
     if izd > IZDUSUM_ESIGI_PX:
         sonuc["nedenler"].append("izdusum_yuksek")
-        return sonuc
-    sonuc["gecerli"] = True
+    if yayilim < KONUM_YAYILIM_ESIGI_MM:
+        sonuc["nedenler"].append("konum_yayilimi_az")
+    sonuc["gecerli"] = not sonuc["nedenler"]
     return sonuc
+
+
+def a1_kosesi(harita: "DuzlemHaritasi", y_mm: float) -> str | None:
+    """Kabinin ARKA-SOL yönü görüntüde hangi köşede (`plate_grid` adı: tl / tr / br / bl) — plaka A1 arka-solda konur (kılavuz).
+
+    Kalibrasyondan: karenin ortasındaki düzlem noktası P → P + 50 mm (+X sol, +Z arka) → düzeltilmiş piksel farkının işaretleri. Kamera
+    ters (180°) ya da yan (90°) takılsa da A1 doğru adlanır (sabit "tl" varsayımı o durumda kuyu kimliklerini aynalardı). Kesişim yoksa None."""
+    w, h = harita.boyut
+    try:
+        P = harita.kabin_noktasi((w / 2.0, h / 2.0), y_mm, kabin_siniri=False)
+    except KesisimGecersiz:
+        return None
+    p0 = harita.piksel(P)
+    p1 = harita.piksel(P + np.array([50.0, 0.0, 50.0]))
+    dx, dy = float(p1[0] - p0[0]), float(p1[1] - p0[1])
+    return ("t" if dy < 0 else "b") + ("l" if dx < 0 else "r")
+
+
+def gorus_alani(harita: "DuzlemHaritasi", y_mm: float) -> dict:
+    """Kör bölge (sahip, KD-1): DÜZELTİLMİŞ karenin kenarları `y_mm` düzlemine → camdan itibaren görünmeyen şerit (cm, 0,5'e yuvarlı).
+
+    `on_cm`: ön camdan ilk N cm görünmez (karenin ALT kenarı, kabin genişliği içinde en kötü nokta); `arka_cm` / `sol_cm` / `sag_cm`
+    benzer (0 = o cama kadar görünür). Görüntünün üstü ARKA cam varsayımıyla; kenar ışını düzlemi kesmiyorsa o yön None."""
+    w, h = harita.boyut
+    ex, _ey, ez = (float(v) * 10.0 for v in harita.ext_cm)
+    t = np.linspace(0.0, 1.0, 41)
+    kenarlar = {
+        "on": np.column_stack([t * (w - 1), np.full_like(t, h - 1)]),
+        "arka": np.column_stack([t * (w - 1), np.zeros_like(t)]),
+        "sol": np.column_stack([np.zeros_like(t), t * (h - 1)]),
+        "sag": np.column_stack([np.full_like(t, w - 1), t * (h - 1)]),
+    }
+    out = {}
+    for ad, pts in kenarlar.items():
+        q = []
+        for p in pts:
+            try:
+                q.append(harita.kabin_noktasi(p, y_mm, kabin_siniri=False))
+            except KesisimGecersiz:
+                continue
+        if not q:
+            out[ad] = None
+            continue
+        q = np.array(q)
+        if ad in ("on", "arka"):
+            q = q[np.abs(q[:, 0]) <= ex / 2.0]
+            seri = (q[:, 2] + ez / 2.0) if ad == "on" else (ez / 2.0 - q[:, 2])
+        else:
+            q = q[np.abs(q[:, 2]) <= ez / 2.0]
+            seri = (ex / 2.0 - q[:, 0]) if ad == "sol" else (q[:, 0] + ex / 2.0)
+        if len(seri) == 0:
+            out[ad] = None
+            continue
+        out[ad] = round(max(0.0, float(seri.max())) / 10.0 * 2.0) / 2.0
+    return out
 
 
 # ── çalışma anı: piksel → kabin ─────────────────────────────────────────────────────────────────────────────────────────
@@ -275,8 +516,33 @@ class DuzlemHaritasi:
         self.C = (-self.R.T @ self.t).astype(np.float64)
         self.ext_cm = [float(v) for v in kal["kabin_ext_cm"]]
         self.duzlem_y_mm = float(kal["duzlem_y_mm"])
+        #: Sahip kararı (KD-1): numune tabanı yükseltmesi (altlık / kutu) — petri ızgara düzlemi + hedef ve fantom tabanı bu kadar yukarı.
+        self.yukseltme_mm = taban_yukseltmesi_mm(kal)
         self.K_yeni = _yeni_K(self.K, self.D, self.boyut)
         self._K_yeni_ters = np.linalg.inv(self.K_yeni)
+
+    @classmethod
+    def durustan(cls, K, D, boyut, R, t_mm, ext_cm, duzlem_y_mm) -> "DuzlemHaritasi":
+        return cls(
+            {
+                "ic_parametre": {"K": np.asarray(K).tolist(), "D": np.asarray(D).ravel().tolist()},
+                "kamera": {"genislik": int(boyut[0]), "yukseklik": int(boyut[1])},
+                "R": np.asarray(R).tolist(),
+                "t_mm": np.asarray(t_mm).ravel().tolist(),
+                "kabin_ext_cm": list(ext_cm),
+                "duzlem_y_mm": float(duzlem_y_mm),
+            }
+        )
+
+    @property
+    def numune_y_mm(self) -> float:
+        """Petri ızgara düzlemi (plaka üstü) — kalibrasyon düzlemi + taban yükseltmesi."""
+        return self.duzlem_y_mm + self.yukseltme_mm
+
+    @property
+    def taban_y_mm(self) -> float:
+        """Numunenin oturduğu taban (fantom alt yüzü) — kabin tabanı + yükseltme."""
+        return -self.ext_cm[1] * 10.0 / 2.0 + self.yukseltme_mm
 
     def isin(self, px, *, duzeltilmis: bool = True) -> np.ndarray:
         u, v = float(px[0]), float(px[1])
@@ -310,7 +576,15 @@ class DuzlemHaritasi:
         return pp.reshape(2)
 
 
-def kuyu_araligi(harita: DuzlemHaritasi, H_img_from_plate, satir: int, sutun: int, aralik_mm: float, y_mm: float) -> dict:
+def kuyu_araligi(
+    harita: DuzlemHaritasi,
+    H_img_from_plate,
+    satir: int,
+    sutun: int,
+    aralik_mm: float,
+    y_mm: float,
+    tolerans: float = KUYU_ARALIGI_TOLERANSI,
+) -> dict:
     """Plaka ızgarasının (homografi, DÜZELTİLMİŞ kare) İDEAL kuyu merkezlerini düzleme eşle → komşu aralıkları 19,3 mm ile karşılaştır.
 
     Kuyu SKORU eşiğinde elenen hücreler ölçüyü bozmasın diye merkezler homografiden üretilir (ızgaranın kendisi). Ölçüt: sütun ve satır
@@ -329,7 +603,32 @@ def kuyu_araligi(harita: DuzlemHaritasi, H_img_from_plate, satir: int, sutun: in
         "satir_mm": round(float(np.median(sat)), 3),
         "beklenen_mm": aralik_mm,
         "sapma": round(sapma, 4),
-        "gecti": bool(sapma <= KUYU_ARALIGI_TOLERANSI),
+        "tolerans": tolerans,
+        "gecti": bool(sapma <= tolerans),
+    }
+
+
+def komsu_kuyu_araligi(harita: DuzlemHaritasi, konum: dict, aralik_mm: float, y_mm: float, tolerans: float) -> dict:
+    """`konum_hazirla` sözlüğünden (yönelimden bağımsız): plaka mm'de aralığı ≈ `aralik_mm` olan KOMŞU kuyu çiftlerinin düzlemdeki
+    uzaklığı → ortanca oran. Sonuç `kuyu_araligi` ile aynı biçim (satır / sütun ayrımı yok → ikisi de ortanca)."""
+    W = np.asarray(konum["kuyu_plaka_mm"], np.float64).reshape(-1, 2)
+    P = np.array([harita.kabin_noktasi(p, y_mm, kabin_siniri=False) for p in np.asarray(konum["kuyu_px"]).reshape(-1, 2)])
+    d = []
+    for i in range(len(W)):
+        for j in range(i + 1, len(W)):
+            if abs(float(np.linalg.norm(W[i] - W[j])) - aralik_mm) < 0.25 * aralik_mm:
+                d.append(float(np.linalg.norm(P[i] - P[j])))
+    if not d:
+        raise ValueError("komsu kuyu yok")
+    m = float(np.median(d))
+    sapma = abs(m / aralik_mm - 1.0)
+    return {
+        "sutun_mm": round(m, 3),
+        "satir_mm": round(m, 3),
+        "beklenen_mm": aralik_mm,
+        "sapma": round(sapma, 4),
+        "tolerans": tolerans,
+        "gecti": bool(sapma <= tolerans),
     }
 
 
@@ -486,7 +785,7 @@ def kaydet(veri_koku, kal: dict, referans_bgr=None, referans_maske=None) -> dict
 _onbellek: dict = {}
 _onbellek_kilit = threading.Lock()
 
-ZORUNLU_ALANLAR = ("kamera", "ic_parametre", "R", "t_mm", "kabin_ext_cm", "duzlem_y_mm", "koseler", "izdusum_hatasi_px")
+ZORUNLU_ALANLAR = ("kamera", "ic_parametre", "R", "t_mm", "kabin_ext_cm", "duzlem_y_mm", "konumlar", "izdusum_hatasi_px")
 
 
 def _dogrula_icerik(d) -> str | None:
@@ -589,6 +888,39 @@ def fantom_ayari_yaz(veri_koku, ayar: dict) -> dict | None:
     return kaydet(veri_koku, kal)
 
 
+def taban_yukseltmesi_mm(kal) -> float:
+    """Kalibrasyondaki numune tabanı yükseltmesi (mm); yok → 0 (dosya bütünlük özetli — değer yazılırken sınırlandı)."""
+    try:
+        v = float(((kal or {}).get("numune_tabani") or {}).get("yukseltme_mm", 0.0))
+    except (TypeError, ValueError, AttributeError):
+        return 0.0
+    return v if math.isfinite(v) and 0.0 <= v <= TABAN_YUKSELTME_AZAMI_MM else 0.0
+
+
+def numune_tabani_yaz(veri_koku, ayar: dict) -> dict | None:
+    kal, hata = yukle(veri_koku)
+    if kal is None or hata:
+        return None
+    kal = {k: v for k, v in kal.items() if not k.startswith("_")}
+    kal["numune_tabani"] = dict(ayar)
+    return kaydet(veri_koku, kal)
+
+
+def sahne_yenile(veri_koku, referans_bgr, referans_maske, kayit: dict) -> dict | None:
+    """Sahip (KD-1) "kalibre etmeden devam": o anki kare YENİ sahne referansı olur; kayıt (`sahne_yenileme`) kuyu aralığı toleransını
+    %10'a çıkarır ve her karede "kalibrasyon eski" uyarısı verdirir. Yeniden kalibrasyon bu alanı SİLER (yeni dosya)."""
+    kal, hata = yukle(veri_koku)
+    if kal is None or hata:
+        return None
+    kal = {k: v for k, v in kal.items() if not k.startswith("_")}
+    oz = sahne_ozniteligi_say(referans_bgr, referans_maske)
+    kal["referans"] = dict(kal.get("referans") or {})
+    kal["referans"].update({"sahne_denetimi": bool(oz >= SAHNE_ASGARI_OZNITELIK), "oznitelik": int(oz)})
+    kal["sahne_yenileme"] = dict(kayit)
+    kal["sahne_yenilemeleri"] = (list(kal.get("sahne_yenilemeleri") or []) + [dict(kayit)])[-20:]
+    return kaydet(veri_koku, kal, referans_bgr=referans_bgr, referans_maske=referans_maske)
+
+
 def zaman_damgasi() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
@@ -622,6 +954,10 @@ ENGEL_KODLARI = (
     "fantom_ayari_yok",
     "fantom_boyu_farkli",
     "fantom_degil",
+    "kor_bolge_on",
+    "kor_bolge_arka",
+    "kor_bolge_sol",
+    "kor_bolge_sag",
 )
 
 
@@ -656,6 +992,15 @@ class KareDurumu:
     def gecerli(self) -> bool:
         return self.harita is not None and not self.engeller
 
+    @property
+    def eski(self) -> bool:
+        """Sahip (KD-1) "kalibre etmeden devam" edildi mi (sahne yenilendi; konum ~1–2 cm sapabilir)."""
+        return bool((self.kal or {}).get("sahne_yenileme"))
+
+    @property
+    def kuyu_araligi_toleransi(self) -> float:
+        return KUYU_ARALIGI_TOLERANSI_ESKI if self.eski else KUYU_ARALIGI_TOLERANSI
+
     def engel(self, kod: str, aciklama: str) -> None:
         self.engeller.append(f"{kod}: {aciklama}")
 
@@ -667,15 +1012,32 @@ class KareDurumu:
             "tarih": kal.get("tarih"),
             "izdusum_hatasi_px": kal.get("izdusum_hatasi_px"),
             "lens_farki_mm": kal.get("lens_farki_mm"),
+            "eski": self.eski,
+            "taban_yukseltmesi_mm": taban_yukseltmesi_mm(kal),
             "engeller": [e.split(":", 1)[0] for e in self.engeller],
             "olcum": dict(self.olcum),
         }
 
 
-def kare_hazirla(durum, *, kare_boyutu, kamera_indeksi=None, npz_sha=None) -> KareDurumu:
-    """`yukle()` çıktısı (kal, hata) + karenin boyutu / kamera indeksi / iç parametre SHA'sı → `KareDurumu`.
+def _kimlik_metni(k: dict) -> str:
+    return f"{k.get('ad') or '?'} ({k.get('vidpid') or '?'})"
 
-    Kalibrasyon BOZUK ya da kamera / çözünürlük / iç parametre FARKLI ise harita KURULMAZ (konum üretilmez)."""
+
+def kimlik_ayni(a: dict | None, b: dict | None) -> bool | None:
+    """Kamera kimliği (ad + VID/PID) aynı mı; ikisinden biri bilinmiyorsa None (karşılaştırılamaz). Aygıt YOLU (USB girişi) burada
+    karşılaştırılmaz: aynı kamera başka girişe takılınca kalibrasyon geçerli kalır (kamera açılırken yol önceliklidir — `kabin_kamerasi`)."""
+    if not a or not b or not a.get("vidpid") or not b.get("vidpid"):
+        return None
+    return str(a.get("ad") or "").strip().lower() == str(b.get("ad") or "").strip().lower() and str(
+        a["vidpid"]
+    ).upper() == str(b["vidpid"]).upper()
+
+
+def kare_hazirla(durum, *, kare_boyutu, kamera_indeksi=None, npz_sha=None, kamera_kimligi=None) -> KareDurumu:
+    """`yukle()` çıktısı (kal, hata) + karenin boyutu / kamera kimliği (yoksa indeksi) / iç parametre SHA'sı → `KareDurumu`.
+
+    Kalibrasyon BOZUK ya da kamera / çözünürlük / iç parametre FARKLI ise harita KURULMAZ (konum üretilmez). Kimlik (ad + VID/PID)
+    iki tarafta da biliniyorsa İNDEKS karşılaştırılmaz (MSMF sırası değişebilir — KD-1'de Pusat 1 → 0 oldu)."""
     kal, hata = durum if durum else (None, None)
     kd = KareDurumu(kal)
     if hata:
@@ -689,8 +1051,16 @@ def kare_hazirla(durum, *, kare_boyutu, kamera_indeksi=None, npz_sha=None) -> Ka
     if (w, h) != (kw, kh):
         kd.engel("kalibrasyon_kamera_farkli", f"kare {w}x{h}, kalibrasyon {kw}x{kh}")
         return kd
+    kk = kal["kamera"].get("kimlik")
+    ayni = kimlik_ayni(kamera_kimligi, kk)
+    if ayni is False:
+        kd.engel(
+            "kalibrasyon_kamera_farkli",
+            f"secili kamera {_kimlik_metni(kamera_kimligi)}, kalibrasyon kamerasi {_kimlik_metni(kk)}",
+        )
+        return kd
     ki = kal["kamera"].get("indeks")
-    if kamera_indeksi is not None and ki is not None and int(kamera_indeksi) != int(ki):
+    if ayni is None and kamera_indeksi is not None and ki is not None and int(kamera_indeksi) != int(ki):
         kd.engel("kalibrasyon_kamera_farkli", f"secili kamera {kamera_indeksi}, kalibrasyon kamerasi {ki}")
         return kd
     ks = (kal.get("ic_parametre") or {}).get("sha256")
@@ -698,6 +1068,12 @@ def kare_hazirla(durum, *, kare_boyutu, kamera_indeksi=None, npz_sha=None) -> Ka
         kd.engel("kalibrasyon_kamera_farkli", "ic parametre dosyasi (K / D) kalibrasyondakinden farkli")
         return kd
     kd.harita = DuzlemHaritasi(kal)
+    if kd.eski:
+        y = kal.get("sahne_yenileme") or {}
+        kd.uyarilar.append(
+            f"kalibrasyon_eski: kamera oynadiktan sonra kalibre etmeden devam edildi ({y.get('tarih', '?')}, sahne "
+            f"{y.get('kayma_px', '?')} px) - konum ~1-2 cm sapabilir; yeniden kalibre edin"
+        )
     return kd
 
 

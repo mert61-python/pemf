@@ -33,10 +33,13 @@ export function PemfKapisiKutusu({
   kapi,
   reliable,
   model,
+  kalibrasyonUyarisi,
 }: {
   kapi?: PemfKapisi | null;
   reliable?: boolean | null;
   model: "petri" | "fantom";
+  /** KD-1 sahip kararı: "kalibre etmeden devam" edildiyse sunucunun KALICI uyarısı (istek dilinde; yoksa satır çizilmez). */
+  kalibrasyonUyarisi?: string | null;
 }) {
   const { t } = useTranslation();
   if (!kapi || typeof kapi !== "object") return null;
@@ -100,6 +103,11 @@ export function PemfKapisiKutusu({
           • {m.metin}{atlanan.has(m.kod) ? t("ai.pro.kapi.atlandi") : ""}
         </Text>
       ))}
+      {kalibrasyonUyarisi ? (
+        <Text testID="pemf-kapisi-kalibrasyon-eski" style={{ fontSize: typography.small, color: colors.warning, marginTop: 2 }}>
+          ⚠ {kalibrasyonUyarisi}
+        </Text>
+      ) : null}
       {varsayimlar.map((v) => (
         <Text key={v.kod} testID={`pemf-varsayim-${v.kod}`} style={{ fontSize: typography.small, color: colors.textMuted, marginTop: 2 }}>
           ⚠ {v.metin}

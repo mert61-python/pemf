@@ -259,6 +259,7 @@ interface AiResult {
   n_cancer?: number; n_wells?: number; n_healthy?: number; wells?: AiWell[];
   // AI-2 (hoca petri v2 / fantom v3): tüketim kapısı + geçerlilik (alan yoksa = eski backend; kutu çizilmez)
   pemf_kapisi?: PemfKapisi; pemf_valid?: boolean; reliable?: boolean; warnings?: string[]; pemf_source?: string; coord_frame?: string;
+  kalibrasyon_uyarisi?: string; // KD-1 sahip: "kalibre etmeden devam" → kalıcı uyarı (sunucu metni)
   // kidney_rna / kidney_disease (CKD)
   predictions?: AiPrediction[]; n_patients?: number;
   label?: string; prob_pct?: number; model?: string;
@@ -2736,7 +2737,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
               })()}
               <Text style={styles.resultText}><Trans i18nKey="ai.fantom.ozet" values={{ n: result.n_tumor ?? "", olcek: method === "pixel" ? t("ai.ortak.piksel") : `${result.mm_per_px} mm/px` }} components={{ kalin: <Text style={{ fontWeight: "bold" }} /> }} /></Text>
               {/* AI-2: hocanın tüketim kontrolleri (pemf_valid / reliable / uyarılar / VARSAYIMLAR) — metin backend'den. */}
-              <PemfKapisiKutusu kapi={result.pemf_kapisi} reliable={result.reliable} model="fantom" />
+              <PemfKapisiKutusu kapi={result.pemf_kapisi} reliable={result.reliable} model="fantom" kalibrasyonUyarisi={result.kalibrasyon_uyarisi} />
               {(result.tumor_regions || []).map((bolge: AiTumorRegion, i: number) => {
                 const D: number[] = Array.isArray(bolge.D) ? bolge.D : [];
                 return (
@@ -3191,7 +3192,7 @@ function PetriModule({ patientName }: { patientName: string }) {
                 );
               })()}
               {/* AI-2: hocanın tüketim kontrolleri — pemf_valid / kontrol QC / çekim uyarıları / VARSAYIMLAR (metin backend'den). */}
-              <PemfKapisiKutusu kapi={result.pemf_kapisi} model="petri" />
+              <PemfKapisiKutusu kapi={result.pemf_kapisi} model="petri" kalibrasyonUyarisi={result.kalibrasyon_uyarisi} />
               {(result.wells || []).map((w: AiWell, i: number) => {
                 const D: number[] = Array.isArray(w.D) ? w.D : [];
                 const isCancer = w.label === "cancer" || w.organ_id === 1;

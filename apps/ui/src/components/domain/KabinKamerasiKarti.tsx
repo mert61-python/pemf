@@ -22,9 +22,13 @@ import { emitToast } from "@/services/toastBridge";
 interface Secim {
   indeks: number;
   kaynak?: "ayar" | "ortam";
+  /** KD-2: kamera kimliği (Windows adı + VID/PID) — seçim buna bağlı; MSMF sırası değişse de aynı kamera açılır. */
+  kimlik?: { ad?: string | null; vidpid?: string | null } | null;
 }
 interface Aday {
   indeks: number;
+  ad?: string | null;
+  vidpid?: string | null;
   genislik: number;
   yukseklik: number;
   onizleme: string | null;
@@ -85,7 +89,9 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
       {yuklendi ? (
         secili ? (
           <Text style={styles.durum} testID="kabin-kamerasi-secili">
-            {t("ayarlar.kabinKamerasi.seciliKamera", { indeks: secili.indeks })}
+            {secili.kimlik?.ad
+              ? t("ayarlar.kabinKamerasi.seciliKameraAdli", { indeks: secili.indeks, ad: secili.kimlik.ad, vidpid: secili.kimlik.vidpid ?? "?" })
+              : t("ayarlar.kabinKamerasi.seciliKamera", { indeks: secili.indeks })}
           </Text>
         ) : (
           <Text style={[styles.durum, styles.uyari]} testID="kabin-kamerasi-secilmedi">
@@ -115,7 +121,11 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
             <Image source={{ uri: `data:image/jpeg;base64,${a.onizleme}` }} style={styles.onizleme} resizeMode="contain" />
           ) : null}
           <View style={styles.adayMetin}>
-            <Text style={styles.adayBaslik}>{t("ayarlar.kabinKamerasi.kameraAdi", { indeks: a.indeks })}</Text>
+            <Text style={styles.adayBaslik}>
+              {a.ad
+                ? t("ayarlar.kabinKamerasi.kameraAdiTam", { indeks: a.indeks, ad: a.ad, vidpid: a.vidpid ?? "?" })
+                : t("ayarlar.kabinKamerasi.kameraAdi", { indeks: a.indeks })}
+            </Text>
             <Text style={styles.aciklama}>{t("ayarlar.kabinKamerasi.cozunurluk", { genislik: a.genislik, yukseklik: a.yukseklik })}</Text>
           </View>
           <TouchableOpacity

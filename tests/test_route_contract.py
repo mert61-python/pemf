@@ -58,6 +58,9 @@ GOLDEN_ROUTES = {
     ("/api/ai/pro/kalibrasyon/kaydet", "POST"),
     ("/api/ai/pro/kalibrasyon/dogrula", "POST"),
     ("/api/ai/pro/kalibrasyon/fantom", "POST"),
+    # 2026-11-10 — KD-2 (sahip): numune tabanı yükseltmesi + kalibre etmeden devam:
+    ("/api/ai/pro/kalibrasyon/taban", "POST"),
+    ("/api/ai/pro/kalibrasyon/sahne-yenile", "POST"),
     ("/api/ai/rna/kidney", "POST"),
     ("/api/ai/sound/cat", "POST"),
     ("/api/ai/vision/cat_organ", "POST"),
@@ -248,4 +251,5 @@ def test_route_contract_unchanged():
     # → 114 (+1 kabin kamerası tek kare: settings/kabin-kamerasi/kare POST — T3 · Y189), 2026-10-23
     # → 117 (+3 canlı kabin kamerası: settings/kabin-kamerasi/canli/{baslat POST, kare GET, durdur POST} — T3 · Y190), 2026-10-24
     # → 123 (+6 KD · Y260 kabin kalibrasyonu: /api/ai/pro/kalibrasyon GET + kare / hesapla / kaydet / dogrula / fantom POST), 2026-11-10
-    assert len(current) == len(beklenen) == 123 - (0 if _simulator_mountlu() else 1)
+    # → 125 (+2 KD-2: /api/ai/pro/kalibrasyon/taban + /sahne-yenile POST), 2026-11-10
+    assert len(current) == len(beklenen) == 125 - (0 if _simulator_mountlu() else 1)

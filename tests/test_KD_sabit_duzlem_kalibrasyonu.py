@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""KD (istem 44 · sahip Y258–Y259) — SABİT DÜZLEM KALİBRASYONU: 4 plaka köşesi + K / D → kamera duruşu KABİN çerçevesinde; her karede
-piksel → ışın → yatay düzlem → kabin mm; ArUco ARANMAZ. Fail-closed denetimler bobini HEDEFLETMEZ.
+"""KD (istem 44 · sahip Y258–Y259; KD-2 çok konumlu) — SABİT DÜZLEM KALİBRASYONU: plaka kabinin iki yanında (kuyular otomatik + ölçülen
+köşeler) + K / D → kamera duruşu KABİN çerçevesinde; her karede piksel → ışın → yatay düzlem → kabin mm; ArUco ARANMAZ. Fail-closed
+denetimler bobini HEDEFLETMEZ. KD-2: kalibre etmeden devam, numune tabanı yükseltmesi, kör bölge, kamera kimliği.
 
 KAPI (istem §3): sentetik izdüşüm (bilinen K / R / t → köşe + kuyu pikselleri → kalibrasyon → konum ≤ 1 mm) · kamera 2 cm / 2° oynayınca
 denetim KIRMIZI → hedef yok · boş kabinde 0 fantom hedefi (T2B görüntüleriyle) · kalibrasyon bozuk / kamera farklı → konum yok.
 
 ÖLÇÜLEN İKİ KARAR (rapor S-KD.1 / S-KD.2; modül `cv_ortak/sabit_duzlem.py` açıklaması):
-  * cetvel ±0,5 cm ile HAM 4 köşe 3 px eşiğini %83 aşar → köşeler plakanın bilinen dikdörtgenine oturtulur;
+  * KD-2 gerçek kareler: tek konum başka yerde 0,8–2,5 cm → iki yana yayılmış ≥ 2 konum, ortak çözüm (S-KD.4);
   * kuyu aralığı yatay 2 cm / 2° kaymayı GÖRMEZ (yalnız yükseklik) → SABİT SAHNE kayması (kalibrasyon karesi referans).
 Sahte EN ALT katta: sentetik kare GERÇEK izdüşümle (ürünün M2 K / D'si) çizilir (`tests/sabit_duzlem_sahne.py`); YOLO kapalı (plaka kipinde
 yalnız ipucu), doz modeli çağrı sınırında sahte. Gerçek görüntü: `tests/kahin/t2b_2026_10_23/` (KAYNAK.md) ve hocanın fantom kâhini.
@@ -59,7 +60,7 @@ def _undistort(kare, K, D):
 
 
 def _kal(sonuc_ya_da_poz, K, D, boyut, *, duzlem_y, indeks=1, npz_sha=None, fantom=None):
-    """Kalibrasyon sözlüğü — `kalibrasyon_hesapla` sonucundan ya da bilinen (R, t)'den."""
+    """Kalibrasyon sözlüğü — `kalibrasyon_coz` sonucundan ya da bilinen (R, t)'den."""
     sd = _sd()
     if isinstance(sonuc_ya_da_poz, dict):
         R, t, izd = sonuc_ya_da_poz["R"], sonuc_ya_da_poz["t_mm"], sonuc_ya_da_poz["izdusum_hatasi_px"]
@@ -80,7 +81,7 @@ def _kal(sonuc_ya_da_poz, K, D, boyut, *, duzlem_y, indeks=1, npz_sha=None, fant
         "R": R,
         "t_mm": t,
         "izdusum_hatasi_px": float(izd),
-        "koseler": [],
+        "konumlar": [],
         "plaka": {"tur": 24, "yukseklik_mm": sh.PLAKA_YUK},
     }
     if fantom is not None:
@@ -138,30 +139,27 @@ def _aruco_yasak(monkeypatch):
         monkeypatch.setattr(m, "solve_cabin_pose", _yasak)
 
 
+#: KD-2: kalibrasyonun iki konumu (kabinin İKİ YANI — sol halka / sağ halka benzeri) ve doğrulama konumu (mm, plaka merkezi X / Z).
+SOL_KONUM, SAG_KONUM, BASKA = (115.0, -32.5), (-110.0, -32.5), (60.0, 20.0)
+
+
 @pytest.fixture(scope="module")
 def sentetik():
-    """Bilinen K / D / duruş + plaka P1'de kalibrasyon (gerçek `kalibrasyon_hesapla` yolu: köşe pikselleri izdüşümle, ölçüler cm)."""
+    """Bilinen K / D / duruş + plaka iki yanda → `kalibrasyon_coz` (gerçek ürün yolu: kuyu pikselleri izdüşümle, ölçüler cm)."""
     sd = _sd()
     K, D = sh.ic_parametre()
     R, t = sh.poz()
-    kose = sh.koseler(115.0, -32.5)
-    px = sh.izdusum(R, t, kose, K, D)
-    r = sd.kalibrasyon_hesapla(
-        kose_px=px,
-        kose_olcum_cm=sh.olcum_cm(kose),
-        K=K,
-        D=D,
-        boyut=(sh.W, sh.H),
-        ext_cm=sh.EXT_CM,
-        lens_cm=sh.lens_cm(),
-    )
-    kare1 = sh.ciz(R, t, K, D, plaka=(115.0, -32.5))
-    return {"K": K, "D": D, "R": R, "t": t, "px": px, "r": r, "kare1": kare1}
+    konumlar = [sh.konum(R, t, K, D, *SOL_KONUM), sh.konum(R, t, K, D, *SAG_KONUM)]
+    r = sd.kalibrasyon_coz(konumlar=konumlar, K=K, D=D, boyut=(sh.W, sh.H), ext_cm=sh.EXT_CM, lens_cm=sh.lens_cm())
+    px = sh.izdusum(R, t, sh.koseler(*SOL_KONUM), K, D)
+    kare1 = sh.ciz(R, t, K, D, plaka=SOL_KONUM)
+    return {"K": K, "D": D, "R": R, "t": t, "px": px, "r": r, "kare1": kare1, "konumlar": konumlar}
 
 
-def _sentetik_kayit(tmp_path, s, *, referans=True):
+def _sentetik_kayit(tmp_path, s, *, referans=True, ek=None):
     sd = _sd()
     kal = _kal(s["r"], s["K"], s["D"], (sh.W, sh.H), duzlem_y=s["r"]["duzlem_y_mm"])
+    kal.update(ek or {})
     hm = sd.DuzlemHaritasi(kal)
     import cv2
 
@@ -170,18 +168,32 @@ def _sentetik_kayit(tmp_path, s, *, referans=True):
     return _kaydet(tmp_path, kal, und if referans else None, [poly])
 
 
-# ═══ 1. Geometri — sahibin yöntemi (KAPI: konum ≤ 1 mm) ════════════════════════════════════════════════════════════════════════════
+def _coz(s, konumlar, **k):
+    return _sd().kalibrasyon_coz(
+        konumlar=konumlar,
+        K=s["K"],
+        D=s["D"],
+        boyut=(sh.W, sh.H),
+        ext_cm=sh.EXT_CM,
+        lens_cm=k.pop("lens_cm", sh.lens_cm()),
+        **k,
+    )
 
 
-def test_KRITIK_sentetik_KOSE_ve_KUYU_pikselleri_kalibrasyon_KONUM_1mm(sentetik):
+# ═══ 1. Geometri — sahibin yöntemi, KD-2 çok konumlu (KAPI: konum ≤ 1 mm) ═══════════════════════════════════════════════════════════
+
+
+def test_KRITIK_sentetik_IKI_KONUM_kalibrasyon_baska_yerde_KONUM_1mm(sentetik):
     sd = _sd()
     r = sentetik["r"]
     assert r["gecerli"] is True and r["nedenler"] == [], r
-    assert r["izdusum_hatasi_px"] < 0.5 and r["lens_farki_mm"] < 2.0 and r["lens_uyarisi"] is False, r
+    assert r["izdusum_hatasi_px"] < 0.5 and r["olcum_uyumu_mm"] < 1.0, r
+    assert r["lens_yatay_farki_mm"] < 2.0 and abs(r["lens_dikey_farki_mm"]) < 2.0 and r["lens_uyarisi"] is False, r
+    assert r["yayilim_mm"] >= 200.0 and len(r["konumlar"]) == 2
     hm = sd.DuzlemHaritasi(_kal(r, sentetik["K"], sentetik["D"], (sh.W, sh.H), duzlem_y=r["duzlem_y_mm"]))
     import cv2
 
-    gercek = sh.kuyu_merkezleri(60.0, 20.0)  # plaka BAŞKA yerde (yalnız X / Z değişir)
+    gercek = sh.kuyu_merkezleri(*BASKA)  # plaka BAŞKA yerde (yalnız X / Z değişir)
     P = np.array(list(gercek.values()))
     ham = sh.izdusum(sentetik["R"], sentetik["t"], P, sentetik["K"], sentetik["D"])
     duz = cv2.undistortPoints(ham.reshape(-1, 1, 2), sentetik["K"], sentetik["D"], P=hm.K_yeni).reshape(-1, 2)
@@ -192,76 +204,127 @@ def test_KRITIK_sentetik_KOSE_ve_KUYU_pikselleri_kalibrasyon_KONUM_1mm(sentetik)
         assert max(hata) <= 1.0, f"{kip}: en büyük konum hatası {max(hata):.3f} mm > 1 mm"
 
 
-def test_KRITIK_cetvel_gurultusu_KOSELER_dikdortgene_oturur_3px_ve_lens_esikleri_ANLAMLI(sentetik):
-    """S-KD.1: σ 2,5 mm + 0,5 cm okuma (sahibin cetveli) ile HAM 4 köşe %83 reddedilirdi (ölçüldü) — oturtmayla geçmeli."""
+def test_KRITIK_cetvel_gurultusu_IKI_KONUM_baska_yerde_MERKEZ_1cm_icinde(sentetik):
+    """S-KD.4 (KD-2, gerçek tezgâh ölçüsü): cetvel σ ≈ 5–8 mm köşe başına. σ 6 mm + 0,5 cm okuma + 0,5 px kuyu gürültüsüyle iki
+    yana yayılmış iki konum → başka yerdeki plaka MERKEZİ ≤ 1 cm (her denemede) ve kalibrasyon kabul edilir (eşikler gerçek ölçüme göre)."""
     sd = _sd()
     rng = np.random.default_rng(44)
-    kose = sh.koseler(115.0, -32.5)
-    gecen, lens = 0, []
-    for _ in range(60):
-        olc = [
-            (round((s_ + rng.normal(0, 0.25)) * 2) / 2, round((o + rng.normal(0, 0.25)) * 2) / 2)
-            for s_, o in sh.olcum_cm(kose)
-        ]
-        px = sentetik["px"] + rng.normal(0, 1.0, sentetik["px"].shape)
-        r = sd.kalibrasyon_hesapla(
-            kose_px=px,
-            kose_olcum_cm=olc,
-            K=sentetik["K"],
-            D=sentetik["D"],
-            boyut=(sh.W, sh.H),
-            ext_cm=sh.EXT_CM,
-            lens_cm=sh.lens_cm(),
-        )
+    gecen, hatalar = 0, []
+    gercek = np.array(list(sh.kuyu_merkezleri(*BASKA).values()))
+    for _ in range(25):
+        konumlar = []
+        for cx, cz in (SOL_KONUM, SAG_KONUM):
+            k = sh.konum(
+                sentetik["R"],
+                sentetik["t"],
+                sentetik["K"],
+                sentetik["D"],
+                cx,
+                cz,
+                piksel_gurultu=lambda s_: rng.normal(0, 0.5, s_),
+            )
+            k["olcum_cm"] = [
+                (round((a + rng.normal(0, 0.6)) * 2) / 2, round((b + rng.normal(0, 0.6)) * 2) / 2)
+                for a, b in k["olcum_cm"]
+            ]
+            konumlar.append(k)
+        r = _coz(sentetik, konumlar)
         gecen += bool(r["gecerli"])
-        if "lens_farki_mm" in r:
-            lens.append(r["lens_farki_mm"])
-    assert gecen >= 54, f"cetvel gürültüsünde {gecen}/60 kalibrasyon geçti (3 px eşiği gerçek ölçümde kullanılamaz)"
-    assert float(np.median(lens)) < sd.LENS_UYARI_ESIGI_MM / 2, f"lens farkı ortancası {np.median(lens):.1f} mm"
+        hm = sd.DuzlemHaritasi(_kal(r, sentetik["K"], sentetik["D"], (sh.W, sh.H), duzlem_y=r["duzlem_y_mm"]))
+        ham = sh.izdusum(sentetik["R"], sentetik["t"], gercek, sentetik["K"], sentetik["D"])
+        tah = np.array([hm.kabin_noktasi(p, gercek[0][1], duzeltilmis=False) for p in ham])
+        hatalar.append(float(np.linalg.norm((tah - gercek).mean(axis=0)[[0, 2]])))
+    assert gecen >= 23, f"cetvel gürültüsünde {gecen}/25 kalibrasyon geçti"
+    assert max(hatalar) <= 10.0 and float(np.median(hatalar)) <= 5.0, (max(hatalar), np.median(hatalar))
+
+
+def test_KRITIK_TEK_konum_ve_AYNI_YANDA_iki_konum_REDDEDILIR(sentetik):
+    """KD-2 bulgusu (gerçek kareler): tek konum başka yerde 2,5 cm'ye, aynı yandaki iki konum karşı yanda 1,9 cm'ye kaçtı."""
+    r1 = _coz(sentetik, sentetik["konumlar"][:1])
+    assert r1["gecerli"] is False and r1["nedenler"] == ["konum_az"], r1
+    yakin = sh.konum(sentetik["R"], sentetik["t"], sentetik["K"], sentetik["D"], 115.0, 60.0)  # aynı yan, 9 cm arkada
+    r2 = _coz(sentetik, [sentetik["konumlar"][0], yakin])
+    assert r2["gecerli"] is False and "konum_yayilimi_az" in r2["nedenler"] and r2["yayilim_mm"] < 200.0, r2
+    tek_kose = dict(sentetik["konumlar"][1], olcum_cm=[sentetik["konumlar"][1]["olcum_cm"][0], None, None, None])
+    r3 = _coz(sentetik, [sentetik["konumlar"][0], tek_kose])
+    assert r3["gecerli"] is False and r3["nedenler"] == ["olcum_eksik"], r3
+
+
+def test_CAPRAZ_kose_IKI_olcu_YETER(sentetik):
+    k = [dict(x, olcum_cm=[x["olcum_cm"][0], None, x["olcum_cm"][2], None]) for x in sentetik["konumlar"]]
+    r = _coz(sentetik, k)
+    assert r["gecerli"] is True and r["izdusum_hatasi_px"] < 0.5, r
 
 
 @pytest.mark.parametrize(
     "bozma, kod",
     [
         ("kose_5cm", "olcum_tutarsiz"),  # bir köşe ölçüsü 5 cm yanlış yazılmış
-        ("sira_kaydi", "izdusum_yuksek"),  # dokunuş sırası bir köşe kaymış
-        (
-            "tek_kose_25px",
-            "izdusum_yuksek",
-        ),  # yanlış noktaya dokunulmuş (~7 mm; 8 px tek nokta RMS < 3 px — duruş soğurur)
+        ("numara_karisik", "olcum_tutarsiz"),  # 1 ve 2 numaralı köşelerin ölçüleri yer değiştirmiş
+        ("izgara_bozuk", "izdusum_yuksek"),  # bir konumda kuyu tespiti bozuk (σ 6 px) — tek kamera duruşuna uymaz
     ],
 )
 def test_KRITIK_kaba_hata_REDDEDILIR(sentetik, bozma, kod):
-    sd = _sd()
-    kose = sh.koseler(115.0, -32.5)
-    olc, px = list(sh.olcum_cm(kose)), sentetik["px"].copy()
+    k = [dict(x) for x in sentetik["konumlar"]]
+    olc = list(k[0]["olcum_cm"])
     if bozma == "kose_5cm":
         olc[2] = (olc[2][0] + 5.0, olc[2][1])
-    elif bozma == "sira_kaydi":
-        px = np.roll(px, 1, axis=0)
+    elif bozma == "numara_karisik":
+        olc[0], olc[1] = olc[1], olc[0]
     else:
-        px[1] += (25.0, 0.0)
-    r = sd.kalibrasyon_hesapla(
-        kose_px=px, kose_olcum_cm=olc, K=sentetik["K"], D=sentetik["D"], boyut=(sh.W, sh.H), ext_cm=sh.EXT_CM
-    )
+        k[1]["kuyu_px"] = k[1]["kuyu_px"] + np.random.default_rng(7).normal(0, 6.0, k[1]["kuyu_px"].shape)
+    k[0]["olcum_cm"] = olc
+    r = _coz(sentetik, k)
     assert r["gecerli"] is False and kod in r["nedenler"], r
 
 
-def test_KRITIK_lens_farki_2cm_UYARI_ama_kalibrasyon_gecerli(sentetik):
-    sd = _sd()
-    kose = sh.koseler(115.0, -32.5)
+def test_KRITIK_bir_konumda_plaka_DUZ_DEGIL_izgara_olcekli_LENS_uyarisi_onay_ister(sentetik):
+    """Ölçülen sınır: tek konumda ızgara %7 ölçekli (plaka altlıkta / yanlış yükseklik) ortak çözümde EĞİMLE soğurulur — izdüşüm küçük
+    kalır, kamera konumu ise ölçülen lensten belirgin ayrılır → `lens_uyarisi` (kayıt AÇIK onay ister). Bu yüzden lens ölçüsü istenir."""
+    k = [dict(x) for x in sentetik["konumlar"]]
+    m = k[1]["kuyu_px"].mean(axis=0)
+    k[1]["kuyu_px"] = m + (k[1]["kuyu_px"] - m) * 1.07
+    r = _coz(sentetik, k)
+    assert r["lens_uyarisi"] is True, r
+
+
+def test_KRITIK_lens_YATAY_2cm_ve_YUKSEKLIK_3cm_UYARI_ama_kalibrasyon_gecerli(sentetik):
     sol, on, taban = sh.lens_cm()
-    for fark_cm, uyari in ((3.0, True), (1.0, False)):
-        r = sd.kalibrasyon_hesapla(
-            kose_px=sentetik["px"],
-            kose_olcum_cm=sh.olcum_cm(kose),
-            K=sentetik["K"],
-            D=sentetik["D"],
-            boyut=(sh.W, sh.H),
-            ext_cm=sh.EXT_CM,
-            lens_cm=(sol + fark_cm, on, taban),
-        )
-        assert r["gecerli"] is True and r["lens_uyarisi"] is uyari, (fark_cm, r)
+    for lens, uyari in (
+        ((sol + 3.0, on, taban), True),
+        ((sol + 1.0, on, taban), False),
+        ((sol, on, taban - 2.5), False),  # cam kalınlığı + optik merkez: yükseklik 3 cm'ye kadar uyarısız
+        ((sol, on, taban - 4.0), True),
+    ):
+        r = _coz(sentetik, sentetik["konumlar"], lens_cm=lens)
+        assert r["gecerli"] is True and r["lens_uyarisi"] is uyari, (lens, r)
+
+
+def test_UC_konumda_CAPRAZ_dogrulama_her_plaka_kalanlarla(sentetik):
+    ucuncu = sh.konum(sentetik["R"], sentetik["t"], sentetik["K"], sentetik["D"], *BASKA)
+    r = _coz(sentetik, sentetik["konumlar"] + [ucuncu])
+    assert r["gecerli"] is True and len(r["capraz_dogrulama_mm"]) == 3, r
+    assert max(r["capraz_dogrulama_mm"]) < 1.0, r["capraz_dogrulama_mm"]
+
+
+def test_GORUS_ALANI_on_kor_serit_bagimsiz_izdusumle_ayni(sentetik):
+    """Kör bölge (sahip, KD-1): kalibrasyondan ön camın dibindeki görünmeyen şerit — düzeltilmiş karenin ALT kenarı."""
+    import cv2
+
+    sd = _sd()
+    r = sentetik["r"]
+    hm = sd.DuzlemHaritasi(_kal(r, sentetik["K"], sentetik["D"], (sh.W, sh.H), duzlem_y=r["duzlem_y_mm"]))
+    ga = sd.gorus_alani(hm, sh.TABAN_Y)
+    # bağımsız: tabanda ön → arka tarama, düzeltilmiş karede görünen en öndeki nokta (kabin genişliği boyunca en kötü)
+    rv, _ = cv2.Rodrigues(np.asarray(r["R"]))
+    en_kotu = 0.0
+    for X in np.linspace(-270.0, 270.0, 19):
+        for Z in np.arange(-202.5, 202.5, 1.0):
+            p, _ = cv2.projectPoints(np.array([[[X, sh.TABAN_Y, Z]]]), rv, np.asarray(r["t_mm"]), hm.K_yeni, None)
+            if 0 <= p[0, 0, 1] <= sh.H - 1:
+                en_kotu = max(en_kotu, Z + 202.5)
+                break
+    assert ga["on"] is not None and abs(ga["on"] - en_kotu / 10.0) <= 0.5, (ga, en_kotu)
 
 
 # ═══ 2. Hat — petri v2 sabit düzlem kipinde ═════════════════════════════════════════════════════════════════════════════════════════
@@ -601,3 +664,146 @@ def test_KARSIT_FIZIKSEL_kod_YOKKEN_genel_pemf_gecersiz_aynen():
 
     k = pemf_kapisi.degerlendir({"success": True, "pemf_valid": False, "warnings": []}, model="petri")
     assert k["nedenler"] == ["pemf_gecersiz"], k
+
+
+# ═══ 5. KD-2 sahip kararları: kalibre etmeden devam · numune tabanı · kör bölge · kamera kimliği ═══════════════════════════════════
+
+
+def test_KRITIK_kalibre_etmeden_DEVAM_kaydi_KALICI_uyari_ve_tolerans_yuzde_10(sentetik, tmp_path):
+    sd = _sd()
+    duz = _sentetik_kayit(tmp_path, sentetik)
+    kd = sd.kare_hazirla(duz, kare_boyutu=(sh.W, sh.H), kamera_indeksi=1)
+    assert kd.eski is False and kd.kuyu_araligi_toleransi == 0.03 and not kd.uyarilar
+    import cv2
+
+    und = _undistort(sentetik["kare1"], sentetik["K"], sentetik["D"])
+    maske = sd.cokgen_maskesi((sh.W, sh.H), [], genislet_px=0)
+    kal = sd.sahne_yenile(
+        tmp_path, und, maske, {"tarih": "2026-11-10T22:00:00+0300", "kayma_px": 30.0, "kuyu_sapma": 0.04}
+    )
+    assert kal is not None and kal["sahne_yenileme"]["kayma_px"] == 30.0
+    kd = sd.kare_hazirla(sd.yukle(tmp_path), kare_boyutu=(sh.W, sh.H), kamera_indeksi=1)
+    assert kd.eski is True and kd.kuyu_araligi_toleransi == 0.10 and kd.gecerli
+    assert any(u.startswith("kalibrasyon_eski") for u in kd.uyarilar), kd.uyarilar
+    assert kd.ozet()["eski"] is True
+    _ = cv2
+
+
+def test_KRITIK_numune_TABANI_yukseltmesi_petri_konum_ve_HEDEF_Y_yukari(sentetik, tmp_path):
+    """Sahip (KD-1): plaka 5 cm altlık üstünde. Ayar doğruysa kuyular ≤ 2 mm ve hedef Y +50 mm; ayar YOKSA kuyu aralığı tutmaz
+    (kamera_oynamis — metin "ya da taban yüksekliği ayarı yanlış" der) ve konum ÜRETİLMEZ."""
+    sd = _sd()
+    kare = sh.ciz(sentetik["R"], sentetik["t"], sentetik["K"], sentetik["D"], plaka=BASKA, yukseltme=50.0)
+    gercek = sh.kuyu_merkezleri(*BASKA, yukseltme=50.0)
+    duz = _sentetik_kayit(tmp_path / "ayarli", sentetik, ek={"numune_tabani": {"yukseltme_mm": 50.0}})
+    res, _ = _petri(duz, tmp_path).process_image(kare)
+    assert res.pemf_valid is True and res.kalibrasyon["engeller"] == [], res.kalibrasyon
+    hata = [
+        math.hypot(w.centroid_cabin_mm[0] - gercek[w.well_id][0], w.centroid_cabin_mm[2] - gercek[w.well_id][2])
+        for w in res.wells
+    ]
+    assert len(hata) == 24 and max(hata) <= 2.0, max(hata)
+    assert all(w.centroid_cabin_mm[1] == PETRI_HEDEF_Y + 50.0 for w in res.wells)
+    duz0 = _sentetik_kayit(tmp_path / "ayarsiz", sentetik)
+    res0, _ = _petri(duz0, tmp_path).process_image(kare)
+    assert res0.pemf_valid is False and "kamera_oynamis" in res0.kalibrasyon["engeller"], res0.kalibrasyon
+    assert all(w.centroid_cabin_mm is None for w in res0.wells)
+    assert sd.taban_yukseltmesi_mm({"numune_tabani": {"yukseltme_mm": 250.0}}) == 0.0  # sınır dışı değer YOK sayılır
+
+
+@pytest.mark.parametrize(
+    "dortgen, yon",
+    [
+        ([[600, 700], [1300, 700], [1300, 1079], [600, 1079]], "on"),
+        ([[600, 0], [1300, 0], [1300, 400], [600, 400]], "arka"),
+        ([[0, 300], [700, 300], [700, 700], [0, 700]], "sol"),
+        ([[1300, 300], [1919, 300], [1919, 700], [1300, 700]], "sag"),
+    ],
+)
+def test_KRITIK_KOR_BOLGE_plaka_kare_kenarina_degerse_ENGEL_ve_YON(sentetik, tmp_path, dortgen, yon):
+    """Sahip (KD-1): numune kısmen kör bölgede → hedef YOK + hangi yöne kaydırılacağı (kod `kor_bolge_<yön>`, PEMF kapısı FİZİKSEL)."""
+    from types import SimpleNamespace
+
+    from ai_hub.cv_ortak import pemf_kapisi
+
+    sd = _sd()
+    duz = _sentetik_kayit(tmp_path, sentetik)
+    kd = sd.kare_hazirla(duz, kare_boyutu=(sh.W, sh.H), kamera_indeksi=1)
+    und = _undistort(sentetik["kare1"], sentetik["K"], sentetik["D"])
+    grid = SimpleNamespace(plate_quad_px=dortgen, spec=None, H_ransac=None)
+    _petri(duz, tmp_path)._duzlem_denetle(kd, und, grid, [], 1.0)
+    kodlar = [e.split(":", 1)[0] for e in kd.engeller]
+    assert kodlar.count(f"kor_bolge_{yon}") == 1 and not kd.gecerli, kd.engeller
+    assert f"kor_bolge_{yon}" in pemf_kapisi.FIZIKSEL and f"kor_bolge_{yon}" in sd.ENGEL_KODLARI
+
+
+def test_KARSIT_KOR_BOLGE_kadraj_icindeki_plakada_YOK(sentetik, tmp_path):
+    from types import SimpleNamespace
+
+    sd = _sd()
+    duz = _sentetik_kayit(tmp_path, sentetik)
+    kd = sd.kare_hazirla(duz, kare_boyutu=(sh.W, sh.H), kamera_indeksi=1)
+    und = _undistort(sentetik["kare1"], sentetik["K"], sentetik["D"])
+    grid = SimpleNamespace(plate_quad_px=[[600, 300], [1300, 300], [1300, 700], [600, 700]], spec=None, H_ransac=None)
+    _petri(duz, tmp_path)._duzlem_denetle(kd, und, grid, [], 1.0)
+    assert not any(e.startswith("kor_bolge") for e in kd.engeller), kd.engeller
+
+
+@pytest.mark.parametrize(
+    "secili, beklenen",
+    [
+        (
+            {"ad": "FHD Camera", "vidpid": "VID_1BCF&PID_28C4", "aygit_yolu": "baska-giris"},
+            [],
+        ),  # aynı kamera başka USB girişinde
+        ({"ad": "HP True Vision FHD Camera", "vidpid": "VID_30C9&PID_0069"}, ["kalibrasyon_kamera_farkli"]),
+        ({"ad": "FHD Camera", "vidpid": "VID_046D&PID_0825"}, ["kalibrasyon_kamera_farkli"]),
+    ],
+)
+def test_KRITIK_KAMERA_KIMLIGI_ad_VIDPID_karsilastirilir_INDEKS_degil(sentetik, tmp_path, secili, beklenen):
+    """KD-2 (sahip): MSMF sırası değişebilir (KD-1: Pusat 1 → 0) — kimlik biliniyorsa indeks farkı ENGEL DEĞİL; ad / VID/PID farkı ENGEL."""
+    sd = _sd()
+    kimlik = {"ad": "FHD Camera", "vidpid": "VID_1BCF&PID_28C4", "aygit_yolu": r"\\?\usb#vid_1bcf&pid_28c4&mi_00#7&1"}
+    kal = _kal(sentetik["r"], sentetik["K"], sentetik["D"], (sh.W, sh.H), duzlem_y=sentetik["r"]["duzlem_y_mm"])
+    kal["kamera"]["kimlik"] = kimlik
+    duz = _kaydet(tmp_path, kal)
+    kd = sd.kare_hazirla(duz, kare_boyutu=(sh.W, sh.H), kamera_indeksi=0, kamera_kimligi=secili)
+    assert [e.split(":", 1)[0] for e in kd.engeller] == beklenen, kd.engeller
+
+
+def test_komsu_kuyu_araligi_yonelimden_bagimsiz_19_3(sentetik):
+    sd = _sd()
+    r = sentetik["r"]
+    hm = sd.DuzlemHaritasi(_kal(r, sentetik["K"], sentetik["D"], (sh.W, sh.H), duzlem_y=r["duzlem_y_mm"]))
+    k = sh.konum(sentetik["R"], sentetik["t"], sentetik["K"], sentetik["D"], *BASKA)
+    ka = sd.komsu_kuyu_araligi(hm, k, ARALIK, hm.numune_y_mm, sd.KUYU_ARALIGI_TOLERANSI)
+    assert ka["gecti"] and abs(ka["sutun_mm"] - ARALIK) < 0.1, ka
+    k90 = dict(k, kuyu_plaka_mm=k["kuyu_plaka_mm"][:, ::-1])  # dikey plaka (eksenler yer değiştirmiş) — aynı komşuluk
+    assert sd.komsu_kuyu_araligi(hm, k90, ARALIK, hm.numune_y_mm, 0.03)["gecti"]
+
+
+def test_KRITIK_A1_kosesi_KALIBRASYONDAN_kamera_TERS_takili_kuyu_kimlikleri_DOGRU(tmp_path):
+    """KD-2: kamera 180° ters takılı (görüntünün üstü ÖN cam). A1 plakanın arka-solunda (kılavuz). Sabit "tl" varsayımı kuyu
+    kimliklerini aynalardı (A1 ↔ D6, ~11 cm); kalibrasyondan A1 köşesi "br" → her kuyu kendi fiziksel konumunda (≤ 2 mm)."""
+    sd = _sd()
+    K, D = sh.ic_parametre()
+    kamera = (27.5, 195.0, 122.5)
+    R, t = sh.poz(kamera, sapma_deg=180.0)
+    konumlar = [sh.konum(R, t, K, D, *SOL_KONUM), sh.konum(R, t, K, D, *SAG_KONUM)]
+    r = sd.kalibrasyon_coz(
+        konumlar=konumlar, K=K, D=D, boyut=(sh.W, sh.H), ext_cm=sh.EXT_CM, lens_cm=sh.lens_cm(kamera)
+    )
+    assert r["gecerli"] is True, r
+    kal = _kal(r, K, D, (sh.W, sh.H), duzlem_y=r["duzlem_y_mm"])
+    assert sd.a1_kosesi(sd.DuzlemHaritasi(kal), r["duzlem_y_mm"]) == "br"
+    duz = _kaydet(tmp_path, kal)
+    res, _ = _petri(duz, tmp_path).process_image(sh.ciz(R, t, K, D, plaka=BASKA))
+    gercek = sh.kuyu_merkezleri(*BASKA)
+    assert res.pemf_valid is True and len(res.wells) == 24, (res.warnings, res.kalibrasyon)
+    hata = {
+        w.well_id: math.hypot(
+            w.centroid_cabin_mm[0] - gercek[w.well_id][0], w.centroid_cabin_mm[2] - gercek[w.well_id][2]
+        )
+        for w in res.wells
+    }
+    assert max(hata.values()) <= 2.0, sorted(hata.items(), key=lambda a: -a[1])[:3]

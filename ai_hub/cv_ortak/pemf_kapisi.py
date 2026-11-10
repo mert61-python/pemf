@@ -56,6 +56,11 @@ FIZIKSEL = (
     "fantom_ayari_yok",
     "fantom_boyu_farkli",
     "fantom_degil",
+    # KD-2 (sahip): numune görüş alanının kenarında (kör bölge) — kısmen görünen numuneye hedef VERİLMEZ, yön söylenir.
+    "kor_bolge_on",
+    "kor_bolge_arka",
+    "kor_bolge_sol",
+    "kor_bolge_sag",
 )
 
 _KOD = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -96,12 +101,18 @@ _EYLEM = {
         "kuyuların hepsinin dolu ve plakanın kadrajın ortasında olduğunu kontrol edip yeniden çekin."
     ),
     # KD · Y258–Y259 — Türkçe TABAN metni; arayüze giden metin sunucuda koddan çevrilir (`ai.pemf.kapi.<kod>`, TR + EN).
-    "kalibrasyon_yok": "Kabin kalibrasyonu yok — Kabin kalibrasyonu bölümünde plakanın 4 köşesiyle kalibre edin.",
+    "kalibrasyon_yok": "Kabin kalibrasyonu yok — Kabin kalibrasyonu bölümünde plakayı iki konumda ölçerek kalibre edin.",
     "kalibrasyon_bozuk": "Kabin kalibrasyonu okunamadı ya da bozuk — kabin kalibrasyonunu yeniden yapın.",
     "kalibrasyon_kamera_farkli": (
         "Kamera ya da çözünürlük kalibrasyondakinden farklı — kalibrasyon yapılan kabin kamerasını seçin ya da yeniden kalibre edin."
     ),
-    "kamera_oynamis": "Kamera oynamış olabilir — kabin kalibrasyonunu yeniden yapın.",
+    "kamera_oynamis": (
+        "Kamera oynamış olabilir ya da taban yüksekliği ayarı yanlış — yeniden kalibre edin ya da (kayma küçükse) kalibre etmeden devam edin."
+    ),
+    "kor_bolge_on": "Numune ön camın dibindeki kör bölgede (kısmen görünüyor) — numuneyi arkaya kaydırın.",
+    "kor_bolge_arka": "Numune arka camın dibindeki kör bölgede (kısmen görünüyor) — numuneyi öne kaydırın.",
+    "kor_bolge_sol": "Numune sol camın dibindeki kör bölgede (kısmen görünüyor) — numuneyi sağa kaydırın.",
+    "kor_bolge_sag": "Numune sağ camın dibindeki kör bölgede (kısmen görünüyor) — numuneyi sola kaydırın.",
     "fantom_ayari_yok": "Fantom kalınlığı / tümör derinliği girilmedi — Kabin kalibrasyonu bölümünden girin.",
     "fantom_degil": (
         "Bulunan bölge fantom gibi görünmüyor (ışık yansıması ya da boş kabin) — fantomu kabine koyun; parlama varsa ışığı değiştirin."

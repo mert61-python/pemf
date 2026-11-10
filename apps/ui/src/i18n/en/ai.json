@@ -619,17 +619,22 @@
     "hata": "Could not capture from the cabin camera. Choose the camera in the \"Cabin camera\" section on this screen and try again."
   },
   "kalibrasyon": {
-    "aciklama": "Calibrate once while the camera is fixed to the top cover: put the 24-well plate in the cabin, take a frame, tap the plate's 4 outer top corners in order and enter each corner's distance to the left glass and the front glass with a ruler. If the camera moves, the app warns and no coil is targeted.",
+    "aciklama": "Calibrate once while the camera is fixed to the top lid: place the 24-well plate with filled wells on one side of the cabin (e.g. left ring), take a frame and measure at least two of the numbered corners with a ruler; then place the plate on the other side (right ring) and repeat.",
     "baslik": "Cabin calibration",
+    "devam": {
+      "aciklama": "Only if the \"The camera may have moved\" warning appeared: calibrate again, or if the shift is small (up to ~2 cm) continue without calibrating — positions may be off by ~1–2 cm.",
+      "baslik": "If the camera moved",
+      "dugme": "Continue without calibrating",
+      "tamam": "Scene renewed (shift {{px}} px) — the calibration is marked as \"outdated\"."
+    },
     "dogrula": "Verify",
-    "dogrulaAciklama": "Move the plate to another place; tap 2 of its outer top corners and enter their left / front glass distances. The difference must be below 1 cm.",
+    "dogrulaAciklama": "Place the plate somewhere else and enter the numbered corners you measured. The calibration is verified if the difference at the plate center is below 1 cm.",
     "dogrulaHesapla": "Measure difference",
-    "dogrulamaGecti": "Verification PASSED — differences {{farklar}} cm, largest {{maks}} cm (limit {{esik}} cm).",
-    "dogrulamaKaldi": "Verification FAILED — differences {{farklar}} cm, largest {{maks}} cm (limit {{esik}} cm). Check the measurements or calibrate again.",
-    "dokunAciklama": "Tap the plate's outer top corners in order (1 front-left, 2 front-right, 3 back-right, 4 back-left); correct by 1 pixel with the magnifier and arrows. Enter the distance to the left glass and the front glass (cm) for each corner.",
-    "dokunulmadi": "not tapped yet",
-    "durumVar": "Calibration: {{tarih}} · reprojection {{px}} px · lens difference {{cm}} cm",
+    "dogrulamaGecti": "Verification PASSED — difference at the plate center {{merkez}} cm (limit {{esik}} cm); corners: {{farklar}} cm.",
+    "dogrulamaKaldi": "Verification FAILED — difference at the plate center {{merkez}} cm (limit {{esik}} cm); corners: {{farklar}} cm. Check the measurements or calibrate again.",
+    "durumVar": "Calibration: {{tarih}} · {{n}} positions · reprojection {{px}} px · lens difference {{cm}} cm",
     "durumYok": "No calibration — Well Plate / phantom AI Pro coil driving does not start without a calibration.",
+    "eski": "OUTDATED calibration ({{tarih}}): work continued without calibrating after the camera moved — positions may be off by ~1–2 cm; calibrate again when you can.",
     "fantom": {
       "aciklama": "The phantom stands on the floor; the tumors are seen on its top surface. Measure and enter the thickness (floor to top surface) and the tumor depth (from the top surface); length / width are optional (for the empty-cabin check).",
       "baslik": "Phantom setting",
@@ -640,20 +645,28 @@
       "kaydedildi": "Phantom setting saved.",
       "kaydet": "Save phantom setting"
     },
+    "gorusAlani": "On the floor the camera does not see the first ~{{on}} cm from the front glass (blind zone) — place the sample inside the rings.",
     "hata": "The calibration request failed — try again.",
     "hesapla": "Calculate",
-    "inceAyar": "Fine adjust (1 px)",
     "kalibreEt": "Calibrate",
+    "kamera": "Calibration camera: {{ad}} ({{vidpid}})",
     "kareAliniyor": "Taking a frame from the cabin camera…",
-    "kareEtiketi": "Calibration frame — tap a corner",
+    "kareEtiketi": "Calibration frame — plate outline and numbered corners",
     "kareZamanAsimi": "The cabin camera did not deliver a frame in time — check the camera cable, close any other app using the camera and try again.",
     "kaydedildi": "Calibration saved.",
     "kaydet": "Save calibration",
     "kilitli": "The calibration cannot be changed while AI Pro preparation / a session is running.",
+    "konum": {
+      "baslik": "Positions: {{n}} (at least {{asgari}})",
+      "ekle": "Add position",
+      "ipucu": "The first position must be on one side of the cabin and the second on the other side (at least 20 cm between centers) — two positions on the same side cannot measure the opposite side.",
+      "kareAl": "Take frame (position {{n}})",
+      "satir": "Position {{n}}: {{kose}} corners measured",
+      "sil": "Remove"
+    },
     "kose": {
       "arkaSag": "Back-right",
       "arkaSol": "Back-left",
-      "dogrulama": "Corner {{sira}}",
       "onSag": "Front-right",
       "onSol": "Front-left"
     },
@@ -662,29 +675,33 @@
       "sol": "To left glass (cm)",
       "taban": "To floor glass (cm)"
     },
-    "lensBaslik": "Lens position (measured, cm) — checks the calibration",
+    "lensBaslik": "Lens position and height (measured, cm) — checks the calibration; the base height setting uses it too",
+    "olcuAciklama": "Enter the distance to the left glass and to the front glass in cm for at least two of the numbered corners in the image (preferably diagonal: 1 and 3 or 2 and 4).",
     "onCm": "To front glass (cm)",
-    "piksel": "{{u}}, {{v}} px",
     "plakaYuksekligi": "Plate height (cm)",
     "sahneYok": "The fixed scene in the calibration frame is weak — camera movement is checked only by the well spacing and the phantom cannot be driven. Stick a patterned tape on the cabin floor and calibrate again.",
     "solCm": "To left glass (cm)",
-    "sonrakiKose": "Next corner: {{kose}} →",
     "sonuc": {
+      "capraz": "Cross-validation (each position from the others): {{liste}} cm",
       "gecerli": "Calibration is valid.",
       "gecersiz": "Calibration REJECTED.",
-      "izdusum": "Reprojection error: {{px}} px (limit {{esik}} px)",
-      "kuyu": "Well spacing: {{sutun}} / {{satir}} mm (expected {{beklenen}} mm, deviation {{yuzde}}%)",
-      "kuyuYok": "The well spacing could not be measured in this frame (not all 24 wells are filled or the grid was not found).",
-      "lens": "Lens (cabin X / Y / Z, cm): calculated {{h}} · measured {{o}} · difference {{cm}} cm",
-      "lensOlcumsuz": "Calculated lens (cabin X / Y / Z, cm): {{h}} — no measured lens entered.",
-      "lensOnay": "The lens difference is more than 2 cm — I checked the measurements, save anyway."
+      "izdusum": "Well reprojection error: {{px}} px (limit {{esik}} px)",
+      "konumSapma": "Position {{n}} corner deviations (mm): {{liste}}",
+      "lens": "Lens (left / front / floor, cm): calculated {{h}} · measured {{o}} · difference {{yatay}} cm horizontally, {{dikey}} cm in height",
+      "lensOlcumsuz": "Calculated lens (left / front / floor, cm): {{h}} — no measured lens entered.",
+      "lensOnay": "The lens difference exceeds the limit — I checked the measurements, save anyway.",
+      "uyum": "Measurement agreement: {{mm}} mm (limit {{esik}} mm) · position spread {{cm}} cm"
     },
-    "yon": {
-      "asagi": "1 pixel down",
-      "sag": "1 pixel right",
-      "sol": "1 pixel left",
-      "yukari": "1 pixel up"
-    }
+    "taban": {
+      "aciklama": "If the dish / phantom stands on a riser, measure and enter the distance from the lens to the sample base (lens height at calibration {{lens}} cm; without a riser use this value).",
+      "baslik": "Sample base",
+      "durum": "Base raise: {{cm}} cm",
+      "kaydedildi": "Base height saved (raise {{cm}} cm).",
+      "lensYok": "The calibration has no lens height — calibrate again with the lens measurement to set the base height.",
+      "uygula": "Apply",
+      "uzaklik": "Lens → sample base (cm)"
+    },
+    "yenidenKare": "Take the frame again"
   },
   "kopru": {
     "etiket": "AI Pro session for this {{hedef}}: go to the Control screen",

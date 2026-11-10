@@ -320,6 +320,35 @@ def duzlem_durumu() -> tuple:
         return None, "okunamadi"
 
 
+def secili_kamera_kimligi():
+    """KD-2: seçili kabin kamerasının KİMLİĞİ (ad + VID/PID + aygıt yolu) — kalibrasyon kamerasıyla karşılaştırılır; yoksa None."""
+    try:
+        from utils import kabin_kamerasi as kk
+
+        s = kk.secili_kamera()
+        return None if s is None else s.get("kimlik")
+    except Exception:
+        return None
+
+
+def gorus_alani_on_cm():
+    """Kalibrasyondan ön camın dibindeki kör şerit (cm); kalibrasyon / bilgi yoksa None."""
+    kal, hata = duzlem_durumu()
+    if kal is None or hata:
+        return None
+    try:
+        v = float((kal.get("gorus_alani") or {}).get("on"))
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
+
+
+def kor_bolge_ipucu() -> str:
+    """Numune HİÇ bulunamadığında ipucuna eklenen kör bölge cümlesi (kalibrasyonda ön kör şerit varsa); yoksa boş."""
+    cm = gorus_alani_on_cm()
+    return "" if cm is None else " " + ceviri.t("ai.pro.ipucu.korBolge", cm=f"{cm:g}")
+
+
 def secili_kamera_indeksi():
     """Seçili kabin kamerasının indeksi (kalibrasyon kamerasıyla karşılaştırılır); seçim yoksa None."""
     try:
@@ -341,9 +370,14 @@ def duzlem_surus_engeli(saglayici) -> str | None:
         return "kalibrasyon_bozuk"
     if kal is None:
         return "kalibrasyon_yok"
+    from ai_hub.cv_ortak import sabit_duzlem as sd
+
+    ayni = sd.kimlik_ayni(secili_kamera_kimligi(), (kal.get("kamera") or {}).get("kimlik"))
+    if ayni is False:
+        return "kalibrasyon_kamera_farkli"
     secili = secili_kamera_indeksi()
     ki = (kal.get("kamera") or {}).get("indeks")
-    if secili is not None and ki is not None and int(secili) != int(ki):
+    if ayni is None and secili is not None and ki is not None and int(secili) != int(ki):
         return "kalibrasyon_kamera_farkli"
     if str(getattr(saglayici, "ad", "") or "") == "fantom":
         ayar = kal.get("fantom") or {}
@@ -373,6 +407,27 @@ def kapi_metni(kod: str) -> str | None:
         return ceviri.t("ai.pemf.kapi.fantomBoyuFarkli")
     if kod == "fantom_degil":
         return ceviri.t("ai.pemf.kapi.fantomDegil")
+    if kod.startswith("kor_bolge_"):
+        cm = gorus_alani_on_cm()
+        ek = "" if cm is None else " " + ceviri.t("ai.pemf.kapi.korBolgeOnSerit", cm=f"{cm:g}")
+        if kod == "kor_bolge_on":
+            return ceviri.t("ai.pemf.kapi.korBolgeOn") + ek
+        if kod == "kor_bolge_arka":
+            return ceviri.t("ai.pemf.kapi.korBolgeArka") + ek
+        if kod == "kor_bolge_sol":
+            return ceviri.t("ai.pemf.kapi.korBolgeSol") + ek
+        if kod == "kor_bolge_sag":
+            return ceviri.t("ai.pemf.kapi.korBolgeSag") + ek
+    return None
+
+
+def kalibrasyon_eski_metni(payload) -> str | None:
+    """KD-1 sahip kararı: "kalibre etmeden devam" edildiyse HER yanıtta kalıcı uyarı (istek dilinde); değilse None."""
+    try:
+        if isinstance(payload, dict) and bool((payload.get("kalibrasyon") or {}).get("eski")):
+            return ceviri.t("ai.pemf.kapi.kalibrasyonEski")
+    except Exception:
+        return None
     return None
 
 
@@ -889,7 +944,11 @@ class FantomSaglayici(_EmCvSaglayici):
         pl = cache["cls"](cache["cfg"], manual_fallback=False)
         pl._predictor = cache["predictor"]  # ENJEKSİYON: her karede ONNX yüklenmesin
         # KD · Y258: veri kökündeki sabit düzlem kalibrasyonu (varsa ArUco ARANMAZ) + karenin geldiği kabin kamerası.
-        pl.duzlem, pl.kamera_indeksi = duzlem_durumu(), secili_kamera_indeksi()
+        pl.duzlem, pl.kamera_indeksi, pl.kamera_kimligi = (
+            duzlem_durumu(),
+            secili_kamera_indeksi(),
+            secili_kamera_kimligi(),
+        )
         return pl
 
     def _ozne_yok_hatalari(self) -> tuple:
@@ -898,7 +957,7 @@ class FantomSaglayici(_EmCvSaglayici):
         return ("phantom_not_detected", "tumor_cluster_not_found")
 
     def _ipucu_ozne_yok(self) -> str:
-        return ceviri.t("ai.pro.ipucu.fantomYok")
+        return ceviri.t("ai.pro.ipucu.fantomYok") + kor_bolge_ipucu()
 
     def _egitim_araligi(self):
         from ai_hub.inference_em_fantom import inference_em_fantom as ief
@@ -981,7 +1040,11 @@ class PetriSaglayici(_EmCvSaglayici):
         pl.yolo = cache["yolo"]
         pl._predictor = cache["predictor"]
         # KD · Y258: veri kökündeki sabit düzlem kalibrasyonu (varsa ArUco ARANMAZ) + karenin geldiği kabin kamerası.
-        pl.duzlem, pl.kamera_indeksi = duzlem_durumu(), secili_kamera_indeksi()
+        pl.duzlem, pl.kamera_indeksi, pl.kamera_kimligi = (
+            duzlem_durumu(),
+            secili_kamera_indeksi(),
+            secili_kamera_kimligi(),
+        )
         return pl
 
     def _ozne_yok_hatalari(self) -> tuple:
@@ -995,7 +1058,7 @@ class PetriSaglayici(_EmCvSaglayici):
     def _ipucu_ozne_yok(self) -> str:
         # ⚠️ AI Hub'ın YÜKLEME bağlamlı makullik metni kullanıcıya GİTMEZ ("yüklenen görüntü",
         # "modüle yükleyin", ortam değişkeni adı) — canlı kamera için ayrı, eylem söyleyen metin.
-        return ceviri.t("ai.pro.ipucu.petriYok")
+        return ceviri.t("ai.pro.ipucu.petriYok") + kor_bolge_ipucu()
 
     def _egitim_araligi(self):
         from ai_hub.inference_em_petri import inference_em_petri as iep

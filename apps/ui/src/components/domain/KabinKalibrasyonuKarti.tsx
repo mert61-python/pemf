@@ -1,17 +1,17 @@
 /**
- * KABİN KALİBRASYONU (KD · sahip kararları Y258–Y260, 2026-11-10) — sabit düzlem kalibrasyonu ekranı. Araştırma profili, AI Pro panelinde
- * petri / fantom modeliyle; masaüstü + telefon + web (kare ARKA UÇTAKİ kabin kamerasından gelir — telefon da aynı uçları kullanır).
+ * KABİN KALİBRASYONU (KD · sahip kararları Y258–Y260; KD-2 çok konumlu, 2026-11-10) — sabit düzlem kalibrasyonu ekranı. Araştırma
+ * profili, AI Pro panelinde petri / fantom modeliyle; masaüstü + telefon + web (kare ARKA UÇTAKİ kabin kamerasından gelir).
  *
- * Akış: kare al → plakanın 4 ÜST dış köşesine sırayla dokun (ön-sol, ön-sağ, arka-sağ, arka-sol; büyüteç + 1 px ince ayar) → köşe başına
- * sol / ön cama uzaklık (cm) + lens konumu (sol / ön / taban camından, cm) → Hesapla (yeniden izdüşüm, hesaplanan ↔ ölçülen lens, kuyu
- * aralığı) → Kaydet (lens farkı 2 cm'yi aşarsa AÇIK onay ister; kayıt denetim izine). "Doğrula": plaka başka yerde, 2 köşe → fark cm.
- * Fantom: kalınlık / tümör derinliği / boy (sahip ölçer). Bütün metinler sunucunun ya da kataloğun (TR + EN); arayüz kural UYDURMAZ —
- * geçerlilik, eşikler ve nedenler arka uçtan (`/api/ai/pro/kalibrasyon/*`).
+ * Akış (KD-2 — gerçek tezgâh karelerinde tek konum başka yerde 2,5 cm'ye kaçtı): plakayı kabinin bir yanına koy → Kare al (kuyular
+ * sunucuda OTOMATİK bulunur, köşeler görüntüde 1–4 numaralı çizilir; dokunma yok) → numaralı köşelerden en az ikisinin (tercihen
+ * çapraz) sol / ön cama uzaklığı → Konumu ekle → plakayı öbür yana koy, tekrarla → lens konumu → Hesapla → Kaydet (lens uyarısı AÇIK
+ * onay ister). "Doğrula": plaka başka yerde, ≥ 1 köşe → plaka MERKEZİ farkı. Numune tabanı (altlık) ve "kalibre etmeden devam"
+ * (kamera ~≤ 2 cm oynadıysa) aynı kartta. Bütün kurallar / eşikler / nedenler arka uçtan (`/api/ai/pro/kalibrasyon/*`).
  */
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Pressable, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair } from "lucide-react-native";
+import { Crosshair } from "lucide-react-native";
 import { colors, radius, spacing, touch, typography } from "@/theme/tokens";
 import { AI_TIMEOUT_MS, apiGet, apiPost, KAMERA_TIMEOUT_MS } from "@/services/apiClient";
 
@@ -21,46 +21,63 @@ interface Kare {
   genislik: number;
   yukseklik: number;
   image_base64: string;
+  plaka: { bulundu: boolean; kuyuSayisi: number; kareSayisi: number; metin: string | null };
 }
-interface Nokta {
-  u: number;
-  v: number;
+interface Olcu {
+  sol: string;
+  on: string;
+}
+interface Konum {
+  kareKimligi: string;
+  olcum: Olcu[];
 }
 interface Durum {
   var: boolean;
   gecerli: boolean;
   hataMetni?: string;
   tarih?: string;
+  konumSayisi?: number;
   izdusumHatasiPx?: number;
   lensFarkiCm?: number | null;
+  kameraAdi?: string | null;
+  kameraVidPid?: string | null;
+  olculenLensTabanCm?: number | null;
+  gorusAlani?: { on: number | null; arka: number | null; sol: number | null; sag: number | null } | null;
   sahneDenetimi?: boolean;
+  eski?: boolean;
+  eskiTarih?: string | null;
+  tabanYukseltmesiCm?: number;
   fantom?: { kalinlikCm: number | null; tumorDerinligiCm: number | null; boyCm: (number | null)[] | null };
-  sonDogrulama?: { maks_cm: number; gecti: boolean } | null;
 }
 interface Sonuc {
   gecerli: boolean;
   nedenler: { kod: string; metin: string }[];
   izdusumHatasiPx: number | null;
+  olcumUyumuMm: number | null;
+  yayilimCm: number | null;
+  konumlar: { koseSapmasiMm: (number | null)[]; kuyuIzdusumPx: number; merkezCm: number[] }[];
+  caprazDogrulamaCm: (number | null)[] | null;
   hesaplananLensCm: number[] | null;
   olculenLensCm: number[] | null;
-  lensFarkiCm: number | null;
+  lensYatayFarkiCm: number | null;
+  lensDikeyFarkiCm: number | null;
   lensUyarisi: boolean;
-  kuyuAraligi: { sutunMm: number; satirMm: number; beklenenMm: number; sapma: number; gecti: boolean } | null;
+  gorusAlani: { onCm: number | null; arkaCm: number | null; solCm: number | null; sagCm: number | null } | null;
   sahne: { oznitelik: number; denetim: boolean } | null;
-  esikler: { izdusumPx: number; lensCm: number };
+  esikler: { izdusumPx: number; lensCm: number; lensDikeyCm: number; olcumMm: number; yayilimCm: number; konumAsgari: number };
 }
 interface Dogrulama {
-  farkCm: number[];
-  maksCm: number;
+  farkCm: (number | null)[];
+  merkezFarkCm: number;
   gecti: boolean;
   esikCm: number;
 }
 
-const BUYUTEC = 180;
-const BUYUTME = 4;
-
 const sayi = (s: string) => Number(String(s).replace(",", "."));
 const gecerliSayi = (s: string) => s.trim() !== "" && Number.isFinite(sayi(s));
+const bosOlcu = (): Olcu[] => Array.from({ length: 4 }, () => ({ sol: "", on: "" }));
+const olculen = (o: Olcu[]) => o.filter((x) => gecerliSayi(x.sol) && gecerliSayi(x.on)).length;
+const cm = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(1));
 
 export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "petri" | "fantom"; kilitli?: boolean }) {
   const { t } = useTranslation();
@@ -68,9 +85,8 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   const [kip, setKip] = useState<Kip | null>(null);
   const [kare, setKare] = useState<Kare | null>(null);
   const [aliniyor, setAliniyor] = useState(false);
-  const [noktalar, setNoktalar] = useState<(Nokta | null)[]>([]);
-  const [aktif, setAktif] = useState(0);
-  const [olcum, setOlcum] = useState<{ sol: string; on: string }[]>([]);
+  const [olcum, setOlcum] = useState<Olcu[]>(bosOlcu());
+  const [konumlar, setKonumlar] = useState<Konum[]>([]);
   const [lens, setLens] = useState({ sol: "", on: "", taban: "" });
   const [plakaYuk, setPlakaYuk] = useState("2");
   const [sonuc, setSonuc] = useState<Sonuc | null>(null);
@@ -80,6 +96,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   const [mesgul, setMesgul] = useState(false);
   const [genislik, setGenislik] = useState(0);
   const [fantom, setFantom] = useState({ kalinlik: "", derinlik: "", boy: "", en: "" });
+  const [tabanUzaklik, setTabanUzaklik] = useState("");
 
   const yukle = useCallback(async () => {
     const d = await apiGet<Durum | null>("/ai/pro/kalibrasyon", null, { silent: true });
@@ -91,6 +108,10 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
         boy: f.boy || (d.fantom?.boyCm?.[0] != null ? String(d.fantom.boyCm[0]) : ""),
         en: f.en || (d.fantom?.boyCm?.[1] != null ? String(d.fantom.boyCm[1]) : ""),
       }));
+    }
+    if (d?.olculenLensTabanCm != null) {
+      const yuk = d.tabanYukseltmesiCm ?? 0;
+      setTabanUzaklik((s) => s || String(Math.round((d.olculenLensTabanCm! - yuk) * 10) / 10));
     }
   }, []);
 
@@ -109,17 +130,11 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
     }
   };
 
-  const baslat = async (yeni: Kip) => {
+  const kareAl = async () => {
     if (kilitli || aliniyor) return;
-    setKip(yeni);
-    setSonuc(null);
-    setDogrulama(null);
     setMesaj(null);
-    setLensOnay(false);
-    const n = yeni === "kalibrasyon" ? 4 : 2;
-    setNoktalar(Array(n).fill(null));
-    setOlcum(Array.from({ length: n }, () => ({ sol: "", on: "" })));
-    setAktif(0);
+    setDogrulama(null);
+    setOlcum(bosOlcu());
     setAliniyor(true);
     try {
       const k = await apiPost<Kare | null>("/ai/pro/kalibrasyon/kare", {}, null, {
@@ -134,132 +149,122 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
     }
   };
 
-  const gosterim = kare ? { w: Math.min(genislik || 320, 960), h: (Math.min(genislik || 320, 960) * kare.yukseklik) / kare.genislik } : null;
-
-  const dokun = (x: number, y: number) => {
-    if (!kare || !gosterim || aktif >= noktalar.length) return;
-    const u = Math.round((x * kare.genislik) / gosterim.w);
-    const v = Math.round((y * kare.yukseklik) / gosterim.h);
-    setNoktalar((p) => p.map((q, i) => (i === aktif ? { u, v } : q)));
+  const baslat = (yeni: Kip) => {
+    if (kilitli || aliniyor) return;
+    setKip(yeni);
+    setKare(null);
     setSonuc(null);
+    setLensOnay(false);
+    if (yeni === "kalibrasyon") setKonumlar([]);
+    void kareAl();
   };
 
-  const kaydir = (du: number, dv: number) => {
-    if (!kare) return;
-    setNoktalar((p) =>
-      p.map((q, i) =>
-        i === aktif && q
-          ? { u: Math.min(kare.genislik, Math.max(0, q.u + du)), v: Math.min(kare.yukseklik, Math.max(0, q.v + dv)) }
-          : q
-      )
-    );
-    setSonuc(null);
-  };
+  const gosterim = kare
+    ? { w: Math.min(genislik || 320, 960), h: (Math.min(genislik || 320, 960) * kare.yukseklik) / kare.genislik }
+    : null;
 
-  // Köşe sırası arka uçla AYNI (`sabit_duzlem.KOSE_ADLARI`): ön-sol, ön-sağ, arka-sağ, arka-sol.
+  // Numaralar arka uçla AYNI (`sabit_duzlem.KOSE_ADLARI`; görüntüde çizilen 1–4): ön-sol, ön-sağ, arka-sağ, arka-sol.
   const koseAdlari = [
     t("ai.kalibrasyon.kose.onSol"),
     t("ai.kalibrasyon.kose.onSag"),
     t("ai.kalibrasyon.kose.arkaSag"),
     t("ai.kalibrasyon.kose.arkaSol"),
   ];
-  const koseAdi = (i: number) => (kip === "dogrulama" ? t("ai.kalibrasyon.kose.dogrulama", { sira: i + 1 }) : koseAdlari[i]);
-  const tamam = kare !== null && noktalar.length > 0 && noktalar.every(Boolean) && olcum.every((o) => gecerliSayi(o.sol) && gecerliSayi(o.on));
+  const plakaVar = kare?.plaka?.bulundu === true;
+  const eklenebilir = plakaVar && olculen(olcum) >= 2;
+  const dogrulanabilir = plakaVar && olculen(olcum) >= 1;
   const lensVar = gecerliSayi(lens.sol) && gecerliSayi(lens.on) && gecerliSayi(lens.taban);
+  const asgari = sonuc?.esikler.konumAsgari ?? 2;
+
+  const olcuGovdesi = (o: Olcu[]) =>
+    o.map((x) => (gecerliSayi(x.sol) && gecerliSayi(x.on) ? { solCm: sayi(x.sol), onCm: sayi(x.on) } : null));
+
+  const konumEkle = () => {
+    if (!kare || !eklenebilir) return;
+    setKonumlar((p) => [...p, { kareKimligi: kare.kareKimligi, olcum }]);
+    setKare(null);
+    setOlcum(bosOlcu());
+    setSonuc(null);
+  };
 
   const govde = () => ({
-    kareKimligi: kare?.kareKimligi,
-    koseler: noktalar.map((n, i) => ({ u: n?.u, v: n?.v, solCm: sayi(olcum[i].sol), onCm: sayi(olcum[i].on) })),
+    konumlar: konumlar.map((k) => ({ kareKimligi: k.kareKimligi, olcumler: olcuGovdesi(k.olcum) })),
     lens: lensVar ? { solCm: sayi(lens.sol), onCm: sayi(lens.on), tabanCm: sayi(lens.taban) } : null,
     plakaYuksekligiCm: sayi(plakaYuk),
     lensUyarisiniOnayla: lensOnay,
   });
 
-  const hesapla = async () => {
-    if (!tamam || mesgul) return;
+  const istek = async <T,>(yol: string, b: unknown, zaman = AI_TIMEOUT_MS) => {
     setMesgul(true);
     setMesaj(null);
     try {
-      const r = await apiPost<Sonuc | null>("/ai/pro/kalibrasyon/hesapla", govde(), null, {
-        timeoutMs: AI_TIMEOUT_MS,
-        silent: true,
-        onHttpError: hataYakala,
-      });
-      if (r) setSonuc(r);
+      return await apiPost<T | null>(yol, b, null, { timeoutMs: zaman, silent: true, onHttpError: hataYakala });
     } finally {
       setMesgul(false);
     }
   };
 
+  const hesapla = async () => {
+    if (konumlar.length < 2 || mesgul) return;
+    const r = await istek<Sonuc>("/ai/pro/kalibrasyon/hesapla", govde());
+    if (r) setSonuc(r);
+  };
+
   const kaydet = async () => {
-    if (!tamam || mesgul || !sonuc?.gecerli || (sonuc.lensUyarisi && !lensOnay)) return;
-    setMesgul(true);
-    setMesaj(null);
-    try {
-      const r = await apiPost<{ durum: Durum } | null>("/ai/pro/kalibrasyon/kaydet", govde(), null, {
-        timeoutMs: AI_TIMEOUT_MS,
-        silent: true,
-        onHttpError: hataYakala,
-      });
-      if (r?.durum) {
-        setDurum(r.durum);
-        setMesaj(t("ai.kalibrasyon.kaydedildi"));
-        setKip(null);
-        setKare(null);
-      }
-    } finally {
-      setMesgul(false);
+    if (mesgul || !sonuc?.gecerli || (sonuc.lensUyarisi && !lensOnay)) return;
+    const r = await istek<{ durum: Durum }>("/ai/pro/kalibrasyon/kaydet", govde());
+    if (r?.durum) {
+      setDurum(r.durum);
+      setMesaj(t("ai.kalibrasyon.kaydedildi"));
+      setKip(null);
+      setKare(null);
+      setKonumlar([]);
     }
   };
 
   const dogrula = async () => {
-    if (!tamam || mesgul) return;
-    setMesgul(true);
-    setMesaj(null);
-    try {
-      const b = govde();
-      const r = await apiPost<Dogrulama | null>(
-        "/ai/pro/kalibrasyon/dogrula",
-        { kareKimligi: b.kareKimligi, koseler: b.koseler },
-        null,
-        { timeoutMs: AI_TIMEOUT_MS, silent: true, onHttpError: hataYakala }
-      );
-      if (r) {
-        setDogrulama(r);
-        void yukle();
-      }
-    } finally {
-      setMesgul(false);
+    if (!kare || !dogrulanabilir || mesgul) return;
+    const r = await istek<Dogrulama>("/ai/pro/kalibrasyon/dogrula", { kareKimligi: kare.kareKimligi, olcumler: olcuGovdesi(olcum) });
+    if (r) {
+      setDogrulama(r);
+      void yukle();
     }
   };
 
   const fantomKaydet = async () => {
     if (mesgul || !gecerliSayi(fantom.kalinlik)) return;
-    setMesgul(true);
-    setMesaj(null);
-    try {
-      const boyVar = gecerliSayi(fantom.boy) && gecerliSayi(fantom.en);
-      const r = await apiPost<{ durum: Durum } | null>(
-        "/ai/pro/kalibrasyon/fantom",
-        {
-          kalinlikCm: sayi(fantom.kalinlik),
-          tumorDerinligiCm: gecerliSayi(fantom.derinlik) ? sayi(fantom.derinlik) : 0,
-          boyCm: boyVar ? sayi(fantom.boy) : null,
-          enCm: boyVar ? sayi(fantom.en) : null,
-        },
-        null,
-        { silent: true, onHttpError: hataYakala }
-      );
-      if (r?.durum) {
-        setDurum(r.durum);
-        setMesaj(t("ai.kalibrasyon.fantom.kaydedildi"));
-      }
-    } finally {
-      setMesgul(false);
+    const boyVar = gecerliSayi(fantom.boy) && gecerliSayi(fantom.en);
+    const r = await istek<{ durum: Durum }>("/ai/pro/kalibrasyon/fantom", {
+      kalinlikCm: sayi(fantom.kalinlik),
+      tumorDerinligiCm: gecerliSayi(fantom.derinlik) ? sayi(fantom.derinlik) : 0,
+      boyCm: boyVar ? sayi(fantom.boy) : null,
+      enCm: boyVar ? sayi(fantom.en) : null,
+    });
+    if (r?.durum) {
+      setDurum(r.durum);
+      setMesaj(t("ai.kalibrasyon.fantom.kaydedildi"));
     }
   };
 
-  const secili = noktalar[aktif] ?? null;
+  const tabanUygula = async () => {
+    if (mesgul || !gecerliSayi(tabanUzaklik)) return;
+    const r = await istek<{ durum: Durum }>("/ai/pro/kalibrasyon/taban", { lensUzaklikCm: sayi(tabanUzaklik) });
+    if (r?.durum) {
+      setDurum(r.durum);
+      setMesaj(t("ai.kalibrasyon.taban.kaydedildi", { cm: cm(r.durum.tabanYukseltmesiCm ?? 0) }));
+    }
+  };
+
+  const devamEt = async () => {
+    if (mesgul || kilitli) return;
+    const r = await istek<{ durum: Durum; kaymaPx: number }>("/ai/pro/kalibrasyon/sahne-yenile", {}, KAMERA_TIMEOUT_MS);
+    if (r?.durum) {
+      setDurum(r.durum);
+      setMesaj(t("ai.kalibrasyon.devam.tamam", { px: r.kaymaPx?.toFixed?.(0) ?? "?" }));
+    }
+  };
+
+  const ga = durum?.gorusAlani;
 
   return (
     <View style={styles.kutu} testID="kabin-kalibrasyonu" onLayout={(e) => setGenislik(Math.round(e.nativeEvent.layout.width) - 2 * spacing.md)}>
@@ -273,8 +278,9 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
           <Text style={styles.durum} testID="kabin-kalibrasyonu-durum">
             {t("ai.kalibrasyon.durumVar", {
               tarih: String(durum.tarih ?? "").slice(0, 16).replace("T", " "),
+              n: durum.konumSayisi ?? 0,
               px: (durum.izdusumHatasiPx ?? 0).toFixed(2),
-              cm: durum.lensFarkiCm == null ? "—" : durum.lensFarkiCm.toFixed(1),
+              cm: cm(durum.lensFarkiCm),
             })}
           </Text>
         ) : (
@@ -282,6 +288,21 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
             {durum.hataMetni ?? t("ai.kalibrasyon.durumYok")}
           </Text>
         )
+      ) : null}
+      {durum?.gecerli && durum.kameraAdi ? (
+        <Text style={styles.not} testID="kabin-kalibrasyonu-kamera">
+          {t("ai.kalibrasyon.kamera", { ad: durum.kameraAdi, vidpid: durum.kameraVidPid ?? "?" })}
+        </Text>
+      ) : null}
+      {durum?.gecerli && ga?.on ? (
+        <Text style={styles.not} testID="kabin-kalibrasyonu-gorus">
+          {t("ai.kalibrasyon.gorusAlani", { on: cm(ga.on) })}
+        </Text>
+      ) : null}
+      {durum?.gecerli && durum.eski ? (
+        <Text style={[styles.not, styles.dikkat]} testID="kabin-kalibrasyonu-eski">
+          {t("ai.kalibrasyon.eski", { tarih: String(durum.eskiTarih ?? "").slice(0, 16).replace("T", " ") })}
+        </Text>
       ) : null}
       {durum?.gecerli && durum.sahneDenetimi === false ? (
         <Text style={[styles.not, styles.uyari]} testID="kabin-kalibrasyonu-sahne-yok">
@@ -292,7 +313,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
       <View style={styles.satir}>
         <TouchableOpacity
           style={[styles.dugme, (kilitli || aliniyor) && styles.kilitli]}
-          onPress={() => void baslat("kalibrasyon")}
+          onPress={() => baslat("kalibrasyon")}
           disabled={kilitli || aliniyor}
           accessibilityRole="button"
           testID="kabin-kalibrasyonu-baslat"
@@ -302,7 +323,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
         {durum?.gecerli ? (
           <TouchableOpacity
             style={[styles.dugme, styles.ikincil, (kilitli || aliniyor) && styles.kilitli]}
-            onPress={() => void baslat("dogrulama")}
+            onPress={() => baslat("dogrulama")}
             disabled={kilitli || aliniyor}
             accessibilityRole="button"
             testID="kabin-kalibrasyonu-dogrula-baslat"
@@ -312,6 +333,40 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
         ) : null}
       </View>
       {kilitli ? <Text style={styles.not}>{t("ai.kalibrasyon.kilitli")}</Text> : null}
+
+      {kip === "kalibrasyon" ? (
+        <View style={styles.adimlar} testID="kabin-kalibrasyonu-konumlar">
+          <Text style={styles.altBaslik}>{t("ai.kalibrasyon.konum.baslik", { n: konumlar.length, asgari })}</Text>
+          <Text style={styles.not}>{t("ai.kalibrasyon.konum.ipucu")}</Text>
+          {konumlar.map((k, i) => (
+            <View key={k.kareKimligi} style={styles.satir} testID={`kabin-kalibrasyonu-konum-${i}`}>
+              <Text style={styles.durum}>{t("ai.kalibrasyon.konum.satir", { n: i + 1, kose: olculen(k.olcum) })}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setKonumlar((p) => p.filter((_, j) => j !== i));
+                  setSonuc(null);
+                }}
+                accessibilityRole="button"
+                testID={`kabin-kalibrasyonu-konum-sil-${i}`}
+              >
+                <Text style={styles.baglanti}>{t("ai.kalibrasyon.konum.sil")}</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          {!kare ? (
+            <TouchableOpacity
+              style={[styles.dugme, styles.ikincil, (kilitli || aliniyor) && styles.kilitli]}
+              onPress={() => void kareAl()}
+              disabled={kilitli || aliniyor}
+              accessibilityRole="button"
+              testID="kabin-kalibrasyonu-kare-al"
+            >
+              <Text style={[styles.dugmeMetni, styles.ikincilMetin]}>{t("ai.kalibrasyon.konum.kareAl", { n: konumlar.length + 1 })}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
       {aliniyor ? (
         <View style={styles.satir} testID="kabin-kalibrasyonu-kare-aliniyor">
           <ActivityIndicator color={colors.primary} />
@@ -321,162 +376,127 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
 
       {kip && kare && gosterim ? (
         <View style={styles.adimlar}>
-          <Text style={styles.not}>{kip === "kalibrasyon" ? t("ai.kalibrasyon.dokunAciklama") : t("ai.kalibrasyon.dogrulaAciklama")}</Text>
-          <Pressable
-            onPress={(e) => dokun(e.nativeEvent.locationX, e.nativeEvent.locationY)}
+          <Image
+            source={{ uri: `data:image/jpeg;base64,${kare.image_base64}` }}
             style={{ width: gosterim.w, height: gosterim.h }}
-            testID="kabin-kalibrasyonu-kare"
             accessibilityLabel={t("ai.kalibrasyon.kareEtiketi")}
-          >
-            <Image source={{ uri: `data:image/jpeg;base64,${kare.image_base64}` }} style={{ width: gosterim.w, height: gosterim.h }} />
-            {noktalar.map((n, i) =>
-              n ? (
-                <View
-                  key={i}
-                  pointerEvents="none"
-                  style={[
-                    styles.isaret,
-                    i === aktif && styles.isaretAktif,
-                    { left: (n.u * gosterim.w) / kare.genislik - 7, top: (n.v * gosterim.h) / kare.yukseklik - 7 },
-                  ]}
-                />
-              ) : null
-            )}
-          </Pressable>
-
-          {secili ? (
-            <View style={styles.satir}>
-              <View style={styles.buyutec} testID="kabin-kalibrasyonu-buyutec" pointerEvents="none">
-                <Image
-                  source={{ uri: `data:image/jpeg;base64,${kare.image_base64}` }}
-                  style={{
-                    position: "absolute",
-                    width: gosterim.w * BUYUTME,
-                    height: gosterim.h * BUYUTME,
-                    left: BUYUTEC / 2 - ((secili.u * gosterim.w) / kare.genislik) * BUYUTME,
-                    top: BUYUTEC / 2 - ((secili.v * gosterim.h) / kare.yukseklik) * BUYUTME,
-                  }}
-                />
-                <View style={[styles.arti, { width: 1, height: BUYUTEC, left: BUYUTEC / 2 }]} />
-                <View style={[styles.arti, { height: 1, width: BUYUTEC, top: BUYUTEC / 2 }]} />
-              </View>
-              <View style={styles.okKutusu}>
-                <Text style={styles.not}>{t("ai.kalibrasyon.inceAyar")}</Text>
-                <View style={styles.satir}>
-                  {[
-                    { ad: "sol", du: -1, dv: 0, Ikon: ChevronLeft, etiket: t("ai.kalibrasyon.yon.sol") },
-                    { ad: "yukari", du: 0, dv: -1, Ikon: ChevronUp, etiket: t("ai.kalibrasyon.yon.yukari") },
-                    { ad: "asagi", du: 0, dv: 1, Ikon: ChevronDown, etiket: t("ai.kalibrasyon.yon.asagi") },
-                    { ad: "sag", du: 1, dv: 0, Ikon: ChevronRight, etiket: t("ai.kalibrasyon.yon.sag") },
-                  ].map(({ ad, du, dv, Ikon, etiket }) => (
-                    <TouchableOpacity
-                      key={ad}
-                      style={styles.ok}
-                      onPress={() => kaydir(du, dv)}
-                      accessibilityRole="button"
-                      accessibilityLabel={etiket}
-                      testID={`kabin-kalibrasyonu-ok-${ad}`}
-                    >
-                      <Ikon color={colors.text} size={18} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-          ) : null}
-
-          {noktalar.map((n, i) => (
-            <View key={i} style={[styles.koseSatiri, i === aktif && styles.koseAktif]} testID={`kabin-kalibrasyonu-kose-${i}`}>
-              <TouchableOpacity onPress={() => setAktif(i)} accessibilityRole="button" testID={`kabin-kalibrasyonu-kose-sec-${i}`}>
-                <Text style={styles.koseAdi}>
-                  {i + 1}. {koseAdi(i)}
-                </Text>
-                <Text style={styles.not}>{n ? t("ai.kalibrasyon.piksel", { u: n.u, v: n.v }) : t("ai.kalibrasyon.dokunulmadi")}</Text>
-              </TouchableOpacity>
-              <TextInput
-                style={styles.giris}
-                keyboardType="decimal-pad"
-                value={olcum[i]?.sol ?? ""}
-                onChangeText={(s) => setOlcum((p) => p.map((o, j) => (j === i ? { ...o, sol: s } : o)))}
-                placeholder={t("ai.kalibrasyon.solCm")}
-                accessibilityLabel={`${koseAdi(i)} ${t("ai.kalibrasyon.solCm")}`}
-                testID={`kabin-kalibrasyonu-sol-${i}`}
-              />
-              <TextInput
-                style={styles.giris}
-                keyboardType="decimal-pad"
-                value={olcum[i]?.on ?? ""}
-                onChangeText={(s) => setOlcum((p) => p.map((o, j) => (j === i ? { ...o, on: s } : o)))}
-                placeholder={t("ai.kalibrasyon.onCm")}
-                accessibilityLabel={`${koseAdi(i)} ${t("ai.kalibrasyon.onCm")}`}
-                testID={`kabin-kalibrasyonu-on-${i}`}
-              />
-            </View>
-          ))}
-          {noktalar[aktif] && aktif < noktalar.length - 1 ? (
-            <TouchableOpacity onPress={() => setAktif(aktif + 1)} accessibilityRole="button" testID="kabin-kalibrasyonu-sonraki">
-              <Text style={styles.baglanti}>{t("ai.kalibrasyon.sonrakiKose", { kose: koseAdi(aktif + 1) })}</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          {kip === "kalibrasyon" ? (
-            <>
-              <Text style={styles.altBaslik}>{t("ai.kalibrasyon.lensBaslik")}</Text>
-              <View style={styles.satir}>
-                {(
-                  [
-                    ["sol", t("ai.kalibrasyon.lens.sol")],
-                    ["on", t("ai.kalibrasyon.lens.on")],
-                    ["taban", t("ai.kalibrasyon.lens.taban")],
-                  ] as const
-                ).map(([a, etiket]) => (
+            testID="kabin-kalibrasyonu-kare"
+          />
+          {plakaVar ? (
+            <Text style={styles.not}>{kip === "kalibrasyon" ? t("ai.kalibrasyon.olcuAciklama") : t("ai.kalibrasyon.dogrulaAciklama")}</Text>
+          ) : (
+            <Text style={[styles.not, styles.uyari]} testID="kabin-kalibrasyonu-plaka-yok">
+              {kare.plaka?.metin ?? t("ai.kalibrasyon.hata")}
+            </Text>
+          )}
+          {plakaVar
+            ? olcum.map((o, i) => (
+                <View key={i} style={styles.koseSatiri} testID={`kabin-kalibrasyonu-kose-${i}`}>
+                  <Text style={styles.koseAdi}>
+                    {i + 1} · {koseAdlari[i]}
+                  </Text>
                   <TextInput
-                    key={a}
                     style={styles.giris}
                     keyboardType="decimal-pad"
-                    value={lens[a]}
-                    onChangeText={(s) => {
-                      setLens((p) => ({ ...p, [a]: s }));
-                      setSonuc(null);
-                    }}
-                    placeholder={etiket}
-                    accessibilityLabel={etiket}
-                    testID={`kabin-kalibrasyonu-lens-${a}`}
+                    value={o.sol}
+                    onChangeText={(s) => setOlcum((p) => p.map((x, j) => (j === i ? { ...x, sol: s } : x)))}
+                    placeholder={t("ai.kalibrasyon.solCm")}
+                    accessibilityLabel={`${i + 1} ${koseAdlari[i]} ${t("ai.kalibrasyon.solCm")}`}
+                    testID={`kabin-kalibrasyonu-sol-${i}`}
                   />
-                ))}
-              </View>
-              <View style={styles.satir}>
-                <Text style={styles.not}>{t("ai.kalibrasyon.plakaYuksekligi")}</Text>
-                <TextInput
-                  style={styles.giris}
-                  keyboardType="decimal-pad"
-                  value={plakaYuk}
-                  onChangeText={setPlakaYuk}
-                  accessibilityLabel={t("ai.kalibrasyon.plakaYuksekligi")}
-                  testID="kabin-kalibrasyonu-plaka-yuksekligi"
-                />
-              </View>
+                  <TextInput
+                    style={styles.giris}
+                    keyboardType="decimal-pad"
+                    value={o.on}
+                    onChangeText={(s) => setOlcum((p) => p.map((x, j) => (j === i ? { ...x, on: s } : x)))}
+                    placeholder={t("ai.kalibrasyon.onCm")}
+                    accessibilityLabel={`${i + 1} ${koseAdlari[i]} ${t("ai.kalibrasyon.onCm")}`}
+                    testID={`kabin-kalibrasyonu-on-${i}`}
+                  />
+                </View>
+              ))
+            : null}
+          <View style={styles.satir}>
+            {kip === "kalibrasyon" ? (
               <TouchableOpacity
-                style={[styles.dugme, (!tamam || mesgul) && styles.kilitli]}
-                onPress={() => void hesapla()}
-                disabled={!tamam || mesgul}
+                style={[styles.dugme, !eklenebilir && styles.kilitli]}
+                onPress={konumEkle}
+                disabled={!eklenebilir}
                 accessibilityRole="button"
-                testID="kabin-kalibrasyonu-hesapla"
+                testID="kabin-kalibrasyonu-konum-ekle"
               >
-                {mesgul ? <ActivityIndicator color="#fff" /> : <Text style={styles.dugmeMetni}>{t("ai.kalibrasyon.hesapla")}</Text>}
+                <Text style={styles.dugmeMetni}>{t("ai.kalibrasyon.konum.ekle")}</Text>
               </TouchableOpacity>
-            </>
-          ) : (
+            ) : (
+              <TouchableOpacity
+                style={[styles.dugme, (!dogrulanabilir || mesgul) && styles.kilitli]}
+                onPress={() => void dogrula()}
+                disabled={!dogrulanabilir || mesgul}
+                accessibilityRole="button"
+                testID="kabin-kalibrasyonu-dogrula"
+              >
+                {mesgul ? <ActivityIndicator color="#fff" /> : <Text style={styles.dugmeMetni}>{t("ai.kalibrasyon.dogrulaHesapla")}</Text>}
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={[styles.dugme, (!tamam || mesgul) && styles.kilitli]}
-              onPress={() => void dogrula()}
-              disabled={!tamam || mesgul}
+              style={[styles.dugme, styles.ikincil, aliniyor && styles.kilitli]}
+              onPress={() => void kareAl()}
+              disabled={aliniyor}
               accessibilityRole="button"
-              testID="kabin-kalibrasyonu-dogrula"
+              testID="kabin-kalibrasyonu-yeniden-kare"
             >
-              {mesgul ? <ActivityIndicator color="#fff" /> : <Text style={styles.dugmeMetni}>{t("ai.kalibrasyon.dogrulaHesapla")}</Text>}
+              <Text style={[styles.dugmeMetni, styles.ikincilMetin]}>{t("ai.kalibrasyon.yenidenKare")}</Text>
             </TouchableOpacity>
-          )}
+          </View>
+        </View>
+      ) : null}
+
+      {kip === "kalibrasyon" && konumlar.length > 0 ? (
+        <View style={styles.adimlar}>
+          <Text style={styles.altBaslik}>{t("ai.kalibrasyon.lensBaslik")}</Text>
+          <View style={styles.satir}>
+            {(
+              [
+                ["sol", t("ai.kalibrasyon.lens.sol")],
+                ["on", t("ai.kalibrasyon.lens.on")],
+                ["taban", t("ai.kalibrasyon.lens.taban")],
+              ] as const
+            ).map(([a, etiket]) => (
+              <TextInput
+                key={a}
+                style={styles.giris}
+                keyboardType="decimal-pad"
+                value={lens[a]}
+                onChangeText={(s) => {
+                  setLens((p) => ({ ...p, [a]: s }));
+                  setSonuc(null);
+                }}
+                placeholder={etiket}
+                accessibilityLabel={etiket}
+                testID={`kabin-kalibrasyonu-lens-${a}`}
+              />
+            ))}
+          </View>
+          <View style={styles.satir}>
+            <Text style={styles.not}>{t("ai.kalibrasyon.plakaYuksekligi")}</Text>
+            <TextInput
+              style={styles.giris}
+              keyboardType="decimal-pad"
+              value={plakaYuk}
+              onChangeText={setPlakaYuk}
+              accessibilityLabel={t("ai.kalibrasyon.plakaYuksekligi")}
+              testID="kabin-kalibrasyonu-plaka-yuksekligi"
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.dugme, (konumlar.length < 2 || mesgul) && styles.kilitli]}
+            onPress={() => void hesapla()}
+            disabled={konumlar.length < 2 || mesgul}
+            accessibilityRole="button"
+            testID="kabin-kalibrasyonu-hesapla"
+          >
+            {mesgul ? <ActivityIndicator color="#fff" /> : <Text style={styles.dugmeMetni}>{t("ai.kalibrasyon.hesapla")}</Text>}
+          </TouchableOpacity>
         </View>
       ) : null}
 
@@ -490,27 +510,41 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
               {t("ai.kalibrasyon.sonuc.izdusum", { px: sonuc.izdusumHatasiPx.toFixed(2), esik: sonuc.esikler.izdusumPx })}
             </Text>
           ) : null}
+          {sonuc.olcumUyumuMm != null ? (
+            <Text style={styles.not} testID="kabin-kalibrasyonu-uyum">
+              {t("ai.kalibrasyon.sonuc.uyum", { mm: sonuc.olcumUyumuMm.toFixed(1), esik: sonuc.esikler.olcumMm, cm: cm(sonuc.yayilimCm) })}
+            </Text>
+          ) : null}
+          {sonuc.konumlar.map((k, i) => (
+            <Text key={i} style={styles.not} testID={`kabin-kalibrasyonu-sapma-${i}`}>
+              {t("ai.kalibrasyon.sonuc.konumSapma", {
+                n: i + 1,
+                liste: k.koseSapmasiMm.map((v, j) => (v == null ? `${j + 1}: —` : `${j + 1}: ${v.toFixed(0)}`)).join(" · "),
+              })}
+            </Text>
+          ))}
+          {sonuc.caprazDogrulamaCm ? (
+            <Text style={styles.not} testID="kabin-kalibrasyonu-capraz">
+              {t("ai.kalibrasyon.sonuc.capraz", { liste: sonuc.caprazDogrulamaCm.map((v) => cm(v)).join(" / ") })}
+            </Text>
+          ) : null}
           {sonuc.hesaplananLensCm ? (
             <Text style={[styles.not, sonuc.lensUyarisi && styles.uyari]} testID="kabin-kalibrasyonu-lens">
               {sonuc.olculenLensCm
                 ? t("ai.kalibrasyon.sonuc.lens", {
                     h: sonuc.hesaplananLensCm.map((v) => v.toFixed(1)).join(" / "),
                     o: sonuc.olculenLensCm.map((v) => v.toFixed(1)).join(" / "),
-                    cm: (sonuc.lensFarkiCm ?? 0).toFixed(1),
+                    yatay: cm(sonuc.lensYatayFarkiCm),
+                    dikey: cm(sonuc.lensDikeyFarkiCm),
                   })
                 : t("ai.kalibrasyon.sonuc.lensOlcumsuz", { h: sonuc.hesaplananLensCm.map((v) => v.toFixed(1)).join(" / ") })}
             </Text>
           ) : null}
-          <Text style={[styles.not, sonuc.kuyuAraligi && !sonuc.kuyuAraligi.gecti && styles.uyari]} testID="kabin-kalibrasyonu-kuyu">
-            {sonuc.kuyuAraligi
-              ? t("ai.kalibrasyon.sonuc.kuyu", {
-                  sutun: sonuc.kuyuAraligi.sutunMm.toFixed(2),
-                  satir: sonuc.kuyuAraligi.satirMm.toFixed(2),
-                  beklenen: sonuc.kuyuAraligi.beklenenMm,
-                  yuzde: (sonuc.kuyuAraligi.sapma * 100).toFixed(1),
-                })
-              : t("ai.kalibrasyon.sonuc.kuyuYok")}
-          </Text>
+          {sonuc.gorusAlani?.onCm != null ? (
+            <Text style={styles.not} testID="kabin-kalibrasyonu-sonuc-gorus">
+              {t("ai.kalibrasyon.gorusAlani", { on: cm(sonuc.gorusAlani.onCm) })}
+            </Text>
+          ) : null}
           {sonuc.sahne && !sonuc.sahne.denetim ? <Text style={[styles.not, styles.uyari]}>{t("ai.kalibrasyon.sahneYok")}</Text> : null}
           {sonuc.nedenler.map((n) => (
             <Text key={n.kod} style={[styles.not, styles.uyari]} testID={`kabin-kalibrasyonu-neden-${n.kod}`}>
@@ -540,9 +574,70 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
       {dogrulama ? (
         <Text style={[styles.durum, dogrulama.gecti ? styles.iyi : styles.uyari]} testID="kabin-kalibrasyonu-dogrulama-sonuc">
           {dogrulama.gecti
-            ? t("ai.kalibrasyon.dogrulamaGecti", { farklar: dogrulama.farkCm.map((v) => v.toFixed(1)).join(" / "), maks: dogrulama.maksCm.toFixed(1), esik: dogrulama.esikCm })
-            : t("ai.kalibrasyon.dogrulamaKaldi", { farklar: dogrulama.farkCm.map((v) => v.toFixed(1)).join(" / "), maks: dogrulama.maksCm.toFixed(1), esik: dogrulama.esikCm })}
+            ? t("ai.kalibrasyon.dogrulamaGecti", {
+                merkez: dogrulama.merkezFarkCm.toFixed(1),
+                farklar: dogrulama.farkCm.map((v, i) => (v == null ? null : `${i + 1}: ${v.toFixed(1)}`)).filter(Boolean).join(" · "),
+                esik: dogrulama.esikCm,
+              })
+            : t("ai.kalibrasyon.dogrulamaKaldi", {
+                merkez: dogrulama.merkezFarkCm.toFixed(1),
+                farklar: dogrulama.farkCm.map((v, i) => (v == null ? null : `${i + 1}: ${v.toFixed(1)}`)).filter(Boolean).join(" · "),
+                esik: dogrulama.esikCm,
+              })}
         </Text>
+      ) : null}
+
+      {durum?.gecerli ? (
+        <View style={styles.adimlar} testID="kabin-kalibrasyonu-taban">
+          <Text style={styles.altBaslik}>{t("ai.kalibrasyon.taban.baslik")}</Text>
+          {durum.olculenLensTabanCm != null ? (
+            <>
+              <Text style={styles.not}>{t("ai.kalibrasyon.taban.aciklama", { lens: cm(durum.olculenLensTabanCm) })}</Text>
+              <View style={styles.satir}>
+                <TextInput
+                  style={styles.giris}
+                  keyboardType="decimal-pad"
+                  value={tabanUzaklik}
+                  onChangeText={setTabanUzaklik}
+                  placeholder={t("ai.kalibrasyon.taban.uzaklik")}
+                  accessibilityLabel={t("ai.kalibrasyon.taban.uzaklik")}
+                  editable={!kilitli}
+                  testID="kabin-kalibrasyonu-taban-uzaklik"
+                />
+                <TouchableOpacity
+                  style={[styles.dugme, (kilitli || mesgul || !gecerliSayi(tabanUzaklik)) && styles.kilitli]}
+                  onPress={() => void tabanUygula()}
+                  disabled={kilitli || mesgul || !gecerliSayi(tabanUzaklik)}
+                  accessibilityRole="button"
+                  testID="kabin-kalibrasyonu-taban-uygula"
+                >
+                  <Text style={styles.dugmeMetni}>{t("ai.kalibrasyon.taban.uygula")}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.not} testID="kabin-kalibrasyonu-taban-durum">
+                {t("ai.kalibrasyon.taban.durum", { cm: cm(durum.tabanYukseltmesiCm ?? 0) })}
+              </Text>
+            </>
+          ) : (
+            <Text style={[styles.not, styles.uyari]}>{t("ai.kalibrasyon.taban.lensYok")}</Text>
+          )}
+        </View>
+      ) : null}
+
+      {durum?.gecerli ? (
+        <View style={styles.adimlar} testID="kabin-kalibrasyonu-devam">
+          <Text style={styles.altBaslik}>{t("ai.kalibrasyon.devam.baslik")}</Text>
+          <Text style={styles.not}>{t("ai.kalibrasyon.devam.aciklama")}</Text>
+          <TouchableOpacity
+            style={[styles.dugme, styles.ikincil, (kilitli || mesgul) && styles.kilitli]}
+            onPress={() => void devamEt()}
+            disabled={kilitli || mesgul}
+            accessibilityRole="button"
+            testID="kabin-kalibrasyonu-devam-et"
+          >
+            <Text style={[styles.dugmeMetni, styles.ikincilMetin]}>{t("ai.kalibrasyon.devam.dugme")}</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       {model === "fantom" && durum?.gecerli ? (
@@ -608,6 +703,7 @@ const styles = StyleSheet.create({
   not: { fontSize: typography.small, color: colors.textMuted },
   durum: { fontSize: typography.small, color: colors.text },
   uyari: { color: colors.danger },
+  dikkat: { color: colors.warning },
   iyi: { color: colors.success },
   dugme: {
     minHeight: touch.min,
@@ -622,23 +718,8 @@ const styles = StyleSheet.create({
   dugmeMetni: { color: "#fff", fontWeight: "700", fontSize: typography.small },
   kilitli: { opacity: 0.5 },
   adimlar: { gap: spacing.sm },
-  isaret: { position: "absolute", width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.warning },
-  isaretAktif: { borderColor: colors.danger },
-  buyutec: { width: BUYUTEC, height: BUYUTEC, overflow: "hidden", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm },
-  arti: { position: "absolute", backgroundColor: colors.danger },
-  okKutusu: { gap: spacing.xs },
-  ok: {
-    minWidth: touch.min,
-    minHeight: touch.min,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-  },
   koseSatiri: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap", padding: spacing.xs, borderRadius: radius.sm },
-  koseAktif: { backgroundColor: "rgba(59,130,246,0.08)" },
-  koseAdi: { fontSize: typography.small, fontWeight: "700", color: colors.text },
+  koseAdi: { fontSize: typography.small, fontWeight: "700", color: colors.text, minWidth: 90 },
   giris: {
     minWidth: 110,
     minHeight: touch.min,

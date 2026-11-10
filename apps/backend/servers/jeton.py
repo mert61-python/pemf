@@ -807,6 +807,9 @@ _SERBEST_AI_UCLARI: frozenset = frozenset(
         "/api/ai/pro/kalibrasyon/kaydet",
         "/api/ai/pro/kalibrasyon/dogrula",
         "/api/ai/pro/kalibrasyon/fantom",
+        # KD-2 (sahip): numune tabanı yükseltmesi + "kalibre etmeden devam" — ayar adımları, ücretlenmez.
+        "/api/ai/pro/kalibrasyon/taban",
+        "/api/ai/pro/kalibrasyon/sahne-yenile",
     }
 )
 # Ağır araştırma (belge: patoloji, RNA, tomografi, yara-kapanma = 3 jeton).

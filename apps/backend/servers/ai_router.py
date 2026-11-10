@@ -1267,6 +1267,9 @@ def _pemf_alanlari(payload: dict, model: str, kosulsuz: bool = False) -> dict:
         _d["pemf_kapisi"] = ai_pro_hedef.kapi_cevir(
             _d["pemf_kapisi"]
         )  # KD: fiziksel (kalibrasyon) nedenleri istek dilinde
+        _eski = ai_pro_hedef.kalibrasyon_eski_metni(payload)  # KD-1 sahip: "kalibre etmeden devam" → kalıcı uyarı
+        if _eski:
+            _d["kalibrasyon_uyarisi"] = _eski
         return _d
     except Exception:
         logger.warning("%s PEMF kapısı alanları üretilemedi → geçersiz işaretlendi", model, exc_info=True)
@@ -1829,10 +1832,16 @@ def _ai_hazirlik_loop():
     # T2D-2 (Tezgâh-2 #3): sabit `VideoCapture(0)` dahili kamerayı açıyordu → seçili KABİN kamerası, ilk okumadan önce 1920×1080.
     try:
         cap, _kamera_no = kabin_kamerasi.kamera_ac(cv2)
-    except kabin_kamerasi.KameraSecilmedi:
-        logger.error("Hazırlık: kabin kamerası SEÇİLMEDİ — kamera açılmadı (dahili kameraya düşülmez).")
+    except kabin_kamerasi.KameraSecilmedi as e:
+        logger.error(
+            "Hazırlık: kabin kamerası SEÇİLMEDİ / kimliği bulunamadı — kamera açılmadı (başka kameraya düşülmez)."
+        )
         _ai_hazirlik_hata_kodu = "kamera_secilmedi"
-        _ai_hazirlik_hata = _hazirlik_hata_metni("kamera_secilmedi", "")
+        _ai_hazirlik_hata = (
+            kabin_kamerasi.secim_hatasi_metni(e)
+            if isinstance(e, kabin_kamerasi.KameraBulunamadi)
+            else _hazirlik_hata_metni("kamera_secilmedi", "")
+        )
         _ai_hazirlik_hata_saglayici = _sag
         _ai_hazirlik_active = False
         return
@@ -2020,7 +2029,7 @@ def _ai_pro_loop(dongu_muhru=None):
             cap, _kamera_no = kabin_kamerasi.kamera_ac(cv2)
     except kabin_kamerasi.KameraSecilmedi:
         logger.error(
-            "Kabin kamerası SEÇİLMEDİ — AI Pro kamerası açılmadı (dahili kameraya düşülmez). AI Pro durduruluyor."
+            "Kabin kamerası SEÇİLMEDİ / kimliği bulunamadı — AI Pro kamerası açılmadı (başka kameraya düşülmez). AI Pro durduruluyor."
         )
         _dongu_bayragini_indir(dongu_muhru)
         _ai_seansi_pasife_al("kabin kamerası seçilmedi", dongu_muhru)
@@ -3945,7 +3954,11 @@ async def analyze_em_fantom(
         pl = cache["cls"](cache["cfg"], phantom_length_cm=phantom_length_cm, manual_fallback=False)
         pl._predictor = cache["predictor"]
         # KD · Y258: veri kökünde sabit düzlem kalibrasyonu VARSA ArUco aranmaz (kare kalibrasyon kamerası / çözünürlüğünde değilse konum yok).
-        pl.duzlem, pl.kamera_indeksi = ai_pro_hedef.duzlem_durumu(), ai_pro_hedef.secili_kamera_indeksi()
+        pl.duzlem, pl.kamera_indeksi, pl.kamera_kimligi = (
+            ai_pro_hedef.duzlem_durumu(),
+            ai_pro_hedef.secili_kamera_indeksi(),
+            ai_pro_hedef.secili_kamera_kimligi(),
+        )
 
         result, ctx = await asyncio.to_thread(lambda: pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum))
 
@@ -4196,7 +4209,11 @@ async def analyze_em_petri(
         pl.yolo = cache["yolo"]
         pl._predictor = cache["predictor"]
         # KD · Y258: veri kökünde sabit düzlem kalibrasyonu VARSA ArUco aranmaz (kare kalibrasyon kamerası / çözünürlüğünde değilse konum yok).
-        pl.duzlem, pl.kamera_indeksi = ai_pro_hedef.duzlem_durumu(), ai_pro_hedef.secili_kamera_indeksi()
+        pl.duzlem, pl.kamera_indeksi, pl.kamera_kimligi = (
+            ai_pro_hedef.duzlem_durumu(),
+            ai_pro_hedef.secili_kamera_indeksi(),
+            ai_pro_hedef.secili_kamera_kimligi(),
+        )
 
         result, ctx = await asyncio.to_thread(lambda: pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum))
 

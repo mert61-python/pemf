@@ -246,16 +246,23 @@
       "icParametreYok": "There are no camera intrinsics for this resolution ({{genislik}}×{{yukseklik}}) — use the cabin camera at its highest 16:9 resolution.",
       "kareYok": "The calibration frame was not found or has expired — take a new frame.",
       "kaydedilemedi": "The calibration could not be written to disk ({{neden}}) — check that the data folder is writable and try again.",
-      "lensOnayGerekli": "The calculated camera position is {{cm}} cm away from the lens position you measured (more than 2 cm) — check the measurements; confirm to save anyway.",
+      "lensOnayGerekli": "The calculated camera position differs from the lens position you measured ({{yatay}} cm horizontally, {{dikey}} cm in height; limits 2 cm horizontal, 3 cm height) — check the measurements; confirm to save anyway.",
+      "lensYuksekligiYok": "The calibration has no lens height — save the calibration again with the lens measurement to set the base height.",
       "neden": {
-        "cozumYok": "The camera position could not be calculated — tap the corners again.",
-        "girdiGecersiz": "The entered values are invalid — tap the 4 corners and enter the distance to the left / front glass in cm for each corner.",
-        "izdusumYuksek": "The tapped corners do not match the measurements (reprojection error {{px}} px, limit 3 px) — zoom in, tap the corners again and check the measurements.",
-        "kameraDuzlemAltinda": "The calculated camera position is below the plate — the corner order may be reversed; tap front-left, front-right, back-right, back-left in that order.",
-        "olcumTutarsiz": "The corner measurements do not match the plate size (a value may be mistyped or the corner order mixed up) — check the measurements and the order (front-left, front-right, back-right, back-left)."
+        "cozumYok": "The camera position could not be calculated — take the positions again and check the measurements.",
+        "girdiGecersiz": "The entered values are invalid — at each position enter the distance of the measured corners to the left / front glass in cm.",
+        "izdusumYuksek": "The well positions do not fit a single camera pose (reprojection error {{px}} px, limit 3 px) — check the plate height and that the plate lies flat, then take the positions again.",
+        "kameraDuzlemAltinda": "The calculated camera position is below the plate — the corner measurements may be mixed up; check the measurements of the numbered corners.",
+        "konumAz": "At least 2 positions are needed — place the plate on one side of the cabin and add it, then place it on the other side and add it again.",
+        "konumYayilimiAz": "The positions are too close to each other — place the plate on the two sides of the cabin (at least {{cm}} cm between centers; e.g. left ring and right ring).",
+        "olcumEksik": "Measure at least 2 corners at each position (preferably diagonal: 1 and 3 or 2 and 4) — enter the missing measurements.",
+        "olcumTutarsiz": "The corner measurements do not agree with each other (a value may be mistyped or the numbers mixed up) — measure the corner with the large deviation again."
       },
+      "plakaBulunamadi": "No 24-well plate was found in the frame — place the plate with filled wells flat inside the ring, fully visible (not in the blind zone at the front glass), and take a new frame.",
       "reddedildi": "The calibration was not saved — see the reasons below; correct them and calculate again.",
-      "seansSuruyor": "The cabin calibration cannot be changed while an AI Pro session is running — stop the session first."
+      "sahneYenilemeBuyuk": "The camera has moved too much (the fixed scene shifted {{px}} px; the continue-without-calibrating limit is {{esik}} px ≈ 2 cm) — calibrate the cabin again.",
+      "seansSuruyor": "The cabin calibration cannot be changed while an AI Pro session is running — stop the session first.",
+      "tabanGecersiz": "Invalid distance — the lens → sample base distance must be at most {{lens}} cm (cabin floor) and small enough to raise the base by at most {{azami}} cm."
     },
     "kimlik": {
       "degerlendirme": "Select an operator — to review, first choose which veterinarian you are from the top bar.",
@@ -313,9 +320,15 @@
         "fantomBoyuFarkli": "The detected phantom size is very different from the setting (no phantom in the cabin, or the thickness / size setting is wrong) — check the phantom and the setting.",
         "fantomDegil": "The detected region does not look like a phantom (light reflection or empty cabin) — place the phantom in the cabin; if there is glare, change the lighting.",
         "kalibrasyonBozuk": "The cabin calibration could not be read or is corrupt — calibrate the cabin again.",
-        "kalibrasyonYok": "No cabin calibration — calibrate in the Cabin calibration section using the 4 corners of the plate.",
+        "kalibrasyonEski": "Outdated calibration: work continued without calibrating after the camera moved — positions may be off by ~1–2 cm; calibrate again when you can.",
+        "kalibrasyonYok": "No cabin calibration — calibrate in the Cabin calibration section by measuring the plate at two positions.",
         "kameraFarkli": "The camera or resolution differs from the calibration — select the cabin camera used for the calibration or calibrate again.",
-        "kameraOynamis": "The camera may have moved — calibrate the cabin again."
+        "kameraOynamis": "The camera may have moved or the base height setting is wrong — calibrate again or (if the shift is small) continue without calibrating.",
+        "korBolgeArka": "The sample is in the blind zone at the back glass (partly visible) — move it forward, inside the ring.",
+        "korBolgeOn": "The sample is in the blind zone at the front glass (partly visible) — move it back, inside the ring.",
+        "korBolgeOnSerit": "The camera does not see the first ~{{cm}} cm from the front glass.",
+        "korBolgeSag": "The sample is in the blind zone at the right glass (partly visible) — move it left, inside the ring.",
+        "korBolgeSol": "The sample is in the blind zone at the left glass (partly visible) — move it right, inside the ring."
       }
     },
     "pro": {
@@ -361,6 +374,7 @@
         "hedefSecilemedi": "{{hedef_adi}} could not be selected — move the target to the middle of the tray, increase the cabin light and make sure there is no glare on the marker.",
         "kabinDisi": "The position of {{ad}} was measured OUTSIDE the cabin — changing the angle will not fix this: check that the cabin marker (the square code on the back wall) is in frame, flat and free of glare; if it persists, have the cabin configuration checked by technical support.",
         "konumOlculemedi": "The position could not be measured: the cabin marker (the square code on the back wall) is not visible in frame. Adjust the camera so that the marker and the target stay in the SAME frame.",
+        "korBolge": "The camera does not see the first ~{{cm}} cm from the front glass — the sample may have been placed there; move it inside the rings.",
         "petriYok": "The well plate is not visible in frame — place the plate flat on the tray, bring the camera directly overhead so the plate is fully in frame, and make sure the cabin marker stays visible."
       },
       "mesaj": {
@@ -446,6 +460,7 @@
       "gecersiz": "Invalid camera number: {{indeks}}. Scan for cameras and choose one from the list.",
       "kareAlinamadi": "Could not capture an image from the cabin camera (camera {{indeks}}). Check its cable and try again, or rescan the cameras in the \"Cabin camera\" section.",
       "kareMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then capture again.",
+      "kimlikBulunamadi": "The selected cabin camera ({{ad}}, {{vidpid}}) is not connected — the camera was not opened. Plug it in, or scan the cameras in the \"Cabin camera\" section and select it again.",
       "taramaCanliAcik": "Cameras cannot be scanned while the live camera is on. Stop the live camera, then scan again.",
       "taramaMesgul": "AI Pro is using the camera right now. Stop the preparation or session, then scan for cameras again.",
       "yazilamadi": "The camera selection could not be saved ({{neden}}). Check that the data folder is writable."

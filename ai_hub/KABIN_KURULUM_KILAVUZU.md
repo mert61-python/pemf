@@ -8,6 +8,86 @@ donanım = kabin + kamera + basılı QR; yazılım = `cabin_config_example.yaml`
 
 ---
 
+## ✅ SABİT DÜZLEM KİPİ — ArUco'suz (KD · sahip kararları Y258–Y261, 2026-11-10; KD-2 çok konumlu) — PETRİ / FANTOM SÜRÜŞÜ BU KİPLE
+
+> Kamera **üst kapağa sabit**; petri / fantom **tabanda** (ya da girilen yükseklikte bir altlıkta), yalnız kabin X / Z (sol↔sağ, ön↔arka)
+> değişir. Bir kez kalibre edilir; sonra her karede piksel → ışın → plaka / fantom üst yüzeyi → kabin mm. **ArUco işareti GEREKMEZ** (kod
+> silinmedi: kalibrasyon dosyası yokken analiz bugünkü ArUco kipiyle çalışır). **Petri / fantom AI Pro bobin sürüşü YALNIZ geçerli
+> kalibrasyonla başlar** (Y259).
+
+**Eksen çevirisi (karışmasın):** sahibin "z"si = kabin **Y** (taban↔tavan); sahibin "x y"si = kabin **X** (sol↔sağ) ve **Z** (ön↔arka).
+Ölçüler camların **İÇ** yüzünden, önden bakana göre: **X = 27,75 − sol** · **Y = −17,5 + taban** · **Z = −20,25 + ön** (cm; kabin 55,5 × 35 × 40,5).
+
+**Neden iki konum (KD-2, tezgâh kareleriyle ölçüldü):** cetvel ölçüsü köşe başına ~5–8 mm oynar; tek konumdaki küçük plaka kameranın eğimini
+zayıf belirler → başka yerde 0,8–2,5 cm hata. Plaka kabinin **iki yanında** ölçülünce (sol halka + sağ halka) dışarıda bırakılan plakalarda
+merkez farkı 0,3–0,9 cm. Aynı yandaki iki konum karşı yanı 1,9 cm kaçırdı → ekran konumlar arası **en az 20 cm** ister.
+
+### Ölçüm yordamı (sahip, kabinin başında — ~15 dk)
+
+1. Kamerayı üst kapağa sabitleyin (tercihen **görüntünün üstü ARKA cam**; ters ya da yan takılsa da kuyu kimlikleri — A1 plakanın
+   arka-solunda — kalibrasyondan doğru adlanır). Uygulamada **Kabin kamerası** bölümünden kabini gösteren kamerayı
+   seçin — liste kameranın Windows adını gösterir ("FHD Camera", VID_1BCF&PID_28C4 = Pusat). Seçim ADA + VID/PID'e + aygıt yoluna bağlıdır:
+   Windows kamera sırasını değiştirse de aynı kamera açılır; kamera takılı değilse hiçbir kamera AÇILMAZ (başka kameraya düşülmez).
+2. **AI Pro** ▸ model **Petri Kuyu** ya da **Fantom Tümör** ▸ **Kabin kalibrasyonu** ▸ **Kalibre et**.
+3. **Konum 1:** kuyuları pembe besiyeriyle **dolu**, KAPAKSIZ 24'lük plakayı kabinin bir yanına (ör. **sol halka**), tamamı görünecek
+   şekilde koyun → kare gelir; kuyular kendiliğinden bulunur, plakanın dış köşeleri görüntüde **1–4** numaralı çizilir
+   (1 ön-sol · 2 ön-sağ · 3 arka-sağ · 4 arka-sol). Bulunamazsa ekran nedenini söyler (kuyular dolu mu, plaka kör bölgede mi).
+4. Numaralı köşelerden **en az ikisini** (tercihen çapraz: 1 ve 3 ya da 2 ve 4; dördü daha iyi) cetvelle ölçün (en yakın 0,5 cm):
+   **sol camın iç yüzünden** ve **ön camın iç yüzünden** köşeye yatay uzaklık → girin → **Konumu ekle**.
+5. **Konum 2:** plakayı kabinin **öbür yanına** (ör. **sağ halka**) koyun → **Kare al (konum 2)** → ölçün → **Konumu ekle**.
+   (İsterseniz 3. konum: ekran her konumu kalanlarla da sınar — "çapraz doğrulama".)
+6. **Lens** merkezinin sol camdan, ön camdan ve **taban camından** uzaklığı (cm) — kalibrasyonu DENETLER; taban camına uzaklık ayrıca
+   "numune tabanı" ayarının başlangıç değeridir. Plaka yüksekliği (tabandan üst kenara; 24'lük kapaksız ~2 cm — ekranda varsayılan 2).
+7. **Hesapla** — kabul ölçütleri (ekran söyler; arka uç yeniden hesaplar):
+   - **kuyu izdüşüm hatası ≤ 3 px** — aşarsa RET: plaka düz mü, yükseklik doğru mu;
+   - **ölçüm uyumu ≤ 10 mm** (RMS) ve tek köşe ≤ 20 mm — aşarsa RET: sapması büyük köşeyi yeniden ölçün (ekran köşe başına sapmayı yazar);
+   - **konum yayılımı ≥ 20 cm** — aşmazsa RET: plakayı öbür yana koyun;
+   - **lens** hesaplanan ↔ ölçülen yatayda ≤ 2 cm, yükseklikte ≤ 3 cm (ölçü cam kalınlığı hariç alınır; optik merkez merceğin birkaç mm
+     içindedir → hesaplanan yükseklik ~1,5–2,5 cm fazla çıkar) — aşarsa kaydetmeden önce AÇIK onay ister (önce ölçüleri kontrol edin).
+   Ekran ayrıca **görüş alanını** yazar: "kamera tabanda ön camdan ilk ~N cm'yi görmüyor" (kör bölge; bu tezgâhta ~4 cm).
+8. **Kaydet** (denetim izine yazılır). Sonra **Doğrula**: plakayı BAŞKA bir yere koyun, kare alın, ölçtüğünüz numaralı köşeleri girin →
+   **plaka merkezinde fark ≤ 1 cm** (köşe farkları bilgi olarak yazılır; cetvel gürültüsü yüzünden tek köşe 1 cm'yi aşabilir).
+9. **Fantom** için (Fantom Tümör modelinde, kalibrasyondan sonra): **kalınlık** (tabandan üst yüzeye), **tümör derinliği** (üst yüzeyden), isteğe
+   bağlı **boy × en** (cm) → **Fantom ayarını kaydet**. Fantom hedef düzlemi = taban + kalınlık − derinlik. Yeniden kalibrasyonda ayar korunur.
+
+### Numune tabanı (altlık) — yeniden kalibrasyon GEREKMEZ
+
+Petri / fantom bir kutu / altlık üstündeyse **Numune tabanı** ▸ "Lens → numune tabanı (cm)" alanına lensten numunenin oturduğu yüzeye
+uzaklığı girin ▸ **Uygula**. Yükseltme = kalibrasyondaki lens yüksekliği − girilen (0–20 cm). Petri ızgara düzlemi + hedef ve fantom tabanı o
+kadar yukarı alınır. Altlığı kaldırınca alanı yine lens yüksekliğine (yükseltme 0) getirin. Yanlış değer kuyu aralığını bozar → "kamera
+oynamış olabilir ya da taban yüksekliği ayarı yanlış" (hedef yok). Seans sürerken değiştirilemez.
+
+### Çalışırken (her kare, fail-closed — bobin HEDEFLENMEZ, ekran nedeni ve eylemi söyler)
+
+| Durum | Ne olur | Ne yapılır |
+|---|---|---|
+| Kalibrasyon yok | Petri / fantom AI Pro başlatılamaz (409) | Yukarıdaki yordam |
+| Kalibrasyon bozuk / elle değiştirilmiş | Konum yok, başlatma 409 | Yeniden kalibre edin |
+| Başka kamera seçili (ad / VID/PID farklı) ya da çözünürlük / iç parametre farklı | Konum yok | Kalibrasyon kamerasını seçin ya da yeniden kalibre edin |
+| Seçili kamera takılı değil | Kamera açılmaz (eylem metni kameranın adını söyler) | Kamerayı takın ya da yeniden seçin |
+| **Kamera oynamış** — sabit sahne > 12 px kaydı ya da kuyu aralığı > %3 | Konum yok | **Yeniden kalibre edin** ya da kayma küçükse **Kalibre etmeden devam et** (aşağıda) |
+| Numune kör bölgede (görüntü kenarına taşıyor) | Hedef yok + yön ("arkaya / öne / sağa / sola kaydırın") | Numuneyi halkaların içine kaydırın |
+| Numune hiç görünmüyor | "Bulunamadı" + "kamera ön camdan ilk ~N cm'yi görmez" | Halkaların içine koyun |
+| Fantom ayarı girilmemiş | Fantom hedefi yok | Fantom ayarını girin |
+| Fantom boyu ayardan > %20 farklı ya da bölge fantom değil (ışık yansıması / boş kabin) | **0 hedef** | Fantomu koyun; parlamayı giderin; ayarı kontrol edin |
+| Hedef kabin dışı | O hedef sürülmez | Plakayı / fantomu kadrajın ortasına alın |
+
+- **Kalibre etmeden devam (sahip kararı):** "kamera oynamış olabilir" çıktıysa **Kabin kalibrasyonu ▸ Kamera oynadıysa ▸ Kalibre etmeden devam
+  et**. Yalnız kayma küçükse (~2 cm: sabit sahne ≤ 70 px, kuyu aralığı ≤ %10) kabul edilir; o anki kare yeni sahne referansı olur, kuyu aralığı
+  toleransı %10'a çıkar, kalibrasyon "ESKİ" işaretlenir ve **her analiz sonucunda** "konum ~1–2 cm sapabilir" uyarısı kalır (denetim izine
+  yazılır). Daha büyük kaymada reddedilir → yeniden kalibre edin. Yeniden kalibrasyon "eski" işaretini kaldırır.
+- **Sabit sahne:** kalibrasyon karesi (plaka bölgesi hariç) referans saklanır; kamera yatay 2 cm ya da 2° oynarsa görüntü 45–70 px kayar
+  (ölçüldü) → yakalanır. Kuyu aralığı yalnız kameranın yüksekliği değişince (2 cm → %6) uyarır. Kabin tabanı desensizse (kalibrasyon "sabit sahne
+  zayıf" der) tabana desenli bir bant yapıştırıp yeniden kalibre edin — aksi hâlde fantom sürülemez, petri yalnız kuyu aralığıyla denetlenir.
+- **Kamera açılışı (KD madde 0):** kamera en yüksek kendi çözünürlüğünde (kalibrasyon varsa onun çözünürlüğünde) açılır; tarama ~2 sn
+  (eskiden 25 sn).
+- **Dosya:** `<veri kökü>\kabin_kalibrasyonu\duzlem_kalibrasyonu.json` + `duzlem_referans.png` (bu makinede
+  `C:\ProgramData\PEMF_System\PEMF_GUI\kabin_kalibrasyonu\`) — uygulama güncellemesi EZMEZ. Dosyayı silmek = ArUco kipine dönüş
+  (araştırma sürüşü kapanır). Elle düzenlenen dosya "bozuk" sayılır (bütünlük özeti). Sürüm 2 (çok konumlu); KD-2 öncesi dosya yoktur.
+- ACİL DURDUR / STOP bu denetimlerin HİÇBİRİNE bağlı değildir (Ö.4-Y8).
+
+---
+
 ## ✅ KABİN (2026-10-23 — TEZGÂH-2B, sahip şerit metre + ArUco; Oturum 13'ün 57 × 34 × 32 / arka duvar düzeni ESKİ)
 
 > Kamera (Pusat "FHD Camera", 1920×1080) tavan camının 2 cm üstünde, tepeden bakar; işaret TABAN camının üstünde.

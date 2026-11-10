@@ -11,7 +11,8 @@ from pathlib import Path
 
 # ── KAMERA AÇILIŞI (KD madde 0 · sahip bildirimi 2026-11-10) — HER ÜÇÜNCÜ TARAF İÇE AKTARMADAN ÖNCE ─────────────────────────
 # "Kameraları tara" istemcide zaman aşımına düşüyordu, Canlı Kamera / Fotoğraf Çek 30–40 sn. ÖLÇÜLDÜ (bu makine, OpenCV 4.11 =
-# paketteki, MSMF, dahili kamera): donanım dönüşümleri AÇIKKEN `VideoCapture` açılışı 7,8–9,1 sn + çözünürlük isteği 15–24 sn
+# paketteki, MSMF, kabin kamerası Pusat "FHD Camera" VID_1BCF&PID_28C4 — KD-1 düzeltmesi: ilk raporda "dahili" yazılmıştı):
+# donanım dönüşümleri AÇIKKEN `VideoCapture` açılışı 7,8–9,1 sn + çözünürlük isteği 15–24 sn
 # (tarama 25 sn, Fotoğraf Çek 23,6 sn); değişken "0" iken açılış 0,27 sn + istek ~0 sn. cv2 İÇE AKTARILDIKTAN SONRA kurmak ETKİSİZ
 # (ölçüldü: 7,8 + 23,9 sn) → yalnız burada, giriş noktasında. `setdefault`: kullanıcının / kurulumun açık değeri EZİLMEZ.
 # Kapı: tests/test_KD_kamera_acilisi_MSMF_giris_noktasi.py

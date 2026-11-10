@@ -153,6 +153,8 @@ class PhantomCvPipeline:
         dosyasinin `fantom` bolumu, sahip olcer). None ya da (None, None) = bugunku kip."""
         self.duzlem = duzlem
         self.kamera_indeksi = kamera_indeksi
+        #: KD-2: karenin geldiği kabin kamerasının KİMLİĞİ (ad + VID/PID + aygıt yolu) — bilinirse indeks yerine bu karşılaştırılır.
+        self.kamera_kimligi = None
         if isinstance(cfg, CabinConfig):
             self.cfg = cfg
         else:
@@ -658,7 +660,8 @@ class PhantomCvPipeline:
         if d is None or (d[0] is None and d[1] is None):
             return None
         npz = _sd.npz_sha256(self.cfg.intrinsics_path()) if self.cfg.has_intrinsics() else None
-        return _sd.kare_hazirla(d, kare_boyutu=orijinal_wh, kamera_indeksi=self.kamera_indeksi, npz_sha=npz)
+        return _sd.kare_hazirla(d, kare_boyutu=orijinal_wh, kamera_indeksi=self.kamera_indeksi, npz_sha=npz,
+                                 kamera_kimligi=self.kamera_kimligi)
 
     def _duzlem_denetle(self, kd, img, phantom, olcek: float, tumors=()):
         """Fantom makullugu (tumorler govdeden koyu) + fantom ayari + sabit sahne + fantom boyu. @return (ust_y_mm, hedef_y_mm) —
@@ -680,10 +683,15 @@ class PhantomCvPipeline:
         if not (np.isfinite(kalinlik) and np.isfinite(derinlik) and kalinlik > 0 and 0 <= derinlik <= kalinlik):
             kd.engel("fantom_ayari_yok", "fantom kalinligi / tumor derinligi kalibrasyon ekranindan girilmedi")
             return None, None
-        taban_y = -float(kd.harita.ext_cm[1]) * 10.0 / 2.0
+        taban_y = float(kd.harita.taban_y_mm)  # KD-2: numune tabanı yükseltmesi (sahip) dahil
         ust_y = taban_y + kalinlik
         hedef_y = ust_y - derinlik
         bx, by, bw, bh = (float(v) for v in phantom.bbox_px)
+        hh, ww = img.shape[:2]
+        # KD-2 (sahip): fantom görüş alanının kenarına değiyorsa (kör bölge) hedef YOK + kaydırma yönü.
+        for kosul, yon in ((by + bh > hh - 4, "on"), (by < 3, "arka"), (bx < 3, "sol"), (bx + bw > ww - 4, "sag")):
+            if kosul:
+                kd.engel(f"kor_bolge_{yon}", f"fantom goruntunun {yon} kenarina degiyor (kor bolge, kismen gorunuyor)")
         _sd.sahne_denetle(kd, img, [np.array([[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]])],
                           genislet_px=max(8, int(round(60 * olcek))))
         if "sahne" not in kd.olcum:

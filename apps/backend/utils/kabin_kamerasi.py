@@ -20,6 +20,10 @@ SÖZLEŞME:
     bellekte (`canli_baslat` / `canli_kare` / `canli_durdur`). Her karede kamerayı açıp kapamak saniyeler sürerdi. Oturum
     `CANLI_ZAMAN_ASIMI_SN` boyunca kare istenmezse kendiliğinden kapanır (sekme kapandı → kamera bırakılır). `kamera_ac` (AI Pro
     hazırlık / seans, tek kare) açık canlı oturumu ÖNCE kapatır — AI Pro önceliklidir, iki `VideoCapture` çakışmaz.
+  * KİMLİK (KD-2, sahip kararı): seçim indeksle BİRLİKTE kameranın Windows ADI + VID/PID + AYGIT YOLU ile saklanır
+    (`kamera_kimligi`). Açılışta MSMF sırası yeniden okunur: önce aygıt yolu, yol değişmişse (başka USB girişi) ad + VID/PID'i TEK
+    olan aygıt; bulunamazsa kamera AÇILMAZ (`KameraBulunamadi`) — MSMF sırası değişince (KD-1: Pusat 1 → 0) yanlış kameraya düşülmez.
+    Aygıt listesi okunamıyorsa (Windows dışı / MF hatası) saklı indeks kullanılır ve günlüğe yazılır.
 """
 
 from __future__ import annotations
@@ -47,6 +51,26 @@ class KameraSecilmedi(RuntimeError):
     """Kabin kamerası seçilmemiş — kamera açılmadı (dahili kameraya sessiz düşüş yok)."""
 
 
+class KameraBulunamadi(KameraSecilmedi):
+    """KD-2: seçili kameranın KİMLİĞİ (ad + VID/PID + aygıt yolu) bağlı aygıtlarda yok — kamera AÇILMADI (başka kameraya düşüş yok).
+    `KameraSecilmedi` alt sınıfı: her yakalayıcı kamerayı açmadan durur; ileti `secim_hatasi_metni` ile kimliği söyler."""
+
+    def __init__(self, secim: dict):
+        super().__init__(secim)
+        self.secim = dict(secim or {})
+
+
+def secim_hatasi_metni(e: Exception) -> str:
+    """`KameraSecilmedi` / `KameraBulunamadi` → istek dilinde EYLEM metni."""
+    from utils import ceviri
+
+    if isinstance(e, KameraBulunamadi):
+        k = e.secim.get("kimlik") or {}
+        p = {"ad": str(k.get("ad") or "?"), "vidpid": str(k.get("vidpid") or "?")}
+        return ceviri.t("ayarlar.kabinKamerasi.kimlikBulunamadi", **p)
+    return ceviri.t("ai.pro.hazirlik.kameraSecilmedi")
+
+
 class KameraMesgul(RuntimeError):
     """D3I-A3.2: canlı oturum başlatılırken kamerayı AI Pro (hazırlık / seans) devraldı — canlı AÇILMADI (AI Pro önceliği)."""
 
@@ -72,8 +96,8 @@ def _ortam_indeksi() -> int | None:
 
 
 def secili_kamera() -> dict | None:
-    """Seçili kabin kamerası `{"indeks": int, "kaynak": "ortam" | "ayar"}`; hiç seçilmemiş / dosya bozuk → None.
-    `PEMF_KABIN_KAMERASI` (tezgâh / kiosk) ayarın ÖNÜNDEdir; sahada tanımlı değildir."""
+    """Seçili kabin kamerası `{"indeks": int, "kaynak": "ortam" | "ayar", "kimlik": {"ad", "vidpid", "aygit_yolu"} | None}`; hiç
+    seçilmemiş / dosya bozuk → None. `PEMF_KABIN_KAMERASI` (tezgâh / kiosk) ayarın ÖNÜNDEdir (kimliksiz); sahada tanımlı değildir."""
     i = _ortam_indeksi()
     if i is not None:
         return {"indeks": i, "kaynak": "ortam"}
@@ -82,20 +106,40 @@ def secili_kamera() -> dict | None:
     except (OSError, ValueError):
         return None
     indeks = _gecerli_indeks(veri.get("indeks")) if isinstance(veri, dict) else None
-    return None if indeks is None else {"indeks": indeks, "kaynak": "ayar"}
+    if indeks is None:
+        return None
+    k = veri.get("kimlik")
+    kimlik = (
+        {"ad": k.get("ad"), "vidpid": k.get("vidpid"), "aygit_yolu": k.get("aygit_yolu")}
+        if isinstance(k, dict) and k.get("vidpid")
+        else None
+    )
+    # Kimlik YALNIZ biliniyorsa alan olarak eklenir (KD-2 öncesi seçim / ortam değişkeni: sözlük biçimi değişmez).
+    return {"indeks": indeks, "kaynak": "ayar", **({"kimlik": kimlik} if kimlik else {})}
 
 
 def kamera_sec(indeks) -> dict:
-    """Seçimi atomik yazar (geçici dosya + os.replace). Geçersiz indeks → ValueError; disk hatası → OSError."""
+    """Seçimi atomik yazar (geçici dosya + os.replace). Geçersiz indeks → ValueError; disk hatası → OSError. KD-2: o anki MSMF
+    listesinden bu indeksin KİMLİĞİ de yazılır (okunamazsa kimliksiz — açılış indekse düşer)."""
+    from utils import kamera_kimligi
+
     i = _gecerli_indeks(indeks)
     if i is None:
         raise ValueError(indeks)
+    kimlik = next(
+        (
+            {k: a.get(k) for k in ("ad", "vidpid", "aygit_yolu")}
+            for a in kamera_kimligi.msmf_kameralar()
+            if a.get("indeks") == i
+        ),
+        None,
+    )
     kok = _veri_koku()
     kok.mkdir(parents=True, exist_ok=True)
     fd, gecici = tempfile.mkstemp(dir=str(kok), suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"indeks": i}, f)
+            json.dump({"indeks": i, **({"kimlik": kimlik} if kimlik else {})}, f, ensure_ascii=False)
         os.replace(gecici, kok / KAMERA_DOSYASI)
     except Exception:
         try:
@@ -103,7 +147,7 @@ def kamera_sec(indeks) -> dict:
         except OSError:
             pass
         raise
-    return {"indeks": i, "kaynak": "ayar"}
+    return {"indeks": i, "kaynak": "ayar", **({"kimlik": kimlik} if kimlik else {})}
 
 
 #: KD madde 0 (2026-11-10): kalibrasyon YOKSA kameranın EN YÜKSEK kendi modu — büyük değer istenir, sürücü desteklediği en büyük
@@ -140,6 +184,40 @@ def _cozunurluk_iste(cap, cv2) -> None:
         logging.getLogger(__name__).warning("kabin kamerasi: %sx%s istegi uygulanamadi", w, h, exc_info=True)
 
 
+def acilacak_indeks(secim: dict) -> int:
+    """KD-2: saklı KİMLİĞİ bugünkü MSMF listesinde bul → açılacak indeks. Kimlik yoksa (eski seçim / ortam değişkeni) ya da liste
+    okunamıyorsa saklı indeks. Liste okunup kimlik BULUNAMAZSA `KameraBulunamadi` (kamera açılmaz)."""
+    from utils import kamera_kimligi
+
+    k = secim.get("kimlik")
+    if not k:
+        return int(secim["indeks"])
+    aygitlar = kamera_kimligi.msmf_kameralar()
+    if not aygitlar:
+        logging.getLogger(__name__).warning(
+            "kabin kamerasi: aygit listesi okunamadi — sakli indeks %s kullaniliyor", secim["indeks"]
+        )
+        return int(secim["indeks"])
+    indeks, yol = kamera_kimligi.esle(k, aygitlar)
+    if indeks is None:
+        logging.getLogger(__name__).error(
+            "kabin kamerasi: secili kamera (%s %s) bagli aygitlarda yok — ACILMADI. Aygitlar: %s",
+            k.get("ad"),
+            k.get("vidpid"),
+            [(a.get("indeks"), a.get("ad"), a.get("vidpid")) for a in aygitlar],
+        )
+        raise KameraBulunamadi(secim)
+    if yol == "ad_vidpid":
+        logging.getLogger(__name__).info(
+            "kabin kamerasi: aygit yolu degismis (baska USB girisi) — ad + VID/PID ile indeks %s", indeks
+        )
+    if indeks != int(secim["indeks"]):
+        logging.getLogger(__name__).info(
+            "kabin kamerasi: MSMF sirasi degismis — indeks %s → %s", secim["indeks"], indeks
+        )
+    return int(indeks)
+
+
 def kamera_ac(cv2=None, *, canliyi_kapat: bool = True):
     """Seçili kabin kamerasını açar ve (açıldıysa) ilk okumadan ÖNCE çözünürlük ister (`_cozunurluk_iste`). @return (cap, indeks) — açılıp
     açılmadığını çağıran `cap.isOpened()` ile denetler. Seçim yoksa `KameraSecilmedi` (kamera hiç açılmaz).
@@ -147,6 +225,7 @@ def kamera_ac(cv2=None, *, canliyi_kapat: bool = True):
     secim = secili_kamera()
     if secim is None:
         raise KameraSecilmedi()
+    indeks = acilacak_indeks(secim)
     if canliyi_kapat:
         # D3I-A3.2: açılışı SÜREN canlı başlatma önce kaydolsun (kilit), sonra kapatılsın — yoksa ikisi de kamerayı tutar.
         # Bekleme SINIRLI (`KAMERA_DEVIR_BEKLE_SN`): canlının açılışı asılırsa (sürücü) AI Pro hazırlık / seans döngüsü süresiz
@@ -166,26 +245,32 @@ def kamera_ac(cv2=None, *, canliyi_kapat: bool = True):
                 _canli_baslat_kilit.release()
     if cv2 is None:
         import cv2
-    cap = cv2.VideoCapture(secim["indeks"])
+    cap = cv2.VideoCapture(indeks)
     if cap.isOpened():
         _cozunurluk_iste(cap, cv2)
-    return cap, secim["indeks"]
+    return cap, indeks
 
 
 #: T3 · Y189: tek karede otomatik pozlama / beyaz dengesi oturana dek atılan ilk kare sayısı.
 KARE_ISINMA = 5
 
 
-def kare_al(cv2=None) -> dict | None:
+def kare_al(cv2=None, adet: int = 1) -> dict | None:
     """T3 · Y189 / Y190 (petri / fantom analizi "Fotoğraf Çek", bu makinede): SEÇİLİ kabin kamerasından TAM çözünürlüklü tek kare (JPEG,
     base64). `kamera_ac` ile açılır (çözünürlük ilk okumadan ÖNCE), ilk `KARE_ISINMA` kare atılır, son kare kodlanır, kamera
     HER durumda bırakılır. Seçim yok → `KameraSecilmedi`; açılamaz / okunamaz → None.
-    D3I-A3.2: eşzamanlı çağrılar (çift dokunuş, iki istemci) SIRAYLA — aynı kameraya iki `VideoCapture` açılmaz."""
+    D3I-A3.2: eşzamanlı çağrılar (çift dokunuş, iki istemci) SIRAYLA — aynı kameraya iki `VideoCapture` açılmaz.
+    KD-2: `adet` > 1 → aynı açılışta son `adet` kare (`ek_kareler`, kalibrasyon ortalaması; canlı oturumdan yalnız son kare).
+    Sonuçta seçimin `kimlik`i (ad + VID/PID + aygıt yolu) da döner."""
     with _kisa_acilis_kilit:
-        return _kare_al(cv2)
+        k = _kare_al(cv2, max(1, int(adet)))
+    kimlik = (secili_kamera() or {}).get("kimlik") if k is not None else None
+    if kimlik:
+        k["kimlik"] = kimlik
+    return k
 
 
-def _kare_al(cv2=None) -> dict | None:
+def _kare_al(cv2=None, adet: int = 1) -> dict | None:
     if cv2 is None:
         import cv2
     if canli_acik():
@@ -198,23 +283,30 @@ def _kare_al(cv2=None) -> dict | None:
     try:
         if not cap.isOpened():
             return None
-        kare = None
-        for _ in range(KARE_ISINMA + 1):
+        kareler = []
+        for _ in range(KARE_ISINMA + adet):
             ok, k = cap.read()
             if ok and k is not None:
-                kare = k
-        if kare is None:
+                kareler.append(k)
+        if not kareler:
             return None
-        basarili, tampon = cv2.imencode(".jpg", kare, [cv2.IMWRITE_JPEG_QUALITY, 92])
-        if not basarili:
+        kodlu = []
+        for k in kareler[-adet:]:
+            basarili, tampon = cv2.imencode(".jpg", k, [cv2.IMWRITE_JPEG_QUALITY, 92])
+            if basarili:
+                kodlu.append(base64.b64encode(tampon).decode("ascii"))
+        if not kodlu:
             return None
-        kh, kw = kare.shape[:2]
-        return {
+        kh, kw = kareler[-1].shape[:2]
+        sonuc = {
             "indeks": indeks,
             "genislik": int(kw),
             "yukseklik": int(kh),
-            "image_base64": base64.b64encode(tampon).decode("ascii"),
+            "image_base64": kodlu[-1],
         }
+        if adet > 1:
+            sonuc["ek_kareler"] = kodlu[:-1]
+        return sonuc
     finally:
         cap.release()
 
@@ -359,6 +451,9 @@ def kameralari_tara(cv2=None, sayi: int = TARAMA_INDEKS_SAYISI) -> list[dict]:
 def _kameralari_tara(cv2=None, sayi: int = TARAMA_INDEKS_SAYISI) -> list[dict]:
     if cv2 is None:
         import cv2
+    from utils import kamera_kimligi
+
+    adlar = {a["indeks"]: a for a in kamera_kimligi.msmf_kameralar()}
     sonuc: list[dict] = []
     for i in range(max(0, int(sayi))):
         cap = cv2.VideoCapture(i)
@@ -372,6 +467,8 @@ def _kameralari_tara(cv2=None, sayi: int = TARAMA_INDEKS_SAYISI) -> list[dict]:
                 "genislik": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0),
                 "yukseklik": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0),
                 "onizleme": None,
+                "ad": (adlar.get(i) or {}).get("ad"),
+                "vidpid": (adlar.get(i) or {}).get("vidpid"),
             }
             if ok and kare is not None:
                 kh, kw = kare.shape[:2]

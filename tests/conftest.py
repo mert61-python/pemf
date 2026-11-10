@@ -283,6 +283,21 @@ def _kabin_kamerasi_bugunku():
 
 
 @pytest.fixture(autouse=True)
+def _kamera_kimligi_kapali():
+    """KD-2: `utils.kamera_kimligi.msmf_kameralar` GERÇEK Media Foundation aygıt listesini okur (Windows) — süit makinenin kameralarına
+    bağlanmasın: varsayılan BOŞ liste (= kimlik bilinmiyor, bugünkü indeks davranışı). Kimliği ölçen kapılar kendi sahtesini kurar
+    (tests/test_KD_kamera_kimligi.py). `monkeypatch` İSTENMEZ (yukarıdaki desen)."""
+    from utils import kamera_kimligi
+
+    once = kamera_kimligi.msmf_kameralar
+    kamera_kimligi.msmf_kameralar = lambda: []
+    try:
+        yield
+    finally:
+        kamera_kimligi.msmf_kameralar = once
+
+
+@pytest.fixture(autouse=True)
 def _kosu_kaydi_sizmaz():
     """1-G inceleme G-14.2 (1G-YB3 sınıfı): bobin koşu kaydı haritaları (`coil_run_tracker._active_coil_runs` /
     `_coil_run_stats`) modül-geneldir. Testlerin AÇIK bıraktığı kayıt sonraki testlere sızıyordu — Y63'ten beri "Seansı

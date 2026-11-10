@@ -200,6 +200,8 @@ class PetriCvPipeline:
         self.kuyu_skor_esigi = float(kuyu_skor_esigi)
         self.duzlem = duzlem
         self.kamera_indeksi = kamera_indeksi
+        #: KD-2: karenin geldiği kabin kamerasının KİMLİĞİ (ad + VID/PID + aygıt yolu) — bilinirse indeks yerine bu karşılaştırılır.
+        self.kamera_kimligi = None
         if isinstance(cfg, CabinConfig):
             self.cfg = cfg
         else:
@@ -429,7 +431,7 @@ class PetriCvPipeline:
         if self.plate_type:
             # Plaka modu: pembe bolge + YOLO/Hough adaylari + izgara homografisi
             grid = detect_plate_wells(img_und, self.plate_type, yolo=self.yolo,
-                                      a1_corner=self.a1_corner)
+                                      a1_corner=self._a1_kosesi(kd))
             result.plate = grid.to_dict()
             dets = grid.detections
             timings["plate_grid"] = (time.perf_counter() - t1) * 1000
@@ -563,7 +565,7 @@ class PetriCvPipeline:
                 # KD: izgara KUYU AGZINI (plaka ust yuzu) gosterir — X / Z o duzlemden, hedef Y = kuyu tabani (hucreler; dikey kuyu).
                 if not kd.gecerli:
                     raise KesisimGecersiz(kd.engeller[0] if kd.engeller else "sabit duzlem kalibrasyonu gecersiz")
-                q = kd.harita.kabin_noktasi((px[0] / olcek, px[1] / olcek), kd.harita.duzlem_y_mm)
+                q = kd.harita.kabin_noktasi((px[0] / olcek, px[1] / olcek), kd.harita.numune_y_mm)
                 v = (float(q[0]), float(hedef_y), float(q[2]))
                 if not _sd.kabin_icinde_mi(v, kd.harita.ext_cm):
                     raise KesisimGecersiz(f"hedef kabin DISINDA {tuple(round(a, 1) for a in v)} mm")
@@ -725,7 +727,8 @@ class PetriCvPipeline:
         npz = None
         if self.cfg.has_intrinsics():
             npz = _sd.npz_sha256(self.cfg.intrinsics_path())
-        return _sd.kare_hazirla(d, kare_boyutu=orijinal_wh, kamera_indeksi=self.kamera_indeksi, npz_sha=npz)
+        return _sd.kare_hazirla(d, kare_boyutu=orijinal_wh, kamera_indeksi=self.kamera_indeksi, npz_sha=npz,
+                                 kamera_kimligi=self.kamera_kimligi)
 
     def _duzlem_denetle(self, kd, img_und, grid, dets, olcek: float) -> None:
         """Sabit sahne kaymasi (plaka bolgesi DISLANIR) + 24'luk izgarada kuyu araligi (19,3 mm, %3). Engel `kd`ye yazilir."""
@@ -738,29 +741,47 @@ class PetriCvPipeline:
             x1, y1, x2, y2 = d.bbox_xyxy
             cokgenler.append(np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.float64))
         _sd.sahne_denetle(kd, img_und, cokgenler, genislet_px=max(8, int(round(60 * olcek))))
+        if grid is not None and grid.plate_quad_px:
+            # KD-2 (sahip): plaka görüş alanının kenarına değiyorsa (kör bölgede, kısmen görünüyor) hedef YOK + hangi yöne kaydırılacağı.
+            hh, ww = img_und.shape[:2]
+            q = np.asarray(grid.plate_quad_px, dtype=np.float64)
+            for kosul, yon in ((q[:, 1].max() > hh - 4, "on"), (q[:, 1].min() < 3, "arka"),
+                               (q[:, 0].min() < 3, "sol"), (q[:, 0].max() > ww - 4, "sag")):
+                if kosul:
+                    kd.engel(f"kor_bolge_{yon}", f"plaka goruntunun {yon} kenarina degiyor (kor bolge, kismen gorunuyor)")
         aralik_olculdu = False
         if grid is not None and grid.spec is not None and getattr(grid, "H_ransac", None) is not None:
             # Aralik Hough kuyu MERKEZLERINDEN (RANSAC) olculur — secilen ECC hipotezi izgarayi sistematik genisletir (plate_grid).
             S = np.diag([1.0 / olcek, 1.0 / olcek, 1.0])
             ka = _sd.kuyu_araligi(kd.harita, S @ np.asarray(grid.H_ransac, dtype=np.float64),
-                                  grid.spec.rows, grid.spec.cols, grid.spec.pitch_mm, kd.harita.duzlem_y_mm)
+                                  grid.spec.rows, grid.spec.cols, grid.spec.pitch_mm, kd.harita.numune_y_mm,
+                                  tolerans=kd.kuyu_araligi_toleransi)
             kd.olcum["kuyu_araligi"] = ka
             aralik_olculdu = True
             if not ka["gecti"]:
                 kd.engel("kamera_oynamis", f"eslenen kuyu araligi {ka['sutun_mm']:.2f} / {ka['satir_mm']:.2f} mm, beklenen "
-                                           f"{ka['beklenen_mm']:g} mm (sapma %{100 * ka['sapma']:.1f} > %{100 * _sd.KUYU_ARALIGI_TOLERANSI:g})")
+                                           f"{ka['beklenen_mm']:g} mm (sapma %{100 * ka['sapma']:.1f} > %{100 * ka['tolerans']:g})")
         elif grid is not None:
             kd.uyarilar.append("kuyu_araligi_olculemedi: izgarada yeterli Hough kuyu merkezi yok - kamera kaymasi yalniz sabit sahneden")
         if not aralik_olculdu and "sahne" not in kd.olcum:
             # Ne sahne ne kuyu araligi olculebildi → kameranin yerinde oldugu DOGRULANAMAZ (fail-closed).
             kd.engel("kamera_oynamis", "kamera konumu dogrulanamadi (sabit sahne ve kuyu araligi olculemedi)")
 
+    def _a1_kosesi(self, kd):
+        """KD-2: A1'in goruntu kosesi — YAML `auto` iken sabit duzlem kalibrasyonundan (kabinin arka-sol yonu); acik YAML degeri ya da
+        kalibrasyonsuz kip AYNEN (bugunku davranis)."""
+        if kd is None or kd.harita is None or str(self.a1_corner or "auto").lower() != "auto":
+            return self.a1_corner
+        return _sd.a1_kosesi(kd.harita, kd.harita.numune_y_mm) or self.a1_corner
+
     def _petri_hedef_y_mm(self, kd) -> float:
         """KD: petri hedef yuksekligi = YAML hedef duzlemi (kuyu tabani, hucreler) eksen "Y" ise; degilse plaka ust yuzu."""
         if kd is None or kd.harita is None:
             return 0.0
         pp = self.cfg.phantom_plate
-        return float(pp.hedef_duzlem_mm) if pp.hedef_duzlem_indeksi == 1 else float(kd.harita.duzlem_y_mm)
+        # KD-2: numune tabanı yükseltmesi (sahip) hedefi de aynı kadar yukarı alır.
+        yuk = float(kd.harita.yukseltme_mm)
+        return (float(pp.hedef_duzlem_mm) + yuk) if pp.hedef_duzlem_indeksi == 1 else float(kd.harita.numune_y_mm)
 
     def _kuyu_skoru_suz(self, grid, result: PipelineResult) -> list:
         """T3 · Y191b (sahip + Caglar Hoca 2026-10-24): PLAKA kipinde izgara hucresinin SKORU — `plate_grid` destek skoru (hucre
