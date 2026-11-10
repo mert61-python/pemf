@@ -217,4 +217,17 @@ mod tests {
         assert_eq!(olu_onbellek_temizle(d.path(), &[]), 0);
         assert!(d.path().join("base.zip").exists());
     }
+
+    /// KP-4 A4: önbellekteki ALT DİZİN (ör. elle bırakılmış klasör) ölü paket sayılıp silinmez; yalnız dosyalara bakılır.
+    #[test]
+    fn KRITIK_KP4_onbellekteki_ALT_DIZINE_dokunulmaz() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("eski.zip")).unwrap(); // adı paket gibi olsa da DİZİN
+        std::fs::write(d.path().join("eski.zip").join("icerik"), b"x").unwrap();
+        std::fs::write(d.path().join("olu.zip"), b"y").unwrap();
+        let silinen = olu_onbellek_temizle(d.path(), &["base.zip".to_string()]);
+        assert!(d.path().join("eski.zip").join("icerik").exists(), "önbellekteki dizin silindi");
+        assert!(!d.path().join("olu.zip").exists(), "ölü paket silinmedi");
+        assert!(silinen >= 1);
+    }
 }

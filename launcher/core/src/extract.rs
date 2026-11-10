@@ -1024,4 +1024,26 @@ mod tests {
         assert!(s.to_str().is_none());
         assert!(!segment_is_hostile(&s));
     }
+
+    /// KP-4 A4: kök DIŞINA çıkan symlink HER platformda reddedilir (Windows'ta da — desteklenmeyen symlink iletisinden ÖNCE kaçış
+    /// denetimi). Yazılan dosya yok.
+    #[test]
+    fn KRITIK_KP4_kok_disina_cikan_symlink_HER_platformda_reddedilir() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.zip");
+        let mut w = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        let o: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+        w.add_symlink("a/b/link", "../../../../dis/hedef", o).unwrap();
+        w.finish().unwrap();
+        let out = tempfile::tempdir().unwrap();
+        match extract_zip(&path, out.path()).unwrap_err() {
+            ExtractError::PathEscape(m) => assert_eq!(
+                m,
+                crate::dil::t_ile("rust.acma.dizinDisinaCikiyor", &[("ad", "a/b/link"), ("hedef", "../../../../dis/hedef")]),
+                "kaçış denetimi değil başka bir red (ör. desteklenmeyen symlink) yakaladı"
+            ),
+            e => panic!("kaçan symlink başka hatayla düştü: {e:?}"),
+        }
+        assert!(!out.path().join("a").join("b").join("link").exists());
+    }
 }

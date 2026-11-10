@@ -285,4 +285,16 @@ mod tests {
     fn kp3_windows_arayuz_dili_bir_dil_doner() {
         assert!(windows_arayuz_dili().is_some());
     }
+
+    /// KP-4 A4: GEÇERLİ JSON ama `dil` alanı yok / tanınmayan dil → o dosya seçim SAYILMAZ, sıradaki dosyaya geçilir.
+    #[test]
+    fn KRITIK_KP4_gecerli_json_dilsiz_ya_da_bilinmeyen_dil_SECIM_SAYILMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        let (dilsiz, bilinmeyen, iyi) = (d.path().join("a.json"), d.path().join("b.json"), d.path().join("c.json"));
+        std::fs::write(&dilsiz, r#"{"baska":"x"}"#).unwrap();
+        std::fs::write(&bilinmeyen, r#"{"dil":"de"}"#).unwrap();
+        std::fs::write(&iyi, r#"{"dil":"tr"}"#).unwrap();
+        assert_eq!(uygulama_secimi(&[dilsiz.clone(), bilinmeyen.clone()]), None);
+        assert_eq!(uygulama_secimi(&[dilsiz, bilinmeyen, iyi]), Some(Dil::Tr));
+    }
 }
