@@ -452,15 +452,19 @@ fn home_var_order(windows: bool) -> (&'static str, &'static str) {
 }
 
 fn detect_environment_blocking() -> Environment {
-    let root = install::default_install_root(&home_dir());
+    ortam_algila(&install::default_install_root(&home_dir()))
+}
+
+/// KP-4 A2c (Y257 a): `detect_environment_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
+fn ortam_algila(root: &std::path::Path) -> Environment {
     // ⚠️ HER ŞEYDEN ÖNCE: yarım kalan çalışma-zamanı takasını kurtar. Güncellemenin iki `rename`i
     // arasında kapanma olduysa `runtime` diskte YOKTUR ve aşağıdaki `already_installed` kontrolü
     // "kurulu değil" der — kullanıcı, çalışan bir kurulumu olduğu hâlde sıfırdan kurulum ekranı
     // görür. (bkz. flow::yarim_takasi_kurtar)
-    if pemf_launcher_core::flow::yarim_takasi_kurtar(&root) {
+    if pemf_launcher_core::flow::yarim_takasi_kurtar(root) {
         eprintln!("[kurtarma] yarim kalan calisma-zamani takasi onarildi");
     }
-    ortam_ozeti(&root)
+    ortam_ozeti(root)
 }
 
 fn ortam_ozeti(root: &std::path::Path) -> Environment {
@@ -483,7 +487,15 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
     // girdisidir. fetch_string_pinned_budgeted: https-only + KISA connect/read timeout + KÜRESEL
     // deadline + duvar saati tavanı (DNS'e deadline uygulanamıyor) + redirect-sonrası host
     // yeniden-doğrulama + into_string ~10MB metin-DoS sınırı.
-    let raw = net::fetch_string_pinned_budgeted(MANIFEST_URL)
+    profilleri_getir(|| net::fetch_string_pinned_budgeted(MANIFEST_URL), &install::default_install_root(&home_dir()))
+}
+
+/// KP-4 A2c (Y257 a): `fetch_profiles_blocking`'in gövdesi — manifest ÇEKİCİSİ ve kök (`su_root`) ENJEKTE (ağ / gerçek kök YOK).
+fn profilleri_getir(
+    cek: impl FnOnce() -> Result<String, net::NetError>,
+    su_root: &std::path::Path,
+) -> Result<serde_json::Value, String> {
+    let raw = cek()
         .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.manifestIndirilemedi", &[("e", &e.to_string())]))?;
 
     let manifest =
@@ -509,8 +521,7 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
     // DENETİM 2026-08-04 (P2 — sonsuz döngü): kayıtlı deneme hedefine ULAŞTIYSAK güncelleme
     // gerçekten uygulanmış → sayacı temizle. Ulaşamadıysak sayaç durur ve N denemeden sonra
     // OTOMATİK kurulum kapanır (bildirim kalır, kullanıcı elle indirebilir).
-    let su_root = install::default_install_root(&home_dir());
-    if let Some((tried, _)) = install::read_selfupdate_attempt(&su_root) {
+    if let Some((tried, _)) = install::read_selfupdate_attempt(su_root) {
         if tried == current_launcher {
             install::clear_selfupdate_attempt(&su_root);
         }
@@ -907,7 +918,11 @@ fn plan_to_json(plan: &flow::UpdatePlan) -> serde_json::Value {
 }
 
 fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
+    check_runtime_update_ile(&install::default_install_root(&home_dir()), manifest_raw)
+}
+
+/// KP-4 A2c (Y257 a): `check_runtime_update_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
+fn check_runtime_update_ile(root: &std::path::Path, manifest_raw: String) -> Result<serde_json::Value, String> {
     // Kaydı olmayan ESKİ kurulumlarda profil sha'larını önce benimse — yoksa üç profil birden
     // (~2,2 GB) boşuna iner. Base bilerek kapsam dışı: o gerçekten değişmiştir.
     let _ = flow::adopt_unknown_models(&manifest_raw, &root);
@@ -920,7 +935,11 @@ fn unix_simdi_s() -> u64 {
 }
 
 fn guncelleme_ozeti_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
+    guncelleme_ozeti_ile(&install::default_install_root(&home_dir()), manifest_raw, unix_simdi_s())
+}
+
+/// KP-4 A2c (Y257 a): `guncelleme_ozeti_blocking`'in gövdesi — kök ve ŞİMDİ (unix sn) ENJEKTE (onay yaşı sahte saatle sınanır).
+fn guncelleme_ozeti_ile(root: &std::path::Path, manifest_raw: String, simdi: u64) -> Result<serde_json::Value, String> {
     let manifest = pemf_launcher_core::Manifest::parse(&manifest_raw).map_err(|e| e.to_string())?;
     // `check_runtime_update` ile AYNI sıra: kaydı olmayan eski kurulumda profil sha'ları önce benimsenir (yoksa ~2,2 GB boşuna sorulur).
     let _ = flow::adopt_unknown_models(&manifest_raw, &root);
@@ -930,7 +949,6 @@ fn guncelleme_ozeti_blocking(manifest_raw: String) -> Result<serde_json::Value, 
     let launcher_otomatik = manifest.launcher_guncellemesi(kendi).is_some_and(|l| {
         install::selfupdate_auto_allowed(&root, &l.version) && install::rollout_dilimi(&root) < l.rollout
     });
-    let simdi = unix_simdi_s();
     let kayit = guncelleme_onayi::oku(&root);
     if kayit.as_ref().is_some_and(|k| !guncelleme_onayi::yas_gecerli(k, simdi)) {
         guncelleme_onayi::temizle(&root); // haftalar önceki onay habersiz kurulum doğurmaz
@@ -952,14 +970,18 @@ fn guncelleme_ozeti_blocking(manifest_raw: String) -> Result<serde_json::Value, 
 #[tauri::command]
 async fn guncelleme_onayini_kaydet(manifest_raw: String, launcher_hedefi: Option<String>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = install::default_install_root(&home_dir());
-        let plan = flow::pending_updates(&manifest_raw, &root).map_err(|e| e.to_string())?;
-        let kayit = guncelleme_onayi::onay_kaydi_kur(&plan, launcher_hedefi.as_deref(), unix_simdi_s());
-        guncelleme_onayi::kaydet(&root, &kayit)
-            .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.onayKaydiYazilamadi", &[("e", &e.to_string())]))
+        onay_kaydet_ile(&install::default_install_root(&home_dir()), &manifest_raw, launcher_hedefi.as_deref(), unix_simdi_s())
     })
     .await
     .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))?
+}
+
+/// KP-4 A2c (Y257 a): `guncelleme_onayini_kaydet`in gövdesi — kök ve ŞİMDİ ENJEKTE.
+fn onay_kaydet_ile(root: &std::path::Path, manifest_raw: &str, launcher_hedefi: Option<&str>, simdi: u64) -> Result<(), String> {
+    let plan = flow::pending_updates(manifest_raw, root).map_err(|e| e.to_string())?;
+    let kayit = guncelleme_onayi::onay_kaydi_kur(&plan, launcher_hedefi, simdi);
+    guncelleme_onayi::kaydet(root, &kayit)
+        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.onayKaydiYazilamadi", &[("e", &e.to_string())]))
 }
 
 /// `guncelleme_engeli` sonucunun JSON'u (saf — testli).
@@ -1595,7 +1617,11 @@ async fn calisan_backend_portu(state: &tauri::State<'_, AppState>) -> Option<u16
 }
 
 fn discard_pending_blocking(manifest_raw: Option<String>) -> Result<(), String> {
-    let root = install::default_install_root(&home_dir());
+    discard_pending_ile(&install::default_install_root(&home_dir()), manifest_raw)
+}
+
+/// KP-4 A2c (Y257 a): `discard_pending_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
+fn discard_pending_ile(root: &std::path::Path, manifest_raw: Option<String>) -> Result<(), String> {
     install::clear_pending(&root);
     if let Some(m) = manifest_raw {
         install::clear_partials(&root, &flow::plan_part_paths(&m, &root));
@@ -1944,8 +1970,12 @@ fn izin_ver_sonucu(kod: Result<i32, String>) -> Result<serde_json::Value, String
 }
 
 fn kaldirma_veri_konumu_blocking() -> serde_json::Value {
-    let ev = home_dir();
-    let (konum, diger) = install::kaldirma_veri_konumu_with(&install::default_install_root(&ev), |k| std::env::var(k).ok(), &ev);
+    kaldirma_veri_konumu_ile(&home_dir(), |k| std::env::var(k).ok())
+}
+
+/// KP-4 A2c (Y257 a): `kaldirma_veri_konumu_blocking`'in gövdesi — ev dizini ve ortam okuyucusu ENJEKTE (gerçek ortam okunmaz).
+fn kaldirma_veri_konumu_ile(ev: &std::path::Path, getenv: impl Fn(&str) -> Option<String>) -> serde_json::Value {
+    let (konum, diger) = install::kaldirma_veri_konumu_with(&install::default_install_root(ev), getenv, ev);
     serde_json::json!({
         "konum": konum.to_string_lossy(),
         "diger": diger.iter().map(|d| d.to_string_lossy().into_owned()).collect::<Vec<_>>(),
@@ -1953,7 +1983,11 @@ fn kaldirma_veri_konumu_blocking() -> serde_json::Value {
 }
 
 fn yedek_hedefi_durumu_blocking() -> serde_json::Value {
-    let root = install::default_install_root(&home_dir());
+    yedek_hedefi_durumu_ile(&install::default_install_root(&home_dir()))
+}
+
+/// KP-4 A2c (Y257 a): `yedek_hedefi_durumu_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
+fn yedek_hedefi_durumu_ile(root: &std::path::Path) -> serde_json::Value {
     let secili = install::backup_dir_oku(&root);
     let erisilebilir = secili.as_deref().map(install::dizin_yazilabilir_mi).unwrap_or(false);
     serde_json::json!({
@@ -2039,7 +2073,11 @@ mod tests {
         // (mutant ölçüldü: 1.9.52 yayındaki 1.9.51'i "yeni" sayar → kendini geri indirir). Dize içine taşınan çağrı metnine karşı
         // `manifest.launcher` ALANINA doğrudan erişim de yasak (yalnız `manifest.launcher_guncellemesi(` yöntemi serbest).
         let src = f5_yorumlari_soy(include_str!("main.rs"));
-        let g = &src[src.find(concat!("fn fetch_profiles_", "blocking(")).expect("fetch_profiles_blocking yok")..];
+        // KP-4 A2c: kararın gövdesi `profilleri_getir`de (kök / çekici enjekte); kabuk `fetch_profiles_blocking` yalnız bağlar.
+        let kabuk = &src[src.find(concat!("fn fetch_profiles_", "blocking(")).expect("fetch_profiles_blocking yok")..];
+        let kabuk = &kabuk[..kabuk.find("\n\u{7d}").expect("kabuk sonu yok")];
+        assert!(kabuk.contains("profilleri_getir(") && !kabuk.contains("launcher_guncellemesi"), "kabuk karar içeriyor / gövdeye bağlanmıyor");
+        let g = &src[src.find(concat!("fn profilleri_", "getir(")).expect("profilleri_getir yok")..];
         let g = &g[..g.find("\n\u{7d}").expect("gövde sonu yok")];
         assert!(g.contains("manifest.launcher_guncellemesi(current_launcher)"), "açılış bildirimi çekirdeğin kararını kullanmıyor");
         assert!(!g.contains(concat!("is_", "newer(")), "açılış bildiriminde satır içi sürüm kıyası var");
@@ -3881,4 +3919,155 @@ Connection: close
         assert!(!yol.exists(), "panikte geçici kök TEMP'te kaldı: {}", yol.display());
     }
 
+    // ═══ KP-4 A2c (Y257 a) · kök-enjeksiyonlu gövdeler — SAHTE kök (GeciciKok), ağ / gerçek kurulum / gerçek ortam YOK ═══
+    const A2C_SHA: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+    const A2C_KAYNAK: &str = "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0";
+
+    fn a2c_manifest(launcher_surumu: &str, rollout: u32) -> String {
+        let plat = platform::current();
+        format!(
+            r#"{{"schema":2,"version":"1.9.60",
+                "runtimes":{{"{plat}":{{"url":"{A2C_KAYNAK}/base.zip","sha256":"{A2C_SHA}","size":5}}}},
+                "models":{{"vet":{{"url":"{A2C_KAYNAK}/vet.zip","sha256":"{A2C_SHA}","size":3}},
+                           "home":{{"url":"{A2C_KAYNAK}/home.zip","sha256":"{A2C_SHA}","size":2}}}},
+                "launcher":{{"version":"{launcher_surumu}","installer_url":"{A2C_KAYNAK}/PEMFVetClient-setup.exe",
+                             "sha256":"{A2C_SHA}","size":10,"rollout":{rollout}}}}}"#
+        )
+    }
+
+    fn kurulu_agac(kok: &std::path::Path, ad: &str) {
+        let b = kok.join(ad).join("PEMF_Backend");
+        std::fs::create_dir_all(b.join("_internal").join("frontend").join("dist")).unwrap();
+        std::fs::write(b.join(platform::backend_exe_name()), b"exe").unwrap();
+        std::fs::write(b.join("_internal").join("frontend").join("dist").join("index.html"), b"<html>").unwrap();
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2c_ortam_algila_YARIM_TAKASI_kurtarir_sonra_KURULU_der() {
+        let g = GeciciKok::yeni("kp4_a2c_ortam");
+        std::fs::create_dir_all(&g.0).unwrap();
+        let e = ortam_algila(&g.0);
+        assert!(!e.already_installed && e.installed_profiles.is_empty(), "boş kök kurulu sayıldı");
+        // Güncellemenin iki rename'i arasında kesinti: `runtime` yok, sağlam `runtime.old` var → kurtarılır, KURULU görünür.
+        kurulu_agac(&g.0, "runtime.old");
+        let e = ortam_algila(&g.0);
+        assert!(e.already_installed, "yarım takas kurtarılmadı → çalışan kurulum 'kurulu değil' göründü");
+        assert!(install::runtime_dir(&g.0).is_dir() && !install::runtime_old_dir(&g.0).exists());
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2c_profiller_MANIFESTTEN_platform_ve_baslatici_guncellemesi_rollout_kapili() {
+        let g = GeciciKok::yeni("kp4_a2c_profil");
+        std::fs::create_dir_all(&g.0).unwrap();
+        let ham = a2c_manifest("99.0.0", 100);
+        let j = profilleri_getir(|| Ok(ham.clone()), &g.0).unwrap();
+        assert_eq!(j["profiles"], serde_json::json!(["home", "vet"]), "profiller sıralı listelenmedi");
+        assert_eq!(j["platform_supported"], serde_json::json!(true));
+        assert_eq!(j["current_launcher"], serde_json::json!(env!("CARGO_PKG_VERSION")));
+        assert_eq!(j["raw"], serde_json::json!(ham), "manifest metni arayüze taşınmadı");
+        assert_eq!(j["update"]["version"], serde_json::json!("99.0.0"));
+        assert_eq!(j["update"]["auto"], serde_json::json!(true), "rollout %100 + deneme yokken otomatik değil");
+        assert_eq!(j["update"]["rollout_bekliyor"], serde_json::json!(false));
+        // rollout 0 → yayın DURDURULDU: bildirim kalır, sessiz kurulum yok
+        let j = profilleri_getir(|| Ok(a2c_manifest("99.0.0", 0)), &g.0).unwrap();
+        assert_eq!((j["update"]["auto"].clone(), j["update"]["rollout_bekliyor"].clone()), (serde_json::json!(false), serde_json::json!(true)));
+        // deneme sınırı dolmuş hedef otomatik kurulmaz
+        for _ in 0..10 {
+            install::record_selfupdate_attempt(&g.0, "99.0.0");
+        }
+        let j = profilleri_getir(|| Ok(a2c_manifest("99.0.0", 100)), &g.0).unwrap();
+        assert_eq!(j["update"]["auto"], serde_json::json!(false), "deneme sınırı dolu hedef yine otomatik");
+        // kendi sürümüne ULAŞILMIŞ deneme kaydı temizlenir; eşit sürümde güncelleme YOK
+        install::record_selfupdate_attempt(&g.0, env!("CARGO_PKG_VERSION"));
+        let j = profilleri_getir(|| Ok(a2c_manifest(env!("CARGO_PKG_VERSION"), 100)), &g.0).unwrap();
+        assert!(j["update"].is_null(), "eşit sürüm güncelleme sayıldı");
+        assert_eq!(install::read_selfupdate_attempt(&g.0), None, "ulaşılan hedefin deneme kaydı temizlenmedi");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2c_profiller_cekim_ve_bozuk_manifest_HATASI_arayuze_doner() {
+        let g = GeciciKok::yeni("kp4_a2c_profil_hata");
+        let e = profilleri_getir(|| Err(net::NetError::Dns("dns".into())), &g.0).unwrap_err();
+        assert!(!e.is_empty());
+        assert!(profilleri_getir(|| Ok("{bozuk".to_string()), &g.0).is_err(), "bozuk manifest kabul edildi");
+        assert!(!g.0.exists(), "hata yolunda köke yazıldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2c_guncelleme_plani_ve_ozeti_KOKTEN_bozuk_manifest_HATA() {
+        let g = GeciciKok::yeni("kp4_a2c_plan");
+        std::fs::create_dir_all(&g.0).unwrap();
+        let ham = a2c_manifest("99.0.0", 100);
+        let plan = check_runtime_update_ile(&g.0, ham.clone()).unwrap();
+        for k in ["needed", "cached", "recall", "otomatik_durduruldu"] {
+            assert!(plan.get(k).is_some(), "plan JSON'unda {k} yok: {plan}");
+        }
+        assert!(check_runtime_update_ile(&g.0, "{bozuk".into()).is_err());
+        let oz = guncelleme_ozeti_ile(&g.0, ham.clone(), 1_000).unwrap();
+        assert!(oz.get("karar").is_some() && oz.get("zorunlu").is_some(), "özet JSON'u eksik: {oz}");
+        assert!(guncelleme_ozeti_ile(&g.0, "{bozuk".into(), 1_000).is_err());
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2c_onay_kaydi_SIMDI_ile_yazilir_BAYAT_onay_ozette_TEMIZLENIR() {
+        let g = GeciciKok::yeni("kp4_a2c_onay");
+        std::fs::create_dir_all(&g.0).unwrap();
+        let ham = a2c_manifest("99.0.0", 100);
+        onay_kaydet_ile(&g.0, &ham, Some("99.0.0"), 5_000).unwrap();
+        let k = guncelleme_onayi::oku(&g.0).expect("onay kaydı yazılmadı");
+        assert_eq!((k.launcher_hedefi.as_deref(), k.zaman), (Some("99.0.0"), 5_000));
+        // Haftalar sonra özet: yaşı geçmiş onay habersiz kuruluma dönüşmez — kayıt SİLİNİR
+        let _ = guncelleme_ozeti_ile(&g.0, ham.clone(), 5_000 + 365 * 24 * 3600).unwrap();
+        assert!(guncelleme_onayi::oku(&g.0).is_none(), "bayat onay kaydı temizlenmedi");
+        // Taze onay korunur
+        onay_kaydet_ile(&g.0, &ham, None, 9_000).unwrap();
+        let _ = guncelleme_ozeti_ile(&g.0, ham.clone(), 9_001).unwrap();
+        assert!(guncelleme_onayi::oku(&g.0).is_some(), "taze onay silindi");
+        assert!(onay_kaydet_ile(&g.0, "{bozuk", None, 1).is_err());
+        // Kök yazılamaz (dosya) → hata arayüze döner
+        let dosya = g.0.join("kok_dosya");
+        std::fs::write(&dosya, b"x").unwrap();
+        assert!(onay_kaydet_ile(&dosya, &ham, None, 1).is_err(), "yazılamayan onay başarılı sayıldı");
+    }
+
+    /// Yarım kurulumu bırak: kayıt HER iki kolda silinir. Manifest YOKSA yarım indirmelere dokunulmaz; manifest varsa GÜNCEL planın
+    /// `.part`'ları korunur, plan DIŞINDAKİ (bayat) yarım indirmeler silinir (`install::clear_partials` koruma listesi).
+    #[test]
+    fn KRITIK_KP4_A2c_yarim_kurulum_IPTALI_kaydi_siler_bayat_yarim_indirmeyi_TEMIZLER() {
+        let g = GeciciKok::yeni("kp4_a2c_iptal");
+        std::fs::create_dir_all(&g.0).unwrap();
+        let bayat = install::cache_dir(&g.0).join("eski.dddddddddddd.part");
+        std::fs::create_dir_all(bayat.parent().unwrap()).unwrap();
+        std::fs::write(&bayat, b"bayat").unwrap();
+        install::write_pending(&g.0, &["vet".to_string()]);
+        discard_pending_ile(&g.0, None).unwrap();
+        assert!(install::read_pending(&g.0).is_empty(), "yarım kurulum kaydı silinmedi");
+        assert!(bayat.exists(), "manifestsiz iptalde yarım indirme silindi");
+        install::write_pending(&g.0, &["vet".to_string()]);
+        discard_pending_ile(&g.0, Some(a2c_manifest("99.0.0", 100))).unwrap();
+        assert!(install::read_pending(&g.0).is_empty(), "manifestli iptalde kayıt silinmedi");
+        assert!(!bayat.exists(), "plan dışı (bayat) yarım indirme silinmedi");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2c_kaldirma_veri_konumu_ENJEKTE_ortamdan_yedek_hedefi_KAYITTAN() {
+        let ev = GeciciKok::yeni("kp4_a2c_ev");
+        std::fs::create_dir_all(&ev.0).unwrap();
+        let j = kaldirma_veri_konumu_ile(&ev.0, |_| None);
+        let konum = j["konum"].as_str().unwrap().to_string();
+        assert!(konum.starts_with(&*ev.0.to_string_lossy()) && konum.ends_with("PEMF_GUI"), "{konum}");
+        assert!(j["diger"].as_array().unwrap().is_empty());
+        let veri = ev.0.join("veri");
+        std::fs::create_dir_all(&veri).unwrap();
+        let kok = install::default_install_root(&ev.0);
+        std::fs::create_dir_all(&kok).unwrap();
+        assert_eq!(yedek_hedefi_durumu_ile(&kok), serde_json::json!({ "yol": null, "erisilebilir": false }));
+        install::backup_dir_yaz(&kok, &veri.to_string_lossy()).unwrap();
+        let y = yedek_hedefi_durumu_ile(&kok);
+        assert_eq!((y["yol"].as_str(), y["erisilebilir"].as_bool()), (Some(&*veri.to_string_lossy()), Some(true)));
+        let dosya = ev.0.join("hedef_aslinda_dosya");
+        std::fs::write(&dosya, b"x").unwrap();
+        install::backup_dir_yaz(&kok, &dosya.to_string_lossy()).unwrap();
+        assert_eq!(yedek_hedefi_durumu_ile(&kok)["erisilebilir"], serde_json::json!(false), "yazılamayan hedef erişilebilir sayıldı");
+    }
 }

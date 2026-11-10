@@ -4,7 +4,7 @@
  "s_sayisi": 44,
  "ozet": {
   "K": {
-   "islev": 22,
+   "islev": 30,
    "eksik_satir": 0
   },
   "S": {
@@ -140,7 +140,12 @@
   "detect_environment_blocking": {
    "sinif": "Y",
    "eksik": 7,
-   "neden": "home_dir(); gövde `ortam_ozeti`(kök) ayrı → T."
+   "neden": "KP-4 A2c: gövde `ortam_algila`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); gövde `ortam_ozeti`(kök) ayrı → T."
+  },
+  "ortam_algila": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `detect_environment_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "ortam_ozeti": {
    "sinif": "T",
@@ -156,7 +161,12 @@
   "fetch_profiles_blocking": {
    "sinif": "Y",
    "eksik": 37,
-   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. Ağdan manifest; saf JSON kurma kısmı ayrılabilir."
+   "neden": "KP-4 A2c: gövde `profilleri_getir`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. Ağdan manifest; saf JSON kurma kısmı ayrılabilir."
+  },
+  "profilleri_getir": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `fetch_profiles_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "dil_bilgisi": {
    "sinif": "S",
@@ -220,7 +230,12 @@
   "check_runtime_update_blocking": {
    "sinif": "Y",
    "eksik": 6,
-   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir()."
+   "neden": "KP-4 A2c: gövde `check_runtime_update_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir()."
+  },
+  "check_runtime_update_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `check_runtime_update_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "unix_simdi_s": {
    "sinif": "T",
@@ -236,12 +251,22 @@
   "guncelleme_ozeti_blocking": {
    "sinif": "Y",
    "eksik": 24,
-   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); karar çekirdekte %100."
+   "neden": "KP-4 A2c: gövde `guncelleme_ozeti_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); karar çekirdekte %100."
+  },
+  "guncelleme_ozeti_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `guncelleme_ozeti_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "guncelleme_onayini_kaydet": {
    "sinif": "Y",
    "eksik": 11,
-   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); kayıt çekirdekte %100."
+   "neden": "KP-4 A2c: gövde `onay_kaydet_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); kayıt çekirdekte %100."
+  },
+  "onay_kaydet_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `guncelleme_onayini_kaydet`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "guncelleme_onayini_temizle": {
    "sinif": "S",
@@ -358,7 +383,12 @@
   "discard_pending_blocking": {
    "sinif": "Y",
    "eksik": 8,
-   "neden": "home_dir(); `clear_pending` / `clear_partials` çekirdekte testli; kök enjeksiyonu KP-4."
+   "neden": "KP-4 A2c: gövde `discard_pending_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); `clear_pending` / `clear_partials` çekirdekte testli; kök enjeksiyonu KP-4."
+  },
+  "discard_pending_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `discard_pending_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "apply_self_update": {
    "sinif": "Y",
@@ -485,12 +515,22 @@
   "kaldirma_veri_konumu_blocking": {
    "sinif": "Y",
    "eksik": 7,
-   "neden": "home_dir(); `kaldirma_veri_konumu_with` çekirdekte testli; kök enjeksiyonu KP-4."
+   "neden": "KP-4 A2c: gövde `kaldirma_veri_konumu_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); `kaldirma_veri_konumu_with` çekirdekte testli; kök enjeksiyonu KP-4."
+  },
+  "kaldirma_veri_konumu_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `kaldirma_veri_konumu_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "yedek_hedefi_durumu_blocking": {
    "sinif": "Y",
    "eksik": 8,
-   "neden": "home_dir(); kök enjeksiyonu KP-4."
+   "neden": "KP-4 A2c: gövde `yedek_hedefi_durumu_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); kök enjeksiyonu KP-4."
+  },
+  "yedek_hedefi_durumu_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-4 A2c: `yedek_hedefi_durumu_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "klasor_secici_sonucu": {
    "sinif": "K",
