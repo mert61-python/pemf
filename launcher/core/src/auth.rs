@@ -179,6 +179,23 @@ fn agent() -> ureq::Agent {
         .build()
 }
 
+/// KP-4 A4: auth POST TAŞIYICISI — YALNIZ isteği yapar (başlıklar + gövde). Supabase URL pini, başlık içerikleri, yanıtın
+/// yorumu ve hata sınıflaması çağıranda (`post_json_ile`) kalır. Üretimde ureq ajanı (HTTPS-only, zaman aşımlı — `agent()`);
+/// testte sahte taşıyıcı (gerçek sunucu / ağ YOK). Hata ham `ureq::Error` döner (durum kodu gövdesiyle).
+trait AuthTasiyici {
+    fn post(&self, url: &str, basliklar: &[(&str, &str)], govde: &str) -> Result<Box<dyn crate::net::Yanit>, ureq::Error>;
+}
+
+impl AuthTasiyici for ureq::Agent {
+    fn post(&self, url: &str, basliklar: &[(&str, &str)], govde: &str) -> Result<Box<dyn crate::net::Yanit>, ureq::Error> {
+        let mut req = ureq::Agent::post(self, url);
+        for (ad, deger) in basliklar {
+            req = req.set(ad, deger);
+        }
+        Ok(Box::new(req.send_string(govde)?))
+    }
+}
+
 /// HTTP durum + gövdesinden KULLANICIYA GÖSTERİLECEK hatayı türet (saf → birim-testlenebilir).
 ///
 /// Gövde yalnız SINIFLANDIRMA için okunur, mesaja ASLA konmaz.
@@ -272,29 +289,28 @@ fn yenileme_hatasi_kaydet(status: u16, body: &str) -> AuthError {
 
 /// Auth ucuna JSON POST. `bearer`: kullanıcının access_token'ı (logout için); yoksa anon anahtar.
 fn post_json(
+    t: &dyn AuthTasiyici,
     url: &str,
     body: &str,
     bearer: Option<&str>,
 ) -> Result<serde_json::Value, AuthError> {
-    post_json_ile(url, body, bearer, classify_error)
+    post_json_ile(t, url, body, bearer, classify_error)
 }
 
 /// `post_json` + çağıranın HTTP hata sınıflayıcısı (yenileme yolu kendi kararını verir).
 fn post_json_ile(
+    t: &dyn AuthTasiyici,
     url: &str,
     body: &str,
     bearer: Option<&str>,
     sinifla: fn(u16, &str) -> AuthError,
 ) -> Result<serde_json::Value, AuthError> {
     validate_supabase_url(url)?;
-    let req = agent()
-        .post(url)
-        .set("apikey", ANON_KEY)
-        .set("Authorization", &format!("Bearer {}", bearer.unwrap_or(ANON_KEY)))
-        .set("Content-Type", "application/json");
+    let yetki = format!("Bearer {}", bearer.unwrap_or(ANON_KEY));
+    let basliklar = [("apikey", ANON_KEY), ("Authorization", yetki.as_str()), ("Content-Type", "application/json")];
     // ureq'in `json` özelliği bu projede KAPALI (Cargo.lock'ta serde_json ureq bağımlılığı yok)
-    // → gövde elle serileştirilip `send_string` ile gönderilir.
-    match req.send_string(body) {
+    // → gövde elle serileştirilip `send_string` ile gönderilir (taşıyıcı).
+    match t.post(url, &basliklar, body) {
         Ok(r) => {
             // 204 (logout) gövdesizdir → boş nesne dön.
             let txt = r.into_string().unwrap_or_default();
@@ -368,18 +384,28 @@ pub fn refresh_budgeted(refresh_token: &str, bilinen_eposta: &str) -> Result<Ses
 
 /// E-posta + parola ile giriş (`grant_type=password`).
 pub fn login(email: &str, password: &str) -> Result<Session, AuthError> {
+    login_ile(&agent(), email, password)
+}
+
+/// `login`'in gövdesi — taşıyıcı ENJEKTE (KP-4 A4).
+fn login_ile(t: &dyn AuthTasiyici, email: &str, password: &str) -> Result<Session, AuthError> {
     let email = email.trim();
     if email.is_empty() || password.is_empty() {
         return Err(AuthError::MissingInput);
     }
     let url = format!("{}/token?grant_type=password", auth_base());
     let body = serde_json::json!({ "email": email, "password": password }).to_string();
-    let v = post_json(&url, &body, None)?;
+    let v = post_json(t, &url, &body, None)?;
     session_from_json(&v, email)
 }
 
 /// Kayıtlı `refresh_token` ile SESSİZ yenileme ("beni hatırla" açılış yolu).
 pub fn refresh(refresh_token: &str, bilinen_eposta: &str) -> Result<Session, AuthError> {
+    refresh_ile(&agent(), refresh_token, bilinen_eposta)
+}
+
+/// `refresh`'in gövdesi — taşıyıcı ENJEKTE (KP-4 A4).
+fn refresh_ile(t: &dyn AuthTasiyici, refresh_token: &str, bilinen_eposta: &str) -> Result<Session, AuthError> {
     if refresh_token.trim().is_empty() {
         return Err(AuthError::SessionRevoked);
     }
@@ -388,7 +414,7 @@ pub fn refresh(refresh_token: &str, bilinen_eposta: &str) -> Result<Session, Aut
     // Yenileme yolunda sunucu hatasının kararı `yenileme_hatasi`nda (çağıran `SessionRevoked`te kaydı siler);
     // reddin özeti `son_yenileme_reddi()` ile okunur (önceki koşunun özeti burada temizlenir).
     let _ = son_yenileme_reddi();
-    let v = post_json_ile(&url, &body, None, yenileme_hatasi_kaydet)?;
+    let v = post_json_ile(t, &url, &body, None, yenileme_hatasi_kaydet)?;
     session_from_json(&v, bilinen_eposta)
 }
 
@@ -412,10 +438,15 @@ fn logout_url() -> String {
 }
 
 pub fn logout(access_token: &str) -> Result<(), AuthError> {
+    logout_ile(&agent(), access_token)
+}
+
+/// `logout`'un gövdesi — taşıyıcı ENJEKTE (KP-4 A4).
+fn logout_ile(t: &dyn AuthTasiyici, access_token: &str) -> Result<(), AuthError> {
     if access_token.trim().is_empty() {
         return Ok(());
     }
-    post_json(&logout_url(), "{}", Some(access_token)).map(|_| ())
+    post_json(t, &logout_url(), "{}", Some(access_token)).map(|_| ())
 }
 
 #[cfg(test)]
@@ -521,7 +552,7 @@ mod tests {
     #[test]
     fn pin_disi_urlye_istek_gonderilmez() {
         let t = std::time::Instant::now();
-        let r = post_json("https://evil.example/auth/v1/token", "{}", None);
+        let r = post_json(&agent(), "https://evil.example/auth/v1/token", "{}", None);
         assert!(matches!(r, Err(AuthError::UrlPin)));
         assert!(t.elapsed() < Duration::from_secs(2), "pin disi URL icin ag beklendi");
     }
@@ -807,11 +838,151 @@ mod tests {
     /// Yenileme reddi: karar `yenileme_hatasi` ile AYNI; özet (HTTP durumu + temizlenmiş kod) saklanır, okununca TEMİZLENİR.
     #[test]
     fn kp3_yenileme_reddi_ozeti_saklanir_okununca_temizlenir() {
+        let _sira = KURESEL_OZET_SIRASI.lock().unwrap_or_else(|e| e.into_inner()); // KP-4: küresel özete yazan testler sıralı
         let govde = r#"{"error_code":"session_not_found","msg":"Session from session_id claim in JWT does not exist"}"#;
         assert!(matches!(yenileme_hatasi_kaydet(403, govde), AuthError::SessionRevoked));
         assert_eq!(son_yenileme_reddi().as_deref(), Some("HTTP 403 session_not_found"));
         assert_eq!(son_yenileme_reddi(), None, "özet okununca temizlenmedi");
         assert!(matches!(yenileme_hatasi_kaydet(503, "<html>"), AuthError::Server(503)));
         assert_eq!(son_yenileme_reddi().as_deref(), Some("HTTP 503"));
+    }
+
+    /// KP-4: `SON_YENILEME_REDDI` süreç-geneli — ona yazan / onu okuyan testler paralel koşuda birbirinin özetini görmesin.
+    static KURESEL_OZET_SIRASI: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    // ═══ KP-4 A4 · auth AĞ kolları — SAHTE taşıyıcıyla (gerçek Supabase / ağ YOK): başlıklar, URL, gövde, yanıt yorumu ═══
+    struct AuthYanit {
+        govde: Vec<u8>,
+    }
+    impl crate::net::Yanit for AuthYanit {
+        fn status(&self) -> u16 {
+            200
+        }
+        fn get_url(&self) -> &str {
+            ""
+        }
+        fn header(&self, _ad: &str) -> Option<&str> {
+            None
+        }
+        fn into_reader(self: Box<Self>) -> Box<dyn std::io::Read + Send + Sync + 'static> {
+            Box::new(std::io::Cursor::new(self.govde))
+        }
+        fn into_string(self: Box<Self>) -> std::io::Result<String> {
+            String::from_utf8(self.govde).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        }
+    }
+
+    /// Sıradaki yanıt: `Ok(gövde)` (2xx) · `Err(Some((durum, gövde)))` (HTTP hata) · `Err(None)` (bağlantı yok).
+    type AuthCevap = Result<&'static [u8], Option<(u16, &'static str)>>;
+    struct SahteAuth {
+        cevap: std::sync::Mutex<Vec<AuthCevap>>,
+        istek: std::sync::Mutex<Vec<(String, Vec<(String, String)>, String)>>,
+    }
+    impl SahteAuth {
+        fn ile(mut c: Vec<AuthCevap>) -> Self {
+            c.reverse();
+            SahteAuth { cevap: std::sync::Mutex::new(c), istek: std::sync::Mutex::new(vec![]) }
+        }
+        fn baslik(&self, i: usize, ad: &str) -> String {
+            self.istek.lock().unwrap()[i].1.iter().find(|(a, _)| a == ad).map(|(_, d)| d.clone()).unwrap_or_default()
+        }
+    }
+    impl AuthTasiyici for SahteAuth {
+        fn post(&self, url: &str, basliklar: &[(&str, &str)], govde: &str) -> Result<Box<dyn crate::net::Yanit>, ureq::Error> {
+            let b = basliklar.iter().map(|(a, d)| (a.to_string(), d.to_string())).collect();
+            self.istek.lock().unwrap().push((url.to_string(), b, govde.to_string()));
+            match self.cevap.lock().unwrap().pop().expect("beklenmeyen ek istek") {
+                Ok(g) => Ok(Box::new(AuthYanit { govde: g.to_vec() })),
+                Err(Some((durum, g))) => Err(ureq::Error::Status(durum, ureq::Response::new(durum, "x", g).unwrap())),
+                Err(None) => Err(ureq::Error::from(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "baglanti yok"))),
+            }
+        }
+    }
+    const OTURUM: &[u8] = br#"{"access_token":"A1","refresh_token":"R1","expires_at":42,"user":{"email":"vet@klinik.tr"}}"#;
+
+    #[test]
+    fn KRITIK_KP4_A4_giris_ISTEGI_dogru_uc_basliklar_ve_gövde_oturum_cozulur() {
+        let t = SahteAuth::ile(vec![Ok(OTURUM)]);
+        let s = login_ile(&t, "  vet@klinik.tr ", "parola").unwrap();
+        assert_eq!((s.access_token.as_str(), s.refresh_token.as_str(), s.email.as_str(), s.expires_at), ("A1", "R1", "vet@klinik.tr", 42));
+        let (url, _, govde) = t.istek.lock().unwrap()[0].clone();
+        assert_eq!(url, format!("{}/token?grant_type=password", auth_base()));
+        let g: serde_json::Value = serde_json::from_str(&govde).unwrap();
+        assert_eq!((g["email"].as_str(), g["password"].as_str()), (Some("vet@klinik.tr"), Some("parola")), "e-posta kırpılmadı / gövde yanlış");
+        assert_eq!(t.baslik(0, "apikey"), ANON_KEY);
+        assert_eq!(t.baslik(0, "Authorization"), format!("Bearer {ANON_KEY}"), "girişte anon anahtar taşınmıyor");
+        assert_eq!(t.baslik(0, "Content-Type"), "application/json");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A4_giris_HATALARI_kullanici_iletisine_siniflanir() {
+        let t = SahteAuth::ile(vec![
+            Err(Some((400, r#"{"error_code":"invalid_credentials"}"#))),
+            Err(Some((429, "{}"))),
+            Err(Some((400, r#"{"error_code":"email_not_confirmed"}"#))),
+            Err(Some((503, "kapali"))),
+            Err(None),
+            Ok(b"bu json degil"),
+            Ok(b""),
+        ]);
+        assert!(matches!(login_ile(&t, "a@b.tr", "p"), Err(AuthError::BadCredentials)));
+        assert!(matches!(login_ile(&t, "a@b.tr", "p"), Err(AuthError::RateLimited)));
+        assert!(matches!(login_ile(&t, "a@b.tr", "p"), Err(AuthError::EmailNotConfirmed)));
+        assert!(matches!(login_ile(&t, "a@b.tr", "p"), Err(AuthError::Server(503))));
+        assert!(matches!(login_ile(&t, "a@b.tr", "p"), Err(AuthError::Offline)), "bağlantı yok çevrimdışı sayılmadı");
+        assert!(matches!(login_ile(&t, "a@b.tr", "p"), Err(AuthError::Malformed)), "bozuk JSON kabul edildi");
+        assert!(matches!(login_ile(&t, "a@b.tr", "p"), Err(AuthError::Malformed)), "boş (204) gövde oturum sayıldı");
+        assert!(matches!(login_ile(&t, " ", "p"), Err(AuthError::MissingInput)));
+        assert_eq!(t.istek.lock().unwrap().len(), 7, "boş girdi için istek yapıldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A4_yenileme_YALNIZ_acik_iptalde_SessionRevoked_digerinde_kayit_korunur() {
+        let _sira = KURESEL_OZET_SIRASI.lock().unwrap_or_else(|e| e.into_inner());
+        let t = SahteAuth::ile(vec![
+            Ok(OTURUM),
+            Err(Some((400, r#"{"error_code":"refresh_token_not_found"}"#))),
+            Err(Some((401, r#"{"message":"Invalid API key"}"#))),
+            Err(None),
+        ]);
+        let s = refresh_ile(&t, "R0", "eski@klinik.tr").unwrap();
+        assert_eq!(s.refresh_token, "R1");
+        assert_eq!(t.istek.lock().unwrap()[0].0, format!("{}/token?grant_type=refresh_token", auth_base()));
+        assert!(t.istek.lock().unwrap()[0].2.contains("\"refresh_token\":\"R0\""));
+        assert!(matches!(refresh_ile(&t, "R0", "e"), Err(AuthError::SessionRevoked)), "açık iptal kaydı silmiyor");
+        assert!(matches!(refresh_ile(&t, "R0", "e"), Err(AuthError::Server(401))), "anahtar hatası iptal sayıldı (kayıt silinirdi)");
+        assert!(matches!(refresh_ile(&t, "R0", "e"), Err(AuthError::Offline)));
+        assert!(matches!(refresh_ile(&t, " ", "e"), Err(AuthError::SessionRevoked)));
+        assert_eq!(t.istek.lock().unwrap().len(), 4, "boş jeton için istek yapıldı");
+    }
+
+    #[test]
+    fn KRITIK_KP4_A4_cikis_KULLANICI_jetonuyla_YEREL_kapsamda_bos_jetonda_istek_YOK() {
+        let t = SahteAuth::ile(vec![Ok(b""), Err(None)]);
+        assert!(logout_ile(&t, "ERISIM").is_ok());
+        assert_eq!(t.istek.lock().unwrap()[0].0, logout_url());
+        assert!(logout_url().ends_with("scope=local"), "çıkış global kapsamda (telefondaki oturum da düşer)");
+        assert_eq!(t.baslik(0, "Authorization"), "Bearer ERISIM", "çıkış kullanıcının jetonunu taşımıyor");
+        assert!(matches!(logout_ile(&t, "ERISIM"), Err(AuthError::Offline)));
+        assert!(logout_ile(&t, "  ").is_ok());
+        assert_eq!(t.istek.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn KRITIK_KP4_A4_pinsiz_URLde_istek_YAPILMAZ_ve_uretim_sarmalayicilari_aga_CIKMAZ() {
+        let t = SahteAuth::ile(vec![]);
+        assert!(matches!(post_json(&t, "https://evil.example/auth/v1/token", "{}", None), Err(AuthError::UrlPin)));
+        assert!(t.istek.lock().unwrap().is_empty());
+        // Üretim sarmalayıcıları gerçek ajanı kurar; boş girdi / boş jeton ağdan ÖNCE döner.
+        assert!(matches!(login("", "p"), Err(AuthError::MissingInput)));
+        assert!(matches!(refresh("", "e"), Err(AuthError::SessionRevoked)));
+        assert!(logout("").is_ok());
+    }
+
+    /// Üretim taşıyıcısının kendisi (ureq) — AĞA ÇIKMADAN: ayrıştırılamayan URL istek gönderilmeden düşer, başlıklar kurulur.
+    #[test]
+    fn KRITIK_KP4_A4_uretim_tasiyicisi_agsiz() {
+        let e = AuthTasiyici::post(&agent(), "https://", &[("apikey", "x")], "{}").err().expect("ayrıştırılamayan URL kabul edildi");
+        assert!(!matches!(e, ureq::Error::Status(..)), "{e}");
     }
 }

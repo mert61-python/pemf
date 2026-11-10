@@ -2581,4 +2581,33 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         assert!(TcpStream::connect(("127.0.0.1", port)).is_ok());
     }
+
+    // ═══ KP-4 A4 · backend küçük kolları — yalnız bu testin kendi geçici dinleyicisi (127.0.0.1:0; yasak portlar / gerçek backend YOK) ═══
+    /// "Çıkış yap": backend'deki masaüstü oturumu SİLME isteği (DELETE) oturum ucuna gider; yanıt beklenmez / hata yutulur.
+    #[test]
+    fn KRITIK_KP4_A4_cikista_backend_oturumu_DELETE_ile_silinir_yanitsizlik_YUTULUR() {
+        let (port, rx) = sahte_backend(vec![Some((204, "")), None]);
+        clear_desktop_session(port);
+        let istek = rx.recv_timeout(Duration::from_secs(5)).expect("silme isteği gelmedi");
+        let yol = desktop_session_url(port);
+        let yol = &yol[yol.find("/api/").expect("oturum ucu /api/ altında değil")..];
+        assert!(istek.starts_with(&format!("DELETE {yol} HTTP/1.1")), "silme isteği yanlış: {}", istek.lines().next().unwrap_or(""));
+        clear_desktop_session(port); // ikinci istek yanıtsız kapanır → panik / bekleme YOK
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
+    }
+
+    /// Boş port arama: aralıktaki her port MEŞGULSE `NoFreePort` (başlangıç / bitiş iletide); meşgul olanı ATLAR.
+    #[test]
+    fn KRITIK_KP4_A4_bos_port_aramasi_MESGUL_portu_atlar_hepsi_doluysa_HATA() {
+        let dolu = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let p = dolu.local_addr().unwrap().port();
+        match find_free_port(p, 1) {
+            Err(BackendError::NoFreePort { start, end }) => assert_eq!((start, end), (p, p + 1)),
+            r => panic!("meşgul tek port boş sayıldı: {r:?}"),
+        }
+        if let Ok(bulunan) = find_free_port(p, 50) {
+            assert_ne!(bulunan, p, "meşgul port döndürüldü");
+        }
+        drop(dolu);
+    }
 }

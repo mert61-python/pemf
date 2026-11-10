@@ -3151,4 +3151,28 @@ mod guncelleme_isareti_testleri {
         std::fs::write(installed_packages_path(d.path()), r#"{"base":"b-sha","app":"a-sha"}"#).unwrap();
         assert_eq!(backend_env_with(yok, d.path(), 8000, "").get(ENV_BASE_SHA).map(String::as_str), Some("a-sha"));
     }
+
+    // ═══ KP-4 A4 · Win32 SALT-OKUR sorgular — gerçek kayıt / ACL / güvenlik duvarı YAZIMI YOK ═══
+    /// YLI-A3 (S-E2I.4): aynı birimdeki iki VAR OLAN dizin → `Some(true)` (birim seri numarası); biri yoksa → `None` (karar sürücü
+    /// harfine kalır). `GetFileInformationByHandle` yalnız ÖZNİTELİK okur.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP4_A4_ayni_birim_seri_VAR_OLAN_iki_dizinde_karar_verir_yoksa_None() {
+        let d = tempfile::tempdir().unwrap();
+        let (a, b) = (d.path().join("a"), d.path().join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        assert_eq!(ayni_birim_seri(&a, &b), Some(true), "aynı birimdeki iki dizin ayrı birim sayıldı");
+        assert_eq!(ayni_birim_seri(&a, &d.path().join("yok")), None, "olmayan dizinde karar uyduruldu");
+        assert_eq!(ayni_birim_seri(&d.path().join("yok"), &a), None);
+    }
+
+    /// Y182: hesap ADINDAN SID — iyi bilinen `SYSTEM` hesabı (her Windows dilinde aynı ad, SID S-1-5-18) çözülür; olmayan ad → None.
+    /// `LookupAccountNameW` salt-okurdur (yerel LSA sorgusu; hesap / grup / ACL DEĞİŞMEZ).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP4_A4_grup_adindan_sid_iyi_bilinen_hesapta_SID_dizesi_doner() {
+        assert_eq!(grup_adindan_sid("SYSTEM").as_deref(), Some("S-1-5-18"), "SYSTEM hesabı çözülemedi / yanlış SID");
+        assert_eq!(grup_adindan_sid("PEMF KP4 olmayan grup 9e1d"), None);
+    }
 }
