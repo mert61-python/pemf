@@ -52,6 +52,12 @@ class _Kart:
         self._sorgu, self._boy, self._n = STM_KIMLIK_SORGUSU, STM_PAKET_BOYU, STM_PAKET_BOBIN_SAYISI
         self.paketler: list[tuple[float, tuple]] = []  # (an, duty'ler)
         self.sessiz = threading.Event()
+        # KP-4 B3b: zamanlanmış (henüz kuyruğa düşmemiş) yanıt sayısı + kuyruğun son dolma / okuyucunun boş bulduğu an — el sıkışma
+        # doğrulamasının GEÇ yanıtları (ör. `saha_gec_nack` 1 sn) sabit uykuyla değil, GERÇEKTEN boşalınca biter (`yanitlar_bosaldi`).
+        self._durum = threading.Lock()
+        self._bekleyen = 0
+        self._son_koyma = 0.0
+        self._son_bos_okuma = 0.0
         #: Paket yanıtının gecikmesi (sn): 121 B @115200 8N1 ≈ 10,5 ms iletim + kartın yanıt satırı. Anında yanıt veren sahte
         #: kart, yanıt beklemesi HİÇ olmayan bir hatayı (yazımdan hemen sonra karar) yakalayamazdı.
         self.gecikme = 0.015
@@ -60,6 +66,8 @@ class _Kart:
         try:
             return self._q.get(timeout=0.02)
         except queue.Empty:
+            with self._durum:
+                self._son_bos_okuma = time.monotonic()
             return b""
 
     def _ack(self, d) -> str:
@@ -92,9 +100,23 @@ class _Kart:
         return len(b)
 
     def _gec(self, satir: bytes, gecikme: float | None = None) -> None:
-        t = threading.Timer(self.gecikme if gecikme is None else gecikme, self._q.put, args=(satir,))
+        with self._durum:
+            self._bekleyen += 1
+
+        def _koy():
+            self._q.put(satir)
+            with self._durum:
+                self._bekleyen -= 1
+                self._son_koyma = time.monotonic()
+
+        t = threading.Timer(self.gecikme if gecikme is None else gecikme, _koy)
         t.daemon = True
         t.start()
+
+    def yanitlar_bosaldi(self) -> bool:
+        """Zamanlanmış yanıt kalmadı VE okuyucu son yanıttan SONRA kuyruğu boş buldu (son satırı işlemeyi bitirip yeniden okudu)."""
+        with self._durum:
+            return self._bekleyen == 0 and self._q.empty() and self._son_bos_okuma > self._son_koyma
 
     def close(self):
         self.is_open = False
@@ -174,6 +196,18 @@ def ortam(monkeypatch):
         core.baglanti, core.olaylar = [], []
         core._set_stm_connected = lambda v: core.baglanti.append(v)
         core._publish_event = lambda tur_, veri=None, **k: core.olaylar.append((tur_, veri))
+        # KP-4 B3b: bağlantı GERÇEKTEN yerleşti mi — `connect_serial` son adımı (`_stm_dogrulama_sonucu`) işlendiğinde olay kurulur
+        # (yalnız gözlem: asıl yöntem AYNEN çağrılır). `baglanti`ya ilk True kartın banner'ından düşer (bağlantı yerleşmeden ÖNCE).
+        dogrulama_islendi = threading.Event()
+        _asil_dogrulama = core._stm_dogrulama_sonucu
+
+        def _dogrulama_gozlemi(ozet):
+            try:
+                _asil_dogrulama(ozet)
+            finally:
+                dogrulama_islendi.set()
+
+        core._stm_dogrulama_sonucu = _dogrulama_gozlemi
         t = threading.Thread(target=core._hw_sender_worker, daemon=True, name="test-HWSender-TD3")
         t.start()
         hc = HardwareController(core)
@@ -182,7 +216,16 @@ def ortam(monkeypatch):
         while time.monotonic() < bitis and core.baglanti[-1:] != [True]:
             time.sleep(0.01)
         assert core.baglanti[-1:] == [True], f"aparat: bağlantı kurulmadı {core.baglanti}"
-        time.sleep(1.8)  # el sıkışma doğrulama yoklaması bitsin (≤ 1,5 sn)
+        # KP-4 B3b (eskiden sabit `sleep(1.8)`): el sıkışma doğrulama yoklamasının (≤ 1,5 sn) kart yanıtları — `saha_gec_nack`te
+        # 1 sn GEÇ gelen NACK'ler dahil — kuyruğa düşüp okuyucu tarafından İŞLENENE dek beklenir; yükte geç kalan bir yanıt artık
+        # sonraki E-stop'un yanıt penceresine karışmaz. Durum kilitli (üst sınır yalnız asılmaya karşı).
+        assert dogrulama_islendi.wait(15.0), "aparat: el sıkışma doğrulaması işlenmedi (bağlantı yerleşmedi)"
+        bitis = time.monotonic() + 15.0
+        while time.monotonic() < bitis and not kart.yanitlar_bosaldi():
+            time.sleep(0.01)
+        assert kart.yanitlar_bosaldi(), "aparat: el sıkışma yanıtları boşalmadı"
+        assert core.baglanti[-1:] == [True], f"aparat: bağlantı düştü {core.baglanti}"
+        # Okuyucu son geç yanıtı da işledi; kartın 2 sn'lik READY pingi aparatta YOK (yalnız açılış banner'ı).
         monkeypatch.setattr(api.state, "hardware", hc)
         monkeypatch.setattr(api.state, "core", core)
         return SimpleNamespace(api=api, ls=ls, core=core, hc=hc, kart=kart, yayinlar=yayinlar, bildirimler=bildirimler)
@@ -225,7 +268,10 @@ def test_KRITIK_STOP_gonderimi_AZALMAZ_NACKte_STOP_yeniden_yazilir(ortam):
     """Ö.4-Y8: kart reddetse de STOP yeniden gönderilir (NACK yeniden oynatması + keep-alive telafisi)."""
     o = ortam("red")
     _sonuc, _sure, t0 = _estop(o)
-    time.sleep(1.2)
+    while (
+        time.monotonic() < t0 + 1.2 and o.kart.stoplar(t0) < 3
+    ):  # KP-4 B3b: sabit uyku yerine koşul (sınır AYNI: 1,2 sn)
+        time.sleep(0.01)
     assert o.kart.stoplar(t0) >= 3, f"NACK'ten sonra STOP yeniden yazılmadı: {o.kart.stoplar(t0)}"
     from utils import estop_mandali
 
@@ -284,7 +330,10 @@ def test_KRITIK_T2D1_yanitsiz_kartta_STOP_gonderimi_AZALMAZ(ortam):
     """Ö.4-Y8: teyit yorumu değişti, gönderim DEĞİŞMEDİ — keep-alive STOP telafisi yanıtsız kartta da sürer, mandal kurulur."""
     o = ortam("saha_sessiz")
     _sonuc, _sure, t0 = _estop(o)
-    time.sleep(1.2)
+    while (
+        time.monotonic() < t0 + 1.2 and o.kart.stoplar(t0) < 2
+    ):  # KP-4 B3b: sabit uyku yerine koşul (sınır AYNI: 1,2 sn)
+        time.sleep(0.01)
     assert o.kart.stoplar(t0) >= 2, f"yanıtsız kartta STOP telafisi yazılmadı: {o.kart.stoplar(t0)}"
     from utils import estop_mandali
 
