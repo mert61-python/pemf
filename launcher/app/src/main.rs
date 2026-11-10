@@ -3835,9 +3835,10 @@ Connection: close
     /// gerçek kuruluma dokunmadan. Kurulu olmayan kökte "kurulu" DENMEZ (yoksa Başlat anlaşılmaz hatayla düşer).
     #[test]
     fn kp3_b2_ortam_ozeti_KOKTEN_okur_kurulu_degilse_kurulu_DEMEZ() {
-        // app crate'inde `tempfile` yok (yeni bağımlılık EKLENMEZ) → süreç + zaman damgalı geçici dizin, sonda silinir.
-        let ns = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let kok = std::env::temp_dir().join(format!("kp3_ortam_ozeti_{}_{ns}", std::process::id()));
+        // app crate'inde `tempfile` yok (yeni bağımlılık EKLENMEZ) → süreç + zaman damgalı geçici dizin; KP-4: `Drop` ile silinir
+        // (eskiden yalnız doğrulamalar geçerse siliniyordu — düşen koşu TEMP'te `kp3_ortam_ozeti_*` bırakıyordu).
+        let gecici = GeciciKok::yeni("kp3_ortam_ozeti");
+        let kok = gecici.0.clone();
         std::fs::create_dir_all(&kok).unwrap();
         let e = ortam_ozeti(&kok);
         assert!(!e.already_installed, "boş kök kurulu sayıldı");
@@ -3847,9 +3848,37 @@ Connection: close
         assert_eq!(e.platform, platform::current());
         install::add_installed_profiles(&kok, &["vet".to_string()]);
         let e2 = ortam_ozeti(&kok);
-        let _ = std::fs::remove_dir_all(&kok);
         assert_eq!(e2.installed_profiles, vec!["vet".to_string()], "kurulu profil kaydı okunmadı");
         assert!(!e2.already_installed, "yalnız profil kaydı varken (exe / frontend yok) kurulu sayıldı");
+    }
+
+    /// KP-4 (KP4-LISTESI ilk iş): testlerin geçici kökü — `Drop`'ta silinir (doğrulama düşse / panik olsa da TEMP'te kalmaz).
+    struct GeciciKok(std::path::PathBuf);
+    impl GeciciKok {
+        fn yeni(onek: &str) -> Self {
+            let ns = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+            GeciciKok(std::env::temp_dir().join(format!("{onek}_{}_{ns}", std::process::id())))
+        }
+    }
+    impl Drop for GeciciKok {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn KRITIK_KP4_gecici_kok_PANIKTE_de_silinir() {
+        let yol = std::sync::Mutex::new(None);
+        let sonuc = std::panic::catch_unwind(|| {
+            let g = GeciciKok::yeni("kp4_drop_sinama");
+            std::fs::create_dir_all(g.0.join("alt")).unwrap();
+            std::fs::write(g.0.join("alt").join("x.txt"), b"x").unwrap();
+            *yol.lock().unwrap() = Some(g.0.clone());
+            panic!("doğrulama düştü (kasıtlı)");
+        });
+        assert!(sonuc.is_err(), "kasıtlı panik yakalanmadı");
+        let yol = yol.lock().unwrap().clone().expect("geçici kök kurulmadı");
+        assert!(!yol.exists(), "panikte geçici kök TEMP'te kaldı: {}", yol.display());
     }
 
 }

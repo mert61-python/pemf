@@ -436,4 +436,19 @@ mod tests {
         assert!(load(&kok).is_none());
         assert_eq!(std::fs::read(&kok).unwrap(), b"dosya", "kök dosyası bozuldu");
     }
+
+    // ═══ KP-4 A4 (KP4-LISTESI ilk iş) · geçici blob yazıldı ama KALICI yere taşınamadı (rename düştü) ═══
+    /// Kalıcı blob yolu dolu bir DİZİNSE `rename` düşer → `save` false döner, geçici dosya SİLİNİR (yetim .tmp kalmaz) ve hedef
+    /// (eski kayıt yeri) DOKUNULMAZ. Kullanıcı girişli kalır; sonraki açılışta yalnız parola sorulur (best-effort sözleşmesi).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP4_kalici_yere_TASINAMAZSA_basarisiz_gecici_SILINIR_hedef_DOKUNULMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(blob_path(d.path())).unwrap();
+        std::fs::write(blob_path(d.path()).join("icerik"), b"eski").unwrap();
+        assert!(!save(d.path(), &ornek()), "taşınamayan kayıt başarılı sayıldı");
+        assert!(!gecici_blob_path(d.path()).exists(), "taşıma düşünce yetim geçici blob kaldı");
+        assert_eq!(std::fs::read(blob_path(d.path()).join("icerik")).unwrap(), b"eski", "hedef bozuldu");
+        assert!(load(d.path()).is_none());
+    }
 }
