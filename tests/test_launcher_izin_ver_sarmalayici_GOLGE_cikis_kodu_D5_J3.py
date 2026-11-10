@@ -45,6 +45,8 @@ import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 MAIN_RS = KOK / "launcher" / "app" / "src" / "main.rs"
+# KP-4 A1 (Y257 c): S sınıfı Tauri kabuğu (pencere / komut kabukları / `main`) kabuk.rs'te — main.rs onu `include!` ile katar.
+KABUK_RS = KOK / "launcher" / "app" / "src" / "kabuk.rs"
 CORE_SRC = KOK / "launcher" / "core" / "src"
 
 #: Beklenen kodlar testte SABİT (ürün sabitinden okunmaz): ERROR_CANCELLED.
@@ -97,7 +99,7 @@ def _rust_dizge(govde: str, bas: int) -> tuple[str, int]:
 def _sabit(ad: str) -> int:
     """`const AD: i32 = N;` — main.rs'te ya da çekirdekte (adlı argümanın yolu ne olursa olsun SON parça)."""
     desen = re.compile(rf"\bconst\s+{re.escape(ad)}\s*:\s*i32\s*=\s*(-?\d+)\s*;")
-    for yol in [MAIN_RS, *sorted(CORE_SRC.glob("*.rs"))]:
+    for yol in [MAIN_RS, KABUK_RS, *sorted(CORE_SRC.glob("*.rs"))]:
         m = desen.search(yol.read_text(encoding="utf-8"))
         if m:
             return int(m.group(1))
@@ -106,7 +108,7 @@ def _sabit(ad: str) -> int:
 
 def _sarmalayici() -> str:
     """main.rs `ps_yukselterek_kos_kodlu`nun KURDUĞU PowerShell komutu (adlı argümanlar yerine konmuş, `{b64}` sahte)."""
-    kaynak = MAIN_RS.read_text(encoding="utf-8").replace("\r\n", "\n")
+    kaynak = KABUK_RS.read_text(encoding="utf-8").replace("\r\n", "\n")  # yükseltme sarmalayıcısı (S) kabuk.rs'te
     govde = _islev_govdesi(kaynak, "fn ps_yukselterek_kos_kodlu(")
     f = govde.index("format!(")
     sablon, son = _rust_dizge(govde, govde.index('"', f))

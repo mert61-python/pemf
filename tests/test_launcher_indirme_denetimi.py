@@ -29,6 +29,8 @@ from i18n_yardimci import launcher_ui as ui
 
 _KOK = Path(__file__).resolve().parents[1]
 _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
+# KP-4 A1 (Y257 c): S sınıfı Tauri kabuğu (pencere / komut kabukları / `main`) kabuk.rs'te — main.rs onu `include!` ile katar.
+_KABUK_RS = _KOK / "launcher" / "app" / "src" / "kabuk.rs"
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 
 
@@ -77,7 +79,7 @@ def test_KRITIK_resume_komutu_VAR_ve_KAYITLI():
 
     ⚠️ Arka plan turu bayrağı BİLEREK sıfırlamaz (kullanıcının kararı ezilmesin); bu yüzden
     açık bir `resume_install` komutu ZORUNLU."""
-    metin = _MAIN_RS.read_text(encoding="utf-8")
+    metin = _KABUK_RS.read_text(encoding="utf-8")
     assert "fn resume_install" in metin, "resume_install komutu YOK → duraklatma geri alınamaz"
     i = metin.find("generate_handler")
     assert i != -1

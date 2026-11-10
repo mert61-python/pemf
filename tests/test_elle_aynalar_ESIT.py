@@ -63,7 +63,7 @@ def _py_int_tanim(ad: str, metin: str) -> str:
 
 
 def _rust_komutlari() -> list[set[str]]:
-    rust = _oku("launcher/app/src/main.rs")
+    rust = _oku("launcher/app/src/kabuk.rs")  # KP-4 A1: generate_handler! `main` içinde (S kabuğu, kabuk.rs)
     bloklar = []
     for m in re.finditer(r"generate_handler!\[(.*?)\]", rust, re.S):
         govde = re.sub(r"//[^\n]*", "", m.group(1))

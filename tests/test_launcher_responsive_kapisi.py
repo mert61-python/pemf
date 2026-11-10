@@ -26,6 +26,8 @@ _KOK = pathlib.Path(__file__).resolve().parents[1]
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _CONF = _KOK / "launcher" / "app" / "tauri.conf.json"
 _RS = _KOK / "launcher" / "app" / "src" / "main.rs"
+# KP-4 A1 (Y257 c): S sınıfı Tauri kabuğu (pencere / komut kabukları / `main`) kabuk.rs'te — main.rs onu `include!` ile katar.
+_KABUK_RS = _KOK / "launcher" / "app" / "src" / "kabuk.rs"
 
 
 @pytest.fixture(autouse=True)
@@ -139,11 +141,14 @@ def test_pencere_asgari_boyutu_kisa_ekranda_kucultmeye_izin_veriyor():
 def test_KRITIK_pencere_boyutu_monitore_gore_kirpiliyor():
     """Saf fonksiyon `cargo test` ile ölçülür; burada BAĞLANTI kilitlenir."""
     rs = _RS.read_text(encoding="utf-8")
+    kabuk = _KABUK_RS.read_text(
+        encoding="utf-8"
+    )  # saf boyut işlevleri main.rs'te (K); kurulum / pencere kabuğu kabuk.rs'te (S)
     assert "fn ana_pencere_boyutu(" in rs and "fn uygulama_pencere_boyutu(" in rs
-    assert "ana_pencere_boyutu(" in rs.split("fn ana_pencere_boyutu(", 1)[1], (
+    assert "ana_pencere_boyutu(" in kabuk and "uygulama_pencere_boyutu(" in kabuk, (
         "saf fonksiyon tanımlı ama KULLANILMIYOR (setup'ta çağrı yok)"
     )
-    assert "min_inner_size(" in rs, "app penceresi asgari boyut vermiyor (matris-9)"
+    assert "min_inner_size(" in kabuk, "app penceresi asgari boyut vermiyor (matris-9)"
 
 
 def test_KRITIK_ust_serit_etiketleri_HER_pencerede_gizli_degil():

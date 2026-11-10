@@ -38,6 +38,8 @@ _KOK = Path(__file__).resolve().parents[1]
 _AUTHCTX = _KOK / "apps" / "ui" / "src" / "context" / "AuthContext.tsx"
 _DESKTOP = _KOK / "apps" / "ui" / "src" / "services" / "desktopSession.ts"
 _MAIN = _KOK / "launcher" / "app" / "src" / "main.rs"
+# KP-4 A1 (Y257 c): S sınıfı Tauri kabuğu (pencere / komut kabukları / `main`) kabuk.rs'te — main.rs onu `include!` ile katar.
+_KABUK = _KOK / "launcher" / "app" / "src" / "kabuk.rs"
 _BACKEND = _KOK / "launcher" / "core" / "src" / "backend.rs"
 _STORE = _KOK / "launcher" / "core" / "src" / "secret_store.rs"
 
@@ -100,9 +102,11 @@ def test_KRITIK_3_launcher_diske_ISLER():
     assert i > 0, "senkron gorevi backend'ten OKUMUYOR (devir_cek(port) cagrisi yok)"
     assert "rotasyonu_isle" in d.group(0)[i : i + 600], "okunan oturum diske ISLENMIYOR"
     assert "oturum_rotasyon_senkronu_baslat" in s, "senkron gorevi HIC baslatilmiyor"
-    # Gorev backend hazir olunca baslamali (port o an bilinir).
-    j = s.find("fn on_backend_ready")
-    assert "oturum_rotasyon_senkronu_baslat" in s[j : j + 1500], (
+    # Gorev backend hazir olunca baslamali (port o an bilinir). `on_backend_ready` S kabuğunda (kabuk.rs).
+    k = _oku(_KABUK)
+    j = k.find("fn on_backend_ready")
+    assert j != -1, "on_backend_ready bulunamadi"
+    assert "oturum_rotasyon_senkronu_baslat" in k[j : j + 1500], (
         "senkron backend hazir oldugunda baslatilmiyor — pencere acikken hic calismaz"
     )
 

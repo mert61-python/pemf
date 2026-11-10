@@ -357,7 +357,7 @@
    "aciklama": "launcher Rust iletileri — uygulama (launcher/app/src)",
    "durum": "tamam",
    "metin": 102,
-   "dosyaSayisi": 1
+   "dosyaSayisi": 2
   },
   {
    "ad": "launcher-11c-rust-cekirdek",
@@ -10735,6 +10735,67 @@
    ],
    "birlesikIstisna": [],
    "not": "I18N-0 pilotu KISMİ: bir hata yolu (uygulama kurulu değil) dil::t; kalan iletiler bekliyor"
+  },
+  "launcher/app/src/kabuk.rs": {
+   "yuzey": "launcher",
+   "grup": "launcher-11b-rust-uygulama",
+   "sira": 11,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "Güncelleme",
+     "gerekce": "`Progress.what` VERİ kimliği — arayüz `pkgLabel` ile gösterimde çevirir (değer→anahtar: `updateWhat`)",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "PEMFVetClient-Guncelleme-{{sfx}}.exe",
+     "gerekce": "geçici dosya adı kalıbı — metin değil",
+     "turler": [
+      "rust-sablon"
+     ]
+    },
+    {
+     "metin": "/S /C \"\"{{yol}}\"\"",
+     "gerekce": "yardımcı .bat / komut dosyası içeriği — cmd komutu, kullanıcı metni değil",
+     "turler": [
+      "rust-sablon"
+     ]
+    },
+    {
+     "metin": "-Command",
+     "gerekce": "PowerShell komutu / argümanı — metin değil",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "let mut job = move ||",
+     "gerekce": "Rust birim testi iletisi (derlemede yok; geliştirici içindir)",
+     "turler": [
+      "rust"
+     ]
+    },
+    {
+     "metin": "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = '{{deger1}}'; if ($d.ShowDialog() -eq 'OK') {{ $d.SelectedPath }}",
+     "gerekce": "klasör seçici PowerShell komut dosyası (`format!` ile kurulur) — komut, kullanıcı metni değil; penceresinin AÇIKLAMA metni ayrıca `rust.klasorSecici.aciklama` ile katalogdan gelir",
+     "turler": [
+      "rust-sablon"
+     ]
+    },
+    {
+     "metin": "try {{ $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{{b64}}' }} catch {{ exit {{red}} }}; if ($null -eq $p -or $null -eq $p.ExitCode) {{ exit {{bos}} }}; exit $p.ExitCode",
+     "gerekce": "PowerShell komutu / argümanı — metin değil",
+     "turler": [
+      "rust-sablon"
+     ]
+    }
+   ],
+   "birlesikIstisna": [],
+   "not": "KP-4 A1 (Y257 c): main.rs'ten DEĞİŞTİRİLMEDEN taşınan S sınıfı Tauri kabuğu (main.rs `include!` ile katar); iletiler aynı `dil::t` / `t_ile` çağrıları, muaflar main.rs kaydından taşındı"
   },
   "launcher/core/src/auth.rs": {
    "yuzey": "launcher",

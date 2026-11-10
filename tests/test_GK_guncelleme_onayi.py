@@ -26,6 +26,8 @@ import pytest
 _KOK = Path(__file__).resolve().parent.parent
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
+# KP-4 A1 (Y257 c): S sınıfı Tauri kabuğu (pencere / komut kabukları / `main`) kabuk.rs'te — main.rs onu `include!` ile katar.
+_KABUK_RS = _KOK / "launcher" / "app" / "src" / "kabuk.rs"
 _NODE = shutil.which("node")
 
 _node_gerek = pytest.mark.skipif((_NODE is None) and not capraz.ZORUNLU, reason="node yok")
@@ -430,11 +432,18 @@ def test_KRITIK_acilis_ve_periyodik_tur_ONAYSIZ_indirme_kurma_cagirmaz():
 
 
 def test_KRITIK_rust_komutlari_kayitli_async_ve_kapi_TEK_yerde():
-    rs = _MAIN_RS.read_text(encoding="utf-8").replace("\r\n", "\n")
+    main = _MAIN_RS.read_text(encoding="utf-8").replace("\r\n", "\n")
+    rs = _KABUK_RS.read_text(encoding="utf-8").replace("\r\n", "\n")  # generate_handler (`main`) + S komut kabukları
     blok = re.search(r"generate_handler!\[(.*?)\]", rs, re.S).group(1)
-    for ad in ("guncelleme_ozeti", "guncelleme_onayini_kaydet", "guncelleme_onayini_temizle", "guncelleme_engeli"):
+    # Komutun bulunduğu dosya: S kabukları kabuk.rs'te, Y (`guncelleme_onayini_kaydet`) main.rs'te — her biri KENDİ dosyasında aranır.
+    for ad, kaynak in (
+        ("guncelleme_ozeti", rs),
+        ("guncelleme_onayini_kaydet", main),
+        ("guncelleme_onayini_temizle", rs),
+        ("guncelleme_engeli", rs),
+    ):
         assert re.search(rf"\b{ad}\b", blok), f"{ad} kayıtlı değil"
-        assert re.search(rf"async fn {ad}\(", rs), f"{ad} async değil (pencere iş parçacığında koşar)"
+        assert re.search(rf"async fn {ad}\(", kaynak), f"{ad} async değil (pencere iş parçacığında koşar)"
     g = rs[rs.index("async fn guncelleme_engeli(") :]
     g = g[: g.index("\n}\n")]
     assert "aktif_seans_kapisi(" in g, "seans engeli TEK kapıyı (aktif_seans_kapisi) kullanmıyor"

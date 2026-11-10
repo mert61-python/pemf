@@ -17,6 +17,8 @@ from i18n_yardimci import launcher_ui
 
 KOK = Path(__file__).resolve().parents[1]
 MAIN = KOK / "launcher" / "app" / "src" / "main.rs"
+# KP-4 A1 (Y257 c): S sınıfı Tauri kabuğu (pencere / komut kabukları / `main`) kabuk.rs'te — main.rs onu `include!` ile katar.
+KABUK = KOK / "launcher" / "app" / "src" / "kabuk.rs"
 HTML = KOK / "launcher" / "app" / "ui" / "index.html"
 TR_HARF = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
 
@@ -113,19 +115,21 @@ def test_KRITIK_TR_deger_eski_literalle_bayt_bayt_ayni_EN_dolu_Turkce_harfsiz_ay
 
 
 def test_KRITIK_her_anahtar_main_rs_de_KULLANILIYOR_ve_eski_Turkce_literal_kalmadi():
-    kaynak = MAIN.read_text(encoding="utf-8")
+    # Uygulama kaynağı = main.rs + kabuk.rs (aynı modül; anahtar hangi dosyada kullanılırsa kullanılsın, literal hiçbirinde kalmaz).
+    kaynak = MAIN.read_text(encoding="utf-8") + "\n" + KABUK.read_text(encoding="utf-8")
     kullanilmayan = [k for k in ESKI_TR if f'"{k}"' not in kaynak]
-    assert not kullanilmayan, f"katalogda var ama main.rs'de çağrılmıyor: {kullanilmayan}"
+    assert not kullanilmayan, f"katalogda var ama main.rs / kabuk.rs'de çağrılmıyor: {kullanilmayan}"
     kalan = [(k, m) for k, m in ESKI_TR.items() if "{{" not in m and f'"{m}"' in kaynak]
-    assert not kalan, f"ESKİ Türkçe literal main.rs'de hâlâ duruyor: {kalan}"
+    assert not kalan, f"ESKİ Türkçe literal main.rs / kabuk.rs'de hâlâ duruyor: {kalan}"
 
 
 def test_klasor_secici_aciklamasi_katalogdan_ve_tek_tirnak_kacislanir():
-    kaynak = MAIN.read_text(encoding="utf-8")
+    kaynak = KABUK.read_text(encoding="utf-8")  # klasör seçici (S) kabuk.rs'te
     assert 'dil::t("rust.klasorSecici.aciklama").replace(\'\\\'\', "\'\'")' in kaynak, (
         "PowerShell açıklamasında tek tırnak kaçışı yok"
     )
-    assert "Yedeklerin kopyalanacagi harici disk" not in kaynak, "açıklama metni koda geri gömülmüş"
+    for dosya in (kaynak, MAIN.read_text(encoding="utf-8")):
+        assert "Yedeklerin kopyalanacagi harici disk" not in dosya, "açıklama metni koda geri gömülmüş"
     assert _tr()["rust.klasorSecici.aciklama"] == "Yedeklerin kopyalanacagi harici disk / ag paylasimi"
     assert "'" not in _en()["rust.klasorSecici.aciklama"], "EN açıklamada tek tırnak: PowerShell betiği kırılır"
 
@@ -134,7 +138,7 @@ def test_pencere_basligi_ve_yok_yedekleri_katalogdan():
     assert _tr()["rust.pencere.guncelleniyor"] == "PEMF Vet — güncelleniyor"
     assert _en()["rust.pencere.guncelleniyor"] == "PEMF Vet — updating"
     assert _tr()["rust.hata.yok"] == "yok" and _en()["rust.hata.yok"] == "none"
-    kaynak = MAIN.read_text(encoding="utf-8")
+    kaynak = KABUK.read_text(encoding="utf-8")  # güncelleme penceresi (S) kabuk.rs'te
     assert 'w.set_title(&pemf_launcher_core::dil::t("rust.pencere.guncelleniyor"))' in kaynak
 
 

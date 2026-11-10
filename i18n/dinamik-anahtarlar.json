@@ -351,7 +351,7 @@
   },
   {
    "yuzey": "launcher",
-   "dosya": "launcher/app/src/main.rs",
+   "dosya": "launcher/app/src/kabuk.rs",
    "ifade": "t_ile(hata_anahtari(kod)",
    "onek": "rust.hata.",
    "degerler": ["yoneticiIzniVerilmedi", "paylasimIzinVerilemedi", "paylasimBagBulundu", "paylasimVeriYok", "paylasimBasarisiz"],

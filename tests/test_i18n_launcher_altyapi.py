@@ -111,8 +111,11 @@ def test_arayuz_katalogu_once_yuklenir_ve_dil_rusttan_alinir():
     assert re.search(r'invoke\("dil_ayarla",\s*\{\s*kod:\s*LANG\s*\}\)', html), (
         "TR/EN düğmesi Rust iletilerinin dilini ayarlamıyor"
     )
-    main = (KOK / "launcher/app/src/main.rs").read_text(encoding="utf-8")
-    assert "dil::baslat()" in main
+    main = (KOK / "launcher/app/src/kabuk.rs").read_text(encoding="utf-8")  # KP-4 A1: `main` S kabuğunda (kabuk.rs)
+    # KP-4 A1: çağrı DEYİM olarak aranır — kabuk.rs başındaki doc yorumu da `dil::baslat()` andığı için düz `in` kör kalırdı.
+    assert re.search(r"(?m)^\s*pemf_launcher_core::dil::baslat\(\);", main), (
+        "açılışta dil başlatılmıyor (yalnız yorumda anılıyor)"
+    )
     assert re.search(r"generate_handler!\[[^\]]*\bdil_bilgisi\b[^\]]*\bdil_ayarla\b", main, re.S), (
         "dil komutları işleyici listesinde değil"
     )

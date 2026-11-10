@@ -23,12 +23,19 @@ from i18n_yardimci import launcher_ui as katalog_ui
 
 _KOK = Path(__file__).resolve().parent.parent
 _MAIN_RS = _KOK / "launcher" / "app" / "src" / "main.rs"
+# KP-4 A1 (Y257 c): S sınıfı Tauri kabuğu (pencere / komut kabukları / `main`) kabuk.rs'te — main.rs onu `include!` ile katar.
+_KABUK_RS = _KOK / "launcher" / "app" / "src" / "kabuk.rs"
 _UI = _KOK / "launcher" / "app" / "ui" / "index.html"
 
 
 @pytest.fixture(scope="module")
 def rs() -> str:
     return _MAIN_RS.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def kabuk() -> str:
+    return _KABUK_RS.read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -70,7 +77,7 @@ def test_prefetch_bitince_kanal_KAPANIR(rs):
     )
 
 
-def test_ilerleme_yazicisi_KURULUMLA_ayni_kaynak(rs):
+def test_ilerleme_yazicisi_KURULUMLA_ayni_kaynak(rs, kabuk):
     """Ön-indirme, kurulumla AYNI snapshot yazıcısını kullanmalı (throttle + son-parça kuralı).
 
     ⚠️ Bu test önce `prefetch_runtime_update` gövdesinde `final_chunk` dizesini arıyordu ve
@@ -86,14 +93,14 @@ def test_ilerleme_yazicisi_KURULUMLA_ayni_kaynak(rs):
     )
     assert "fn snapshot_yazici" in rs, "ortak yazıcı tanımlı değil"
     # Kurulum yolu da aynı yazıcıyı kullanmalı ki iki akış ayrışmasın.
-    rep = re.search(r"fn progress_reporter\((.*?)\n}", rs, re.S)
+    rep = re.search(r"fn progress_reporter\((.*?)\n}", kabuk, re.S)  # kurulum yolunun yazıcısı S kabuğunda
     assert rep and "snapshot_yazici(" in rep.group(1), "kurulum yolu ortak yazıcıyı kullanmıyor"
 
 
-def test_get_prefetch_progress_komutu_KAYITLI(rs):
+def test_get_prefetch_progress_komutu_KAYITLI(kabuk):
     """Komut tanımlansa da `invoke_handler`a eklenmezse UI `invoke` çağrısı hata verir."""
-    assert "fn get_prefetch_progress" in rs, "komut tanımlı değil"
-    handler = re.search(r"invoke_handler\(tauri::generate_handler!\[(.*?)\]\)", rs, re.S)
+    assert "fn get_prefetch_progress" in kabuk, "komut tanımlı değil"
+    handler = re.search(r"invoke_handler\(tauri::generate_handler!\[(.*?)\]\)", kabuk, re.S)
     assert handler, "invoke_handler bloğu bulunamadı"
     assert "get_prefetch_progress" in handler.group(1), (
         "komut `invoke_handler`a KAYITLI DEĞİL → UI'da 'command not found' olur, bar hiç çizilmez."

@@ -568,7 +568,8 @@ mod tests {
     /// kurulum kökünden. Yorumlar (`//` ve — D5 J-3 tur 2 — `/* … */`) atılır (çağrı yalnız yorumda kalırsa KIRMIZI), boşluklar silinir.
     #[test]
     fn KRITIK_I1_main_rs_kural_portu_COCUGUN_portundan() {
-        let kaynak = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/main.rs")).expect("main.rs okunamadı");
+        // KP-4 A1 (Y257 c): güvenlik duvarı komut kabukları (S) app/src/kabuk.rs'te (main.rs onu `include!` ile katar).
+        let kaynak = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/kabuk.rs")).expect("kabuk.rs okunamadı");
         let yalin = rust_yorumsuz(&kaynak).replace("\r\n", "\n");
         for (islev, cagri) in [
             ("fn firewall_durumu_blocking()", "durum_icin(Some(&exe),api_portu(&root))"),
@@ -639,7 +640,10 @@ mod tests {
     /// kod okunmadan "tamam" dönen dal bu gövdede YOK. Yorumlar — `//` ve (tur 2 · n10) `/* … */` — atılır, boşluklar silinir.
     #[test]
     fn KRITIK_J3_main_rs_izin_ver_KODLU_kosar_kodu_Err_e_cevirir() {
-        let kaynak = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/main.rs")).expect("main.rs okunamadı");
+        // KP-4 A1 (Y257 c): güvenlik duvarı komut kabukları (S) app/src/kabuk.rs'te (main.rs onu `include!` ile katar).
+        let kaynak = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/kabuk.rs")).expect("kabuk.rs okunamadı");
+        let main_rs = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/main.rs")).expect("main.rs okunamadı");
+        let main_yalin = rust_yorumsuz(&main_rs).replace("\r\n", "\n");
         let yalin = rust_yorumsuz(&kaynak).replace("\r\n", "\n");
         let govde_of = |islev: &str| -> String {
             let i = yalin.find(islev).unwrap_or_else(|| panic!("{islev} bulunamadı"));
@@ -653,7 +657,12 @@ mod tests {
         );
         assert!(!govde.contains("ps_yukselterek_kos("), "kodsuz yükseltme (sonuç okunmaz) 'İzin ver' gövdesinde duruyor");
         assert!(!govde.contains("\"status\":\"ok\""), "kod okunmadan 'tamam' dönen bir dal var (başarı yalnız izin_ver_sonucu'nda)");
-        let esle = govde_of("fn izin_ver_sonucu(");
+        // `izin_ver_sonucu` (K, saf) main.rs'te kaldı — kabukta ARANMAZ.
+        let esle: String = {
+            let i = main_yalin.find("fn izin_ver_sonucu(").expect("fn izin_ver_sonucu( bulunamadı");
+            let j = main_yalin[i..].find("\n\u{7d}\n").map(|j| i + j).expect("işlev gövdesinin sonu bulunamadı");
+            main_yalin[i..j].split_whitespace().collect()
+        };
         assert!(
             esle.contains("pemf_launcher_core::firewall::ekleme_hata_anahtari(kod)"),
             "izin_ver_sonucu çıkış kodunu ekleme_hata_anahtari ile eşlemiyor"
