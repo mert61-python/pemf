@@ -366,7 +366,7 @@
    "aciklama": "launcher Rust iletileri — çekirdek (launcher/core)",
    "durum": "tamam",
    "metin": 139,
-   "dosyaSayisi": 16
+   "dosyaSayisi": 17
   },
   {
    "ad": "launcher-11d-nsis",
@@ -11320,6 +11320,17 @@
    ],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "launcher/core/src/test_kaynak.rs": {
+   "yuzey": "launcher",
+   "grup": "launcher-11c-rust-cekirdek",
+   "sira": 11,
+   "durum": "muaf",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "KP-4: YALNIZ TEST kodu (lib.rs `#[cfg(test)] mod test_kaynak`) — kaynak çapası yardımcıları; kullanıcıya giden metin YOK"
   },
   "launcher/core/src/verify.rs": {
    "yuzey": "launcher",

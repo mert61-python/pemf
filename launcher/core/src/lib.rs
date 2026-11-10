@@ -28,4 +28,8 @@ pub mod platform;
 pub mod secret_store;
 pub mod verify;
 
+// KP-4 (istem 42): yalnız TEST — kaynak çapası yardımcıları (davranış koruyan yeniden düzenlemenin SABİTLEYEN kapıları).
+#[cfg(test)]
+mod test_kaynak;
+
 pub use manifest::{is_newer, LauncherInfo, Manifest, Package};

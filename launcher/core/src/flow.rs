@@ -4239,4 +4239,31 @@ mod kp2_testleri {
         let beklenen = crate::dil::t_ile("rust.kurulum.onbellekOkunamadi", &[("profil", "vet"), ("dosya", "yok.zip"), ("hata", &os)]);
         assert!(matches!(&e, FlowError::ProfilKaldirma(s) if *s == beklenen), "{e:?}");
     }
+
+    // ── KP-4 A2 (Y257 a) SABİTLEYEN kapı — `ensure_package` yeniden deneme / telafi SIRASI (yeniden düzenlemeden ÖNCE yazıldı) ─
+    // İndiricinin enjeksiyonu yalnız G/Ç'yi ayırır: önbellek doğrulaması, 6 deneme, yalnız GEÇİCİ hatada yeniden deneme, artan
+    // bekleme boyunca Duraklat / İptal'e anında yanıt, sha uyuşmazlığında `.part` SİLİNEREK tek temiz yeniden indirme AYNEN kalmalı.
+    #[test]
+    fn KRITIK_KP4_A2_SABIT_ensure_package_yeniden_deneme_SIRASI() {
+        let kaynak = crate::test_kaynak::yorumsuz(include_str!("flow.rs"));
+        crate::test_kaynak::sira_dogru(
+            &kaynak,
+            &[
+                "let dest = cache_path_for(pkg, cache, label);",
+                "if dest.exists() && verify::verify_file(&dest, &pkg.sha256).is_ok() {",
+                "const MAX_ATTEMPTS: u32 = 6;",
+                "(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)",
+                "let retriable = is_retriable(&e);",
+                "if !retriable || attempt >= MAX_ATTEMPTS {",
+                "Progress::Reconnecting { what: label.to_string(), attempt, max: MAX_ATTEMPTS }",
+                "let wait_ms = (attempt.min(5) as u64) * 1500;",
+                "net::Control::Cancel => return Err(net::NetError::Cancelled.into()),",
+                "net::Control::Pause => return Err(net::NetError::Paused.into()),",
+                "waited += 200;",
+                "let _ = fs::remove_file(net::part_path(&dest, &pkg.sha256));",
+                "dogrula_ya_da_bir_kez_temiz_indir(&dest, &pkg.sha256, label, on, control, &mut temiz_yeniden_indir)?;",
+            ],
+            "ensure_package sırası bozuk",
+        );
+    }
 }

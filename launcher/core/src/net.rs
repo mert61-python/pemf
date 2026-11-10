@@ -1059,4 +1059,50 @@ mod tests {
         assert_eq!(parse_content_range_start(""), None);
         assert_eq!(parse_content_range_start("bytes abc-def/1"), None);
     }
+
+    // ── KP-4 A2 (Y257 a) SABİTLEYEN kapılar — indirme / metin çekimi güvenlik SIRASI (yeniden düzenlemeden ÖNCE yazıldı) ─────
+    // Yeniden düzenleme (taşıyıcı enjeksiyonu) yalnız G/Ç'yi ayırır; bu sıra ve tavanlar AYNEN kalmalı. Yorumlar soyulur; gövde,
+    // çapaların HEPSİNİ taşıyan TEK işlevdir (adından bağımsız — `_ile` gövdesine taşındığında da aynı kapı).
+
+    #[test]
+    fn KRITIK_KP4_A2_SABIT_indirme_guvenlik_SIRASI() {
+        let kaynak = crate::test_kaynak::yorumsuz(include_str!("net.rs"));
+        crate::test_kaynak::sira_dogru(
+            &kaynak,
+            &[
+                "validate_download_source(url)?;",          // kaynak repo-yolu pini HER ŞEYDEN önce
+                "fs::create_dir_all(parent)",
+                ".ends_with(\".part\")",                    // farklı-sha yetim `.part` temizliği
+                "let part = part_path(dest, expected_sha);",
+                "if control() == Control::Cancel {",        // baştan iptal → ağa çıkmadan dön
+                "done >= expected_size",                    // şüpheli devam noktası sıfırlanır
+                "format!(\"bytes={done}-\")",               // Range yalnız devam varken
+                "ureq_hatasi(e, url)",                      // aktarım hatası TEK sınıflandırıcıdan (DNS ayrı)
+                "validate_url(resp.",                       // yönlendirme SONRASI host pini
+                "== 206 && done > 0",
+                "got != Some(done)",                        // Content-Range ofseti DOĞRULANIR
+                ".min(manifest_cap)",
+                ".min(MAX_DOWNLOAD_BYTES)",                 // mutlak tavan aşılamaz
+                ".append(true)",
+                "into_reader()",
+                "started.elapsed() >",                      // küresel süre tavanı (slowloris)
+                "Control::Pause =>",
+                "Control::Cancel =>",
+                "if done > ceiling {",
+                "out.write_all(",
+                "fs::rename(&part, dest)",
+            ],
+            "indirme sırası bozuk",
+        );
+    }
+
+    #[test]
+    fn KRITIK_KP4_A2_SABIT_metin_cekimi_pin_SIRASI() {
+        let kaynak = crate::test_kaynak::yorumsuz(include_str!("net.rs"));
+        crate::test_kaynak::sira_dogru(
+            &kaynak,
+            &["validate_download_source(url)?;", "ureq_hatasi(e, url)", "validate_url(resp.", "into_string()"],
+            "metin çekimi: kaynak pini → istek → yönlendirme pini → gövde",
+        );
+    }
 }
