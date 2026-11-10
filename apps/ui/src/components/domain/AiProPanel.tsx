@@ -22,6 +22,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } 
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { kabinKamerasiKullanilir, KosulSecici } from "@/components/domain/AnalizKosulu";
 import { KabinKamerasiKarti } from "@/components/domain/KabinKamerasiKarti";
+import { KabinKalibrasyonuKarti } from "@/components/domain/KabinKalibrasyonuKarti";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { STM_BOBIN_SAYISI } from "@/services/bobinGorunurlugu";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
@@ -1209,6 +1210,11 @@ export function AiProPanel({
 
       {/* T3 · Y190: kabin kamerası seçimi burada (Ayarlar'dan kalktı) — bu makinede; hazırlık / seans kamerayı tutarken kilitli. */}
       {kabinKamerasiKullanilir() ? <KabinKamerasiKarti kilitli={modelKilitli} /> : null}
+      {/* KD · Y260: kabin kalibrasyonu (sabit düzlem) — araştırma modelinde, HER platformda (kare arka uçtaki kabin kamerasından gelir);
+          hazırlık / seans sürerken kilitli (sunucu da 409 verir). Petri / fantom sürüşü geçerli kalibrasyon olmadan başlamaz (Y259). */}
+      {arastirmaKipi && (hedefModeli === "petri" || hedefModeli === "fantom") ? (
+        <KabinKalibrasyonuKarti model={hedefModeli} kilitli={modelKilitli} />
+      ) : null}
 
       {/* Kamera görüntüsü: web = sunucudan (Image), mobil = telefon kamerası (CameraView) */}
       <View

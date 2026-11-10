@@ -155,6 +155,12 @@ _JETONLU_ROTA_SINIFI = {
     "/api/ai/pro/calibrate": None,
     "/api/ai/pro/hazirlik/baslat": None,
     "/api/ai/pro/hazirlik/durdur": None,
+    "/api/ai/pro/kalibrasyon": None,  # KD · Y260 kabin kalibrasyonu (kurulum, bobin sürmez)
+    "/api/ai/pro/kalibrasyon/kare": None,  # KD · Y260 kabin kalibrasyonu (kurulum, bobin sürmez)
+    "/api/ai/pro/kalibrasyon/hesapla": None,  # KD · Y260 kabin kalibrasyonu (kurulum, bobin sürmez)
+    "/api/ai/pro/kalibrasyon/kaydet": None,  # KD · Y260 kabin kalibrasyonu (kurulum, bobin sürmez)
+    "/api/ai/pro/kalibrasyon/dogrula": None,  # KD · Y260 kabin kalibrasyonu (kurulum, bobin sürmez)
+    "/api/ai/pro/kalibrasyon/fantom": None,  # KD · Y260 kabin kalibrasyonu (kurulum, bobin sürmez)
     "/api/ai/pro/organ": None,
     "/api/ai/pro/reject": None,
     "/api/ai/pro/status": None,

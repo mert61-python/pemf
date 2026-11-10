@@ -19,6 +19,9 @@ import random
 
 import ai_pro_aparati as ap
 import pytest
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 
 _ONEKLI = ["AI (Auto)", "AI Pro · x", "AI Pro · Kedi Organ · Tüm Vücut", "AI", "AIx", "AI ", "AI Pro", "AI-otomatik"]
 _ONEKSIZ = ["Manuel", "Otomatik", "ai (auto)", " AI (Auto)", "Ai Pro", "manual", "Test"]

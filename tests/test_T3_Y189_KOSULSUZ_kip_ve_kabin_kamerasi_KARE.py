@@ -25,6 +25,9 @@ import time
 
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 from test_ai_hub_fantom_petri_v2v3_YANIT_ve_PARITE_AI2_C3 import FANTOM, _b64, gomulu, onbellek, servis  # noqa: F401
 from test_ai_pro_arastirma_PEMF_KAPISI_fail_closed_AI2_C4 import _IDS, DURUMLAR, _Hat, _Sonuc, sag  # noqa: F401
 from test_em_ongorucu_SONLU_OLMAYAN_girdi_PIKSEL_kipi_ve_TOPLAM_sure import (  # noqa: F401

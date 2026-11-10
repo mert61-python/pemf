@@ -22,6 +22,9 @@ from __future__ import annotations
 import ai_pro_aparati as ap
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 
 P1, P2, P3 = (100.0, 100.0), (200.0, 100.0), (300.0, 100.0)
 M1, M2, M3 = (-40.0, -60.0, 0.0), (-40.0, 0.0, 0.0), (-40.0, 60.0, 0.0)

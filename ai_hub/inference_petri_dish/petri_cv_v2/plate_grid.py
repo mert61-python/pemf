@@ -70,6 +70,10 @@ class PlateGridResult:
     hypotheses: dict = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)    # cekim kalitesi
     error: str | None = None
+    #: KD (sabit duzlem, kuyu araligi denetimi): Hough kuyu MERKEZLERINDEN RANSAC homografisi (n_inliers >= 6 ise; yoksa None).
+    #: Secilen ECC hipotezi pembe BOLGEYE hizalanir ve izgarayi sistematik genisletir (sentetik, kusursuz kalibrasyon: secilen
+    #: +%1,5 / +%3,5, RANSAC <= %0,8) — aralik OLCUMU buna dayanir; kuyu konumlari secilen hipotezden (hocanin kurali) DEGISMEDI.
+    H_ransac: np.ndarray | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -545,6 +549,7 @@ def detect_plate_wells(image_bgr: np.ndarray, plate_type: int = 24, *,
                           plate_quad_px=quad.tolist(),
                           n_candidates=len(cands), n_inliers=len(srcmap),
                           fit_rms_mm=rms, ecc_ok=ecc_ok)
+    res.H_ransac = H1 if n_inl >= 6 else None
     res.chosen = chosen
     res.orientation = "landscape" if landscape else "portrait"
     res.a1_corner = a1

@@ -800,6 +800,13 @@ _SERBEST_AI_UCLARI: frozenset = frozenset(
         "/api/ai/pro/hazirlik/baslat",
         "/api/ai/pro/hazirlik/durdur",
         "/api/ai/hazirlik",
+        # KD · Y260: kabin kalibrasyonu KURULUM adımıdır (analiz değil, bobin sürmez) — ücretlenmez.
+        "/api/ai/pro/kalibrasyon",
+        "/api/ai/pro/kalibrasyon/kare",
+        "/api/ai/pro/kalibrasyon/hesapla",
+        "/api/ai/pro/kalibrasyon/kaydet",
+        "/api/ai/pro/kalibrasyon/dogrula",
+        "/api/ai/pro/kalibrasyon/fantom",
     }
 )
 # Ağır araştırma (belge: patoloji, RNA, tomografi, yara-kapanma = 3 jeton).

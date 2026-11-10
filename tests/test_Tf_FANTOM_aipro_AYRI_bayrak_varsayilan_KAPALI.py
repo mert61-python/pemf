@@ -18,6 +18,9 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 
 KOK = Path(__file__).resolve().parents[1]
 

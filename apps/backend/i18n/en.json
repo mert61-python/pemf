@@ -241,6 +241,22 @@
       "xaiYontemi": "xai_method is invalid: {{xai_method}}",
       "yaraKapanma": "Wound closure analysis error"
     },
+    "kalibrasyon": {
+      "fantomGecersiz": "Invalid phantom values — the thickness must be greater than 0 and at most 20 cm, the tumor depth smaller than the thickness; length and width are entered together.",
+      "icParametreYok": "There are no camera intrinsics for this resolution ({{genislik}}×{{yukseklik}}) — use the cabin camera at its highest 16:9 resolution.",
+      "kareYok": "The calibration frame was not found or has expired — take a new frame.",
+      "kaydedilemedi": "The calibration could not be written to disk ({{neden}}) — check that the data folder is writable and try again.",
+      "lensOnayGerekli": "The calculated camera position is {{cm}} cm away from the lens position you measured (more than 2 cm) — check the measurements; confirm to save anyway.",
+      "neden": {
+        "cozumYok": "The camera position could not be calculated — tap the corners again.",
+        "girdiGecersiz": "The entered values are invalid — tap the 4 corners and enter the distance to the left / front glass in cm for each corner.",
+        "izdusumYuksek": "The tapped corners do not match the measurements (reprojection error {{px}} px, limit 3 px) — zoom in, tap the corners again and check the measurements.",
+        "kameraDuzlemAltinda": "The calculated camera position is below the plate — the corner order may be reversed; tap front-left, front-right, back-right, back-left in that order.",
+        "olcumTutarsiz": "The corner measurements do not match the plate size (a value may be mistyped or the corner order mixed up) — check the measurements and the order (front-left, front-right, back-right, back-left)."
+      },
+      "reddedildi": "The calibration was not saved — see the reasons below; correct them and calculate again.",
+      "seansSuruyor": "The cabin calibration cannot be changed while an AI Pro session is running — stop the session first."
+    },
     "kimlik": {
       "degerlendirme": "Select an operator — to review, first choose which veterinarian you are from the top bar.",
       "oncekiDegerlendirmeler": "Select an operator — to see earlier reviews, first choose which veterinarian you are from the top bar."
@@ -291,7 +307,16 @@
       "tumorler": "Tumors"
     },
     "pemf": {
-      "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis."
+      "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis.",
+      "kapi": {
+        "fantomAyariYok": "Phantom thickness / tumor depth has not been entered — enter it in the Cabin calibration section.",
+        "fantomBoyuFarkli": "The detected phantom size is very different from the setting (no phantom in the cabin, or the thickness / size setting is wrong) — check the phantom and the setting.",
+        "fantomDegil": "The detected region does not look like a phantom (light reflection or empty cabin) — place the phantom in the cabin; if there is glare, change the lighting.",
+        "kalibrasyonBozuk": "The cabin calibration could not be read or is corrupt — calibrate the cabin again.",
+        "kalibrasyonYok": "No cabin calibration — calibrate in the Cabin calibration section using the 4 corners of the plate.",
+        "kameraFarkli": "The camera or resolution differs from the calibration — select the cabin camera used for the calibration or calibrate again.",
+        "kameraOynamis": "The camera may have moved — calibrate the cabin again."
+      }
     },
     "pro": {
       "hata": {

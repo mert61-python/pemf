@@ -1139,6 +1139,18 @@ def _arastirma_aipro_kapisi(saglayici) -> None:
     )
 
 
+def _duzlem_kalibrasyonu_kapisi(saglayici) -> None:
+    """KD · Y259 (sahip 2026-11-10): araştırma modelleri (petri / fantom) YALNIZ geçerli SABİT DÜZLEM kalibrasyonuyla önerilir,
+    başlatılır ve SÜRÜLÜR → değilse 409 (nedeni + eylemi istek dilinde). Kedi bu kapıya TABİ DEĞİL (kendi Y142 kapısı).
+    Kare başına denetimler (sahne kayması, kuyu aralığı, fantom boyu / boş kabin) hatta — geçmeyen kare lokalize sayılmaz.
+    ⚠️ ACİL DURDUR / STOP bu kapıya BAĞLI DEĞİL (Ö.4-Y8): yalnız başlatma / öneri / sürüş yolu."""
+    if _kedi_modeli_mi(saglayici):
+        return
+    kod = ai_pro_hedef.duzlem_surus_engeli(saglayici)
+    if kod:
+        raise HTTPException(status_code=409, detail=ai_pro_hedef.kapi_metni(kod) or kod)
+
+
 #: Y142 (S-AI1.5, sahip 2026-10-13): KEDİ AI Pro kapalı döngü SÜRÜŞÜ — VARSAYILAN KAPALI.
 #: Neden: hocanın uyarısı "EM'e henüz güvenme, bobine gönderme" — kedi kabin çerçevesi ↔ em_kedi EĞİTİM çerçevesinin aynı
 #: olduğu hiçbir ölçümle kanıtlanmadı (AI-1 K2: kabin içi eğitim DIŞI hedef yalnız `ood` ile işaretlenip SÜRÜLÜYORDU).
@@ -1251,7 +1263,11 @@ def _pemf_alanlari(payload: dict, model: str, kosulsuz: bool = False) -> dict:
     try:
         from ai_hub.cv_ortak import pemf_kapisi as _pk
 
-        return _pk.yanit_alanlari(payload, model=model, kosulsuz=kosulsuz)  # T3 · Y189: koşulsuz kip (tek kaynak)
+        _d = _pk.yanit_alanlari(payload, model=model, kosulsuz=kosulsuz)  # T3 · Y189: koşulsuz kip (tek kaynak)
+        _d["pemf_kapisi"] = ai_pro_hedef.kapi_cevir(
+            _d["pemf_kapisi"]
+        )  # KD: fiziksel (kalibrasyon) nedenleri istek dilinde
+        return _d
     except Exception:
         logger.warning("%s PEMF kapısı alanları üretilemedi → geçersiz işaretlendi", model, exc_info=True)
         _m = ceviri.t("ai.pemf.gecerlilikHesaplanamadi")
@@ -1402,6 +1418,14 @@ def _muhur_surulebilir_mi(muhur) -> bool:
         _arastirma_aipro_kapisi(sag)
     except HTTPException:
         logger.warning("AI Pro: araştırma bayrağı kapalı → '%s' ile SÜRÜLMEZ", getattr(sag, "ad", ""))
+        return False
+    # KD · Y259: kalibrasyon SÜRÜŞ ANINDA da denetlenir (seans sürerken silinen / bozulan / kamerası değişen kalibrasyonla sürülmez).
+    try:
+        _duzlem_kalibrasyonu_kapisi(sag)
+    except HTTPException as e:
+        logger.warning(
+            "AI Pro: sabit düzlem kalibrasyonu geçersiz → '%s' ile SÜRÜLMEZ (%s)", getattr(sag, "ad", ""), e.detail
+        )
         return False
     # Y142: kedi sürüşü de SÜRÜŞ ANINDA denetlenir (bayrak açıkken alınmış onay / başka yoldan yazılmış mühür sürülmez).
     if _kedi_modeli_mi(sag) and not _kedi_aipro_surus_acik():
@@ -2472,6 +2496,7 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     except ValueError as _me:
         raise HTTPException(status_code=422, detail=str(_me)) from None
     _arastirma_aipro_kapisi(_saglayici)  # kedi DIŞI model + bayrak kapalı → 409
+    _duzlem_kalibrasyonu_kapisi(_saglayici)  # KD · Y259: araştırma modeli + geçerli kalibrasyon yok → 409
     if oid not in _saglayici.hedef_idleri():
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
         _ek = {"oid": oid, "model": ai_pro_hedef.model_adi(_saglayici), "gecerli": _gecerli}
@@ -2771,6 +2796,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     # Bayrak MÜHÜRLÜ model için de denetlenir: bayrak açıkken alınmış bir onay, bayrak
     # kapatıldıktan sonra (ör. tezgâh sonucu olumsuz çıktı) SÜRÜLMEMELİ.
     _arastirma_aipro_kapisi(_saglayici)
+    # KD · Y259: araştırma modeli geçerli sabit düzlem kalibrasyonu olmadan BAŞLAMAZ — onay TÜKETİLMEDEN (D1.E06).
+    _duzlem_kalibrasyonu_kapisi(_saglayici)
     # Y142: kedi AI Pro sürüşü kapalıyken başlatma 409 — onay TÜKETİLMEDEN (D1.E06: başlamayan tedavi onayı yakmaz).
     _kedi_aipro_surus_kapisi(_saglayici)
     _organ_req = int(_spec.get("organ_id", payload.organ_id))
@@ -3097,6 +3124,16 @@ def calibrate_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         raise HTTPException(status_code=403, detail=ceviri.t("ai.pro.hata.sahipDegil"))
     _ai_relocalize = True
     return {"status": "success", "relocalize": True}
+
+
+# ══ KD · KABİN KALİBRASYONU UÇLARI (Y260: araştırma profili, masaüstü + telefon + web) ══════════════════════════════════════════
+# Yetki /api/ai/pro/* ile AYNI (sahibin AI Pro muafiyeti, `auth._EXEMPT_PREFIXES`) + araştırma eklentisi (`require_research`).
+# Akış: kare al (kabin kamerası, sunucuda saklanır) → 4 köşeye dokun + sol / ön cm + lens → hesapla → kaydet (lens > 2 cm farkta AÇIK onay)
+# → doğrula (plaka başka yerde, 2 köşe) → fantom ayarı. Kayıt / doğrulama / fantom ayarı DENETİM İZİNE (append-only session_events).
+# ⚠️ Seans sürerken kalibrasyon DEĞİŞTİRİLMEZ (hedefler kayar) → 409. ACİL DURDUR bu uçlara bağlı DEĞİL (Ö.4-Y8).
+from servers import kabin_kalibrasyonu as _kk_uclari  # noqa: E402
+
+ai_router.include_router(_kk_uclari.router)
 
 
 @ai_router.post("/api/ai/pro/hazirlik/baslat")
@@ -3907,6 +3944,8 @@ async def analyze_em_fantom(
         # manual_fallback=False ŞART — headless serviste GUI açmamalı.
         pl = cache["cls"](cache["cfg"], phantom_length_cm=phantom_length_cm, manual_fallback=False)
         pl._predictor = cache["predictor"]
+        # KD · Y258: veri kökünde sabit düzlem kalibrasyonu VARSA ArUco aranmaz (kare kalibrasyon kamerası / çözünürlüğünde değilse konum yok).
+        pl.duzlem, pl.kamera_indeksi = ai_pro_hedef.duzlem_durumu(), ai_pro_hedef.secili_kamera_indeksi()
 
         result, ctx = await asyncio.to_thread(lambda: pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum))
 
@@ -4156,6 +4195,8 @@ async def analyze_em_petri(
         )
         pl.yolo = cache["yolo"]
         pl._predictor = cache["predictor"]
+        # KD · Y258: veri kökünde sabit düzlem kalibrasyonu VARSA ArUco aranmaz (kare kalibrasyon kamerası / çözünürlüğünde değilse konum yok).
+        pl.duzlem, pl.kamera_indeksi = ai_pro_hedef.duzlem_durumu(), ai_pro_hedef.secili_kamera_indeksi()
 
         result, ctx = await asyncio.to_thread(lambda: pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum))
 

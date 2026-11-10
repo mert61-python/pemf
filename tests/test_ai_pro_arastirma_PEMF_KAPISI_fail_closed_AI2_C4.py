@@ -18,6 +18,9 @@ import time
 
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 
 _EYLEM_PETRI = (
     "PEMF değerleri geçersiz: plakanın kabindeki konumu bilinmiyor — kabine ArUco koyun ya da konumu ayarlayın."

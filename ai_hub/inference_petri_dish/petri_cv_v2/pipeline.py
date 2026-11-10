@@ -41,6 +41,7 @@ from .coord_transform import (
     undistort_image, approx_intrinsics_from_marker, isaret_ters_mi, olcekli_intrinsics,
 )
 from ...cv_ortak.pemf_kapisi import ISARET_TERS_METNI
+from ...cv_ortak import sabit_duzlem as _sd
 from .petri_detector import PetriYoloDetector, PetriDetection
 from .color_segment import (segment_cancer_in_petri, classify_plate_wells,
                             Region, TUMOR, HEALTHY)
@@ -149,6 +150,9 @@ class PipelineResult:
     yolo_ayar: dict[str, Any] = field(default_factory=dict)
     #: T3 · Y189: KOSULSUZ kip (analizi kesen engeller uyariya dondu; `kosulsuz_*` uyarilari ne atlandigini soyler).
     kosulsuz: bool = False
+    #: KD · Y258: SABIT DUZLEM kalibrasyonu ozeti (kip, gecerli, engeller, sahne / kuyu araligi olcumleri) — kalibrasyon dosyasi
+    #: yoksa BOS (ArUco kipi). YALNIZ EK alan.
+    kalibrasyon: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items() if k != "wells"}
@@ -181,14 +185,21 @@ class PetriCvPipeline:
                  control_cancer: list[str] | None = None,
                  a1_cabin_mm: list[float] | None = None,
                  kosulsuz: bool = False,
-                 kuyu_skor_esigi: float = 0.6):  # T3 · Y191b — TEK KAYNAK (petri_ayar okur); 0 = kapali
+                 kuyu_skor_esigi: float = 0.6,  # T3 · Y191b — TEK KAYNAK (petri_ayar okur); 0 = kapali
+                 duzlem=None,
+                 kamera_indeksi: int | None = None):
         """Plaka parametreleri None ise YAML `multiwell:` bolumunden alinir
         (CLI > YAML > varsayilan). plate_type=0 -> plaka modu kapali (tekil petri / YOLO).
         kosulsuz (T3 · Y189, sahip + Cağlar Hoca): analizi KESEN iki engel uyariya doner — plaka izgarasi kurulamazsa
         (`plate_not_found`) modelin HAM YOLO kuyucuk tespiti gosterilir, makullik reddi (`not_a_petri_plate`) analizi
-        bitirmez. Varsayilan False = davranis AYNI. YALNIZ gercek True acar (dogruluk degeri tasiyan baska nesne acmaz)."""
+        bitirmez. Varsayilan False = davranis AYNI. YALNIZ gercek True acar (dogruluk degeri tasiyan baska nesne acmaz).
+        duzlem (KD · Y258): `cv_ortak.sabit_duzlem.yukle(veri_koku)` ciktisi (kal, hata). Dosya VARSA (ya da bozuksa) ArUco ARANMAZ,
+        konum sabit duzlem kalibrasyonundan; None ya da (None, None) = bugunku ArUco kipi. kamera_indeksi: karenin geldigi kabin
+        kamerasi (kalibrasyon kamerasiyla karsilastirilir; None = bilinmiyor, karsilastirilmaz)."""
         self.kosulsuz = kosulsuz is True
         self.kuyu_skor_esigi = float(kuyu_skor_esigi)
+        self.duzlem = duzlem
+        self.kamera_indeksi = kamera_indeksi
         if isinstance(cfg, CabinConfig):
             self.cfg = cfg
         else:
@@ -336,6 +347,8 @@ class PetriCvPipeline:
         ctx: dict = {"img_und": None, "detections": None,
                      "cabin_pose": None, "marker": None}
 
+        # KD: sabit duzlem kalibrasyonu ORIJINAL kare boyutuna gore yapilir (kucultme oncesi).
+        orijinal_wh = (int(image_bgr.shape[1]), int(image_bgr.shape[0]))
         # 0) RESIZE — YOLO girdisi 640x640'a SABIT export edilmis; 4032 px'lik bir telefon
         # fotografinda kuyucuklar o boyuta inince tespit edilemiyor (olculdu). Kucultme
         # OLCEK-GUVENLIDIR cunku petri olcegi GORUNTUNUN ICINDEN gelir (kuyu capi ya da
@@ -349,6 +362,12 @@ class PetriCvPipeline:
                 result.resize = {"from": [w0, h0], "to": [image_bgr.shape[1], image_bgr.shape[0]],
                                  "max": int(self.resize_max)}
 
+        # 1a) KD · SABIT DUZLEM kipi: kalibrasyon dosyasi VARSA (bozuk olsa bile) ArUco ARANMAZ — kamera durusu kalibrasyondan.
+        # Bozuk / kamera farkli → konum URETILMEZ (fail-closed; ArUco'ya sessiz dusus YOK). Kare, kalibrasyonun K / D'siyle duzeltilir.
+        kd = self._duzlem_hazirla(orijinal_wh)
+        if kd is not None and kd.harita is not None:
+            self.intrinsics = CameraIntrinsics(kd.harita.K, kd.harita.D, kd.harita.boyut, float("nan"))
+            self._approx_intrinsics = False
         self._ensure_intrinsics(image_bgr)
         result.camera_calib = {
             "K": self.intrinsics.K.tolist(),
@@ -364,9 +383,11 @@ class PetriCvPipeline:
         timings["undistort"] = (time.perf_counter() - t1) * 1000
         ctx["img_und"] = img_und
 
+        olcek = float(img_und.shape[1]) / float(orijinal_wh[0]) if orijinal_wh[0] else 1.0
+
         # 2) ArUco PnP
         t1 = time.perf_counter()
-        marker_det = detect_aruco_marker(img_und, self.cfg.aruco)
+        marker_det = detect_aruco_marker(img_und, self.cfg.aruco) if kd is None else None
         cabin_pose = None
         if marker_det is not None:
             cabin_pose = solve_cabin_pose(
@@ -478,11 +499,21 @@ class PetriCvPipeline:
         # Sirali kopyayi ctx'e ekle (render sirasinda wells ile esle)
         # Not: sirali alti _sorted, asagida atanir
 
+        # 3c) KD · SABIT DUZLEM denetimleri (fail-closed): sabit sahne kaymasi (plaka maskeli) + kuyu araligi 19,3 mm (%3).
+        if kd is not None:
+            t1 = time.perf_counter()
+            self._duzlem_denetle(kd, img_und, grid, dets, olcek)
+            timings["sabit_duzlem"] = (time.perf_counter() - t1) * 1000
+
         # 4) Kalibrasyon mm/px (en buyuk kuyucuk referans)
         primary = max(dets, key=lambda d: d.area_px)
         x1, y1, x2, y2 = primary.bbox_xyxy
         bbox_max = max(x2 - x1, y2 - y1)
-        if cabin_pose is not None:
+        if kd is not None:
+            # KD: perspektif-dogru kabin konumu sabit duzlem kalibrasyonundan (tek bir mm/px yok — ArUco gibi).
+            result.method = "sabit_duzlem"
+            result.mm_per_px = 0.0
+        elif cabin_pose is not None:
             result.method = "aruco_pnp"
             result.mm_per_px = 0.0
         elif grid is not None:
@@ -501,14 +532,19 @@ class PetriCvPipeline:
         ref_cx, ref_cy = primary.centroid_px
 
         H_inv = (np.linalg.inv(grid.H_img_from_plate)
-                 if grid is not None and cabin_pose is None else None)
+                 if grid is not None and cabin_pose is None and kd is None else None)
         placement = (np.asarray(self.a1_cabin_mm, dtype=np.float64)
                      if H_inv is not None and self.a1_cabin_mm is not None else None)
 
         # Koordinat cercevesi: PEMF modeli KABIN cercevesinde egitildi
         # (egitim x,y,z ort ~ (37,-2,-45) mm, std ~ (141,176,111)). Plaka ya da
         # piksel cercevesindeki koordinatla tahmin fiziksel olarak anlamsizdir.
-        if cabin_pose is not None:
+        if kd is not None:
+            # KD: `pemf_valid` YALNIZ denetimler gecince (kalibrasyon saglam, ayni kamera / cozunurluk, sahne ve kuyu araligi).
+            result.coord_frame, result.pemf_valid = "cabin_plane", kd.gecerli
+            result.warnings.extend(kd.engeller + kd.uyarilar)
+            result.kalibrasyon = kd.ozet()
+        elif cabin_pose is not None:
             result.coord_frame, result.pemf_valid = "cabin_aruco", True
         elif placement is not None:
             result.coord_frame, result.pemf_valid = "cabin_placement", True
@@ -516,12 +552,22 @@ class PetriCvPipeline:
             result.coord_frame, result.pemf_valid = "plate", False
         else:
             result.coord_frame, result.pemf_valid = result.method, False
-        if not result.pemf_valid:
+        if not result.pemf_valid and kd is None:
             result.warnings.append(
                 "pemf_frame_unknown: kabin konumu yok (ArUco veya multiwell.placement."
                 "a1_cabin_mm) - D/P/E tahminleri fiziksel olarak gecersiz")
+        hedef_y = self._petri_hedef_y_mm(kd)
 
         def _to_mm(px: tuple[float, float]) -> tuple[float, float, float]:
+            if kd is not None:
+                # KD: izgara KUYU AGZINI (plaka ust yuzu) gosterir — X / Z o duzlemden, hedef Y = kuyu tabani (hucreler; dikey kuyu).
+                if not kd.gecerli:
+                    raise KesisimGecersiz(kd.engeller[0] if kd.engeller else "sabit duzlem kalibrasyonu gecersiz")
+                q = kd.harita.kabin_noktasi((px[0] / olcek, px[1] / olcek), kd.harita.duzlem_y_mm)
+                v = (float(q[0]), float(hedef_y), float(q[2]))
+                if not _sd.kabin_icinde_mi(v, kd.harita.ext_cm):
+                    raise KesisimGecersiz(f"hedef kabin DISINDA {tuple(round(a, 1) for a in v)} mm")
+                return v
             if cabin_pose is not None:
                 v = pixel_to_cabin_mm(px, cabin_pose, self.intrinsics, self.cfg)
                 return float(v[0]), float(v[1]), float(v[2])
@@ -544,7 +590,7 @@ class PetriCvPipeline:
             ArUco modunda: ray-plane intersection ile her nokta dogru cabin mm
             Diger modlarda: area_px * mm_per_px^2 (sabit oran)
             """
-            if cabin_pose is None and H_inv is None:
+            if cabin_pose is None and H_inv is None and kd is None:
                 # Sabit mm/px: hızlı formul
                 area_px = float(cv2.contourArea(contour))
                 return area_px * (result.mm_per_px ** 2)
@@ -554,8 +600,9 @@ class PetriCvPipeline:
             pts_cabin = []
             for i in range(0, n_pts, step):
                 p = contour[i][0]
-                x_mm, y_mm, _ = _to_mm((float(p[0]), float(p[1])))
-                pts_cabin.append([x_mm, y_mm])
+                x_mm, y_mm, z_mm = _to_mm((float(p[0]), float(p[1])))
+                # KD: yatay duzlemde alan X-Z'de (Y sabit).
+                pts_cabin.append([x_mm, z_mm] if kd is not None else [x_mm, y_mm])
             if len(pts_cabin) < 3:
                 return 0.0
             arr = np.array(pts_cabin, dtype=np.float32)
@@ -668,6 +715,52 @@ class PetriCvPipeline:
         timings["total"] = (time.perf_counter() - t0) * 1000
         result.timing_ms = timings
         return result, ctx
+
+    # ------------------------------------------------------------------ KD · sabit duzlem
+    def _duzlem_hazirla(self, orijinal_wh):
+        """Kalibrasyon dosyasi YOKSA None (ArUco kipi); varsa (bozuk dahil) `KareDurumu` — denetimler `cv_ortak.sabit_duzlem`de."""
+        d = self.duzlem
+        if d is None or (d[0] is None and d[1] is None):
+            return None
+        npz = None
+        if self.cfg.has_intrinsics():
+            npz = _sd.npz_sha256(self.cfg.intrinsics_path())
+        return _sd.kare_hazirla(d, kare_boyutu=orijinal_wh, kamera_indeksi=self.kamera_indeksi, npz_sha=npz)
+
+    def _duzlem_denetle(self, kd, img_und, grid, dets, olcek: float) -> None:
+        """Sabit sahne kaymasi (plaka bolgesi DISLANIR) + 24'luk izgarada kuyu araligi (19,3 mm, %3). Engel `kd`ye yazilir."""
+        if kd.harita is None:
+            return
+        cokgenler = []
+        if grid is not None and grid.plate_quad_px:
+            cokgenler.append(np.asarray(grid.plate_quad_px, dtype=np.float64))
+        for d in dets:
+            x1, y1, x2, y2 = d.bbox_xyxy
+            cokgenler.append(np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.float64))
+        _sd.sahne_denetle(kd, img_und, cokgenler, genislet_px=max(8, int(round(60 * olcek))))
+        aralik_olculdu = False
+        if grid is not None and grid.spec is not None and getattr(grid, "H_ransac", None) is not None:
+            # Aralik Hough kuyu MERKEZLERINDEN (RANSAC) olculur — secilen ECC hipotezi izgarayi sistematik genisletir (plate_grid).
+            S = np.diag([1.0 / olcek, 1.0 / olcek, 1.0])
+            ka = _sd.kuyu_araligi(kd.harita, S @ np.asarray(grid.H_ransac, dtype=np.float64),
+                                  grid.spec.rows, grid.spec.cols, grid.spec.pitch_mm, kd.harita.duzlem_y_mm)
+            kd.olcum["kuyu_araligi"] = ka
+            aralik_olculdu = True
+            if not ka["gecti"]:
+                kd.engel("kamera_oynamis", f"eslenen kuyu araligi {ka['sutun_mm']:.2f} / {ka['satir_mm']:.2f} mm, beklenen "
+                                           f"{ka['beklenen_mm']:g} mm (sapma %{100 * ka['sapma']:.1f} > %{100 * _sd.KUYU_ARALIGI_TOLERANSI:g})")
+        elif grid is not None:
+            kd.uyarilar.append("kuyu_araligi_olculemedi: izgarada yeterli Hough kuyu merkezi yok - kamera kaymasi yalniz sabit sahneden")
+        if not aralik_olculdu and "sahne" not in kd.olcum:
+            # Ne sahne ne kuyu araligi olculebildi → kameranin yerinde oldugu DOGRULANAMAZ (fail-closed).
+            kd.engel("kamera_oynamis", "kamera konumu dogrulanamadi (sabit sahne ve kuyu araligi olculemedi)")
+
+    def _petri_hedef_y_mm(self, kd) -> float:
+        """KD: petri hedef yuksekligi = YAML hedef duzlemi (kuyu tabani, hucreler) eksen "Y" ise; degilse plaka ust yuzu."""
+        if kd is None or kd.harita is None:
+            return 0.0
+        pp = self.cfg.phantom_plate
+        return float(pp.hedef_duzlem_mm) if pp.hedef_duzlem_indeksi == 1 else float(kd.harita.duzlem_y_mm)
 
     def _kuyu_skoru_suz(self, grid, result: PipelineResult) -> list:
         """T3 · Y191b (sahip + Caglar Hoca 2026-10-24): PLAKA kipinde izgara hucresinin SKORU — `plate_grid` destek skoru (hucre

@@ -33,6 +33,9 @@ import ai_pro_aparati as ap
 import cv2
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 from servers import ai_router as air
 from utils import ceviri
 

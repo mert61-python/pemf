@@ -267,7 +267,10 @@ def saglayici_al(model: "str | None"):
 #: Kalibrasyon YÖNTEMİ tavanı (kararlar #4 ve #7). ArUco dışı yöntemlerde tavan `MIN_GUVEN`in
 #: ALTINDA → hedef YAPISAL olarak "bulunamadı" sayılır: kapalı döngüde ArUco ZORUNLU (karar #4) ve
 #: piksel/ölçek modunda koordinat kabin çerçevesinde değildir (nesne-merkezli, z=0).
-YONTEM_TAVANI = {"aruco_pnp": 1.0}
+YONTEM_TAVANI = {
+    "aruco_pnp": 1.0,
+    "sabit_duzlem": 1.0,
+}  # KD · Y258: sabit düzlem kalibrasyonu da perspektif-doğru kabin konumu
 YONTEM_TAVANI_VARSAYILAN = 0.25
 
 #: Kedi hattındaki `_MIN_RELIABILITY` ile aynı eşik (0.3) — kedi tarafı DEĞİŞMEDİ.
@@ -290,6 +293,107 @@ def _sayi_ya_da_none(v):
     except (TypeError, ValueError):
         return None
     return f if math.isfinite(f) else None
+
+
+# ── KD · SABİT DÜZLEM KALİBRASYONU (Y258–Y259, sahip 2026-11-10) ───────────────────────────────────────────────────────────────
+# Kalibrasyon VERİ KÖKÜNDE (`cv_ortak.sabit_duzlem`, uygulama katmanı değil — güncelleme ezmez). Dosya varsa hatlar ArUco ARAMAZ.
+# Araştırma sürüşü (petri / fantom) YALNIZ geçerli kalibrasyonla başlar ve sürer (`ai_router._duzlem_kalibrasyonu_kapisi`); kare başına
+# fiziksel denetimler (sahne kayması, kuyu aralığı, fantom boyu) hatta → PEMF kapısı `FIZIKSEL` kodları (koşulsuzda da keser).
+
+
+def duzlem_veri_koku():
+    from utils.path_utils import get_app_data_directory
+
+    return get_app_data_directory()
+
+
+def duzlem_durumu() -> tuple:
+    """`sabit_duzlem.yukle(veri kökü)` → (kal, hata). (None, None) = dosya YOK (ArUco kipi); okunamazsa (None, "okunamadi")."""
+    try:
+        from ai_hub.cv_ortak import sabit_duzlem as sd
+
+        return sd.yukle(duzlem_veri_koku())
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("Sabit düzlem kalibrasyonu okunamadı", exc_info=True)
+        return None, "okunamadi"
+
+
+def secili_kamera_indeksi():
+    """Seçili kabin kamerasının indeksi (kalibrasyon kamerasıyla karşılaştırılır); seçim yoksa None."""
+    try:
+        from utils import kabin_kamerasi as kk
+
+        s = kk.secili_kamera()
+        return None if s is None else int(s["indeks"])
+    except Exception:
+        return None
+
+
+def duzlem_surus_engeli(saglayici) -> str | None:
+    """Y259: araştırma sürüşünün KALİBRASYON ön koşulu → engel kodu (`pemf_kapisi.FIZIKSEL`) ya da None.
+
+    Dosya yok → `kalibrasyon_yok` · bozuk → `kalibrasyon_bozuk` · seçili kamera kalibrasyon kamerası değil → `kalibrasyon_kamera_farkli` ·
+    fantomda kalınlık / derinlik girilmemiş → `fantom_ayari_yok`. Kare başına denetimler (sahne / aralık / boy) hatta, her karede."""
+    kal, hata = duzlem_durumu()
+    if hata:
+        return "kalibrasyon_bozuk"
+    if kal is None:
+        return "kalibrasyon_yok"
+    secili = secili_kamera_indeksi()
+    ki = (kal.get("kamera") or {}).get("indeks")
+    if secili is not None and ki is not None and int(secili) != int(ki):
+        return "kalibrasyon_kamera_farkli"
+    if str(getattr(saglayici, "ad", "") or "") == "fantom":
+        ayar = kal.get("fantom") or {}
+        try:
+            kalinlik = float(ayar.get("kalinlik_mm"))
+        except (TypeError, ValueError):
+            kalinlik = 0.0
+        if not (kalinlik > 0):
+            return "fantom_ayari_yok"
+    return None
+
+
+def kapi_metni(kod: str) -> str | None:
+    """KD: PEMF kapısının FİZİKSEL (kalibrasyon) nedeni → istek / cihaz dilinde EYLEM metni. ai_hub metni Türkçe TABANDIR (ai_hub
+    backend'i içe aktarmaz); arayüze giden metin buradan. Bilinmeyen kod → None (hocanın metni olduğu gibi kalır)."""
+    if kod == "kalibrasyon_yok":
+        return ceviri.t("ai.pemf.kapi.kalibrasyonYok")
+    if kod == "kalibrasyon_bozuk":
+        return ceviri.t("ai.pemf.kapi.kalibrasyonBozuk")
+    if kod == "kalibrasyon_kamera_farkli":
+        return ceviri.t("ai.pemf.kapi.kameraFarkli")
+    if kod == "kamera_oynamis":
+        return ceviri.t("ai.pemf.kapi.kameraOynamis")
+    if kod == "fantom_ayari_yok":
+        return ceviri.t("ai.pemf.kapi.fantomAyariYok")
+    if kod == "fantom_boyu_farkli":
+        return ceviri.t("ai.pemf.kapi.fantomBoyuFarkli")
+    if kod == "fantom_degil":
+        return ceviri.t("ai.pemf.kapi.fantomDegil")
+    return None
+
+
+def kapi_cevir(kapi):
+    """PEMF kapısı sözlüğünün FİZİKSEL kod mesajlarını (ve ilk eylemi) dile çevir; diğerleri AYNEN (hocanın metni)."""
+    if not isinstance(kapi, dict):
+        return kapi
+    mesajlar = []
+    for m in kapi.get("mesajlar") or []:
+        m = dict(m) if isinstance(m, dict) else m
+        if isinstance(m, dict):
+            metin = kapi_metni(str(m.get("kod") or ""))
+            if metin:
+                m["metin"] = metin
+        mesajlar.append(m)
+    out = dict(kapi)
+    if "mesajlar" in kapi:
+        out["mesajlar"] = mesajlar
+    if mesajlar and isinstance(mesajlar[0], dict) and kapi.get("eylem"):
+        out["eylem"] = mesajlar[0].get("metin") or kapi.get("eylem")
+    return out
 
 
 def kabin_yari_boyut_mm():
@@ -517,7 +621,7 @@ class _EmCvSaglayici:
         with self._kilit:
             yontem = str(self._meta.get("method") or "")
             kapi = dict(self._meta.get("pemf_kapisi") or {})
-        if yontem and yontem != "aruco_pnp":
+        if yontem and yontem not in YONTEM_TAVANI:
             return ceviri.t("ai.pro.ipucu.konumOlculemedi")
         # AI-2: hocanın tüketim kapısı kareyi kestiyse NEDENİ ve EYLEMİ (pemf geçersiz / güvenilmez / yerleşim uyuşmuyor /
         # kontrol kuyucuğu / yeniden çekim) — "hedef seçilemedi" demek operatörü yanlış yere yönlendirirdi.
@@ -663,10 +767,13 @@ class _EmCvSaglayici:
         # `/propose` taze hedef bulamaz (409 + eylem), seans döngüsü sürmez, `_predict_and_drive` ÇAĞRILMAZ. FAIL-CLOSED ve
         # `PEMF_ARASTIRMA_AIPRO` bayrağından BAĞIMSIZ (bayrak sürüşü açar, bu kapı geçersiz sonucu yine keser). Hedef
         # adayları meta'da kalır (operatör ne görüldüğünü görür) ama hiçbiri seçili değildir.
-        if basarili:
-            from ai_hub.cv_ortak import pemf_kapisi
+        # KD: hat FİZİKSEL nedenle hedef üretmeden durduysa (fantom boyu ayardakinden farklı — boş kabin) kapı yine hesaplanır:
+        # şerit "hedef seçilemedi" değil NEDENİ ve EYLEMİ söyler.
+        from ai_hub.cv_ortak import pemf_kapisi
 
-            kapi = pemf_kapisi.degerlendir(result, model=self.kapi_modeli, kosulsuz=self.kosulsuz)
+        fiziksel_hata = not basarili and any(k in pemf_kapisi.FIZIKSEL for k in pemf_kapisi.uyari_kodlari([hata]))
+        if basarili or fiziksel_hata:
+            kapi = kapi_cevir(pemf_kapisi.degerlendir(result, model=self.kapi_modeli, kosulsuz=self.kosulsuz))
             meta["pemf_kapisi"] = kapi
             if not kapi["surulebilir"]:
                 air.logger.warning("%s karesi tüketim kapısında REDDEDİLDİ: %s", self.ad, kapi["nedenler"])
@@ -696,7 +803,7 @@ class _EmCvSaglayici:
                 "guven_ham": ham,
             }
         )
-        dokum = {"yontem": yontem, "yontem_tavani": tavan, "ham_guven": ham, "kalibre": yontem == "aruco_pnp"}
+        dokum = {"yontem": yontem, "yontem_tavani": tavan, "ham_guven": ham, "kalibre": yontem in YONTEM_TAVANI}
         with self._kilit:
             self._meta = meta
         # ⚠️ D1.85 (B-5.11): araştırma hattında da kabin DIŞI / sonlu olmayan hedef SÜRÜLMEZ (kedi hattıyla aynı kural).
@@ -781,6 +888,8 @@ class FantomSaglayici(_EmCvSaglayici):
         # serviste bloklardı (döngü donar, E-stop ayrı yoldan çalışsa da sürüş güncellenmez).
         pl = cache["cls"](cache["cfg"], manual_fallback=False)
         pl._predictor = cache["predictor"]  # ENJEKSİYON: her karede ONNX yüklenmesin
+        # KD · Y258: veri kökündeki sabit düzlem kalibrasyonu (varsa ArUco ARANMAZ) + karenin geldiği kabin kamerası.
+        pl.duzlem, pl.kamera_indeksi = duzlem_durumu(), secili_kamera_indeksi()
         return pl
 
     def _ozne_yok_hatalari(self) -> tuple:
@@ -871,6 +980,8 @@ class PetriSaglayici(_EmCvSaglayici):
         pl = cache["cls"](cache["cfg"], yolo_model_path=cache["yolo_path"], yolo_device="cpu", kosulsuz=self.kosulsuz)
         pl.yolo = cache["yolo"]
         pl._predictor = cache["predictor"]
+        # KD · Y258: veri kökündeki sabit düzlem kalibrasyonu (varsa ArUco ARANMAZ) + karenin geldiği kabin kamerası.
+        pl.duzlem, pl.kamera_indeksi = duzlem_durumu(), secili_kamera_indeksi()
         return pl
 
     def _ozne_yok_hatalari(self) -> tuple:

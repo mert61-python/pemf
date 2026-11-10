@@ -23,6 +23,9 @@ from __future__ import annotations
 import ai_pro_aparati as ap
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 
 BAYRAK = "PEMF_KEDI_AIPRO_SURUS"
 MESAJ = (

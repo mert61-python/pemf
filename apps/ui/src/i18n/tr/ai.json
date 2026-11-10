@@ -618,6 +618,74 @@
     "cekiliyor": "Kabin kamerasından alınıyor…",
     "hata": "Kabin kamerasından görüntü alınamadı. Bu ekrandaki \"Kabin kamerası\" bölümünden kamerayı seçip yeniden deneyin."
   },
+  "kalibrasyon": {
+    "aciklama": "Kamera üst kapağa sabitken bir kez kalibre edin: 24'lük plakayı kabine koyun, kare alın, plakanın 4 üst dış köşesine sırayla dokunun ve her köşenin sol cama ve ön cama uzaklığını cetvelle girin. Kamera oynarsa uygulama uyarır ve bobin hedeflenmez.",
+    "baslik": "Kabin kalibrasyonu",
+    "dogrula": "Doğrula",
+    "dogrulaAciklama": "Plakayı başka bir yere koyun; 2 üst dış köşesine dokunup sol / ön cam uzaklıklarını girin. Fark 1 cm'den küçük olmalı.",
+    "dogrulaHesapla": "Farkı ölç",
+    "dogrulamaGecti": "Doğrulama GEÇTİ — farklar {{farklar}} cm, en büyük {{maks}} cm (sınır {{esik}} cm).",
+    "dogrulamaKaldi": "Doğrulama KALDI — farklar {{farklar}} cm, en büyük {{maks}} cm (sınır {{esik}} cm). Ölçüleri kontrol edin ya da yeniden kalibre edin.",
+    "dokunAciklama": "Plakanın üst dış köşelerine sırayla dokunun (1 ön-sol, 2 ön-sağ, 3 arka-sağ, 4 arka-sol); büyüteçle ve oklarla 1 piksel düzeltin. Her köşe için sol cama ve ön cama uzaklığı (cm) girin.",
+    "dokunulmadi": "henüz dokunulmadı",
+    "durumVar": "Kalibrasyon: {{tarih}} · yeniden izdüşüm {{px}} px · lens farkı {{cm}} cm",
+    "durumYok": "Kalibrasyon yok — petri / fantom AI Pro bobin sürüşü kalibrasyon olmadan başlamaz.",
+    "fantom": {
+      "aciklama": "Fantom tabanda durur; tümörler üst yüzeyde görünür. Kalınlığı (tabandan üst yüzeye) ve tümör derinliğini (üst yüzeyden) cetvelle ölçüp girin; boy / en isteğe bağlı (boş kabin denetimi için).",
+      "baslik": "Fantom ayarı",
+      "boy": "Boy (cm)",
+      "derinlik": "Tümör derinliği (cm)",
+      "en": "En (cm)",
+      "kalinlik": "Kalınlık (cm)",
+      "kaydedildi": "Fantom ayarı kaydedildi.",
+      "kaydet": "Fantom ayarını kaydet"
+    },
+    "hata": "Kalibrasyon isteği başarısız — yeniden deneyin.",
+    "hesapla": "Hesapla",
+    "inceAyar": "İnce ayar (1 px)",
+    "kalibreEt": "Kalibre et",
+    "kareAliniyor": "Kabin kamerasından kare alınıyor…",
+    "kareEtiketi": "Kalibrasyon karesi — köşeye dokunun",
+    "kareZamanAsimi": "Kabin kamerası zamanında kare vermedi — kamera kablosunu kontrol edin, kamerayı kullanan başka uygulamayı kapatın ve yeniden deneyin.",
+    "kaydedildi": "Kalibrasyon kaydedildi.",
+    "kaydet": "Kalibrasyonu kaydet",
+    "kilitli": "AI Pro hazırlığı / seansı sürerken kalibrasyon değiştirilemez.",
+    "kose": {
+      "arkaSag": "Arka-sağ",
+      "arkaSol": "Arka-sol",
+      "dogrulama": "Köşe {{sira}}",
+      "onSag": "Ön-sağ",
+      "onSol": "Ön-sol"
+    },
+    "lens": {
+      "on": "Ön cama (cm)",
+      "sol": "Sol cama (cm)",
+      "taban": "Taban camına (cm)"
+    },
+    "lensBaslik": "Lens konumu (ölçü, cm) — kalibrasyonu denetler",
+    "onCm": "Ön cama (cm)",
+    "piksel": "{{u}}, {{v}} px",
+    "plakaYuksekligi": "Plaka yüksekliği (cm)",
+    "sahneYok": "Kalibrasyon karesinde sabit sahne zayıf — kamera kayması yalnız kuyu aralığından denetlenir; fantom sürülemez. Kabin tabanına desenli bir bant yapıştırıp yeniden kalibre edin.",
+    "solCm": "Sol cama (cm)",
+    "sonrakiKose": "Sıradaki köşe: {{kose}} →",
+    "sonuc": {
+      "gecerli": "Kalibrasyon geçerli.",
+      "gecersiz": "Kalibrasyon REDDEDİLDİ.",
+      "izdusum": "Yeniden izdüşüm hatası: {{px}} px (sınır {{esik}} px)",
+      "kuyu": "Kuyu aralığı: {{sutun}} / {{satir}} mm (beklenen {{beklenen}} mm, sapma %{{yuzde}})",
+      "kuyuYok": "Kuyu aralığı bu karede ölçülemedi (24 kuyu dolu değil ya da ızgara bulunamadı).",
+      "lens": "Lens (kabin X / Y / Z, cm): hesaplanan {{h}} · ölçülen {{o}} · fark {{cm}} cm",
+      "lensOlcumsuz": "Hesaplanan lens (kabin X / Y / Z, cm): {{h}} — ölçülen lens girilmedi.",
+      "lensOnay": "Lens farkı 2 cm'den büyük — ölçüleri kontrol ettim, yine de kaydet."
+    },
+    "yon": {
+      "asagi": "Aşağı 1 piksel",
+      "sag": "Sağa 1 piksel",
+      "sol": "Sola 1 piksel",
+      "yukari": "Yukarı 1 piksel"
+    }
+  },
   "kopru": {
     "etiket": "Bu {{hedef}} için AI Pro seansı: Kontrol ekranına git",
     "hedefFantom": "tümör",

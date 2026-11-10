@@ -39,6 +39,7 @@ from .coord_transform import (
     undistort_image, approx_intrinsics_from_marker, isaret_ters_mi, olcekli_intrinsics,
 )
 from ...cv_ortak.pemf_kapisi import ISARET_TERS_METNI
+from ...cv_ortak import sabit_duzlem as _sd
 from .color_segment import segment_phantom, find_phantoms, Region, TUMOR, HEALTHY
 from .tumor_detect import TumorDetectCfg, detect_phantom_tumors
 from .ring_calib import detect_ring
@@ -123,6 +124,8 @@ class PipelineResult:
     warnings: list[str] = field(default_factory=list)
     timing_ms: dict[str, float] = field(default_factory=dict)
     error: str | None = None
+    #: KD · Y258: SABIT DUZLEM kalibrasyonu ozeti (kip, gecerli, engeller, sahne / fantom boyu olcumleri) — dosya yoksa BOS. YALNIZ EK.
+    kalibrasyon: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items()
@@ -140,8 +143,16 @@ class PhantomCvPipeline:
                  manual_fallback: bool = False,
                  ring_diameter_mm: float | None = None,
                  use_ring: bool | None = None,
-                 origin_cabin_mm: list[float] | None = None):
-        """Parametreler None ise YAML `phantom_v2:` bolumunden (CLI > YAML)."""
+                 origin_cabin_mm: list[float] | None = None,
+                 duzlem=None,
+                 kamera_indeksi: int | None = None):
+        """Parametreler None ise YAML `phantom_v2:` bolumunden (CLI > YAML).
+
+        duzlem (KD · Y258): `cv_ortak.sabit_duzlem.yukle(veri_koku)` ciktisi (kal, hata). Dosya VARSA (ya da bozuksa) ArUco ve halka
+        ARANMAZ; tumorler fantomun UST YUZEYINDE (taban + kalinlik) gorulur, hedef Y = ust yuzey - tumor derinligi (kalibrasyon
+        dosyasinin `fantom` bolumu, sahip olcer). None ya da (None, None) = bugunku kip."""
+        self.duzlem = duzlem
+        self.kamera_indeksi = kamera_indeksi
         if isinstance(cfg, CabinConfig):
             self.cfg = cfg
         else:
@@ -217,6 +228,13 @@ class PhantomCvPipeline:
             result.timing_ms = timings
             return result, ctx
 
+        # 0) KD · SABIT DUZLEM kipi: kalibrasyon dosyasi VARSA (bozuk olsa bile) ArUco / halka ARANMAZ; kare kalibrasyonun K / D'siyle
+        # duzeltilir. Bozuk / kamera farkli / fantom ayari yok → konum URETILMEZ (fail-closed; ArUco'ya sessiz dusus YOK).
+        orijinal_wh = (int(image_bgr.shape[1]), int(image_bgr.shape[0]))
+        kd = self._duzlem_hazirla(orijinal_wh)
+        if kd is not None and kd.harita is not None:
+            self.intrinsics = CameraIntrinsics(kd.harita.K, kd.harita.D, kd.harita.boyut, float("nan"))
+            self._approx_intrinsics = False
         self._ensure_intrinsics(image_bgr)
         result.camera_calib = {
             "K": self.intrinsics.K.tolist(), "D": self.intrinsics.D.tolist(),
@@ -233,7 +251,7 @@ class PhantomCvPipeline:
         # 2) ArUco
         t1 = time.perf_counter()
         cabin_pose = None
-        marker_det = detect_aruco_marker(img, self.cfg.aruco)
+        marker_det = detect_aruco_marker(img, self.cfg.aruco) if kd is None else None
         if marker_det is not None:
             cabin_pose = solve_cabin_pose(img, self.intrinsics, self.cfg.aruco,
                                           self.cfg.geometry, self.cfg.pnp)
@@ -330,10 +348,28 @@ class PhantomCvPipeline:
                             f"sablonu fit edildi (ortusme {sc:.2f})")
                         result.reliable = sc >= 0.6
 
+        # 3c) KD · SABIT DUZLEM denetimleri: fantom ayari (ust yuzey yuksekligi) · sabit sahne (fantom maskeli) · fantom BOYU
+        # (ayardakinden %20'den fazla farkli → bos / fantomsuz karede sahte "fantom" dahil HEDEF YOK — T2B B1).
+        olcek = float(img.shape[1]) / float(orijinal_wh[0]) if orijinal_wh[0] else 1.0
+        ust_y = hedef_y = None
+        if kd is not None:
+            t1 = time.perf_counter()
+            ust_y, hedef_y = self._duzlem_denetle(kd, img, phantom, olcek, tumors)
+            timings["sabit_duzlem"] = (time.perf_counter() - t1) * 1000
+            result.kalibrasyon = kd.ozet()
+            boy = [e for e in kd.engeller if e.startswith(("fantom_boyu_farkli", "fantom_degil"))]
+            if boy:
+                # Bu boyda bir fantom kabinde YOK — bulunan bolge fantom DEGIL: tumor / hedef URETILMEZ (0 hedef).
+                result.error = boy[0]
+                result.warnings.extend(kd.engeller + kd.uyarilar)
+                ctx["regions"] = None
+                ctx["phantoms"] = []
+                return _done()
+
         # 4) olcek + cerceve
         t1 = time.perf_counter()
         ring = None
-        if cabin_pose is None and self.use_ring:
+        if cabin_pose is None and kd is None and self.use_ring:
             bx, by, bw, bh = phantom.bbox_px
             ring = detect_ring(img, phantom.centroid_px, max(bw, bh),
                                diameter_mm=self.ring_diameter_mm)
@@ -346,7 +382,11 @@ class PhantomCvPipeline:
         timings["ring"] = (time.perf_counter() - t1) * 1000
 
         ph_cx, ph_cy = phantom.centroid_px
-        if cabin_pose is not None:
+        if kd is not None:
+            # KD: perspektif-dogru kabin konumu sabit duzlem kalibrasyonundan (tek mm/px yok).
+            result.method, result.mm_per_px = "sabit_duzlem", 0.0
+            result.coord_frame, result.frame_origin = "cabin_plane", "cabin_center"
+        elif cabin_pose is not None:
             result.method, result.mm_per_px = "aruco_pnp", 0.0
             result.coord_frame, result.frame_origin = "cabin_aruco", "marker"
         elif ring is not None:
@@ -365,6 +405,9 @@ class PhantomCvPipeline:
             result.coord_frame, result.frame_origin = "pixel", "phantom_center"
             result.warnings.append("no_scale: halka/ArUco/fantom boyu yok - koordinatlar PIKSEL")
 
+        def _sd_nokta(px):
+            return kd.harita.kabin_noktasi((px[0] / olcek, px[1] / olcek), ust_y, kabin_siniri=False)
+
         # Paralaks: fantom ust yuzeyi (tumorler) halka duzleminden h mm yukarida ->
         # kameraya yakin, Z/(Z-h) kat buyuk ve nadirden disari kaymis gorunur.
         # Nadir ~ goruntu merkezi (ustten cekim). Duzleme indirgemek icin olcekle.
@@ -378,6 +421,11 @@ class PhantomCvPipeline:
             result.ring["parallax_height_mm"] = v2c.parallax_height_mm
 
         def _frame(px) -> tuple[float, float]:
+            if kd is not None and kd.harita is not None and ust_y is not None:
+                # KD: fantom ust yuzeyinde kabin (-X, Z) mm — goruntu (saga x, yukari y) ile AYNI el (+X = onden bakanin SOLU,
+                # goruntunun ustu arka duvar) → yerlesim referansina KAYIT mm olceginde calisir (sabit T1..T5 kimligi).
+                q = _sd_nokta(px)
+                return (-float(q[0]), float(q[2]))
             if ring is not None:
                 q = nadir + (np.asarray(px, dtype=np.float64) - nadir) * par
                 return ring.px_to_mm(q)
@@ -452,12 +500,16 @@ class PhantomCvPipeline:
             }
 
         placement = (np.asarray(self.origin_cabin_mm, dtype=np.float64)
-                     if self.origin_cabin_mm is not None and cabin_pose is None
+                     if self.origin_cabin_mm is not None and cabin_pose is None and kd is None
                      and result.method != "pixel" else None)
         v2c = self.cfg.phantom_v2
-        use_cst = (cabin_pose is None and placement is None and uv is not None
+        use_cst = (cabin_pose is None and kd is None and placement is None and uv is not None
                    and v2c.cst_box_enabled)
-        if cabin_pose is not None:
+        if kd is not None:
+            # KD: `pemf_valid` YALNIZ denetimler gecince (kalibrasyon saglam, ayni kamera, fantom ayari var, sahne + boy).
+            result.pemf_valid, result.pemf_source = kd.gecerli, "sabit_duzlem"
+            result.warnings.extend(kd.engeller + kd.uyarilar)
+        elif cabin_pose is not None:
             result.pemf_valid, result.pemf_source = True, "aruco"
         elif placement is not None:
             result.coord_frame, result.pemf_valid = "cabin_placement", True
@@ -508,6 +560,15 @@ class PhantomCvPipeline:
             return float(d @ eu), float(d @ ev)
 
         def _to_mm(px, tid=None) -> tuple[tuple[float, float, float], tuple[float, float] | None]:
+            if kd is not None:
+                # KD: X / Z ust yuzeyden, hedef Y = ust yuzey - tumor derinligi (dikey). Gecersiz kalibrasyon → konum YOK.
+                if not kd.gecerli or ust_y is None:
+                    raise KesisimGecersiz(kd.engeller[0] if kd.engeller else "sabit duzlem kalibrasyonu gecersiz")
+                q = _sd_nokta(px)
+                v = (float(q[0]), float(hedef_y), float(q[2]))
+                if not _sd.kabin_icinde_mi(v, kd.harita.ext_cm):
+                    raise KesisimGecersiz(f"hedef kabin DISINDA {tuple(round(a, 1) for a in v)} mm")
+                return v, _frame(px)
             if cabin_pose is not None:
                 v = pixel_to_cabin_mm(px, cabin_pose, self.intrinsics, self.cfg)
                 return (float(v[0]), float(v[1]), float(v[2])), None
@@ -531,6 +592,7 @@ class PhantomCvPipeline:
         # hesaplanmaz (mm_per_px 0) → alan None (eskiden 0.0 "ölçüldü, sıfır").
         _doz_hesaplanir = result.method != "pixel"
         _olcekli_alan = result.method in ("phantom_length", "phantom_layout") and bool(result.mm_per_px)
+        _duzlem_alan = kd is not None and kd.gecerli
 
         def _make(r: Region, tid: str) -> RegionPrediction:
             konum_hatasi = None
@@ -541,6 +603,15 @@ class PhantomCvPipeline:
                 xyz, fr, konum_hatasi = None, None, str(e)
             if xyz is None:
                 area_mm2 = None
+            elif _duzlem_alan:
+                # KD: konturun ust yuzeydeki alani (X-Z) — perspektif-dogru.
+                try:
+                    cc = np.asarray(r.contour_px, dtype=np.float64).reshape(-1, 2)
+                    adim = max(1, len(cc) // 60)
+                    mm = np.array([[q[0], q[2]] for q in (_sd_nokta(c) for c in cc[::adim])], dtype=np.float32)
+                    area_mm2 = round(float(abs(cv2.contourArea(mm))), 2) if len(mm) >= 3 else None
+                except (KesisimGecersiz, TypeError, ValueError):
+                    area_mm2 = None
             elif ring is not None:
                 area_mm2 = round(ring.area_px_to_mm2(r.area_px) * par ** 2, 2)
             elif _olcekli_alan:
@@ -579,6 +650,60 @@ class PhantomCvPipeline:
         result.n_healthy = len(result.healthy_regions)
         result.success = True
         return _done()
+
+    # ------------------------------------------------------------------ KD · sabit duzlem
+    def _duzlem_hazirla(self, orijinal_wh):
+        """Kalibrasyon dosyasi YOKSA None; varsa (bozuk dahil) `KareDurumu` (`cv_ortak.sabit_duzlem.kare_hazirla`)."""
+        d = self.duzlem
+        if d is None or (d[0] is None and d[1] is None):
+            return None
+        npz = _sd.npz_sha256(self.cfg.intrinsics_path()) if self.cfg.has_intrinsics() else None
+        return _sd.kare_hazirla(d, kare_boyutu=orijinal_wh, kamera_indeksi=self.kamera_indeksi, npz_sha=npz)
+
+    def _duzlem_denetle(self, kd, img, phantom, olcek: float, tumors=()):
+        """Fantom makullugu (tumorler govdeden koyu) + fantom ayari + sabit sahne + fantom boyu. @return (ust_y_mm, hedef_y_mm) —
+        ayar yoksa (None, None) ve ENGEL."""
+        if kd.harita is None:
+            return None, None
+        # KD §1d: bos / fantomsuz karede (isik yansimasi, mavi leke) "fantom" REDDEDILIR — tumorler govdeden KOYU degilse fantom degil.
+        oran = _sd.fantom_koyuluk_orani(img, getattr(phantom, "mask", None), [getattr(t, "mask", None) for t in tumors])
+        kd.olcum["fantom_koyuluk"] = {"oran": None if oran is None else round(oran, 3), "esik": _sd.FANTOM_KOYULUK_ORANI}
+        if oran is None or oran > _sd.FANTOM_KOYULUK_ORANI:
+            kd.engel("fantom_degil", "bulunan bolge fantom degil: tumorler govdeden koyu degil "
+                                     f"(oran {'?' if oran is None else f'{oran:.2f}'} > {_sd.FANTOM_KOYULUK_ORANI:g}) - isik yansimasi / bos kabin")
+        ayar = dict((kd.kal or {}).get("fantom") or {})
+        try:
+            kalinlik = float(ayar.get("kalinlik_mm"))
+            derinlik = float(ayar.get("tumor_derinligi_mm") or 0.0)
+        except (TypeError, ValueError):
+            kalinlik = derinlik = float("nan")
+        if not (np.isfinite(kalinlik) and np.isfinite(derinlik) and kalinlik > 0 and 0 <= derinlik <= kalinlik):
+            kd.engel("fantom_ayari_yok", "fantom kalinligi / tumor derinligi kalibrasyon ekranindan girilmedi")
+            return None, None
+        taban_y = -float(kd.harita.ext_cm[1]) * 10.0 / 2.0
+        ust_y = taban_y + kalinlik
+        hedef_y = ust_y - derinlik
+        bx, by, bw, bh = (float(v) for v in phantom.bbox_px)
+        _sd.sahne_denetle(kd, img, [np.array([[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]])],
+                          genislet_px=max(8, int(round(60 * olcek))))
+        if "sahne" not in kd.olcum:
+            # Fantomda kamera kaymasini olcen TEK denetim sabit sahne — olculemiyorsa kamera yerinde DOGRULANAMAZ (fail-closed).
+            kd.engel("kamera_oynamis", "kamera konumu dogrulanamadi (kalibrasyon karesinde sabit sahne yok)")
+        beklenen = ayar.get("boy_mm") or list(_sd.VARSAYILAN_FANTOM_BOY_MM)
+        kontur = np.asarray(phantom.contour_px, dtype=np.float64).reshape(-1, 2) / olcek
+        olculen = _sd.fantom_boyu(kd.harita, kontur, ust_y)
+        kd.olcum["fantom_boyu"] = {"olculen_mm": [round(v, 1) for v in olculen] if olculen else None,
+                                   "beklenen_mm": [float(v) for v in beklenen], "tolerans": _sd.FANTOM_BOY_TOLERANSI}
+        if olculen is None:
+            kd.engel("fantom_boyu_farkli", "fantom konturu ust yuzey duzlemine eslenemedi")
+        else:
+            b_uzun, b_kisa = max(beklenen), min(beklenen)
+            sapma = max(abs(olculen[0] / b_uzun - 1.0), abs(olculen[1] / b_kisa - 1.0))
+            kd.olcum["fantom_boyu"]["sapma"] = round(sapma, 3)
+            if sapma > _sd.FANTOM_BOY_TOLERANSI:
+                kd.engel("fantom_boyu_farkli", f"bulunan bolge {olculen[0]:.0f} x {olculen[1]:.0f} mm, ayar {b_uzun:.0f} x {b_kisa:.0f} mm "
+                                                f"(sapma %{100 * sapma:.0f} > %{100 * _sd.FANTOM_BOY_TOLERANSI:.0f})")
+        return ust_y, hedef_y
 
     # ------------------------------------------------------------------ cikti
     def render_panels(self, ctx: dict, result: PipelineResult, *, lang: str = "tr"):

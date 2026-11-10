@@ -45,6 +45,19 @@ YENIDEN_CEKIM = (
     "oblique_view", "low_resolution", "ring_partial", "plate_cropped", "few_candidates", "ecc_failed", "kuyu_skor_esigi",
 )
 
+#: KD · Y258–Y259 (sahip 2026-11-10): SABİT DÜZLEM kalibrasyonunun fiziksel engelleri (`cv_ortak.sabit_duzlem.ENGEL_KODLARI` +
+#: AI Pro'nun `kalibrasyon_yok`u). Konum KABİN çerçevesinde geçersizdir → bobin HEDEFLENMEZ; KOŞULSUZ kipte de keser (fiziksel).
+#: Sonuçta uyarı (`kod: açıklama`) ya da `error` olarak gelir (fantom boyu farklıysa hat hedef üretmez → `error`).
+FIZIKSEL = (
+    "kalibrasyon_yok",
+    "kalibrasyon_bozuk",
+    "kalibrasyon_kamera_farkli",
+    "kamera_oynamis",
+    "fantom_ayari_yok",
+    "fantom_boyu_farkli",
+    "fantom_degil",
+)
+
 _KOD = re.compile(r"^[a-z][a-z0-9_]*$")
 
 #: Neden kodu → operatöre NE YAPACAĞINI söyleyen metin (hata mesajı eylem söylesin). `{nesne}` = "plakanın" / "fantomun".
@@ -81,6 +94,21 @@ _EYLEM = {
     "kuyu_skor_esigi": (
         "Bazı ızgara hücrelerinde besiyeri yok ya da ızgara plakadan taştı (hücre skoru eşiğin altında, kuyu sayılmadı) — "
         "kuyuların hepsinin dolu ve plakanın kadrajın ortasında olduğunu kontrol edip yeniden çekin."
+    ),
+    # KD · Y258–Y259 — Türkçe TABAN metni; arayüze giden metin sunucuda koddan çevrilir (`ai.pemf.kapi.<kod>`, TR + EN).
+    "kalibrasyon_yok": "Kabin kalibrasyonu yok — Kabin kalibrasyonu bölümünde plakanın 4 köşesiyle kalibre edin.",
+    "kalibrasyon_bozuk": "Kabin kalibrasyonu okunamadı ya da bozuk — kabin kalibrasyonunu yeniden yapın.",
+    "kalibrasyon_kamera_farkli": (
+        "Kamera ya da çözünürlük kalibrasyondakinden farklı — kalibrasyon yapılan kabin kamerasını seçin ya da yeniden kalibre edin."
+    ),
+    "kamera_oynamis": "Kamera oynamış olabilir — kabin kalibrasyonunu yeniden yapın.",
+    "fantom_ayari_yok": "Fantom kalınlığı / tümör derinliği girilmedi — Kabin kalibrasyonu bölümünden girin.",
+    "fantom_degil": (
+        "Bulunan bölge fantom gibi görünmüyor (ışık yansıması ya da boş kabin) — fantomu kabine koyun; parlama varsa ışığı değiştirin."
+    ),
+    "fantom_boyu_farkli": (
+        "Bulunan fantom boyu ayardakinden çok farklı (kabinde fantom yok ya da kalınlık / boy ayarı yanlış) — fantomu ve ayarı "
+        "kontrol edin."
     ),
 }
 
@@ -158,8 +186,8 @@ def varsayimlar(sonuc, *, model: str) -> list[dict]:
     return out
 
 
-#: KOŞULSUZ kipte de sürüşü KESEN nedenler (fiziksel: sonuç yok / kabin çerçevesinde konum yok).
-KOSULSUZDA_KALAN = ("basarisiz", "pemf_gecersiz")
+#: KOŞULSUZ kipte de sürüşü KESEN nedenler (fiziksel: sonuç yok / kabin çerçevesinde konum yok / KD kalibrasyon engeli).
+KOSULSUZDA_KALAN = ("basarisiz", "pemf_gecersiz") + FIZIKSEL
 
 
 def yanit_alanlari(sonuc, *, model: str, kosulsuz: bool = False) -> dict:
@@ -173,6 +201,8 @@ def yanit_alanlari(sonuc, *, model: str, kosulsuz: bool = False) -> dict:
         "coord_frame": str(_al(sonuc, "coord_frame") or ""),
         "pemf_kapisi": degerlendir(sonuc, model=model, kosulsuz=kosulsuz),
         "kosulsuz": kosulsuz is True,
+        # KD · Y258: sabit düzlem kalibrasyonu özeti (kip, geçerli, engeller, sahne / kuyu aralığı / fantom boyu ölçümü) — YALNIZ EK.
+        "kalibrasyon": dict(_al(sonuc, "kalibrasyon") or {}),
     }
     if model == "fantom":
         d["reliable"] = _al(sonuc, "reliable") is True
@@ -183,7 +213,9 @@ def yanit_alanlari(sonuc, *, model: str, kosulsuz: bool = False) -> dict:
     else:
         d["plate"] = dict(_al(sonuc, "plate") or {})
         d["classification"] = dict(_al(sonuc, "classification") or {})
-        d["pemf_source"] = {"cabin_aruco": "aruco", "cabin_placement": "placement"}.get(d["coord_frame"], "")
+        d["pemf_source"] = {"cabin_aruco": "aruco", "cabin_placement": "placement", "cabin_plane": "sabit_duzlem"}.get(
+            d["coord_frame"], ""
+        )
     return d
 
 
@@ -202,12 +234,18 @@ def degerlendir(sonuc, *, model: str, kosulsuz: bool = False) -> dict:
     nesne = "plakanın" if model == "petri" else "fantomun"
     nesne_yalin = "plakaya" if model == "petri" else "fantoma"
     kodlar = uyari_kodlari(_al(sonuc, "warnings") or [])
+    # KD: hat hedef üretmeden durduysa (`error` fiziksel kodla başlar: fantom boyu farklı) neden O koddur — "analiz sonuç üretmedi"
+    # değil; uyarılarda gelen fiziksel kodlar da AYNI listeye.
+    hata_kodlari = uyari_kodlari([_al(sonuc, "error")]) if _al(sonuc, "error") else []
+    fiziksel = [k for k in FIZIKSEL if k in kodlar or k in hata_kodlari]
     nedenler: list[str] = []
-    if _al(sonuc, "success") is not True:
+    if _al(sonuc, "success") is not True and not any(k in hata_kodlari for k in FIZIKSEL):
         nedenler.append("basarisiz")
     pemf = _al(sonuc, "pemf_valid") is True
-    if not pemf:
+    if not pemf and not fiziksel:
+        # Fiziksel neden zaten "konum neden yok"u söyler; genel (ArUco öneren) metin YANLIŞ yönlendirirdi.
         nedenler.append("pemf_gecersiz")
+    nedenler += fiziksel
     if model == "fantom" and _al(sonuc, "reliable") is not True:
         nedenler.append("guvenilir_degil")
     engel = [k for k in ENGELLEYICI if k in kodlar]

@@ -13,6 +13,9 @@ hazırlık — `hedef_idleri` tek kaynağını kullanır); VERİLMEMİŞ kimlik 
 
 from __future__ import annotations
 
+from kd_kalibrasyon_yardimci import (
+    kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
+)
 from test_ai_pro_arastirma_OTOMATIK_hedef_SECILI_KIMLIGI_muhurler_Y143 import (  # noqa: F401 — aparat
     _hazirlik_karesi,
     _onayla_baslat,
