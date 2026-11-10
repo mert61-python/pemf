@@ -41,6 +41,8 @@ ENGELLEYICI = ("layout_mismatch", "control_cancer_missed", "control_healthy_flag
 #: gerçek plakada uydurulan 24 kuyucuk (0/12 doğru, ~3 aralık kayık) yalnız bu ikisini taşıyıp "sürülebilir" geçiyordu.
 #: T3 · Y191b: + `kuyu_skor_esigi` — ızgara hücresi skoru eşiğin altında kaldı (hücre kuyu sayılmadı): ızgara plakadan taştı ya da
 #: kuyu boş → kalan kuyuların konumu da şüpheli; koşulluda bobine esas alınmaz, koşulsuzda uyarı.
+#: KD-2b · Y264: petri hattı `low_resolution` ÜRETMEZ (kuyu yarıçapı eşiği kaldırıldı — sabit kabin kamerasında kuyu 24 px);
+#: kod burada fantom tümör eşiği (`tumor_detect`, < 6 px) için KALIR.
 YENIDEN_CEKIM = (
     "oblique_view", "low_resolution", "ring_partial", "plate_cropped", "few_candidates", "ecc_failed", "kuyu_skor_esigi",
 )

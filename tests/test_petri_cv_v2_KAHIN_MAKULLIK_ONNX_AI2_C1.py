@@ -102,7 +102,9 @@ def test_KRITIK_KAHIN_24_kuyucuk_kimlik_etiket_konum(petri_v2, ad):
         f"{ad}: kuyucuk merkezi hatası {max(sapma):.2f} px ≥ 0,25 aralık ({aralik_px:.1f} px)"
     )
     # Uyarı kodları hocanınkiyle aynı (çekim kalitesi + PEMF çerçevesi); plaka kipi + kabin konumu yok.
-    assert sorted(_kod(u) for u in r.warnings) == sorted(_kod(u) for u in ozet[ad]["warnings"].split(" | ") if u)
+    # KD-2b · Y264: kuyu yarıçapı eşiği kaldırıldı → hocanın `low_resolution`ı (15(4) 22 px, 17(3) 16 px) guii'de BEKLENMEZ.
+    hoca = sorted(_kod(u) for u in ozet[ad]["warnings"].split(" | ") if u and _kod(u) != "low_resolution")
+    assert sorted(_kod(u) for u in r.warnings) == hoca
     assert (r.method, r.coord_frame, r.pemf_valid) == ("plate_grid", "plate", False)
     # ONNX ↔ PT farkı GİZLENMEZ: aday kırpıntısı ONNX'in sabit girişine çekildi, aday sayısı ve kuyucuk kaynağı yanıtta.
     assert r.yolo_ayar.get("aday_imgsz") == 640 and r.yolo_ayar.get("plate_type") == 24

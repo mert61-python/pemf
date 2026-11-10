@@ -109,7 +109,8 @@ DURUMLAR = [
     ("petri", {"warnings": ["control_cancer_missed: B2 (blue=0.001)"]}, "control_cancer_missed"),
     ("petri", {"warnings": ["control_healthy_flagged: A1 (frac)"]}, "control_healthy_flagged"),
     ("petri", {"warnings": ["oblique_view: olcek degisimi x1.34"]}, "oblique_view"),
-    ("petri", {"warnings": ["low_resolution: kuyucuk yaricapi 16px (<25)"]}, "low_resolution"),
+    # KD-2b · Y264: petri hattı `low_resolution` üretmez (kuyu yarıçapı eşiği kaldırıldı); kod fantom tümör eşiğinde KALIR.
+    ("fantom", {"warnings": ["low_resolution: tumor yaricapi ~4px - yaklas"]}, "low_resolution"),
     ("fantom", {"warnings": ["ring_unavailable: ring_partial: halkanin %31'i gorunur (<%35)"]}, "ring_partial"),
 ]
 _IDS = [f"{m}-{n}" for m, _, n in DURUMLAR]

@@ -339,7 +339,7 @@
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
    "durum": "tamam",
    "metin": 136,
-   "dosyaSayisi": 38
+   "dosyaSayisi": 39
   },
   {
    "ad": "launcher-11a-ui",
@@ -9442,6 +9442,25 @@
    "metin": 0,
    "kritik": false,
    "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/backend/utils/kamera_kimligi.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "VID_{{deger1}}&PID_{{deger2}}",
+     "gerekce": "USB aygıt kimliği biçimi (VID/PID) — kamera seçimini ve kalibrasyonu donanıma bağlayan kimlik; çevrilecek metin değil (KD-2)",
+     "turler": [
+      "donus"
+     ]
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },

@@ -601,12 +601,14 @@ def detect_plate_wells(image_bgr: np.ndarray, plate_type: int = 24, *,
 
 def _quality_warnings(res: PlateGridResult, spec: PlateSpec,
                       shape: tuple[int, int]) -> list[str]:
-    """Cekim protokolu kontrolu (README 'Cekim Protokolu')."""
+    """Cekim protokolu kontrolu (README 'Cekim Protokolu').
+
+    KD-2b · Y264 (sahip 2026-11-10): kuyu YARICAPI esigi (`well_radius_px < 25` -> `low_resolution`) KALDIRILDI. Sabit kabin
+    kamerasinda (~37 cm) 24'luk plakanin kuyu yaricapi 24 px; esik her karede yeniden cekim isteyip petriyi hic surdurmuyordu.
+    Konum dogrulugu izgara uyumundan gelir (aday sayisi, ECC, egiklik, kirpik plaka, kuyu skoru) - onlar AYNEN. Fantom tumor
+    esigi (`tumor_detect`, < 6 px) KALIR."""
     warn = []
     h, w = shape
-    if res.well_radius_px < 25:
-        warn.append(f"low_resolution: kuyucuk yaricapi {res.well_radius_px:.0f}px "
-                    f"(<25) - plakaya daha yakin cek")
     if res.n_inliers < 6:
         warn.append(f"few_candidates: {res.n_inliers} aday dogrulandi - konum "
                     f"agirlikla geometri+ECC'den")
