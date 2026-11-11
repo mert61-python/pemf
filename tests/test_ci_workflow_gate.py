@@ -447,7 +447,8 @@ def _fail_under() -> float:
 #: KP-2 A5 (Y243, 2026-11-03): CI eşdeğeri ölçülen %96,58 → eşik 95; taban 95 (75'te kalsaydı 95→76 düşürmesi YEŞİLDİ).
 #: KP-2 kapanış (2026-11-03): KP-2 C testleriyle ölçülen %97,41 → eşik ve taban 96.
 #: KP-3 AŞAMA D (2026-11-08): KP-3 C testleriyle ölçülen %99,88 (@ c83b47e9; C18 kalan 30 satırı kapattı + 1 ULASILAMAZ etiketi) → eşik ve taban 98.
-_FAIL_UNDER_TABANI = 98
+#: KP-4 C (2026-11-11): CI eşdeğeri (temiz klon kp2s @ 147bcaea, modelsiz / eserSİZ, tests.yml Windows adımı aynen) TOPLAM %99,98 (26504 ifade, 5 kapsanmayan — hepsi ai_router model yolları) → eşik ve taban 99.
+_FAIL_UNDER_TABANI = 99
 
 
 def test_KRITIK_fail_under_SAHIP_KARARI_TABANIN_ALTINA_DUSMEZ():
