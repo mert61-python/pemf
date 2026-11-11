@@ -112,6 +112,8 @@ type FrameResult = {
    *  2026-08-24). ⚠️ Opsiyonel: eski backend göndermezse damga-kapısı devre dışı, kare-başı sayıma
    *  düşülür (geriye-uyum; kilitlenme yok — catDetected/ownerClientId sürüm-kayması deseni). */
   localizedAt?: number;
+  /** KD-3a (yalnız-ek): kapının FİZİKSEL eylem metni (kesmediyse ""). Eski backend göndermez → status poll'una düşülür. */
+  kapiEylem?: string;
   perCoil?: Coil[];
   target?: { x: number; y: number; z: number };
   eField?: number;
@@ -141,7 +143,7 @@ type FrameResult = {
  * özne var/hedef yok → ışık ve işaret, hedef var/konum ölçülemedi → kabin işareti, konumlandı →
  * öneri hesaplanıyor.
  */
-function asamaMetniArastirma(a: {
+export function asamaMetniArastirma(a: {
   ozne: string;
   ozneIpucu: string;
   hedefEtiketi: string;
@@ -150,16 +152,23 @@ function asamaMetniArastirma(a: {
   localized: boolean;
   hedefSayisi: number;
   yontem: string;
+  /** KD-3a: kapının FİZİKSEL eylem metni (kesmediyse ""). */
+  kapiEylem?: string;
   guvenYuzde: number;
   gecikmeIpucu: string;
 }): string {
   if (a.localized) {
     return i18n.t("ai.pro.asamaArastirma.konumlandi", { hedefEtiketi: a.hedefEtiketi, guvenYuzde: a.guvenYuzde });
   }
+  // KD-3a (B-KD3a.1): sabit düzlem kipinde kapı FİZİKSEL nedenle kestiyse (kamera oynamış / kör bölge / taban ayarı …) NEDEN ve EYLEM
+  // — "plaka görünüyor, kuyu aranıyor" ya da ArUco "kabin işareti" metni değil (plaka ve kuyular bulundu, konum kalibrasyonda kesildi).
+  if (a.yontem === "sabit_duzlem" && a.kapiEylem) {
+    return i18n.t("ai.pro.asamaArastirma.kalibrasyonEngeli", { hedefEtiketi: a.hedefEtiketi, eylem: a.kapiEylem });
+  }
   if (!a.ozneVar) {
     return i18n.t("ai.pro.asamaArastirma.ozneAraniyor", { ozne: a.ozne, ozneIpucu: a.ozneIpucu, gecikmeIpucu: a.gecikmeIpucu });
   }
-  if (a.hedefSayisi > 0 && a.yontem && a.yontem !== "aruco_pnp") {
+  if (a.hedefSayisi > 0 && a.yontem && a.yontem !== "aruco_pnp" && a.yontem !== "sabit_duzlem") {
     return i18n.t("ai.pro.asamaArastirma.konumOlculemedi", { hedefEtiketi: a.hedefEtiketi });
   }
   return i18n.t("ai.pro.asamaArastirma.hedefAraniyor", {
@@ -233,6 +242,8 @@ interface AiProStatus {
   targets?: HedefAdayi[];
   /** 3B konum yöntemi — "aruco_pnp" = kabin işaretiyle ölçüldü. */
   method?: string;
+  /** KD-3a (yalnız-ek): kapı FİZİKSEL nedenle kestiyse sunucunun eylem metni (kesmediyse ""; eski backend göndermez). */
+  kapiEylem?: string;
   /** Seçili hedefin adı ("Tümör 1", "Kuyu 3 · Kanserli"). */
   targetLabel?: string;
   /** Konum modelin eğitim aralığı dışında mı (onay ekranı uyarısı). */
@@ -348,6 +359,7 @@ export function AiProPanel({
   /** Kare üstü hedef adayları + kalibrasyon/ood alanları (status poll ve WS aynı kaynağı besler). */
   const [hedefler, setHedefler] = useState<HedefAdayi[]>([]);
   const [yontem, setYontem] = useState("");
+  const [kapiEylem, setKapiEylem] = useState(""); // KD-3a: status poll'un `kapiEylem`i
   const [hedefEtiket, setHedefEtiket] = useState("");
   const [ood, setOod] = useState(false);
   /** T3 · Y189: backend'in ETKİN kipi (rozet bunu gösterir — panelin seçimi değil, sürülen kip). */
@@ -523,6 +535,7 @@ export function AiProPanel({
       // halkalar ve rozet çizilmez, kedi ekranı BİREBİR aynı kalır.
       setHedefler(Array.isArray(st.targets) ? st.targets : []);
       setYontem(typeof st.method === "string" ? st.method : "");
+      setKapiEylem(typeof st.kapiEylem === "string" ? st.kapiEylem : "");
       setHedefEtiket(typeof st.targetLabel === "string" ? st.targetLabel : "");
       setOod(Boolean(st.ood));
       setSunucuKosulsuz(st.kosulsuz === true);  // T3 · Y189
@@ -1096,6 +1109,15 @@ export function AiProPanel({
   /** Kare üstü hedef adayları: seans/önizleme WS'i (taze) yoksa status poll'u. */
   const hedefAdaylari: HedefAdayi[] = (IS_WEB && v?.targets?.length ? v.targets : hedefler) as HedefAdayi[];
   const yontemAktif = (IS_WEB && v?.method ? v.method : yontem) || "";
+  /** KD-3a: kapının FİZİKSEL eylemi — web WS karesi (taze) varsa ondan, yoksa status poll'dan; mobilde /frame yanıtı. */
+  const kapiEylemAktif =
+    (IS_WEB
+      ? typeof v?.kapiEylem === "string" && v?.method
+        ? v.kapiEylem
+        : kapiEylem
+      : typeof mobileResult?.kapiEylem === "string"
+        ? mobileResult.kapiEylem
+        : kapiEylem) || "";
   /** Şerit metni: araştırmada özneyi/hedefi model adıyla söyler. */
   const seritMetni = !hazirlik
     ? ""
@@ -1109,6 +1131,7 @@ export function AiProPanel({
           localized: detected,
           hedefSayisi: hedefAdaylari.length,
           yontem: yontemAktif,
+          kapiEylem: kapiEylemAktif,
           guvenYuzde,
           gecikmeIpucu,
         })
@@ -1310,7 +1333,7 @@ export function AiProPanel({
           NEDEN gelmediğini peşinen söyler; liste halkaların ZORUNLU erişilebilir yedeğidir. */}
       {arastirmaKipi ? (
         <>
-          <KalibrasyonRozeti yontem={yontemAktif} gorunur={hazirlik || running} />
+          <KalibrasyonRozeti yontem={yontemAktif} gorunur={hazirlik || running} localized={detected} kapiEylem={kapiEylemAktif} />
           {ood ? (
             <Text style={styles.note}>
               {t("ai.pro.konumEgitimDisi")}

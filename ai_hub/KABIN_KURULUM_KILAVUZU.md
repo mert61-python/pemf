@@ -46,7 +46,8 @@ merkez farkı 0,3–0,9 cm. Aynı yandaki iki konum karşı yanı 1,9 cm kaçır
      içindedir → hesaplanan yükseklik ~1,5–2,5 cm fazla çıkar) — aşarsa kaydetmeden önce AÇIK onay ister (önce ölçüleri kontrol edin).
    Ekran ayrıca **görüş alanını** yazar: "kamera tabanda ön camdan ilk ~N cm'yi görmüyor" (kör bölge; bu tezgâhta ~4 cm).
 8. **Kaydet** (denetim izine yazılır). Sonra **Doğrula**: plakayı BAŞKA bir yere koyun, kare alın, ölçtüğünüz numaralı köşeleri girin →
-   **plaka merkezinde fark ≤ 1 cm** (köşe farkları bilgi olarak yazılır; cetvel gürültüsü yüzünden tek köşe 1 cm'yi aşabilir).
+   **plaka merkezinde fark ≤ 2 cm** (sahip kararı, 11 Kasım tezgâhı: önce 1 cm'ydi — cetvelle ölçülen köşe başına ~0,5–0,8 cm oynadığından
+   1,01 cm "KALDI" çıktı, yeniden ölçünce 0,73; köşe farkları bilgi olarak yazılır, tek köşe 1 cm'yi aşabilir). İyi ölçüyle beklenen ~0,3–1 cm.
 9. **Fantom** için (Fantom Tümör modelinde, kalibrasyondan sonra): **kalınlık** (tabandan üst yüzeye), **tümör derinliği** (üst yüzeyden), isteğe
    bağlı **boy × en** (cm) → **Fantom ayarını kaydet**. Fantom hedef düzlemi = taban + kalınlık − derinlik. Yeniden kalibrasyonda ayar korunur.
 

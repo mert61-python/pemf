@@ -91,9 +91,11 @@ FANTOM_BOY_TOLERANSI = 0.20
 #: ÖLÇÜLDÜ (göreli — aydınlatmadan bağımsız): tümör ortanca V / gövde ortanca V hocanın 9 fantom fotoğrafında 0,36–0,71; T2B boş kabin
 #: karelerindeki mavi IŞIK YANSIMASI "fantomu" 1,01–1,28 (boyu ayara %17 yakın çıkabildiği için boy denetimi tek başına yetmedi).
 FANTOM_KOYULUK_ORANI = 0.85
-#: Sahip (istem 44 §4): doğrulama ölçütü — hedef ≤ 1 cm. Ölçüt plaka MERKEZİ (ölçülen köşelerin ortalaması ↔ hesaplanan): köşe başına
-#: cetvel gürültüsü σ ≈ 5–8 mm olduğundan tek köşe kusursuz kalibrasyonda da 1 cm'yi aşabilir (köşe farkları bilgi olarak gösterilir).
-DOGRULAMA_ESIGI_MM = 10.0
+#: Doğrulama ölçütü plaka MERKEZİ (ölçülen köşelerin ortalaması ↔ hesaplanan): köşe başına cetvel gürültüsü σ ≈ 5–8 mm olduğundan tek
+#: köşe kusursuz kalibrasyonda da 1 cm'yi aşabilir (köşe farkları bilgi olarak gösterilir). İstem 44 §4 "≤ 1 cm" idi; SAHİP KARARI
+#: (KD-3a, 11 Kasım tezgâh — canlı doğrulama 1,01 cm KALDI, yeniden ölçünce 0,73): "ya 2 cm olsun fark eşiği" → 2 cm. Yalnız
+#: doğrulama geçti / kaldı sınırı; kalibrasyonun RET eşikleri (izdüşüm, ölçüm uyumu, lens) ve kamera-oynadı denetimleri DEĞİŞMEDİ.
+DOGRULAMA_ESIGI_MM = 20.0
 
 #: SBS / ANSI SLAS 1-2004 plaka DIŞ ölçüsü (mm, uzun × kısa) — kuyu ızgarası bu dikdörtgenin ortasındadır.
 PLAKA_DIS_MM = {12: (127.76, 85.48), 24: (127.76, 85.48), 48: (127.76, 85.48), 96: (127.76, 85.48)}

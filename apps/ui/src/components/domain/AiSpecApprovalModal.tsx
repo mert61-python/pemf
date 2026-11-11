@@ -296,7 +296,8 @@ export function AiSpecApprovalModal({
 
           {/* 3B konum rozeti: karar #4 (kabin işareti ZORUNLU) — işaretsiz öneri zaten üretilmez,
               rozet onaylayan kişiye konumun NEYE dayandığını söyler. */}
-          {arastirma ? <KalibrasyonRozeti yontem={meta?.method} /> : null}
+          {/* KD-3a: öneri YALNIZ lokalize karede üretilir → sabit düzlem kipinde "kabin kalibrasyonuyla ölçüldü" (tezgâhta ArUco metni çıkıyordu). */}
+          {arastirma ? <KalibrasyonRozeti yontem={meta?.method} localized /> : null}
 
           {/* Y143: otomatik seçim onay anında MÜHÜRLENDİ — onaylanan hedef seans boyunca DEĞİŞMEZ (görülen = sürülen). */}
           {arastirma && meta?.otomatik_secim ? (

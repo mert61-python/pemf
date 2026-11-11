@@ -6,17 +6,49 @@
  * Rozet o REDDİ önceden anlaşılır kılar: operatör "neden öneri gelmiyor" diye beklemez, kamerayı
  * ya da yerleşimi düzeltir.
  *
- * ⚠️ Ham yöntem adı (`aruco_pnp`, `phantom_length`, `pixel`) kullanıcıya GÖSTERİLMEZ — eylem
+ * KD-3a (B-KD3a.1, tezgâh 2026-11-11): SABİT DÜZLEM kipinde (`sabit_duzlem` — kabin kalibrasyonu, ArUco ARANMAZ) rozet
+ * "kabin işareti (kare kod) görünmüyor" diyordu: konum ölçülse de (onay penceresi) kapı kalibrasyon nedeniyle kesse de
+ * (taban ayarı yanlış → "kamera oynamış"). Artık: ölçüldüyse "kabin kalibrasyonuyla ölçüldü ✓"; kapı FİZİKSEL nedenle
+ * kestiyse sunucunun EYLEM metni (`kapiEylem`, istek / cihaz dilinde); ikisi de yoksa "numune aranıyor".
+ *
+ * ⚠️ Ham yöntem adı (`aruco_pnp`, `sabit_duzlem`, `phantom_length`, `pixel`) kullanıcıya GÖSTERİLMEZ — eylem
  * söyleyen hata kuralı. Teknik ad yalnız erişilebilirlik ipucunda/log'da anlamlıdır.
  */
 import { View, Text, StyleSheet } from "react-native";
 import { colors, spacing, typography } from "@/theme/tokens";
 import { useTranslation } from "react-i18next";
 
-export function KalibrasyonRozeti({ yontem, gorunur = true }: { yontem?: string; gorunur?: boolean }) {
+export function KalibrasyonRozeti({
+  yontem,
+  gorunur = true,
+  localized = false,
+  kapiEylem = "",
+}: {
+  yontem?: string;
+  gorunur?: boolean;
+  /** Konum bu karede ölçüldü mü (onay penceresinde her zaman true — öneri yalnız lokalize karede üretilir). */
+  localized?: boolean;
+  /** KD-3a: kapının FİZİKSEL eylem metni (sunucu `kapiEylem`; kesmediyse boş). */
+  kapiEylem?: string;
+}) {
   const { t } = useTranslation();
   if (!gorunur) return null;
   const y = String(yontem || "");
+  if (y === "sabit_duzlem") {
+    const eylem = String(kapiEylem || "");
+    const durum = localized ? "iyi" : eylem ? "kotu" : "bekliyor";
+    return (
+      <View style={[styles.rozet, styles[durum]]} testID={`kalibrasyon-rozeti-duzlem-${durum}`}>
+        <Text style={styles.metin}>
+          {localized
+            ? t("ai.pro.kalibrasyon.duzlemOlculdu")
+            : eylem
+              ? t("ai.pro.kalibrasyon.duzlemOlculemedi", { eylem })
+              : t("ai.pro.kalibrasyon.duzlemBekliyor")}
+        </Text>
+      </View>
+    );
+  }
   const kalibre = y === "aruco_pnp";
   if (!y) {
     return (

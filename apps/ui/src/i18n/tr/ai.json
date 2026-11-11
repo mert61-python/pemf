@@ -628,7 +628,7 @@
       "tamam": "Sahne yenilendi (kayma {{px}} px) — kalibrasyon \"eski\" olarak işaretlendi."
     },
     "dogrula": "Doğrula",
-    "dogrulaAciklama": "Plakayı başka bir yere koyun; numaralı köşelerden ölçtüklerinizi girin. Plaka merkezindeki fark 1 cm'den küçükse kalibrasyon doğrulanır.",
+    "dogrulaAciklama": "Plakayı başka bir yere koyun; numaralı köşelerden ölçtüklerinizi girin. Plaka merkezindeki fark 2 cm'den küçükse kalibrasyon doğrulanır.",
     "dogrulaHesapla": "Farkı ölç",
     "dogrulamaGecti": "Doğrulama GEÇTİ — plaka merkezinde fark {{merkez}} cm (sınır {{esik}} cm); köşeler: {{farklar}} cm.",
     "dogrulamaKaldi": "Doğrulama KALDI — plaka merkezinde fark {{merkez}} cm (sınır {{esik}} cm); köşeler: {{farklar}} cm. Ölçüleri kontrol edin ya da yeniden kalibre edin.",
@@ -1012,6 +1012,7 @@
     },
     "asamaArastirma": {
       "hedefAraniyor": "🔎 {{ozne}} görünüyor, {{hedefEtiketiKucuk}} aranıyor…{{gecikmeIpucu}}",
+      "kalibrasyonEngeli": "⚠️ {{hedefEtiketi}} konumu ölçülemedi — {{eylem}}",
       "konumOlculemedi": "✓ {{hedefEtiketi}} bulundu, konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın.",
       "konumlandi": "✓ {{hedefEtiketi}} konumlandı — güven %{{guvenYuzde}} · öneri hesaplanıyor…",
       "ozneAraniyor": "🔎 {{ozne}} aranıyor… {{ozneIpucu}}{{gecikmeIpucu}}"
@@ -1045,7 +1046,7 @@
       "analizOneri": "🔎 Analiz ve Öneri (sürüş kapalı)",
       "analizOneriEtiket": "AI Pro analiz ve öneri — kedi sürüşü kapalı",
       "analizOneriIpucu": "Organı konumlar ve doz önerisi hazırlar; bobin sürmez",
-      "baslat": "🚀 AI Pro Başlat (1Hz DDS)",
+      "baslat": "🚀 AI Pro Başlat (100 Hz DDS)",
       "baslatEtiket": "AI Pro otonom seansı başlat",
       "baslatIpucu": "Kamera kapalı-döngüsüyle bobinleri otomatik sürer",
       "durdur": "⏹ AI Pro'yu Durdur",
@@ -1086,6 +1087,9 @@
     "kalibrasyon": {
       "bekliyor": "3B konum: henüz ölçülmedi — kamera açılınca ölçülür.",
       "dogrulandi": "3B konum: kabin işaretiyle doğrulandı ✓",
+      "duzlemBekliyor": "3B konum: kabin kalibrasyonuyla ölçülecek — numune aranıyor.",
+      "duzlemOlculdu": "3B konum: kabin kalibrasyonuyla ölçüldü ✓",
+      "duzlemOlculemedi": "Konum ölçülemedi — {{eylem}}",
       "olculemedi": "Konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın."
     },
     "kamera": {

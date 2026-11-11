@@ -699,8 +699,10 @@ _ai_started_at = 0.0
 # ile günlerce/gözetimsiz PEMF sürüşünü engeller. (freq/duty güvenlik sınırı EKLEMEZ — sahip kararıyla kaldırıldılar;
 # 48 °C termal kesme / interlock hiçbir katmanda YOK, A-47.)
 _AI_PRO_MAX_DURATION_MIN = 120
-# AI Pro freq sabit 1 Hz (eski PyQt DDS varsayılanı). Sabit; backend'de limit/clamp EKLEME.
-_AI_PRO_FREQ_HZ = 1.0
+# AI Pro freq SABİT 100 Hz — SAHİP KARARI (KD-3a, 11 Kasım tezgâh: kart her AI Pro sürüşünde F=1 alıyordu; "100hz olcak ai pro freq").
+# Eskiden 1 Hz'di (yalnız "eski PyQt DDS varsayılanı"). Vekil doz modellerinin girdisinde frekans YOK → öneri (duty / faz) değişmez,
+# yalnız karta giden F. Sabit; backend'de limit/clamp EKLEME. Kapı: tests/test_KD3a_dogrulama_2cm_AIPro_100Hz_kapi_eylemi.py
+_AI_PRO_FREQ_HZ = 100.0
 # em_kedi modelinin sabit ekstra girdileri (eski camera_ai_thread ile birebir: 0.001 T = 1 mT · 1.5).
 # ⚠️ D7.02 (DENETIM-12 P2): TEK KAYNAK `ai_pro_hedef.KEDI_*` — sürüş (`_predict_and_drive_cpu/_gpu`) bu adları, XAI açıklaması
 # ve onay metası `KediSaglayici.achieved_B/duty_sum`'ı okur; iki ayrı literal sahip kararı #9'u ("açıklama dozun FİİLEN
@@ -1318,7 +1320,24 @@ def _saglayici_cache_alanlari() -> dict:
         "secili_id": m.get("secili_id"),
         # T3 · Y189: bu konum KOŞULSUZ kipte mi bulundu (öneri tazelik denetimi ve mühür buna bakar; kedide hep False).
         "kosulsuz": bool(getattr(_aktif_saglayici(), "kosulsuz", False)),
+        # KD-3a (B-KD3a.1): kapı FİZİKSEL nedenle (kalibrasyon / kamera oynamış / kör bölge …) kestiyse ilk eylem metni (dile çevrilmiş).
+        "kapi_eylem": _kapi_fiziksel_eylemi(m.get("pemf_kapisi")),
     }
+
+
+def _kapi_fiziksel_eylemi(kapi) -> str:
+    """KD-3a (B-KD3a.1, tezgâh 11 Kasım): sabit düzlem kipinde kapı FİZİKSEL nedenle kestiğinde panel nedeni göremiyor, rozet ArUco
+    metnine ("kabin işareti … kare kod … görünmüyor") düşüyordu. Kapı kestiyse İLK fiziksel mesajın (sağlayıcıda `kapi_cevir` ile
+    dile çevrilmiş) metni; kapı geçtiyse / hesaplanmadıysa / neden fiziksel değilse "" (hocanın kalite nedenleri kendi şeridinde)."""
+    if not isinstance(kapi, dict) or kapi.get("surulebilir") is not False:
+        return ""
+    from ai_hub.cv_ortak import pemf_kapisi as _pk
+
+    for m in kapi.get("mesajlar") or []:
+        if isinstance(m, dict) and str(m.get("kod") or "") in _pk.FIZIKSEL:
+            metin = ai_pro_hedef.kapi_metni(str(m.get("kod")))
+            return str(metin or m.get("metin") or "")
+    return ""
 
 
 def _hazirlik_hata_metni(kod: str, ad: str, dil: str | None = "tr") -> str:
@@ -1664,7 +1683,7 @@ def _ai_pro_plan_disi_bobinler(onay=None) -> set:
 def _drive_coils_ai_pro(D, P) -> list:
     """
     em_kedi çıktısı D[7]/P[7] ile bobin 1-7'yi PER-COIL sürer (paylaşımlı tek faz YOK) → GERÇEKTEN sürülen bobinler.
-      - Bobin 1-7: `STM_COIL_IDS` tek kaynağından `hardware_controller.update_coil` (duty yüzde, freq=1 Hz, per-coil faz).
+      - Bobin 1-7: `STM_COIL_IDS` tek kaynağından `hardware_controller.update_coil` (duty yüzde, freq=`_AI_PRO_FREQ_HZ` 100 Hz, per-coil faz).
         ⚠️ D1.83/D1.84 (S-1.1 · B-5.2 · Y25): 6-7 eskiden `for idx in (5, 6)` → MQTT `pemf/coil/{6,7}/control`
         yayınıyla "sürülüyordu"; faz 4'ten beri 6-7 STM'de → telde duty 0, konular ÖLÜ (1-C §9 #3), panel/kayıt ise 7
         bobini uygulanmış gösteriyordu. `update_coil`'in dönüşü artık OKUNUR (İG-5.32): reddedilen bobin "sürülmedi".
@@ -1955,6 +1974,7 @@ def _ai_hazirlik_loop():
                                 "targetName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _ai_organ_id),
                                 "targets": _ai_organ_cache.get("targets") or [],
                                 "method": _ai_organ_cache.get("method") or "",
+                                "kapiEylem": _ai_organ_cache.get("kapi_eylem") or "",  # YALNIZ-EK (KD-3a · B-KD3a.1)
                                 "targetLabel": _ai_organ_cache.get("target_label") or "",
                                 "perCoil": [],
                                 "remainingSec": 0,
@@ -2306,6 +2326,7 @@ def _ai_pro_loop(dongu_muhru=None):
                 "targetName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _gosterim_oid),
                 "targets": _ai_organ_cache.get("targets") or [],
                 "method": _ai_organ_cache.get("method") or "",
+                "kapiEylem": _ai_organ_cache.get("kapi_eylem") or "",  # YALNIZ-EK (KD-3a · B-KD3a.1)
                 "targetLabel": _ai_organ_cache.get("target_label") or "",
                 "perCoil": per_coil,
                 "remainingSec": remaining,
@@ -3270,6 +3291,8 @@ def ai_pro_status():
         # ve onay ekranı uyarıları (ood) BU alanlardan beslenir. Kedi hattında boş/varsayılan.
         "targets": _ai_organ_cache.get("targets") or [],
         "method": _ai_organ_cache.get("method") or "",
+        # YALNIZ-EK (KD-3a · B-KD3a.1): kapının FİZİKSEL eylem metni (kesmediyse ""). Panel rozeti / şeridi ArUco metni yerine bunu yazar.
+        "kapiEylem": _ai_organ_cache.get("kapi_eylem") or "",
         "mmPerPx": _ai_organ_cache.get("mm_per_px"),
         "targetLabel": _ai_organ_cache.get("target_label") or "",
         "ood": bool(_ai_organ_cache.get("ood")),
@@ -3584,6 +3607,7 @@ async def ai_pro_frame(
                 "targetName": ai_pro_hedef.hedef_gosterim_adi(_aktif_saglayici(), _gosterim_oid),
                 "targets": _ai_organ_cache.get("targets") or [],
                 "method": _ai_organ_cache.get("method") or "",
+                "kapiEylem": _ai_organ_cache.get("kapi_eylem") or "",  # YALNIZ-EK (KD-3a · B-KD3a.1)
                 "targetLabel": _ai_organ_cache.get("target_label") or "",
             }
         )

@@ -628,7 +628,7 @@
       "tamam": "Scene renewed (shift {{px}} px) — the calibration is marked as \"outdated\"."
     },
     "dogrula": "Verify",
-    "dogrulaAciklama": "Place the plate somewhere else and enter the numbered corners you measured. The calibration is verified if the difference at the plate center is below 1 cm.",
+    "dogrulaAciklama": "Place the plate somewhere else and enter the numbered corners you measured. The calibration is verified if the difference at the plate center is below 2 cm.",
     "dogrulaHesapla": "Measure difference",
     "dogrulamaGecti": "Verification PASSED — difference at the plate center {{merkez}} cm (limit {{esik}} cm); corners: {{farklar}} cm.",
     "dogrulamaKaldi": "Verification FAILED — difference at the plate center {{merkez}} cm (limit {{esik}} cm); corners: {{farklar}} cm. Check the measurements or calibrate again.",
@@ -1012,6 +1012,7 @@
     },
     "asamaArastirma": {
       "hedefAraniyor": "🔎 The {{ozne}} is visible, looking for the {{hedefEtiketiKucuk}}…{{gecikmeIpucu}}",
+      "kalibrasyonEngeli": "⚠️ {{hedefEtiketi}} position not measured — {{eylem}}",
       "konumOlculemedi": "✓ {{hedefEtiketi}} found, but the position could not be measured — the cabin marker (the square code on the back wall) is not visible in the frame. Adjust the camera so that the marker and the target stay in the same frame.",
       "konumlandi": "✓ {{hedefEtiketi}} located — confidence {{guvenYuzde}}% · calculating the recommendation…",
       "ozneAraniyor": "🔎 Looking for the {{ozne}}… {{ozneIpucu}}{{gecikmeIpucu}}"
@@ -1045,7 +1046,7 @@
       "analizOneri": "🔎 Analysis and Recommendation (driving off)",
       "analizOneriEtiket": "AI Pro analysis and recommendation — cat driving is off",
       "analizOneriIpucu": "Locates the organ and prepares a dose recommendation; no coil is driven",
-      "baslat": "🚀 Start AI Pro (1Hz DDS)",
+      "baslat": "🚀 Start AI Pro (100 Hz DDS)",
       "baslatEtiket": "Start the AI Pro autonomous session",
       "baslatIpucu": "Drives the coils automatically with the camera closed loop",
       "durdur": "⏹ Stop AI Pro",
@@ -1086,6 +1087,9 @@
     "kalibrasyon": {
       "bekliyor": "3D position: not measured yet — it is measured once the camera opens.",
       "dogrulandi": "3D position: verified with the cabin marker ✓",
+      "duzlemBekliyor": "3D position: will be measured with the cabin calibration — looking for the sample.",
+      "duzlemOlculdu": "3D position: measured with the cabin calibration ✓",
+      "duzlemOlculemedi": "Position not measured — {{eylem}}",
       "olculemedi": "The position could not be measured — the cabin marker (the square code on the back wall) is not visible in the frame. Adjust the camera so that the marker and the target stay in the same frame."
     },
     "kamera": {

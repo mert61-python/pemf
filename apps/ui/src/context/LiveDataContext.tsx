@@ -86,6 +86,8 @@ export interface AiVisionData {
   targetLabel?: string;
   /** 3B konum yöntemi — "aruco_pnp" = kabin işaretiyle ölçüldü. */
   method?: string;
+  /** KD-3a (yalnız-ek): kapı FİZİKSEL nedenle kestiyse sunucunun eylem metni (kesmediyse ""). */
+  kapiEylem?: string;
   /** Kare üstünde seçilebilir hedef adayları. `pxn` = kare oranına göre merkez (0..1). */
   targets?: {
     id?: number;
