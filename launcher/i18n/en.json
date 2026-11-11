@@ -379,6 +379,7 @@
     "pause": "Pause",
     "pausedLead": "Download paused — the downloaded part is kept on your computer. You can resume where you left off.",
     "pausedTitle": "Paused",
+    "paylasimBelirsiz": "This Windows account's access to the patient data on this computer could not be checked — sharing may be required. If the app cannot open patient records, set up sharing with the button below (administrator permission required).",
     "paylasimGerekli": "The patient data on this computer belongs to another Windows account; this account cannot access it (the app cannot open patient records).",
     "paylasimKur": "Set up sharing (administrator)",
     "paylasimKuruldu": "Sharing is set up. For it to take effect, sign out of Windows and back in once on this account AND on the account that set up the data, then start the app.",

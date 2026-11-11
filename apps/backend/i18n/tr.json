@@ -927,6 +927,7 @@
   "sistem": {
     "db": {
       "acilamadi": "{{ad}} açılamadı ({{hata}}). Arka planda yeniden deneniyor; sürerse cihazı yeniden başlatın, yine sürerse teknik desteğe başvurun.",
+      "erisimYok": "Bu Windows hesabının PEMF verisine erişimi yok — başlatıcıdaki paylaşım kartıyla erişim verin.",
       "eskiKokGocu": "{{ad}} açılmadı: eski veri klasöründeki kayıtlar yeni klasöre taşınamadı (dosya kilitli, disk dolu ya da anahtarı farklı olabilir). Boş veritabanı kurulmadı, eski dosya korunuyor; taşıma arka planda ve her açılışta yeniden deneniyor. Eski dosyayı SİLMEYİN: dosyayı açık tutan programı (virüs tarayıcı, yedekleme) kapatın, disk alanını denetleyin ve cihazı yeniden başlatın; sürerse teknik desteğe başvurun (eski dosyanın yeri günlükteki VERİ GÖÇÜ satırında).",
       "goc": "{{ad}} göç bekliyor: at-rest şifreleme göçü tamamlanmadı (dosya kilitli olabilir); dosya korunuyor, karantinaya alınmadı. Göç arka planda yeniden deneniyor; düzelmezse cihazı yeniden başlatın.",
       "hasta": "Hasta veritabanı",

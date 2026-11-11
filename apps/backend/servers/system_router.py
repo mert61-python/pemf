@@ -789,7 +789,13 @@ def _kurtarma_durumu():
             onay = None
     except Exception:
         logging.getLogger("system_router").debug("kurtarma durumu okunamadi", exc_info=True)
-    return at_rest, kod_dosyasi.exists(), onay, str(kod_dosyasi)
+    try:
+        kod_var = kod_dosyasi.exists()
+    # #22: bu Windows hesabı veri köküne erişemiyor — uç 500 yerine "kod yok / bilinmiyor" (bant çıkmaz)
+    except OSError:
+        logging.getLogger("system_router").warning("kurtarma kodu dosyasi denetlenemedi (erisim yok?)", exc_info=True)
+        kod_var = False
+    return at_rest, kod_var, onay, str(kod_dosyasi)
 
 
 @router.get("/api/system/recovery-status")

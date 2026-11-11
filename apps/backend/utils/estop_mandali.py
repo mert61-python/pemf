@@ -339,7 +339,19 @@ def kalicilik_kur(yol) -> dict:
     yol = Path(yol)
     _kalici_yol = yol
     kurulu, onceki_neden = False, ""
-    if yol.exists():
+    # #22 (T2Y, Y275): ikinci Windows hesabında veri kökü bu hesaba kapalıyken `exists()` İZİN hatası fırlatıyordu → kalıcılık
+    # hiç kurulmuyor, "okunamayan dosya → KURULU" kuralı (Y46) atlanıyor ve operatör hiçbir şey görmüyordu (yalnız günlük). Varlığı
+    # denetlenemeyen dosya OKUNAMAYAN dosyadır: mandal KURULU başlar, açılış yoklaması "denetlenemedi" der → ekran bildirimi (Y64).
+    try:
+        var = yol.exists()
+    except OSError:
+        _log.error(
+            "ACIL DURDUR mandal dosyasi DENETLENEMEDI (%s) -> mandal KURULU kabul edildi (guvenli taraf)",
+            yol,
+            exc_info=True,
+        )
+        var, kurulu, onceki_neden = False, True, "dosya_okunamadi"
+    if var:
         try:
             veri = json.loads(yol.read_text(encoding="utf-8"))
             kurulu = bool(veri.get("aktif"))

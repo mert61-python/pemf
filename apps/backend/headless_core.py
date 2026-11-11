@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import logging
+import os
 import queue
 import re
 import socket
@@ -186,9 +187,39 @@ def _tum_duty_sifir_mi(stm_msg: Any) -> bool:
     return all(d == 0.0 for d in struct.unpack_from(f"<{n}f", stm_msg, 2))
 
 
+def izin_hatasi_mi(exc: BaseException | None) -> bool:
+    """#22 (T2Y, Y275): istisna zincirinde (`__cause__` / `__context__`) İZİN hatası var mı. Windows'ta dosya KİLİDİ (paylaşım / kilit
+    ihlali, `winerror` 32 / 33: virüs tarayıcı, yedekleme) da `PermissionError`dır ama "erişim yok" DEĞİLDİR → sayılmaz. `open()` C
+    çalışma zamanından geçtiği için erişim reddinde `winerror` TAŞIMAZ (errno 13) — kilitten ayırt edilemez; kesin karar için
+    çağıran veri dizinini ayrıca yoklar (`veri_koku_erisilemez_mi`). Döngüye karşı en çok 16 halka."""
+    for _ in range(16):
+        if exc is None:
+            return False
+        if isinstance(exc, PermissionError) and getattr(exc, "winerror", None) not in (32, 33):
+            return True
+        exc = exc.__cause__ or exc.__context__
+    return False
+
+
+def veri_koku_erisilemez_mi(dizin) -> bool:
+    """#22: bu hesap veri dizinini LİSTELEYEMİYOR mu (izin reddi) — ikinci Windows hesabı, Y182 paylaşımı kurulmamış ya da oturum
+    yenilenmemiş. Dizin yok / başka G/Ç hatası → False (erişim yok DENMEZ)."""
+    try:
+        os.listdir(dizin)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def db_acilis_metni(tur: str, ad: str, hata: str = "", dil: str | None = None) -> str:
     """DB açılamama nedeninin operatör metni (yol / istisna AYRINTISI içermez — `/api/health` auth-muaf): `tur` = "goc" | "eskiKok" |
-    "acilamadi". Y200: "eskiKok" = eski kök göçü taşıyamadı / doğrulayamadı (boş DB kurulmadı) — eylem: eski dosyayı silme, kilidi kaldır."""
+    "erisimYok" | "acilamadi". Y200: "eskiKok" = eski kök göçü taşıyamadı / doğrulayamadı (boş DB kurulmadı) — eylem: eski dosyayı silme,
+    kilidi kaldır. #22: "erisimYok" = bu Windows hesabının veri köküne erişimi yok — eylem: başlatıcının paylaşım kartı (iki DB için AYNI
+    metin; sağlık nedeni onu bir kez söyler)."""
+    if tur == "erisimYok":
+        return ceviri.t("sistem.db.erisimYok", dil=dil)
     adi = (
         ceviri.t("sistem.db.hasta", dil=dil)
         if ad == "hasta"
@@ -514,6 +545,8 @@ class HeadlessCore:
 
             if isinstance(exc, EskiKokGocuBekliyorHatasi):
                 tur = "eskiKok"  # Y200: eski kök göçü bekliyor (boş DB kurulmadı)
+            elif izin_hatasi_mi(exc) and veri_koku_erisilemez_mi(self.app_data_dir):
+                tur = "erisimYok"  # #22: bu Windows hesabı veri köküne / sırlara erişemiyor (ikinci hesap)
             else:
                 tur = "goc" if isinstance(exc, GocBekliyorHatasi) else "acilamadi"
             sebep = db_acilis_metni(

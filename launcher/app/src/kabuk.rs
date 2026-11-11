@@ -564,18 +564,18 @@ fn ps_yukselterek_kos_kodlu(betik: &str) -> Result<i32, String> {
 }
 
 /// D3 T-g · Y182 (S-YLI.1): bu hesap makinedeki hasta verisine erişemiyor mu (başka hesabın) — arayüz paylaşım kartını gösterir.
-/// Dosya sistemi + hesap araması → ayrı iş parçacığı; görev çökerse boş nesne (kart gösterilmez — mevcut görünür arıza sürer).
+/// Dosya sistemi + hesap araması → ayrı iş parçacığı. #22 (Y275): görev çökerse BELİRSİZ yanıtı (kart "paylaşım gerekli olabilir"
+/// der) — eskiden boş nesne dönüyor ve kart hiç gösterilmiyordu.
 #[tauri::command]
 async fn paylasim_durumu() -> serde_json::Value {
-    tauri::async_runtime::spawn_blocking(paylasim_durumu_blocking).await.unwrap_or_else(|_| serde_json::json!({}))
+    tauri::async_runtime::spawn_blocking(paylasim_durumu_blocking)
+        .await
+        .unwrap_or_else(|_| pemf_launcher_core::paylasim::belirsiz_yaniti())
 }
 
 fn paylasim_durumu_blocking() -> serde_json::Value {
-    use pemf_launcher_core::paylasim::{durum_icin, Durum};
-    match durum_icin(|k| std::env::var(k).ok()) {
-        Durum::Gereksiz => serde_json::json!({ "gerekli": false }),
-        Durum::Gerekli { grup_var } => serde_json::json!({ "gerekli": true, "grup_var": grup_var }),
-    }
+    use pemf_launcher_core::paylasim::{arayuz_yaniti, durum_icin};
+    arayuz_yaniti(durum_icin(|k| std::env::var(k).ok()))
 }
 
 /// D3 T-g · Y182: paylaşılan grubu TEK SEFERLİK yönetici adımıyla (UAC) kur — yalnız kullanıcının düğmeye basmasıyla.

@@ -44,6 +44,10 @@ pub enum Durum {
     /// Hasta veri dizini VAR ama bu hesap ona erişemiyor (başka hesabın) → tek seferlik yönetici adımı önerilir.
     /// `grup_var`: grup zaten kurulu (paylaşım daha önce kurulduysa bu hesap oturumu yenilememiş olabilir).
     Gerekli { grup_var: bool },
+    /// #22 (T2Y, Y275): veri dizininin VARLIĞI ya da bu hesabın ERİŞİMİ belirlenemedi (üst dizin listelenemedi / izin dışı G/Ç
+    /// hatası). Eskiden üst dizin okunamayınca "veri yok" sayılıp paylaşım hiç önerilmiyordu — arayüz kartı artık "paylaşım gerekli
+    /// olabilir" metniyle ve aynı yönetici düğmesiyle gösterir.
+    Belirsiz,
 }
 
 /// Saf karar (testli).
@@ -64,17 +68,34 @@ where
 }
 
 /// Veri dizini VAR mı — üst dizinin LİSTESİNDEN (erişilemeyen dizinin kendi öznitelikleri okunamayabilir; o zaman "yok" sanılıp
-/// paylaşım hiç önerilmezdi).
+/// paylaşım hiç önerilmezdi). `None` = BELİRLENEMEDİ (#22): üst dizin var ama listelenemiyor (izin / G/Ç) — "yok" SAYILMAZ.
+pub fn veri_varligi(dir: &Path) -> Option<bool> {
+    let (Some(ust), Some(ad)) = (dir.parent(), dir.file_name()) else { return Some(false) };
+    match std::fs::read_dir(ust) {
+        Ok(it) => Some(it.flatten().any(|e| e.file_name().eq_ignore_ascii_case(ad))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(false),
+        Err(_) => None,
+    }
+}
+
+/// `veri_varligi` — belirlenemezse `false`.
 pub fn veri_var_mi(dir: &Path) -> bool {
-    let (Some(ust), Some(ad)) = (dir.parent(), dir.file_name()) else { return false };
-    std::fs::read_dir(ust)
-        .map(|it| it.flatten().any(|e| e.file_name().eq_ignore_ascii_case(ad)))
-        .unwrap_or(false)
+    veri_varligi(dir).unwrap_or(false)
 }
 
 /// Bu hesap veri dizinini LİSTELEYİP içine YAZABİLİYOR mu (yaz + sil sondası — backend'in açılışta yaptığının özü).
+/// `Some(false)`: listeleme İZİN hatası ya da yazılamıyor · `None` = BELİRLENEMEDİ (#22): izin dışı bir G/Ç hatası.
+pub fn erisim(dir: &Path) -> Option<bool> {
+    match std::fs::read_dir(dir) {
+        Ok(_) => Some(crate::install::dizin_yazilabilir_mi(dir)),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Some(false),
+        Err(_) => None,
+    }
+}
+
+/// `erisim` — belirlenemezse `false`.
 pub fn erisilebilir_mi(dir: &Path) -> bool {
-    std::fs::read_dir(dir).is_ok() && crate::install::dizin_yazilabilir_mi(dir)
+    erisim(dir) == Some(true)
 }
 
 /// Bu makinedeki durum (dosya sistemi + salt-okur hesap araması).
@@ -86,8 +107,29 @@ where
         return Durum::Gereksiz;
     }
     let Some(dir) = veri_dizini(&getenv) else { return Durum::Gereksiz };
-    let veri_var = veri_var_mi(&dir);
-    durum_karari(veri_var, veri_var && erisilebilir_mi(&dir), crate::install::grup_adindan_sid(GRUP_ADI).is_some())
+    match veri_varligi(&dir) {
+        None => Durum::Belirsiz,
+        Some(false) => Durum::Gereksiz,
+        Some(true) => match erisim(&dir) {
+            None => Durum::Belirsiz,
+            Some(erisilebilir) => durum_karari(true, erisilebilir, crate::install::grup_adindan_sid(GRUP_ADI).is_some()),
+        },
+    }
+}
+
+/// Arayüze (`paylasim_durumu` komutu) giden yanıt — `index.html` `paylasimKontrol` bu alanları okur. Komut görevi çökerse kabuk
+/// `belirsiz_yaniti`nı verir (#22: kart susmaz).
+pub fn arayuz_yaniti(d: Durum) -> serde_json::Value {
+    match d {
+        Durum::Gereksiz => serde_json::json!({ "gerekli": false }),
+        Durum::Gerekli { grup_var } => serde_json::json!({ "gerekli": true, "grup_var": grup_var }),
+        Durum::Belirsiz => serde_json::json!({ "belirsiz": true }),
+    }
+}
+
+/// Durum yoklanamadı (komut görevi çöktü) — arayüz "paylaşım gerekli olabilir" kartını gösterir.
+pub fn belirsiz_yaniti() -> serde_json::Value {
+    arayuz_yaniti(Durum::Belirsiz)
 }
 
 /// Hesap SID'i biçimi: yerel / etki alanı hesabı (`S-1-5-21-<a>-<b>-<c>-<RID>`, yalnız rakam + tire). İş / okul (Azure AD,
@@ -334,5 +376,89 @@ mod tests {
         std::fs::create_dir_all(&veri).unwrap();
         assert!(veri_var_mi(&veri));
         assert_eq!(durum_icin(ortam), Durum::Gereksiz, "erişilebilen veri dizini için yönetici istemi");
+    }
+
+    // ═══ #22 (T2Y, Y275) · ikinci Windows hesabı: GERÇEK ACL ile — bu hesabın kendi geçici dizininde, test sonunda geri alınır ═══
+
+    /// Geçici dizinde bu sürecin hesabına `(OI)(CI)` RET (oku + yaz) koyar; `Drop` reddi kaldırır (tempdir silinebilsin).
+    #[cfg(windows)]
+    struct Ret(PathBuf, String);
+    #[cfg(windows)]
+    impl Ret {
+        fn koy(dir: &Path) -> Ret {
+            let sid = format!("*{}", surec_hesabi_sid().expect("sürecin hesabı okunamadı"));
+            let c = std::process::Command::new("icacls")
+                .arg(dir)
+                .args(["/deny", &format!("{sid}:(OI)(CI)(RX,W)"), "/C", "/Q"])
+                .output()
+                .expect("icacls başlatılamadı");
+            assert!(c.status.success(), "ret konamadı: {}", String::from_utf8_lossy(&c.stderr));
+            Ret(dir.to_path_buf(), sid)
+        }
+    }
+    #[cfg(windows)]
+    impl Drop for Ret {
+        fn drop(&mut self) {
+            let _ = std::process::Command::new("icacls").arg(&self.0).args(["/remove:d", &self.1, "/C", "/Q"]).output();
+        }
+    }
+
+    #[cfg(windows)]
+    fn veri_koku() -> (tempfile::TempDir, String, PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let pd = d.path().to_string_lossy().into_owned();
+        let gui = d.path().join("PEMF_System").join("PEMF_GUI");
+        std::fs::create_dir_all(&gui).unwrap();
+        std::fs::write(gui.join("pemf_secrets.json"), b"{}").unwrap();
+        (d, pd, gui)
+    }
+
+    /// #22 ÖLÇÜLEN durum (Şükrü): veri dizini VAR, bu hesap onu listeleyemiyor + yazamıyor (GERÇEK ACL) → GEREKLİ ve arayüz yanıtı
+    /// `gerekli: true`. (Kartın çıkmamasının nedeni bu karar DEĞİL — arayüz kartı siliyordu; bkz. tests/test_IH_22_*.)
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_IH22_GERCEK_ACL_erisemeyen_hesapta_GEREKLI_ve_arayuz_yaniti() {
+        let (_d, pd, gui) = veri_koku();
+        let _ret = Ret::koy(&gui);
+        assert!(std::fs::read_dir(&gui).is_err(), "ret uygulanmadı — ölçüm geçersiz");
+        assert_eq!(erisim(&gui), Some(false), "izin hatası 'belirlenemedi' sayıldı");
+        let ortam = |k: &str| (k == "PROGRAMDATA").then(|| pd.clone());
+        let d = durum_icin(ortam);
+        assert!(matches!(d, Durum::Gerekli { .. }), "erişemeyen hesapta {d:?}");
+        assert_eq!(arayuz_yaniti(d)["gerekli"], serde_json::json!(true));
+    }
+
+    /// #22: üst dizin (`PEMF_System`) LİSTELENEMİYORSA veri "yok" SAYILMAZ (eskiden Gereksiz → kart hiç yok) → BELİRSİZ.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_IH22_GERCEK_ACL_ust_dizin_listelenemezse_BELIRSIZ_gereksiz_DEGIL() {
+        let (_d, pd, gui) = veri_koku();
+        let _ret = Ret::koy(gui.parent().unwrap());
+        assert_eq!(veri_varligi(&gui), None);
+        assert!(!veri_var_mi(&gui));
+        let ortam = |k: &str| (k == "PROGRAMDATA").then(|| pd.clone());
+        assert_eq!(durum_icin(ortam), Durum::Belirsiz);
+    }
+
+    /// #22: izin DIŞI hata (üst "dizin" aslında dosya) → belirlenemedi; üst dizin YOK → veri yok (ilk hesap, istem YOK).
+    #[test]
+    fn IH22_veri_varligi_ust_yoksa_YOK_ust_okunamazsa_BELIRLENEMEDI() {
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(veri_varligi(&d.path().join("yok").join("PEMF_GUI")), Some(false));
+        let dosya = d.path().join("PEMF_System");
+        std::fs::write(&dosya, b"x").unwrap();
+        assert_eq!(veri_varligi(&dosya.join("PEMF_GUI")), None, "okunamayan üst dizin 'veri yok' sayıldı");
+        assert_eq!(erisim(&dosya), None, "dizin olmayan yol 'erişilebilir / erişilemez' diye karara bağlandı");
+        std::fs::create_dir(d.path().join("PEMF_GUI")).unwrap();
+        assert_eq!(erisim(&d.path().join("PEMF_GUI")), Some(true));
+    }
+
+    /// #22: arayüz yanıtı — üç durum ayrı; görev çöküşü BELİRSİZ (eskiden `{}` → kart yok).
+    #[test]
+    fn KRITIK_IH22_arayuz_yaniti_uc_durum_ve_COKUS_belirsiz() {
+        assert_eq!(arayuz_yaniti(Durum::Gereksiz), serde_json::json!({ "gerekli": false }));
+        assert_eq!(arayuz_yaniti(Durum::Gerekli { grup_var: true }), serde_json::json!({ "gerekli": true, "grup_var": true }));
+        assert_eq!(arayuz_yaniti(Durum::Belirsiz), serde_json::json!({ "belirsiz": true }));
+        assert_eq!(belirsiz_yaniti(), serde_json::json!({ "belirsiz": true }));
     }
 }

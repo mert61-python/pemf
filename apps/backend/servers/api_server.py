@@ -3300,7 +3300,8 @@ def _db_acilis_hatasi() -> str:
             from headless_core import db_acilis_metni
 
             s = db_acilis_metni(a[0], k, a[1])
-        parcalar.append(s)
+        if s not in parcalar:  # #22: "erişim yok" iki DB için AYNI cümle — bir kez söylenir
+            parcalar.append(s)
     return " ".join(parcalar)
 
 

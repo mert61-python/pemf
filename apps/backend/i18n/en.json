@@ -927,6 +927,7 @@
   "sistem": {
     "db": {
       "acilamadi": "{{ad}} could not be opened ({{hata}}). It is being retried in the background; if it persists, restart the device, and if it still persists, contact technical support.",
+      "erisimYok": "This Windows account has no access to the PEMF data — grant access with the sharing card in the launcher.",
       "eskiKokGocu": "{{ad}} was not opened: the records in the old data folder could not be moved to the new folder (the file may be locked, the disk may be full or its key may be different). No empty database was created and the old file is preserved; the move is being retried in the background and at every start. Do NOT delete the old file: close any program keeping it open (antivirus, backup), check the free disk space and restart the device; if it persists, contact technical support (the data migration line in the log shows where the old file is).",
       "goc": "{{ad}} is waiting for migration: the at-rest encryption migration was not completed (the file may be locked); the file is preserved and was not quarantined. The migration is being retried in the background; if it does not clear, restart the device.",
       "hasta": "Patient database",
