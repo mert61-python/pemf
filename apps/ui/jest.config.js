@@ -32,6 +32,8 @@ module.exports = {
   // eslint / jest / metro / jest.setup payda DIŞI) + eşik — CI `npm test -- --coverage` ile uygulanır. Eşikler ölçülenin
   // ~1 puan altı; yalnız YÜKSELTİLİR. KP-2 kapanış (2026-11-03) ölçülen: satır %89,01 · deyim %84,94 · dal %79,60 · fonksiyon %81,28.
   // KP-3 AŞAMA D (2026-11-08, uç 6c7d4f10) ölçülen: satır %98,27 (8 049 / 8 190) · deyim %96,40 · dal %88,78 · fonksiyon %93,52.
+  // KP-4 C (2026-11-11, B1 + B3 sonrası arayüz içeriği, 449 süit) ölçülen: satır %99,40 (8 293 / 8 343) · deyim %97,45 · dal %89,54 ·
+  // fonksiyon %95,81 → 98 / 96 / 88 / 94. Kalan satırlar ULAŞILAMAZ savunmalar + 1 ZAMAN (KAPSAM.md KP-4 · B1).
   collectCoverageFrom: [
     "src/**/*.{ts,tsx,js,jsx}",
     "app/**/*.{ts,tsx,js,jsx}",
@@ -43,6 +45,6 @@ module.exports = {
     "!**/node_modules/**",
   ],
   coverageThreshold: {
-    global: { lines: 97, statements: 95, branches: 87, functions: 92 },
+    global: { lines: 98, statements: 96, branches: 88, functions: 94 },
   },
 };
