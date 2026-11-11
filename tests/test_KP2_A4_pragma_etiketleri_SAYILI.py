@@ -32,12 +32,15 @@ ETIKETLI = re.compile(r"# pragma: no cover — (?P<etiket>[A-Z]+): (?P<neden>\S.
 #:     kolu test EDİLİR) · hybrid_recommender :735 `__main__` tanıtım girdisi protokol tablosuyla sözcük paylaşmaz (benzer listesi boş)
 #:   production_config_manager :34 göreli içe aktarma yedeği · :47 `pemf_gui` kök sys.path'te değilse — yalnız doğrudan betik koşumu
 #:   patient_database :1198 (KP-3) arama belirteci boş — boş terim yukarıda döner, `arama_katla` aynı kırpmayı yapar
+#:   kamera_kimligi :45 (KP-4 B3; KD-2) `_msmf_kameralar` (66 satır) gerçek Media Foundation aygıt sorgusu (ctypes COM) — sarmalayıcı
+#:     `msmf_kameralar` (Windows dışı / hata → []) test EDİLİR; aygıt listesinin kendisi yalnız tezgâhta gerçek kamerayla
 BEKLENEN = {
     "ai/hybrid_recommender.py": [("ULASILAMAZ", 2)],
     "apps/backend/database/patient_database.py": [("ULASILAMAZ", 1)],
     "apps/backend/servers/api_server.py": [("SAVUNMA", 2), ("SAVUNMA", 2)],
     "apps/backend/servers/history_router.py": [("SAVUNMA", 2)],
     "apps/backend/servers/sync_worker.py": [("SAVUNMA", 2), ("SAVUNMA", 2)],
+    "apps/backend/utils/kamera_kimligi.py": [("DONANIM", 66)],
     "apps/backend/utils/production_config_manager.py": [("ULASILAMAZ", 3), ("ULASILAMAZ", 5)],
     "apps/backend/utils/secrets_manager.py": [("PLATFORM", 8)],
 }

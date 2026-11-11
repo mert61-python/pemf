@@ -347,6 +347,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
                   setSonuc(null);
                 }}
                 accessibilityRole="button"
+                style={styles.silDugmesi}
                 testID={`kabin-kalibrasyonu-konum-sil-${i}`}
               >
                 <Text style={styles.baglanti}>{t("ai.kalibrasyon.konum.sil")}</Text>
@@ -730,5 +731,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   baglanti: { color: colors.primary, fontSize: typography.small, fontWeight: "700" },
+  // KP-4 B3: konum satırı "Sil" — asgari dokunma hedefi (dokunma hedefi kapısı; görünüm aynı metin bağlantısı)
+  silDugmesi: { minHeight: touch.min, justifyContent: "center", paddingHorizontal: spacing.xs },
   sonuc: { gap: spacing.xs },
 });

@@ -216,7 +216,7 @@ def _plaka_bul(und, sd):
 
     try:
         g = plate_grid.detect_plate_wells(und, 24, yolo=None)
-    except Exception as e:  # pragma: no cover — ızgara kendi hatasını `error`a yazar; beklenmeyen istisna günlüğe
+    except Exception as e:  # ızgara kendi hatasını `error`a yazar; beklenmeyen istisna günlüğe (KP-4 B3 testi)
         logger.warning("kalibrasyon: plaka ızgarası istisnası", exc_info=True)
         return None, type(e).__name__
     if not g.success or not g.wells_plate_mm:

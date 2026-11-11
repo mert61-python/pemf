@@ -42,7 +42,7 @@ def msmf_kameralar() -> list[dict]:
             return []
 
 
-def _msmf_kameralar() -> list[dict]:  # pragma: no cover — yalnız Windows + Media Foundation (tezgâhta doğrulanır)
+def _msmf_kameralar() -> list[dict]:  # pragma: no cover — DONANIM: gerçek Media Foundation sorgusu (tezgâhta)
     import ctypes
     import ctypes.wintypes as wt
     import uuid
