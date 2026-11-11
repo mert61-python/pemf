@@ -21,6 +21,8 @@
 //!   * Geniş gruplara (Users / Authenticated Users / Everyone) hak VERİLMEZ (Y96).
 //!
 //! Gerçek grup / ACL / UAC denemesi TEZGÂH-GÜNÜ'dür (D3 T-g); testler saf karar + betik metni + salt-okur arama yoludur.
+//! #22 (T2Y, 11-11 GERÇEK deneme): backend'in KORUMALI kilitlediği dosyalar (sırlar, kimlik DB'si) dizin izninin kalıtımını ALMAZ —
+//! betik dizindeki her öğeye ayrıca açık `Değiştir` verir.
 
 use std::path::{Path, PathBuf};
 
@@ -171,6 +173,9 @@ pub fn kurma_betigi(kullanici_sid: &str, aciklama: &str) -> Option<String> {
            catch {{ if ($_.FullyQualifiedErrorId -notlike 'MemberExists*') {{ throw }} }} }}; \
          & icacls.exe $gui /grant ('*' + $g.SID.Value + ':(OI)(CI)M') /T /C /Q | Out-Null; \
          if ($LASTEXITCODE -ne 0) {{ exit {izin} }}; \
+         if (@(Get-ChildItem -LiteralPath $gui -Force).Count -gt 0) {{ \
+           & icacls.exe (Join-Path $gui '*') /grant ('*' + $g.SID.Value + ':M') /T /C /Q | Out-Null; \
+           if ($LASTEXITCODE -ne 0) {{ exit {izin} }} }}; \
          exit {tamam}",
         veri_yok = KOD_VERI_YOK,
         bag = KOD_BAG_BULUNDU,
@@ -324,6 +329,21 @@ mod tests {
     fn T_g_aciklama_KACISLANIR() {
         let s = kurma_betigi(SID, "a'b\u{2019}c").unwrap();
         assert!(s.contains("-Description 'a''b\u{2019}\u{2019}c'"), "{s}");
+    }
+
+    /// #22 (T2Y, ÖLÇÜLDÜ 11-11 ikinci hesapta, paylaşım kurulduktan SONRA): backend sır / kimlik dosyalarını kalıtımı KAPATARAK kilitler
+    /// (`file_acl.lock_down_file` → `pemf_secrets.json`, `.pemf_key`, `auth_users.db`). Dizine `(OI)(CI)` izni + `/T` bu KORUMALI
+    /// dosyalara izin EKLEMEDİ (ACL ölçüldü: yalnız SYSTEM / Administrators / kuran hesap) → ikinci hesap sırları okuyamadı, DB'ler
+    /// açılmadı. Betik dizindeki her öğeye AYRICA açık `M` verir (joker + `/T`); hata → çıkış 3; bağ denetiminden SONRA.
+    #[test]
+    fn KRITIK_IH22_korumali_dosyalara_da_grup_izni_ACIKCA_verilir() {
+        let s = betik();
+        let dizin = s.find("icacls.exe $gui /grant ('*' + $g.SID.Value + ':(OI)(CI)M') /T").expect("dizin izni yok");
+        let oge = s.find("icacls.exe (Join-Path $gui '*') /grant ('*' + $g.SID.Value + ':M') /T /C /Q").expect("korumalı dosyalara açık izin yok");
+        assert!(dizin < oge, "öğe izni dizin izninden önce");
+        assert!(s[oge..].contains(&format!("if ($LASTEXITCODE -ne 0) {{ exit {KOD_IZIN_VERILEMEDI} }}")), "öğe izni hatası yutuluyor");
+        assert!(s.find(&format!("exit {KOD_BAG_BULUNDU}")).unwrap() < oge, "bağ denetimi öğe izninden SONRA");
+        assert!(s[..oge].contains("Get-ChildItem -LiteralPath $gui -Force"), "boş dizinde joker icacls hata verir — öğe varlığı denetlenmiyor");
     }
 
     /// #22 (T2Y, ÖLÇÜLDÜ 11-11 ikinci hesapta): `New-LocalGroup -Description` en çok 48 karakter — 67 karakterlik katalog metniyle
