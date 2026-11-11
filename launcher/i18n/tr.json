@@ -194,7 +194,7 @@
       "sha256Gecersiz": "'{{key}}' kaydının sha256 değeri geçersiz (64 hex bekleniyor, gelen: {{got}})"
     },
     "paylasim": {
-      "grupAciklamasi": "PEMF Vet: bu bilgisayarda hasta verisini paylaşan Windows hesapları"
+      "grupAciklamasi": "PEMF: hasta verisini paylaşan Windows hesapları"
     },
     "pencere": {
       "guncelleniyor": "PEMF Vet — güncelleniyor"

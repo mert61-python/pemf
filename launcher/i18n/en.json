@@ -194,7 +194,7 @@
       "sha256Gecersiz": "The sha256 value of record '{{key}}' is invalid (64 hex expected, got: {{got}})"
     },
     "paylasim": {
-      "grupAciklamasi": "PEMF Vet: Windows accounts that share patient data on this computer"
+      "grupAciklamasi": "PEMF: Windows accounts sharing patient data"
     },
     "pencere": {
       "guncelleniyor": "PEMF Vet — updating"

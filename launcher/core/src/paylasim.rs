@@ -36,6 +36,10 @@ pub const KOD_VERI_YOK: i32 = 5;
 /// `ERROR_CANCELLED` — kullanıcı UAC istemini reddetti (çağıran yükseltme sarmalayıcısı verir).
 pub const KOD_UAC_REDDEDILDI: i32 = 1223;
 
+/// #22 (T2Y, ÖLÇÜLDÜ 11-11): `New-LocalGroup -Description` en çok 48 karakter kabul eder — aşan metinde PowerShell parametre doğrulaması
+/// betiği çıkış 1'e düşürür (paylaşım hiç kurulmaz). Katalog metni sınırın altında tutulur; betik ayrıca kırpar.
+pub const ACIKLAMA_AZAMI: usize = 48;
+
 /// Paylaşım durumu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Durum {
@@ -145,7 +149,8 @@ pub fn kurma_betigi(kullanici_sid: &str, aciklama: &str) -> Option<String> {
         return None;
     }
     let ad = crate::firewall::ps_kacis(GRUP_ADI);
-    let aciklama = crate::firewall::ps_kacis(aciklama);
+    let kisa: String = aciklama.chars().take(ACIKLAMA_AZAMI).collect(); // #22: New-LocalGroup -Description <= 48 karakter
+    let aciklama = crate::firewall::ps_kacis(&kisa);
     Some(format!(
         "$ErrorActionPreference='Stop'; \
          $kok = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PEMF_System'; \
@@ -319,6 +324,25 @@ mod tests {
     fn T_g_aciklama_KACISLANIR() {
         let s = kurma_betigi(SID, "a'b\u{2019}c").unwrap();
         assert!(s.contains("-Description 'a''b\u{2019}\u{2019}c'"), "{s}");
+    }
+
+    /// #22 (T2Y, ÖLÇÜLDÜ 11-11 ikinci hesapta): `New-LocalGroup -Description` en çok 48 karakter — 67 karakterlik katalog metniyle
+    /// betik `ParameterBindingValidationException` ile çıkış 1'e düşüyor, paylaşım HİÇ kurulamıyordu ("Paylaşım kurulamadı (kod 1)").
+    /// Her dilin katalog metni sınırın altında VE betik uzun metni kırpar (gelecekteki çeviri sınırı aşsa da adım düşmez).
+    #[test]
+    fn KRITIK_IH22_grup_aciklamasi_48_karakteri_ASMAZ_katalog_ve_betik() {
+        use crate::dil::{katalog, Dil};
+        for d in [Dil::Tr, Dil::En] {
+            let m = katalog(d).get("rust.paylasim.grupAciklamasi").expect("katalogda yok");
+            assert!(m.chars().count() <= ACIKLAMA_AZAMI, "{d:?} grup açıklaması {} karakter: {m}", m.chars().count());
+        }
+        let uzun = format!("{}'{}", "ş".repeat(40), "x".repeat(40));
+        let s = kurma_betigi(SID, &uzun).unwrap();
+        let bas = s.find("-Description '").expect("açıklama yok") + "-Description '".len();
+        let son = bas + s[bas..].find("' }").expect("açıklama sonu yok");
+        let gercek = s[bas..son].replace("''", "'");
+        assert_eq!(gercek.chars().count(), ACIKLAMA_AZAMI, "betikteki açıklama kırpılmadı: {gercek}");
+        assert!(uzun.starts_with(&gercek));
     }
 
     /// T-g: her çıkış kodu eyleme dönük bir iletiye gider; iletiler iki dilde katalogda.
