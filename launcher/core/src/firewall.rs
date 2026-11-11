@@ -50,6 +50,58 @@ pub const KURAL_KESIF: &str = "PEMF UDP Discovery (Launcher)";
 pub const ESKI_KURAL_API: &str = "PEMF Backend API";
 pub const ESKI_KURAL_KESIF: &str = "PEMF UDP Discovery";
 
+/// SAHİP 12 Kasım 2026 (A · #22): PEMF'in KENDİ broker'ı (`<backend dizini>\_internal\bin\mosquitto\mosquitto.exe`) için program
+/// kapsamlı gelen izin (Windows'un kendi "İzin ver"inin aynısı) — standart hesapta Windows bunu onaylatamayıp Block yazıyordu.
+pub const KURAL_BROKER: &str = "PEMF MQTT Broker (Launcher)";
+
+/// SAHİP 12 Kasım 2026 (A · #22, Y209 · S-D5.13'ün yerine): `$p` (bu kurulumun backend'i) ve PEMF'in KENDİ broker'ı için Windows'un
+/// ETKİN, GELEN Block kurallarını KALDIRIR (bizim adlı kurallarımız hariç; başka programa, devre dışı Block'a, Allow'a DOKUNMAZ); broker
+/// diskteyse ve izni yoksa program kapsamlı izin kurar. ÇIKMAZ; kurulamayan broker izni `$kurulamadi`yı artırır. Kaldırılamayan Block
+/// (grup ilkesi / yetki) çağıranın `$engel` denetiminde kalır → kod 4 ("kaldırın").
+fn engel_kaldir_ve_broker_izni() -> String {
+    format!(
+        "$mq = [IO.Path]::Combine([IO.Path]::GetDirectoryName($p), '_internal\\bin\\mosquitto\\mosquitto.exe'); \
+         foreach ($pp in @($p, $mq)) {{ \
+           foreach ($x in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $pp) }})) {{ \
+             foreach ($rr in @($x | Get-NetFirewallRule -ErrorAction SilentlyContinue)) {{ \
+               if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True' -and $rr.Action -eq 'Block' -and \
+                   @('{api}', '{kesif}', '{eski_api}', '{eski_kesif}', '{broker}') -notcontains $rr.DisplayName) {{ \
+                 try {{ $rr | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ }} }} }} }} }}; \
+         if ([IO.File]::Exists($mq)) {{ \
+           $mqIzin = 0; \
+           foreach ($x in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object {{ $_.Program -and ($_.Program -ieq $mq) }})) {{ \
+             foreach ($rr in @($x | Get-NetFirewallRule -ErrorAction SilentlyContinue)) {{ \
+               if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True' -and $rr.Action -eq 'Allow') {{ $mqIzin++ }} }} }}; \
+           if ($mqIzin -eq 0) {{ try {{ New-NetFirewallRule -DisplayName '{broker}' -Direction Inbound -Program $mq -Action Allow \
+             -Protocol TCP -Profile Any -ErrorAction Stop | Out-Null }} catch {{ $kurulamadi++ }} }} }}; ",
+        api = KURAL_API,
+        kesif = KURAL_KESIF,
+        eski_api = ESKI_KURAL_API,
+        eski_kesif = ESKI_KURAL_KESIF,
+        broker = KURAL_BROKER,
+    )
+}
+
+/// #22 (sahip 12 Kasım: "kullanıcı etkileşimini azalt"): paylaşım yönetici adımının (`paylasim::kurma_betigi`) güvenlik duvarı
+/// ÖN-İZİN parçası — `$p` (hesabın backend'i) verilince adlı izinleri (API + keşif) kurar, Windows Block'unu kaldırır, broker iznini
+/// kurar. ÇIKMAZ (paylaşımın sonucu bozulmaz); her adım en iyi çaba.
+pub fn on_izin_parcasi(api_port: u16) -> String {
+    format!(
+        "{islevler}$kurulamadi = 0; \
+         foreach ($k in @(@('{api}', 'TCP', {tcp}), @('{kesif}', 'UDP', {udp}))) {{ \
+           $uyan = @(Get-NetFirewallRule -DisplayName $k[0] -ErrorAction SilentlyContinue | Where-Object {{ $_ -and (PemfKuralUyar $_ $k[1] $k[2]) }}).Count; \
+           if ($uyan -eq 0) {{ try {{ New-NetFirewallRule -DisplayName $k[0] -Direction Inbound -Program $p -Action Allow \
+             -Protocol $k[1] -LocalPort $k[2] -Profile Any -ErrorAction Stop | Out-Null }} catch {{ }} }} }}; \
+         {engel}",
+        islevler = ICERIK_ISLEVLERI,
+        api = KURAL_API,
+        kesif = KURAL_KESIF,
+        tcp = api_port,
+        udp = DISCOVERY_PORT,
+        engel = engel_kaldir_ve_broker_izni(),
+    )
+}
+
 /// Adlı kural İÇERİKLE doğrulanır (D5 I-1 · S-4BI.5; `setup_services.ps1` İG-9.5 / 4B-3.5 ölçütü): aynı adlı ama devre dışı /
 /// Block / giden / yanlış protokol / yanlış port / dar profil / BAŞKA programın kuralı "var" SAYILMAZ. `$p` boşsa (exe
 /// bilinmiyor) program denetlenmez. `PemfKuralBizim`: kural BU backend exe'sinin mi — başka programın aynı adlı kuralı (eski
@@ -128,7 +180,7 @@ pub fn ekleme_betigi(backend_exe: &Path, api_port: u16) -> String {
          if ($kurulamadi -eq 0) {{ foreach ($eski in @('{eski_api}', '{eski_kesif}')) {{ \
            foreach ($r in @(Get-NetFirewallRule -DisplayName $eski -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ \
              if (PemfKuralBizim $r) {{ try {{ $r | Remove-NetFirewallRule -ErrorAction Stop }} catch {{ $silinemedi++ }} }} }} }} }}; \
-         $engel = 0; \
+         {engel_kaldir}$engel = 0; \
          try {{ foreach ($x in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | \
                   Where-Object {{ $_.Program -and ($_.Program -ieq $p) }})) {{ \
                   foreach ($rr in @($x | Get-NetFirewallRule -ErrorAction SilentlyContinue)) {{ \
@@ -139,6 +191,7 @@ pub fn ekleme_betigi(backend_exe: &Path, api_port: u16) -> String {
         p = p, islevler = ICERIK_ISLEVLERI, api = KURAL_API, kesif = KURAL_KESIF, tcp = api_port, udp = DISCOVERY_PORT,
         eski_api = ESKI_KURAL_API, eski_kesif = ESKI_KURAL_KESIF,
         kod_kur = KOD_KURAL_KURULAMADI, kod_sil = KOD_BOZUK_KURAL_SILINEMEDI, kod_tamam = KOD_TAMAM, kod_engel = KOD_WINDOWS_ENGEL_KURALI,
+        engel_kaldir = engel_kaldir_ve_broker_izni(),
     )
 }
 
@@ -189,10 +242,14 @@ pub fn ekleme_hata_anahtari(kod: i32) -> Option<&'static str> {
 /// backend'ine LAN'dan (mobil / web, ACİL DURDUR dahil) erişim SESSİZCE kapanıyordu (servis yolu kuralı yeniden denetlemez).
 pub fn silme_betigi(backend_exe: &Path) -> String {
     format!(
-        "$ErrorActionPreference='SilentlyContinue'; $p='{p}'; {islevler}{yetim}\
+        "$ErrorActionPreference='SilentlyContinue'; $p='{p}'; {islevler}{yetim}{broker_islevi}\
          foreach ($ad in @('{api}','{kesif}','{eski_api}','{eski_kesif}')) {{ \
            foreach ($r in @(Get-NetFirewallRule -DisplayName $ad -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ \
-             if ((PemfKuralBizim $r) -or (PemfKuralYetim $r)) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }} }}",
+             if ((PemfKuralBizim $r) -or (PemfKuralYetim $r)) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }} }}; \
+         foreach ($r in @(Get-NetFirewallRule -DisplayName '{broker}' -ErrorAction SilentlyContinue | Where-Object {{ $_ }})) {{ \
+           if ((PemfBrokerBizim $r) -or (PemfKuralYetim $r)) {{ $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue }} }}",
+        broker = KURAL_BROKER,
+        broker_islevi = BROKER_ISLEVI,
         p = ps_kacis(&backend_exe.to_string_lossy()),
         islevler = ICERIK_ISLEVLERI,
         yetim = YETIM_ISLEVI,
@@ -202,6 +259,10 @@ pub fn silme_betigi(backend_exe: &Path) -> String {
         eski_kesif = ESKI_KURAL_KESIF,
     )
 }
+
+/// SAHİP 12 Kasım 2026 (A · #22): adla bulunan broker kuralı BU kurulumun broker'ına mı ait (`$p` = backend → `<dizin>\_internal\bin\
+/// mosquitto\mosquitto.exe`). Kaldırma YALNIZ kendi adlı kuralımızı siler; Windows'un kendi kurallarına dokunmaz.
+const BROKER_ISLEVI: &str = r##"function PemfBrokerBizim($r) { $af = $r | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue; $mq = [IO.Path]::Combine([IO.Path]::GetDirectoryName($p), '_internal\bin\mosquitto\mosquitto.exe'); [bool]($p -and $af -and "$($af.Program)" -ieq $mq) }; "##;
 
 /// SON-A1.53: adlı kuralın programı (ortam değişkenleri açılarak) diskte YOKSA yetimdir — hiçbir kurulum onu kullanamaz.
 /// Programsız (`Any`) ya da okunamayan kural yetim SAYILMAZ (kimin olduğu bilinmiyor → dokunulmaz).
@@ -971,18 +1032,22 @@ mod tests {
             assert!(r["j_dogru_ariza_dugmesi"].olay.is_empty(), "doğru kural varken yeniden kurulmaya çalışıldı");
         }
 
-        /// Y209 · S-D5.13 (sahip) · SON-A1.51: Windows'un KENDİ Block kuralı (kullanıcı ilk dinlemede "İptal" demiş) varken "İzin ver"
-        /// betiği 'tamam' (0) DEMEZ — Block, Allow'dan önce gelir; eskiden betik 0 dönüyor, uyarı kapanıyor, LAN'dan (mobil / web, ACİL
-        /// DURDUR dahil) erişim kapalı kalıyordu. Kural SİLİNMEZ (kullanıcının / Windows'un kararı) → kod 4 ("kaldırın" iletisi). Devre
-        /// dışı Block ve Windows'un Allow kuralı engel SAYILMAZ; hiçbirine dokunulmaz.
+        /// Y209 · S-D5.13 → SAHİP 12 Kasım 2026 (istem 46 · #22, ikinci Windows hesabında ölçüldü): standart hesap Windows'un "erişime
+        /// izin ver" penceresini yönetici olmadan onaylayamaz → Windows backend için KENDİ Block kurallarını yazar; Block, Allow'dan önce
+        /// gelir ve "İzin ver"in kurduğu kurallar engeli açmıyordu (eskiden kod 4 + "kaldırın"; ileti de ekranda ezilip kayboluyordu).
+        /// Sahip (A): "İzin ver (yönetici)" YALNIZ PEMF'in KENDİ backend'ine ait etkin, gelen Block kurallarını KALDIRIR ve izinleri kurar
+        /// → kod 0. Kaldırılamayan Block (grup ilkesi / yetki) → kod 4 ("kaldırın" iletisi). Devre dışı Block ve Windows'un Allow kuralına
+        /// DOKUNULMAZ; başka programın Block kuralına DOKUNULMAZ.
         #[test]
-        fn KRITIK_Y209_windows_block_kurali_varken_izin_ver_TAMAM_demez_kural_SILINMEZ_kod_4() {
+        fn KRITIK_Y209_SAHIP_12_11_windows_block_KALDIRILIR_izin_KURULUR_baska_programa_DOKUNULMAZ() {
             let wb_tcp = win("TCP", "Any", "Block");
             let wb_udp = win("UDP", "Any", "Block");
+            let baska = Kural { ad: "baska.exe", program: r"C:\Baska\baska.exe".to_string(), ..win("TCP", "Any", "Block") };
             let r = golge_kos(&[
-                ("w_block_iki", vec![wb_tcp.clone(), wb_udp.clone()], ekle_betik(COCUK), 1),
+                ("w_block_iki", vec![wb_tcp.clone(), wb_udp.clone(), baska.clone()], ekle_betik(COCUK), 1),
                 ("w_block_tcp", vec![wb_tcp.clone()], ekle_betik(COCUK), 1),
                 ("w_block_adli_dogru", vec![wb_tcp.clone(), wb_udp.clone(), api(COCUK), kesif()], ekle_betik(COCUK), 1),
+                ("w_block_silinemez", vec![Kural { silinemez: true, ..wb_tcp.clone() }], ekle_betik(COCUK), 1),
                 // KARŞIT — engel değil
                 ("w_block_devre_disi", vec![Kural { etkin: "False", ..wb_tcp.clone() }], ekle_betik(COCUK), 1),
                 ("w_allow", vec![win("TCP", "Any", "Allow")], ekle_betik(COCUK), 1),
@@ -990,18 +1055,66 @@ mod tests {
             temiz(&r);
             for ad in ["w_block_iki", "w_block_tcp", "w_block_adli_dogru"] {
                 let x = &r[ad];
-                assert_eq!(
-                    x.kod, KOD_WINDOWS_ENGEL_KURALI,
-                    "{ad}: Windows'un Block kuralı varken betik {} ile bitti — 0 ise arayüz uyarıyı KAPATIR ama LAN engeli sürer; tablo: {:?}",
-                    x.kod, x.tablo
-                );
-                assert!(!x.olay.iter().any(|o| o.starts_with("REMOVE")), "{ad}: Windows'un Block kuralı SİLİNDİ (sahip: silinmez): {:?}", x.olay);
-                assert!(x.tablo.iter().any(|t| t.contains("/Block/")), "{ad}: Block kuralı tablodan kalktı: {:?}", x.tablo);
+                assert_eq!(x.kod, KOD_TAMAM, "{ad}: Windows'un Block kuralı kaldırılıp izin kurulmadı (kod {}); tablo: {:?}", x.kod, x.tablo);
+                assert!(x.olay.iter().any(|o| o.starts_with("REMOVE|pemf_backend.exe|")), "{ad}: Windows'un Block kuralı KALDIRILMADI: {:?}", x.olay);
+                assert!(!x.tablo.iter().any(|t| t.contains("/Block/") && t.ends_with(EXE)), "{ad}: backend Block kuralı kaldı: {:?}", x.tablo);
+                assert!(x.tablo.contains(&satir(&api(COCUK))) && x.tablo.contains(&satir(&kesif())), "{ad}: izin kuralları yok: {:?}", x.tablo);
             }
+            assert!(r["w_block_iki"].tablo.contains(&satir(&baska)), "başka programın Block kuralına DOKUNULDU");
+            let s = &r["w_block_silinemez"];
+            assert_eq!(s.kod, KOD_WINDOWS_ENGEL_KURALI, "kaldırılamayan Windows Block kuralında betik {} ile bitti (engel sürüyor)", s.kod);
+            assert!(s.tablo.iter().any(|t| t.contains("/Block/")), "silinemez Block tablodan kalktı: {:?}", s.tablo);
             for ad in ["w_block_devre_disi", "w_allow"] {
                 assert_eq!(r[ad].kod, KOD_TAMAM, "{ad}: engel olmayan Windows kuralında betik {} ile bitti (yanlış alarm)", r[ad].kod);
                 assert!(!r[ad].olay.iter().any(|o| o.starts_with("REMOVE")), "{ad}: Windows'un kuralına dokunuldu: {:?}", r[ad].olay);
             }
+        }
+
+        /// SAHİP 12 Kasım 2026 (A, #22): PEMF'in KENDİ broker'ı (`<backend dizini>\_internal\bin\mosquitto\mosquitto.exe`) için Windows'un
+        /// Block kuralı da kaldırılır ve program kapsamlı izin kurulur (Windows'un kendi "İzin ver"i gibi); başka mosquitto'ya dokunulmaz.
+        #[test]
+        fn KRITIK_IH22_PEMF_mosquitto_block_KALDIRILIR_broker_izni_KURULUR() {
+            let d = tempfile::tempdir().unwrap();
+            let exe = d.path().join("runtime").join("PEMF_Backend").join("PEMF_Backend.exe");
+            let mq = exe.parent().unwrap().join("_internal").join("bin").join("mosquitto").join("mosquitto.exe");
+            std::fs::create_dir_all(mq.parent().unwrap()).unwrap();
+            std::fs::write(&exe, b"x").unwrap();
+            std::fs::write(&mq, b"x").unwrap();
+            let mqs = mq.to_string_lossy().into_owned();
+            let mq_block = Kural { ad: "mosquitto.exe", program: mqs.clone(), ..win("TCP", "Any", "Block") };
+            let baska_mq = Kural { ad: "mosquitto.exe", program: r"C:\Baska\mosquitto.exe".to_string(), ..win("TCP", "Any", "Block") };
+            let r = golge_kos(&[("m", vec![mq_block, baska_mq.clone()], ekleme_betigi(&exe, COCUK), 1)]);
+            temiz(&r);
+            let x = &r["m"];
+            assert_eq!(x.kod, KOD_TAMAM, "{:?}", x.olay);
+            assert!(x.olay.iter().any(|o| o == &format!("REMOVE|mosquitto.exe|{mqs}")), "PEMF mosquitto Block kuralı kaldırılmadı: {:?}", x.olay);
+            assert!(
+                x.olay.iter().any(|o| o.starts_with(&format!("NEW|{KURAL_BROKER}|Inbound|{mqs}|Allow|TCP|"))),
+                "broker izni kurulmadı: {:?}",
+                x.olay
+            );
+            assert!(x.tablo.contains(&satir(&baska_mq)), "başka mosquitto'nun kuralına DOKUNULDU");
+            // Kaldırma temizliği broker kuralını da siler (bu kurulumun broker'ı).
+            let k = Kural { ad: KURAL_BROKER, program: mqs.clone(), proto: "TCP", port: "Any".to_string(), ..api(0) };
+            let r2 = golge_kos(&[("s", vec![k, baska_mq.clone()], silme_betigi(&exe), 1)]);
+            assert!(r2["s"].olay.iter().any(|o| o == &format!("REMOVE|{KURAL_BROKER}|{mqs}")), "kaldırmada broker kuralı kalmış: {:?}", r2["s"].olay);
+            assert!(r2["s"].tablo.contains(&satir(&baska_mq)));
+        }
+
+        /// #22 (sahip 12 Kasım: "kullanıcı etkileşimini azalt"): paylaşım adımının ön-izin PARÇASI (ÇIKMAZ — paylaşım sonucunu bozmaz) —
+        /// `$p` verilince Windows Block'u kaldırır, adlı izinleri (API + keşif) kurar.
+        #[test]
+        fn KRITIK_IH22_on_izin_parcasi_CIKMAZ_engeli_kaldirir_izinleri_kurar() {
+            let betik = format!("$p = '{}'; {} 'ON-IZIN-BITTI'", ps_kacis(EXE), on_izin_parcasi(COCUK));
+            let r = golge_kos(&[
+                ("o", vec![win("TCP", "Any", "Block")], betik.clone(), 1),
+                ("o_ariza", vec![], betik, 1),
+            ]);
+            let x = &r["o"];
+            assert!(x.cikti.contains("ON-IZIN-BITTI"), "parça betiği SONLANDIRDI: {}", x.cikti);
+            assert!(x.olay.iter().any(|o| o.starts_with("REMOVE|pemf_backend.exe|")), "{:?}", x.olay);
+            assert!(x.tablo.contains(&satir(&api(COCUK))) && x.tablo.contains(&satir(&kesif())), "{:?}", x.tablo);
+            assert!(!on_izin_parcasi(COCUK).contains("exit"), "ön-izin parçası çıkış yapıyor");
         }
 
         /// D5 J-3 · ÜRETİM BİÇİMİ: aynı kollar betik KENDİ `powershell` sürecinde koşarken — çağıranın okuduğu şey sürecin çıkış kodudur.

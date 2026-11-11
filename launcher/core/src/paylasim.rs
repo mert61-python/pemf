@@ -41,6 +41,8 @@ pub const KOD_UAC_REDDEDILDI: i32 = 1223;
 /// #22 (T2Y, ÖLÇÜLDÜ 11-11): `New-LocalGroup -Description` en çok 48 karakter kabul eder — aşan metinde PowerShell parametre doğrulaması
 /// betiği çıkış 1'e düşürür (paylaşım hiç kurulmaz). Katalog metni sınırın altında tutulur; betik ayrıca kırpar.
 pub const ACIKLAMA_AZAMI: usize = 48;
+/// #22 (sahip 12 Kasım): hesabın profil kökü SİSTEMDEN (SID ile) okunur — yükseltilmiş betiğe kullanıcı etkili yol girmez.
+pub const PROFIL_LISTESI: &str = r"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\";
 
 /// Paylaşım durumu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,7 +178,13 @@ pub fn kurma_betigi(kullanici_sid: &str, aciklama: &str) -> Option<String> {
          if (@(Get-ChildItem -LiteralPath $gui -Force).Count -gt 0) {{ \
            & icacls.exe (Join-Path $gui '*') /grant ('*' + $g.SID.Value + ':M') /T /C /Q | Out-Null; \
            if ($LASTEXITCODE -ne 0) {{ exit {izin} }} }}; \
+         try {{ $prof = [string](Get-ItemProperty -LiteralPath ('{pl}' + '{kullanici_sid}') -ErrorAction Stop).ProfileImagePath; \
+           if ($prof) {{ $p = [IO.Path]::Combine([Environment]::ExpandEnvironmentVariables($prof), \
+             'AppData\\Local\\PEMF Vet Client\\runtime\\PEMF_Backend\\PEMF_Backend.exe'); \
+             {on_izin} }} }} catch {{ }}; \
          exit {tamam}",
+        pl = PROFIL_LISTESI,
+        on_izin = crate::firewall::on_izin_parcasi(crate::install::DEFAULT_PORT),
         veri_yok = KOD_VERI_YOK,
         bag = KOD_BAG_BULUNDU,
         izin = KOD_IZIN_VERILEMEDI,
@@ -268,7 +276,24 @@ mod tests {
         let s = betik();
         assert!(s.contains("[Environment]::GetFolderPath('CommonApplicationData')"), "kök betikte çözülmüyor: {s}");
         assert!(!s.to_ascii_lowercase().contains("$env:"), "betik ortam değişkeni okuyor (kullanıcı etkili)");
-        assert!(!s.contains(":\\"), "betiğe mutlak yol girdi");
+        // #22: tek SABİT mutlak yol — kayıt defteri ProfileList anahtarı (hesabın profil kökü SİSTEMDEN, SID ile okunur).
+        assert!(!s.replace(PROFIL_LISTESI, "").contains(":\\"), "betiğe mutlak yol girdi");
+    }
+
+    /// #22 (sahip 12 Kasım: "kullanıcı etkileşimini azaltmak için direkt izinli yapamaz mıyız"): paylaşım yönetici adımı AYNI UAC ile o
+    /// hesabın PEMF backend'i + broker'ı için güvenlik duvarı iznini ÖNCEDEN kurar (Windows o hesapta hiç sormaz; "İzin ver" gerekmez).
+    /// Yol kullanıcının ortamından DEĞİL — SID'den, kayıt defteri ProfileList'inden; parça en iyi çaba (`try`), paylaşım sonucunu bozmaz;
+    /// veri izni ve bağ denetiminden SONRA, son `exit 0`dan ÖNCE.
+    #[test]
+    fn KRITIK_IH22_paylasim_guvenlik_duvarini_ON_IZINLER_yol_SID_den() {
+        let s = betik();
+        let pl = s.find(&format!("'{PROFIL_LISTESI}' + '{SID}'")).expect("profil kökü SID'den okunmuyor");
+        assert!(s[pl..].contains("AppData\\Local\\PEMF Vet Client\\runtime\\PEMF_Backend\\PEMF_Backend.exe"), "backend yolu");
+        let parca = crate::firewall::on_izin_parcasi(crate::install::DEFAULT_PORT);
+        let p = s.find(&parca).expect("ön-izin parçası betikte yok");
+        assert!(s[..pl].rfind("try {").is_some() && s[p + parca.len()..].trim_start().starts_with("}"), "parça try içinde değil");
+        assert!(s.find("icacls.exe (Join-Path $gui '*')").unwrap() < pl, "ön-izin veri izninden ÖNCE");
+        assert!(s.rfind(&format!("exit {KOD_TAMAM}")).unwrap() > p, "ön-izin son çıkıştan SONRA");
     }
 
     /// T-g: grup yoksa kurulur; bu hesap + veriyi kuran hesap (dizin SAHİBİ) üye olur; veri dizinine (`PEMF_GUI`) grubun `Değiştir` hakkı

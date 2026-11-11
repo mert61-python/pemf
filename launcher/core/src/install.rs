@@ -2523,7 +2523,12 @@ mod tests {
         if cozulmus_veri_dizini(yalniz_pd(&pds)).is_some() {
             beklenen.push(ENV_DATA_DIR);
         }
-        // Y96 (LN L8): paylaşılan yerel grup — sahte ortamda tanımsız (L11), eklenmez.
+        // Y96 (LN L8): paylaşılan yerel grup — sahte ortamda değişken tanımsız (L11). #22 (2026-11-12): değişken yokken grup ADLA
+        // bulunur — makinede Y182 grubu GERÇEKTEN kuruluysa (paylaşım yapılmış klinik / geliştirici makinesi) eklenir; ortama bağlı
+        // sahte kırmızı yok.
+        if paylasilan_grup_sid(yalniz_pd(&pds)).is_some() {
+            beklenen.push(ENV_DATA_GROUP_SID);
+        }
         assert_eq!(
             anahtarlar,
             beklenen
@@ -2702,7 +2707,10 @@ mod tests {
         assert!(!yerel_grup_karari(2, "KLINIK-PC", "KLINIK-PC"), "SidTypeGroup (makine 'None') yerel grup sayıldı");
         assert!(!yerel_grup_karari(4, "SIRKET", "KLINIK-PC"), "etki alanı grubu yerel sayıldı");
         assert!(!yerel_grup_karari(4, "", ""));
-        assert_eq!(paylasilan_grup_sid(|_| None), None);
+        // #22 (2026-11-12): bu makinede Y182 grubu GERÇEKTEN kurulu olabilir — değişken yokken sonuç ADLA bulunan geçerli yerel grup,
+        // yoksa None (ortama bağlı sahte kırmızı yok; ad yolu `KRITIK_T_g_paylasilan_grup_ortam_YOKKEN_ADIYLA_bulunur`ta saf ölçülür).
+        let adla = grup_adindan_sid(crate::paylasim::GRUP_ADI).filter(|s| ozel_grup_sid_bicimi_mi(s) && bu_makinenin_yerel_grubu_mu(s));
+        assert_eq!(paylasilan_grup_sid(|_| None), adla);
         assert_eq!(paylasilan_grup_sid(|k| (k == ENV_DATA_GROUP_SID).then(|| "S-1-5-32-545".to_string())), None);
         // Biçim tutar ama bu makinede YOK (RID 4294967295 kullanılmaz) → çözülemez → reddedilir (gerçek LookupAccountSid yolu).
         let yok = |k: &str| (k == ENV_DATA_GROUP_SID).then(|| "S-1-5-21-1-2-3-4294967295".to_string());
