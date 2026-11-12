@@ -78,6 +78,15 @@ PROFILLER: dict[str, tuple[str, ...]] = {
         # XAI Faz 2: termal Grad-CAM PT ikizi. (xai_ref_stats.npz'ler BİLEREK YOK:
         # modül dizinlerinde commit'li → app katmanıyla/EXE-gömülü giderler.)
         "ai_hub/cat_thermal/GhostNetV2.pt",
+        # Y282 · ODK (istem 45, 12 Kasım 2026): ODAK alan tablosu + KNN modelleri (CST'den türetilmiş) AÇIK DEPODA YOK — AI model
+        # katmanında. AI Pro önerisi / onayı bunlarla (vet: kedi · research: petri / fantom); yoksa ODAK `modelYok` der (sürmez).
+        # İki pakette de: profiller bağımsız kurulabilir; aynı yola aynı bayt açılır.
+        "ai_hub/odak/veri/alan_tablosu.npz",
+        "ai_hub/odak/veri/model_TUM_PETRI.onnx",
+        "ai_hub/odak/veri/model_KUYUCUK.onnx",
+        "ai_hub/odak/veri/model_FANTOM.onnx",
+        "ai_hub/odak/veri/model_KEDI_TV.onnx",
+        "ai_hub/odak/veri/model_KEDI_ORGAN.onnx",
     ),
     "research": (
         "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.onnx",
@@ -120,6 +129,15 @@ PROFILLER: dict[str, tuple[str, ...]] = {
         # `require_research` → yeri araştırma profili (ONNX çıkarımı app katmanında, açıklama araştırmayla). Yayınlanınca
         # bu ağırlığın da makine dışı ilk yedeği olur (restore_assets research.zip'ten geri getirir).
         "ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt",
+        # Y282 · ODK (istem 45, 12 Kasım 2026): ODAK alan tablosu + KNN modelleri (CST'den türetilmiş) AÇIK DEPODA YOK — AI model
+        # katmanında. AI Pro önerisi / onayı bunlarla (vet: kedi · research: petri / fantom); yoksa ODAK `modelYok` der (sürmez).
+        # İki pakette de: profiller bağımsız kurulabilir; aynı yola aynı bayt açılır.
+        "ai_hub/odak/veri/alan_tablosu.npz",
+        "ai_hub/odak/veri/model_TUM_PETRI.onnx",
+        "ai_hub/odak/veri/model_KUYUCUK.onnx",
+        "ai_hub/odak/veri/model_FANTOM.onnx",
+        "ai_hub/odak/veri/model_KEDI_TV.onnx",
+        "ai_hub/odak/veri/model_KEDI_ORGAN.onnx",
     ),
 }
 

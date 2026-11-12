@@ -35,7 +35,20 @@ _INSTALL_RS = _KOK / "launcher" / "core" / "src" / "install.rs"
 
 
 def _paket_haritasi() -> dict[str, str]:
-    """make_model_zip.py::PROFILLER + PARCALAR → {modül: profil} (TEK KAYNAK)."""
+    """make_model_zip.py::PROFILLER + PARCALAR → {modül: profil} (TEK KAYNAK). ORTAK modüller (birden çok profilde) DIŞARIDA — bkz.
+    `_ortak_moduller`."""
+    harita, ortak = _paket_tablosu()
+    return {m: p for m, p in harita.items() if m not in ortak}
+
+
+def _ortak_moduller() -> dict[str, set]:
+    """ODK6 (Y282, 13 Kasım 2026): birden çok profilin paketinde olan modül (ör. `odak`: vet kedi AI Pro + research petri / fantom) TEK
+    profile eşlenemez — eşlenirse yalnız diğer profili kuran makinede "Onar" yanlış profili de indirir. Launcher bilinmeyen modül
+    dizinini YOK SAYAR; profil, profile özgü modüllerden (em_kedi → vet, em_petri → research) çıkar."""
+    return _paket_tablosu()[1]
+
+
+def _paket_tablosu() -> tuple[dict[str, str], dict[str, set]]:
     # D5-L TUR 2 (lc6): İZLENEN derleme aracı — dosya yoksa atla (ZORUNLU kipte DÜŞ); VARKEN içe aktarılamıyorsa ürün hatasıdır,
     # ATLANMAZ. Eskiden `except Exception: pytest.skip` kırık aracı ZORUNLU kipte de sessizce atlıyordu (kapı kör).
     capraz.atla_yoksa("build_tools/make_model_zip.py", izlenen=True)
@@ -52,12 +65,14 @@ def _paket_haritasi() -> dict[str, str]:
     gruplar = list(getattr(mmz, "PROFILLER", {}).items())
     # `research-2` ayrı bir profil DEĞİL, research'ün parçasıdır.
     gruplar += [(ad.split("-")[0], yollar) for ad, yollar in getattr(mmz, "PARCALAR", {}).items()]
+    profiller: dict[str, set] = {}
     for profil, yollar in gruplar:
         for yol in yollar:
             parcalar = yol.split("/")
             if len(parcalar) >= 2 and parcalar[0] == "ai_hub":
                 harita.setdefault(parcalar[1], profil)
-    return harita
+                profiller.setdefault(parcalar[1], set()).add(profil)
+    return harita, {m: p for m, p in profiller.items() if len(p) > 1}
 
 
 def _rust_haritasi() -> dict[str, str]:
@@ -155,3 +170,15 @@ def test_install_rs_ast_benzeri_cipa_saglam():
     assert "dizin_adini_profile_cevir" in metin[j : j + 2000], (
         "infer_profiles_from_disk çeviriciyi çağırmıyor — düzeltme bağlanmamış"
     )
+
+
+def test_KRITIK_ORTAK_modul_Rust_tablosunda_YOK_ve_gercekten_ORTAK():
+    """ODK6: ortak modül (`odak`) Rust tablosuna EKLENMEZ (tek profile eşlemek "Onar"ı yanıltır); ortaklık gerçek (≥ 2 profil) ve
+    profile özgü bir modül yanlışlıkla ortak sayılmıyor (em_kedi yalnız vet)."""
+    ortak = _ortak_moduller()
+    rust = _rust_haritasi()
+    assert "odak" in ortak and ortak["odak"] == {"vet", "research"}, ortak
+    assert not (set(ortak) & set(rust)), (
+        f"ortak modül launcher tablosunda — tek profile eşlenemez: {set(ortak) & set(rust)}"
+    )
+    assert "em_kedi" not in ortak and "em_petri" not in ortak

@@ -34,11 +34,16 @@ MODEL_GORELI = "ai_hub/odak/veri"
 
 
 def model_katmani_yolu(ad: str) -> str:
-    """AI model katmanındaki ODAK dosyası (`alan_tablosu.npz` / `model_<KIP>.onnx`). Bulunamazsa FileNotFoundError (çağıran:
-    ODAK engeli `modelYok` — SÜRMEZ); özeti tutmazsa `ModelButunlukHatasi` (YÜKLENMEZ)."""
-    from utils.model_downloader import download_model_sync
+    """AI model katmanındaki ODAK dosyası (`alan_tablosu.npz` / `model_<KIP>.onnx`). Çözüm `yan_dosya_coz`: modül yanı (donmuş pakete
+    gömülü kopya varsa) → model kökleri (başlatıcı `install_root/ai_models` — vet / research paketleri; kaynaktan koşuda
+    `release_assets/ai_models`). Bulunamazsa FileNotFoundError (çağıran: ODAK engeli `modelYok` — SÜRMEZ); özeti tutmazsa
+    `ModelButunlukHatasi` (YÜKLENMEZ)."""
+    from utils.model_downloader import yan_dosya_coz
 
-    return download_model_sync(f"{MODEL_GORELI}/{ad}")
+    yol = yan_dosya_coz(os.path.join(VERI_DIZINI, ad), f"{MODEL_GORELI}/{ad}")
+    if not os.path.isfile(yol):
+        raise FileNotFoundError(f"ODAK model dosyası bulunamadı: {MODEL_GORELI}/{ad}")
+    return yol
 #: Veri kökü altındaki kalibrasyon (0. adım; düzlem kalibrasyonuyla AYNI klasör).
 KALIBRASYON_DIZINI = "kabin_kalibrasyonu"
 KALIBRASYON_DOSYASI = "alan_kalibrasyonu.json"

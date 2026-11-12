@@ -13,6 +13,10 @@ import os
 import subprocess
 
 import pytest
+from test_her_model_agirligi_bir_PAKETE_duser_D427 import (  # noqa: F401 — aparat (spec'in datas listesi)
+    _mmz,
+    spec_datas,
+)
 
 KOK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOSYALAR = ("alan_tablosu.npz",) + tuple(
@@ -109,3 +113,29 @@ def test_KRITIK_Y282_oneri_ONNX_yoksa_engel_modelYok(monkeypatch):
 def _ornek_kalibrasyon() -> dict:
     with open(os.path.join(KOK, "tests", "veri", "odak_kalibrasyon_ornek.json"), encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def test_KRITIK_Y282_SAHADA_model_PAKETLERINDE_ve_APP_katmanina_GOMULMEZ(spec_datas):
+    """Başlatıcı düzeninde `_internal/ai_models` HARİÇ (D4.27) → ODAK dosyaları vet + research MODEL PAKETLERİNDE olmalı (launcher
+    `install_root/ai_models`'a açar). Paketsiz kalırsa spec onları APP katmanına (`_internal/ai_hub/odak/veri`) gömer — 14e39763'te ölçüldü."""
+    mmz = _mmz()
+    for f in DOSYALAR:
+        rel = f"ai_hub/odak/veri/{f}"
+        assert rel in mmz.PROFILLER["vet"] and rel in mmz.PROFILLER["research"], f"{rel} model paketinde değil"
+    app = [d for s, d in spec_datas if os.path.basename(s) in DOSYALAR and d.replace(os.sep, "/").startswith("ai_hub")]
+    assert not app, f"ODAK ağırlığı APP katmanına gömülüyor: {app}"
+
+
+def test_KRITIK_Y282_yukleyici_MODUL_YANI_sonra_MODEL_KOKLERI(monkeypatch, tmp_path):
+    """Donmuş pakete modül yanına gömülü kopya varsa o (bütünlük denetimiyle), yoksa model kökleri — ikisi de yoksa FileNotFoundError."""
+    import shutil
+
+    from ai_hub.odak import alan
+
+    asil = alan.model_katmani_yolu("model_KEDI_TV.onnx")
+    assert os.path.normcase(os.path.dirname(asil)) != os.path.normcase(alan.VERI_DIZINI)
+    shutil.copyfile(asil, tmp_path / "model_KEDI_TV.onnx")
+    monkeypatch.setattr(alan, "VERI_DIZINI", str(tmp_path))
+    assert os.path.samefile(alan.model_katmani_yolu("model_KEDI_TV.onnx"), tmp_path / "model_KEDI_TV.onnx")
+    with pytest.raises(FileNotFoundError):
+        alan.model_katmani_yolu("model_YOK.onnx")
