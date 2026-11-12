@@ -16,6 +16,9 @@ import time
 from pathlib import Path
 
 import pytest
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 
 KOK = Path(__file__).resolve().parents[1]
 PENCERE = KOK / "apps" / "ui" / "src" / "components" / "domain" / "AiSpecApprovalModal.tsx"

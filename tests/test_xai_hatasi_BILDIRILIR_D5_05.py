@@ -20,6 +20,9 @@ import logging
 
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 
 # Aparat (gerçek uç + sahte hat): mevcut kapılardan — kopyalanmaz, aynı sahte model / ArUco yaması.
 from test_em_ongorucu_SONLU_OLMAYAN_girdi_PIKSEL_kipi_ve_TOPLAM_sure import (  # noqa: F401 — aparat
@@ -113,24 +116,18 @@ def test_KRITIK_em_petri_XAI_hatasi_yanitta_xai_error_ve_TAM_ZINCIR(petri_ucu_d1
     _zincirli_kayit(caplog, "em_petri XAI meta")
 
 
-def test_KRITIK_propose_XAI_hatasi_meta_da_xai_error_ve_TAM_ZINCIR(propose_env, monkeypatch, caplog):
+def test_KRITIK_ODK5_propose_ODAK_onerisinde_XAI_CAGRILMAZ_xai_error_YOK(propose_env, monkeypatch):
+    """ODK5: AI Pro önerisi (kedi dahil) ODAK'tan — hoca XAI'si HİÇ çağrılmaz (dozu açıklamaz), bu yüzden "açıklama üretilemedi" uyarısı
+    da çıkmaz; öneri 200. (XAI hatasının yutulmaması AI Hub analiz uçlarında — yukarıdaki fantom / petri testleri.)"""
     import ai_hub.em_kedi.inference_em_kedi as iek
 
     _air, client = propose_env
     cagrildi: list = []
     monkeypatch.setattr(iek, "xai_hizli_sensitivity", _patlayan(cagrildi))
-    with caplog.at_level(logging.WARNING):
-        r = client.post("/api/ai/pro/propose", json={"organ_id": 3, "duration_minutes": 20})
-    assert r.status_code == 200, f"XAI hatası ÖNERİYİ düşürdü: {r.text[:200]}"
-    assert cagrildi, "aparat: sağlayıcının xai_sensitivity'si açıklama işlevine ulaşmadı — kapı vakumda"
-    body = r.json()
-    meta = body.get("meta") or {}
-    assert body.get("proposalId"), "öneri oluşmadı"
-    assert "xaiSensitivity" not in meta
-    assert meta.get("xai_error") == _beklenen_metin(), (
-        f"öneri meta'sında xai_error yok/yanlış: {meta.get('xai_error')!r}"
-    )
-    _zincirli_kayit(caplog, "AI Pro öneri XAI")
+    r = client.post("/api/ai/pro/propose", json={"organ_id": 3, "duration_minutes": 20})
+    assert r.status_code == 200, f"öneri düştü: {r.text[:200]}"
+    meta = r.json().get("meta") or {}
+    assert not cagrildi and "xaiSensitivity" not in meta and "xai_error" not in meta, meta
 
 
 @pytest.mark.parametrize("dil", ["tr", "en"])

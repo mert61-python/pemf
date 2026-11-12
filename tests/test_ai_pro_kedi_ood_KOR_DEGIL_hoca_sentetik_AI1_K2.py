@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 
 # Hocanın beklenen sonucu: synthetic_aruco_test/organlar.csv — organ: (kabin_x_cm, kabin_y_cm, kabin_z_cm, guvenilirlik)
 HOCA_SENTETIK = {

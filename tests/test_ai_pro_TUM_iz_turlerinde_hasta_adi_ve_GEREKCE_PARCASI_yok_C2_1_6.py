@@ -16,6 +16,9 @@ import re
 import time
 
 import pytest
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 
 AD = "Şükrü Çağlar Ğİz"
 GEREKCE = "Şükrü Çağlar Ğİz kilosu yüksek tırnakları uzun"

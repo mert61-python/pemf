@@ -113,11 +113,17 @@ class KediSaglayici:
         air._get_or_load_kedi()
         air._get_or_load_catorgan()
 
+    #: ODK (istem 45): mühürdeki ODAK ayarı (`odak_ayarla`) — varsa sürüş faz / duty'si ODAK'tan (Y142 kapalıyken kedi zaten SÜRÜLMEZ).
+    odak_ayari: dict | None = None
+
     def localize(self, frame_bgr, hedef_id: int) -> tuple:
         """cat_organ ile lokalize et (GPU servisi açıksa oraya devret, hata → CPU-yerel).
-        ⚠️ Gövde `_localize_organ`ın 2026-08-25'teki hâlidir; fallback deseni korunmuştur."""
+        ⚠️ Gövde `_localize_organ`ın 2026-08-25'teki hâlidir; fallback deseni korunmuştur.
+        ODK5: aynı karedeki organlardan ODAK kedi girdisi (gövde merkezi + yönü) `odak_kedi_girdisi()`nde (yoksa None). Veteriner META'SINA
+        GİRMEZ (panel sözleşmesi: kedi meta'sı yalnız `ood`)."""
         from servers import ai_router as air
 
+        air._kedi_organ_izi.organlar = None
         sonuc = None
         if air.ai_service_enabled():
             try:
@@ -127,7 +133,16 @@ class KediSaglayici:
         if sonuc is None:
             sonuc = air._localize_organ_cpu(frame_bgr, hedef_id)
         self._ood_isaretle(sonuc)
+        try:
+            self._odak_kedi = kedi_govde_geometrisi(getattr(air._kedi_organ_izi, "organlar", None))
+        except Exception:
+            air.logger.warning("ODAK kedi gövde geometrisi çıkarılamadı (öneri `kediGovdeYok` der)", exc_info=True)
+            self._odak_kedi = None
         return sonuc
+
+    def odak_kedi_girdisi(self) -> dict | None:
+        """ODK5: son lokalizasyonun gövde merkezi + yönü (`kedi_govde_geometrisi`); yoksa None → öneri `kediGovdeYok`."""
+        return getattr(self, "_odak_kedi", None)
 
     def _ood_isaretle(self, sonuc) -> None:
         """İG-5.22: hedef em_kedi'nin eğitim aralığı DIŞINDA mı? Eskiden kedi meta'sı hep boştu → `/propose` `ood` kedi
@@ -149,9 +164,13 @@ class KediSaglayici:
         self._meta = {"ood": ood}
 
     def predict(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int) -> tuple:
-        """em_kedi ile D/P/E üret (GPU → CPU fallback). Duty kırpması ZARFTA yapılır."""
+        """em_kedi ile D/P/E üret (GPU → CPU fallback). Duty kırpması ZARFTA yapılır.
+        ODK: mühürde ODAK ayarı varsa (`odak_ayarla`) faz / duty ODAK'tan — hoca modeli SÜRÜŞ KAYNAĞI OLMAZ. Bugün Y142 kapalıyken kedi
+        hiç sürülmez; bayrak açılırsa ODAK mühürlü seans ODAK ile sürer."""
         from servers import ai_router as air
 
+        if self.odak_ayari:
+            return _odak_predict(self, x_mm, y_mm, z_mm, hedef_id)
         if air.ai_service_enabled():
             try:
                 return air._predict_and_drive_gpu(x_mm, y_mm, z_mm, hedef_id)
@@ -241,9 +260,55 @@ ODAK_PETRI_KIPLERI = ("TUM_PETRI", "KUYUCUK")
 ODAK_VARSAYILAN_DOZ_KESRI = 0.8
 
 
-#: ODAK'ın SÜRÜŞ kaynağı olduğu modeller. ⚠️ Kedi (Y142 gereği sürüşü kapalı) bu committe eski öneri yolunda kalır: kedi öneri / onay
-#: hesabının ODAK'a geçişi (gövde konumu + organ yükseklikleri CST kedi modelinden) ayrı iş (`DENETIM\\ODAK.md` "kalan").
-ODAK_MODELLERI = ("petri", "fantom")
+#: ODAK'ın öneri / onay (ve mühürlü sürüş) kaynağı olduğu modeller. Kedi (ODK5): öneri + onay ekranı ODAK'tan (KEDI_TV tüm vücut /
+#: KEDI_ORGAN); kedi SÜRÜŞÜ Y142 gereği KAPALI kalır (onay / başlatma / sürüş katı ayrı kapılarla).
+ODAK_MODELLERI = ("petri", "fantom", "kedi")
+
+#: ODK5 · kedi gövde ekseni organlardan: kranial grup (kalp, sağ / sol akciğer, karaciğer) ortalaması → kaudal grup (mesane, bağırsak)
+#: ortalaması. Organ kimlikleri `ai_router._ORGAN_ADLARI` ile aynı. Güven eşiği kedi hattıyla aynı (0,3).
+KEDI_KRANIAL = (7, 9, 10, 3)
+KEDI_KAUDAL = (4, 6)
+KEDI_GUVEN_ESIGI = 0.3
+#: Kranial–kaudal yatay uzaklık bunun altındaysa yön belirsiz (aynı bölgedeki organlar) → geometri YOK.
+KEDI_EKSEN_EN_AZ_MM = 40.0
+
+
+def kedi_govde_geometrisi(organlar) -> dict | None:
+    """cat_organ organ sözlüğü ({kimlik: {coord_cabin_cm | coord_3d_cm, reliability}}) → ODAK kedi girdisi
+    {"merkez_P": [X, Y, Z] backend mm, "theta": rad (ölçüm çerçevesi; `oneri.kip_girdisi` boy ekseni (−sin θ, cos θ)), "organ_sayisi"}.
+    Kranial VE kaudal grupta güvenilir (≥ eşik, sonlu, kabin içi) organ yoksa ya da eksen < 40 mm → None (öneri `kediGovdeYok` der)."""
+    if not isinstance(organlar, dict) or not organlar:
+        return None
+    import numpy as np
+
+    from ai_hub.odak.alan import backend_to_olcum
+
+    def _nokta(kimlik):
+        o = organlar.get(kimlik) or organlar.get(str(kimlik))
+        if not isinstance(o, dict) or float(o.get("reliability") or 0.0) < KEDI_GUVEN_ESIGI:
+            return None
+        c = o.get("coord_cabin_cm") or o.get("coord_3d_cm")
+        try:
+            P = [float(v) * 10.0 for v in c[:3]]
+        except (TypeError, ValueError, IndexError):
+            return None
+        if len(P) != 3 or hedef_kabin_disi_nedeni(*P):
+            return None
+        return P
+
+    on = [p for p in (_nokta(k) for k in KEDI_KRANIAL) if p is not None]
+    arka = [p for p in (_nokta(k) for k in KEDI_KAUDAL) if p is not None]
+    if not on or not arka:
+        return None
+    on_b, arka_b = np.mean(on, axis=0), np.mean(arka, axis=0)
+    a = backend_to_olcum(arka_b) - backend_to_olcum(on_b)
+    if float(np.hypot(a[0], a[2])) < KEDI_EKSEN_EN_AZ_MM:
+        return None
+    return {
+        "merkez_P": [float(v) for v in (on_b + arka_b) / 2.0],
+        "theta": float(np.arctan2(-a[0], a[2])),
+        "organ_sayisi": len(on) + len(arka),
+    }
 
 
 def odak_destekli(saglayici) -> bool:
@@ -294,6 +359,15 @@ def odak_plani(saglayici, konum: dict, hedef_id: int, doz_mT, istenen_kip: str =
             "kuyular": meta.get("odak_adaylar") or [],
             "hedef_etiket": _etiket_eki(saglayici, konum.get("target_label")),
         }
+    elif kip in ("KEDI_TV", "KEDI_ORGAN"):
+        # ODK5: gövde merkezi + yönü AYNI lokalizasyonun organlarından; KEDI_TV hedefi = gövde (Tüm Vücut lokalizasyonu 0,0,0 döner).
+        geo = saglayici.odak_kedi_girdisi() if hasattr(saglayici, "odak_kedi_girdisi") else None
+        if not geo:
+            return _odak_engeli(kip, "kediGovdeYok", doz_mT)
+        hedef = (
+            geo["merkez_P"] if kip == "KEDI_TV" else [float(konum["x_mm"]), float(konum["y_mm"]), float(konum["z_mm"])]
+        )
+        girdi = {"hedef_P": hedef, "kedi": {"merkez_P": geo["merkez_P"], "theta": geo["theta"]}}
     else:
         girdi = {"hedef_P": [float(konum["x_mm"]), float(konum["y_mm"]), float(konum["z_mm"])]}
     if doz_mT is None:
@@ -304,6 +378,19 @@ def odak_plani(saglayici, konum: dict, hedef_id: int, doz_mT, istenen_kip: str =
     return odak_oneri.oner(kip, A, float(doz_mT), **girdi)
 
 
+def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: int) -> tuple:
+    """Döngü sürüşü (mühürlü ODAK ayarıyla): AYNI dozla yeniden hesap; plan ENGELLİ → SIFIR (bobin sürülmez)."""
+    ayar = saglayici.odak_ayari
+    konum = {"x_mm": x_mm, "y_mm": y_mm, "z_mm": z_mm, "target_label": ayar.get("hedef_etiket")}
+    plan = odak_plani(saglayici, konum, hedef_id, ayar["doz_mT"], ayar.get("kip", ""))
+    if plan.get("engel"):
+        from servers import ai_router as air
+
+        air.logger.warning("%s ODAK planı ENGELLİ (%s) → sürülmez", saglayici.ad, plan.get("engel"))
+        return [0.0] * 7, [0.0] * 7, 0.0
+    return [float(d) for d in plan["duty"]], [float(p) for p in plan["faz"]], 0.0
+
+
 def odak_engel_metni(plan: dict) -> str:
     """Engel kodu → eylem söyleyen metin (istek dili). Sayılar 2 basamak."""
     ek = {k: (f"{float(v):.2f}" if isinstance(v, float) else v) for k, v in (plan.get("engel_ek") or {}).items()}
@@ -312,7 +399,7 @@ def odak_engel_metni(plan: dict) -> str:
 
 def odak_ayarla(saglayici, odak, hedef_etiket: str = "") -> None:
     """Seans: MÜHÜRDEKİ ODAK ayarı (doz, kip, hedef etiketi) → döngünün `predict`i kullanır; None = temizle (durdurma).
-    Kedi sağlayıcısında yok sayılır (kedi sürüşü Y142 gereği kapalı)."""
+    Kedi (ODK5): ayar tutulur; Y142 kapalıyken kedi seansı zaten BAŞLATILMAZ / SÜRÜLMEZ."""
     if not hasattr(saglayici, "odak_ayari"):
         return
     if not odak or odak.get("doz_mT") is None:
@@ -994,17 +1081,9 @@ class _EmCvSaglayici:
         """ODAK (istem 45) → (duty[7], faz[7], 0.0). Faz / duty MÜHÜRDEKİ doz + kiple ODAK modelinden (`odak_plani`; seans
         başlangıcında `odak_ayarla`). Hoca modeli (`cache["predictor"]`) SÜRÜŞ KAYNAĞI OLMAZ. Ayar YOK ya da plan ENGELLİ
         (fizik denetimi / kalibrasyon) → SIFIR (bobin sürülmez — `_predict_and_drive` sıfırı "doz yok" sayar)."""
-        ayar = self.odak_ayari
-        if not ayar:
+        if not self.odak_ayari:
             return [0.0] * 7, [0.0] * 7, 0.0
-        konum = {"x_mm": x_mm, "y_mm": y_mm, "z_mm": z_mm, "target_label": ayar.get("hedef_etiket")}
-        plan = odak_plani(self, konum, hedef_id, ayar["doz_mT"], ayar.get("kip", ""))
-        if plan.get("engel"):
-            from servers import ai_router as air
-
-            air.logger.warning("%s ODAK planı ENGELLİ (%s) → sürülmez", self.ad, plan.get("engel"))
-            return [0.0] * 7, [0.0] * 7, 0.0
-        return [float(d) for d in plan["duty"]], [float(p) for p in plan["faz"]], 0.0
+        return _odak_predict(self, x_mm, y_mm, z_mm, hedef_id)
 
     def xai_sensitivity(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int):
         """Onay ekranı için hafif duyarlılık — dozun FİİLEN kullandığı baz noktasıyla (karar #9)."""

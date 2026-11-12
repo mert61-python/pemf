@@ -391,6 +391,7 @@
           "kalibrasyonBozuk": "Alan kalibrasyonu okunamadı ya da bozuk — sürülmedi. Kalibrasyonu yeniden kaydedin (tezgâh ölçümü).",
           "kalibrasyonEski": "Alan kalibrasyonu eski sürümde — sürülmedi. Tezgâh ölçümünü bu sürümle yineleyin.",
           "kalibrasyonYok": "Alan kalibrasyonu yok (tezgâh ölçümü) — sürülmedi. Bobin alanı MLX ile ölçülüp kalibrasyon kaydedilmeden bu sürüş yapılamaz.",
+          "kediGovdeYok": "Kedinin gövde yönü kameradan çıkarılamadı (göğüs organlarından en az biri ve mesane / bağırsaktan biri görünmeli) — sürülmedi. Kediyi kamerada tam görünecek şekilde yerleştirip yeniden hesaplayın.",
           "kuyuYok": "Seçilen kuyu ({{hedef}}) plaka ızgarasında yok — sürülmedi. Kuyuyu kare üstünde yeniden seçin.",
           "modelEski": "ODAK modeli bu kabin kalibrasyonuyla eğitilmemiş — sürülmedi. Uygulamayı güncelleyin ya da alan ölçümünü (tezgâh) modelle aynı sürüme getirin.",
           "modelYok": "ODAK model dosyaları (alan tablosu / model) bu bilgisayarda bulunamadı — sürülmedi. Uygulamanın AI model paketini kurun ya da güncelleyin (başlatıcı → Güncellemeler).",

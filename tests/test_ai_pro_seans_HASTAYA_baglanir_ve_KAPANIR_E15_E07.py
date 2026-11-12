@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 
 U1 = "boncuk-kimlik-e15-01"
 U2 = "baska-kimlik-e15-02"

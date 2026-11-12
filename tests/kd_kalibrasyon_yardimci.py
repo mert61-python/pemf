@@ -29,7 +29,10 @@ def _odak_plani_tahminciden(saglayici, konum, hedef_id, doz_mT, istenen_kip=""):
 
     x, y, z = konum["x_mm"], konum["y_mm"], konum["z_mm"]
     pd = air._predict_and_drive
-    if not (
+    if getattr(saglayici, "ad", "") == "kedi":
+        # ODK5: kedi önerisi de ODAK'tan — eski kedi testlerinin doz kanıtı yönlendiricinin (sahte ya da gerçek) `_predict_and_drive`'ı.
+        D, P, _ = air._predict_and_drive(x, y, z, hedef_id)
+    elif not (
         getattr(pd, "__module__", "") == "servers.ai_router" and getattr(pd, "__qualname__", "") == "_predict_and_drive"
     ):
         D, P, _ = air._predict_and_drive(x, y, z, hedef_id)

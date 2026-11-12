@@ -391,6 +391,7 @@
           "kalibrasyonBozuk": "The field calibration could not be read or is damaged — not driven. Save the calibration again (bench measurement).",
           "kalibrasyonEski": "The field calibration is from an old version — not driven. Repeat the bench measurement with this version.",
           "kalibrasyonYok": "No field calibration (bench measurement) — not driven. This drive needs the coil field measured with the MLX and the calibration saved.",
+          "kediGovdeYok": "The cat's body orientation could not be determined from the camera (at least one chest organ and the bladder or intestine must be visible) — not driven. Position the cat fully in view and recalculate.",
           "kuyuYok": "The selected well ({{hedef}}) is not in the plate grid — not driven. Select the well again on the frame.",
           "modelEski": "The ODAK model was not trained with this cabin calibration — not driven. Update the application or bring the field measurement (bench) to the model's version.",
           "modelYok": "ODAK model files (field table / model) were not found on this computer — not driven. Install or update the app's AI model package (launcher → Updates).",

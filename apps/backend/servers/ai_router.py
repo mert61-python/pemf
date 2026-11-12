@@ -829,6 +829,11 @@ def _hat_dokumu(poz_turu, pnp_hata_px, ayna_uyarisi, anatomik, pnp_olcek_px_cm=N
     }
 
 
+#: ODK (istem 45) · kedi ODAK: son `_extract_organ_target` çağrısının organ sözlüğü — AYNI iş parçacığında `KediSaglayici.localize`
+#: okur (gövde merkezi + yönü organlardan, `ai_pro_hedef.kedi_govde_geometrisi`). İş parçacığı yerel: eşzamanlı lokalizasyonlar karışmaz.
+_kedi_organ_izi = _ai_threading.local()
+
+
 def _extract_organ_target(organs_by_id, organ_id, overlay, hat=None):
     """cat_organ sonucundan (CPU dict VEYA GPU-JSON'dan kurulmuş dict) seçili organ hedefini çıkar.
     organs_by_id: {id: {coord_cabin_cm|coord_3d_cm, reliability}}. organ_id 0 (Tüm Vücut) → max-reliability
@@ -844,6 +849,7 @@ def _extract_organ_target(organs_by_id, organ_id, overlay, hat=None):
     döndürmediyse karede kedi yoktur; organ döndürüp hedef seçilemiyorsa kedi vardır ama o organ
     (okluzyon/açı) görünmüyordur. İki durum farklı eylem gerektirir."""
     kedi_var = bool(organs_by_id)
+    _kedi_organ_izi.organlar = organs_by_id if isinstance(organs_by_id, dict) else {}
     if int(organ_id) == 0:
         # Tüm Vücut: EN AZ BİR organ güvenle lokalize değilse "bulunamadı" → coil SÜRÜLMEZ (max güven-geçidi;
         # eski zorla-1.0 baypası KALDIRILDI — okluzyonlu organlara rağmen gerçek kediyi reddetmez, çöpte sürmez).

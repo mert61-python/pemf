@@ -21,6 +21,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 
 KOK = Path(__file__).resolve().parents[1]
 
@@ -123,17 +126,19 @@ def propose_env(monkeypatch):
 _SENTINEL = [{"feature": "duty_sum", "etki": 0.15}]
 
 
-def test_KRITIK_propose_meta_xai_sensitivity_TASIR(propose_env, monkeypatch):
+def test_KRITIK_ODK5_kedi_ODAK_onerisinde_hoca_XAI_HESAPLANMAZ_TASINMAZ(propose_env, monkeypatch):
+    """ODK5 (istem 45): kedi önerisinin faz / duty'si artık ODAK'tan — hocanın em_kedi duyarlılığı o dozu AÇIKLAMAZ (sürüş / öneri
+    kaynağı değil; petri / fantomda ODK1'den beri aynı kural) → çağrılmaz, onay ekranına "dozu ne belirledi" diye gitmez."""
     air, client = propose_env
     import ai_hub.em_kedi.inference_em_kedi as iek
 
-    monkeypatch.setattr(iek, "xai_hizli_sensitivity", lambda *a, **k: _SENTINEL)
+    cagri: list = []
+    monkeypatch.setattr(iek, "xai_hizli_sensitivity", lambda *a, **k: cagri.append(1) or _SENTINEL)
     r = client.post("/api/ai/pro/propose", json={"organ_id": 3, "duration_minutes": 20})
     assert r.status_code == 200, r.text
     meta = r.json().get("meta") or {}
-    assert meta.get("xaiSensitivity") == _SENTINEL, (
-        "öneri meta'sı xaiSensitivity taşımıyor — hekim onay ekranı 'dozu ne belirledi' gösteremez"
-    )
+    assert "xaiSensitivity" not in meta and not cagri, "ODAK önerisinde hoca XAI'si hesaplandı / gösterildi"
+    assert "odak" in r.json()["specs"]
 
 
 def test_KARSIT_KANIT_xai_hatasi_ONERIYI_dusurmez(propose_env, monkeypatch):

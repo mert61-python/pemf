@@ -257,7 +257,7 @@ def test_KRITIK_odak_kipi_ve_etiket_eki():
         and hedef._etiket_eki(P, "B4") == "B4"
         and hedef._etiket_eki(P, None) == ""
     )
-    assert hedef.odak_destekli(P) and not hedef.odak_destekli(kedi)
+    assert hedef.odak_destekli(P) and hedef.odak_destekli(kedi)  # ODK5: kedi önerisi de ODAK'tan (sürüşü Y142 kapalı)
 
 
 def test_KRITIK_odak_engel_metni_SAYI_bicimi():

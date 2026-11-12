@@ -16,6 +16,9 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 
 TUNEL = {"cf-ray": "8a1b2c3d4e5f-IST", "cf-connecting-ip": "203.0.113.9"}
 LAN = ("192.168.1.85", 52135)

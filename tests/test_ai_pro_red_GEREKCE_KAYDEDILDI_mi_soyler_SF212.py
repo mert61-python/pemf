@@ -10,6 +10,9 @@ GERÇEK: `/api/ai/pro/propose` → `/reject`, TreatmentHistoryDB (sentetik, tmp)
 
 from __future__ import annotations
 
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODK5: kedi önerisi de ODAK'tan — sahte, eski doz kanıtına bağlar
+)
 from test_ai_pro_red_gerekcesi_KARAR_TABLOSUNDA_Y119 import _oner, o  # noqa: F401
 
 
