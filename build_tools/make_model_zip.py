@@ -82,6 +82,7 @@ PROFILLER: dict[str, tuple[str, ...]] = {
         # katmanında. AI Pro önerisi / onayı bunlarla (vet: kedi · research: petri / fantom); yoksa ODAK `modelYok` der (sürmez).
         # İki pakette de: profiller bağımsız kurulabilir; aynı yola aynı bayt açılır.
         "ai_hub/odak/veri/alan_tablosu.npz",
+        "ai_hub/odak/veri/e_tablosu.npz",
         "ai_hub/odak/veri/model_TUM_PETRI.onnx",
         "ai_hub/odak/veri/model_KUYUCUK.onnx",
         "ai_hub/odak/veri/model_FANTOM.onnx",
@@ -133,6 +134,7 @@ PROFILLER: dict[str, tuple[str, ...]] = {
         # katmanında. AI Pro önerisi / onayı bunlarla (vet: kedi · research: petri / fantom); yoksa ODAK `modelYok` der (sürmez).
         # İki pakette de: profiller bağımsız kurulabilir; aynı yola aynı bayt açılır.
         "ai_hub/odak/veri/alan_tablosu.npz",
+        "ai_hub/odak/veri/e_tablosu.npz",
         "ai_hub/odak/veri/model_TUM_PETRI.onnx",
         "ai_hub/odak/veri/model_KUYUCUK.onnx",
         "ai_hub/odak/veri/model_FANTOM.onnx",

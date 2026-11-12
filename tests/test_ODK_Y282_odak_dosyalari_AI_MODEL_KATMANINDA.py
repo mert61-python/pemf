@@ -19,7 +19,7 @@ from test_her_model_agirligi_bir_PAKETE_duser_D427 import (  # noqa: F401 — ap
 )
 
 KOK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOSYALAR = ("alan_tablosu.npz",) + tuple(
+DOSYALAR = ("alan_tablosu.npz", "e_tablosu.npz") + tuple(
     f"model_{k}.onnx" for k in ("TUM_PETRI", "KUYUCUK", "FANTOM", "KEDI_TV", "KEDI_ORGAN")
 )
 

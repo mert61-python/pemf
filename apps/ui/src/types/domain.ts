@@ -191,6 +191,8 @@ export interface EFieldLive {
   /** Modele verilen canlı girdiler — şeffaflık/teşhis için. B yalnız alanı ÖLÇÜLEN bobinlerden; `null` = ölçülmüyor. */
   achievedB_T: number | null;
   dutySum: number;
+  /** ODK6: "cst" = ODAK seansında sürülen planın CST E'si (tepe |E|, V/m; hesaplanan, E ölçülmedi); yoksa vekil model ("yaklaşık"). */
+  kaynak?: "cst" | "vekil";
   /** D1.76 · İG-5.83: E neden hesaplanmadı (yalnız-ek alanlar; eski backend göndermez). */
   egitimAraligiDisi?: boolean;
   bOlculmuyor?: boolean;

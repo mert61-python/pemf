@@ -13,6 +13,7 @@ Girdiler BACKEND kabin çerçevesindedir (X sol, Y yukarı, Z arka; mm); çeviri
 from __future__ import annotations
 
 import functools
+import logging
 import json
 import os
 
@@ -200,6 +201,7 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
         plan["sapma_yuzde"] = _yuvarla(100.0 * (beklenen / D - 1.0), 1)
         if abs(beklenen / D - 1.0) > DOZ_SAPMA_SINIRI:
             raise Engel("dozSapmasi", beklenen=plan["beklenen_mT"], istenen=plan["doz_mT"])
+        plan["e_hedef_Vm"], plan["e_cevre_Vm"] = _e_degerleri(A, T, C, sd)
         plan["duty"] = [round(float(v), 4) for v in np.abs(sd)]
         plan["faz"] = [round(float(v), 2) for v in faz]
     except Engel as e:
@@ -207,6 +209,18 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
         plan["duty"], plan["faz"] = [0.0] * N_BOBIN, [0.0] * N_BOBIN
     assert max(plan["duty"]) <= DUTY_AZAMI + 1e-9
     return plan
+
+
+def _e_degerleri(A: AlanModeli, T, C, sd) -> tuple:
+    """ODK6 · canlı E çubuğu / onay için CST E (tepe |E|, V/m): hedef noktaları ortalaması · çevre ortalaması (çevre yoksa None). YALNIZ
+    GÖSTERİM: E tablosu yok / bozuk / ızgara uyuşmuyor → (None, None), plan SÜRÜLÜR (doz denetimi B ile)."""
+    try:
+        e_h = float(A.td_e_tepe(A.e_alan(T), sd).mean())
+        e_c = float(A.td_e_tepe(A.e_alan(C), sd).mean()) if C is not None and len(C) else None
+    except Exception:
+        logging.getLogger(__name__).warning("ODAK: CST E hesaplanamadı (yalnız gösterim eksik; sürüş etkilenmez)", exc_info=True)
+        return None, None
+    return _yuvarla(e_h, 4), (None if e_c is None else _yuvarla(e_c, 4))
 
 
 def hedef_tavani(kip: str, A: AlanModeli, **girdi) -> dict:

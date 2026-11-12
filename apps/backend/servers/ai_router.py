@@ -1686,6 +1686,19 @@ def _ai_pro_plan_disi_bobinler(onay=None) -> set:
         return set(_ai_pro_plan_disi["bobinler"])
 
 
+def _canli_e_odak() -> None:
+    """ODK6 (istem 45): bu turda SÜRÜLEN ODAK planının CST E'si (hedef / çevre, tepe V/m) → canlı E çubuğu. Sağlayıcı ODAK değilse
+    (`son_odak_e` yok) dokunmaz → analiz bağlamının vekil yolu aynen. Hata sürüşü ETKİLEMEZ (yalnız gösterim)."""
+    try:
+        _odak_e = getattr(_aktif_saglayici(), "son_odak_e", None)
+        if _odak_e is not None:
+            from servers import efield_live as _ef_odak
+
+            _ef_odak.odak_guncelle(_odak_e)
+    except Exception:
+        logger.debug("ODAK canlı E yazılamadı (yalnız gösterim)", exc_info=True)
+
+
 def _drive_coils_ai_pro(D, P) -> list:
     """
     em_kedi çıktısı D[7]/P[7] ile bobin 1-7'yi PER-COIL sürer (paylaşımlı tek faz YOK) → GERÇEKTEN sürülen bobinler.
@@ -2228,6 +2241,8 @@ def _ai_pro_loop(dongu_muhru=None):
                     # reddeder.
                     with estop_mandali.surus_baglami(_nesil), estop_mandali.gozlem_baglami(kayip_damgasi):
                         _surulen = _drive_coils_ai_pro(D, P) or []
+                    if _surulen:
+                        _canli_e_odak()  # ODK6: canlı E = bu turda sürülen ODAK planının CST E'si
                     if not _dongu_gecerli():
                         logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
                         break
@@ -2523,6 +2538,8 @@ _ODAK_OZET_ALANLARI = (
     "tavan_mT",
     "cevre_mT",
     "oran",
+    "e_hedef_Vm",
+    "e_cevre_Vm",
     "pay_yuzde",
     "sapma_yuzde",
     "kuyular",
@@ -3585,6 +3602,8 @@ async def ai_pro_frame(
             _surdu = bool(_surulen) and not (
                 estop_mandali.baslatma_engeli(_muhur["nesil"]) or estop_mandali.gozlem_engeli(kayip_damgasi)
             )
+            if _surdu:
+                _canli_e_odak()  # ODK6: canlı E = bu karede sürülen ODAK planının CST E'si
             if _surdu:
                 remaining = max(0, int(_muhur["bitis_mono"] - time.monotonic()))
                 try:

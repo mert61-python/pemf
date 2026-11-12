@@ -224,6 +224,10 @@
       "bayt": 3879705,
       "sha256": "d67fb41812755ae75ba997666dd2948d9aeca60baae978e94654f43c9360af56"
     },
+    "ai_hub/odak/veri/e_tablosu.npz": {
+      "bayt": 3956929,
+      "sha256": "d2ce87eb68b953f5c399fcb1fdda54fc3705673f56381b39fc1fc4d378a6d1ca"
+    },
     "ai_hub/odak/veri/model_FANTOM.onnx": {
       "bayt": 2580608,
       "sha256": "924a3e5b65e4a1d36acd5046b9cf67c0e0e99e8b851f027ace87e2043af01b8e"

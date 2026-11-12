@@ -45,6 +45,28 @@ _ctx: dict | None = None
 # 15,6 ms çözünürlüklü (ölçüldü) → döngü çıkışıyla aynı tikte kurulan yeni bağlam "eski" sayılırdı.
 _ctx_nesli = 0
 
+# ODK6 (istem 45): ODAK seansında canlı E = sürülen planın CST E'si (tepe |E|, V/m; hedef / çevre) — vekil modelin ÖNÜNDE.
+# AI Pro döngüsü her sürüşten sonra yazar (`odak_guncelle`); seans başı / sonu ve bağlam temizliği siler.
+_odak_lock = threading.Lock()
+_odak: dict | None = None
+
+
+def odak_guncelle(deger: dict | None) -> None:
+    """ODK6: {"cancer": hedef E, "healthy": çevre E | None} (V/m, CST) ya da None (temizle)."""
+    global _odak
+    with _odak_lock:
+        _odak = (
+            None
+            if deger is None
+            else {"cancer": deger.get("cancer"), "healthy": deger.get("healthy"), "set_at": time.time()}
+        )
+
+
+def odak_degeri() -> dict | None:
+    with _odak_lock:
+        return dict(_odak) if _odak else None
+
+
 # Son hesaplanan canlı değer (snapshot bunu okur — ONNX istek yolunda çalışmaz).
 _live_lock = threading.Lock()
 _live: dict | None = None
@@ -65,6 +87,7 @@ def set_context(regions: list[dict], organ_id: int | None = None, model: str | N
         with _ctx_lock:
             _ctx = None
             _ctx_nesli += 1
+        odak_guncelle(None)
         _set_live(None)
         return
     _ad = (model or "").strip().lower() or None
@@ -112,6 +135,7 @@ def temizle_degismediyse(nesil: int) -> bool:
             return False
         _ctx = None
         _ctx_nesli += 1
+    odak_guncelle(None)
     _set_live(None)
     return True
 
@@ -123,6 +147,7 @@ def seans_basladi(tur: str = "", model: str | None = None) -> None:
     bağlam duruyordu → E barı BAŞKA hedefin (önceki analizin) E'sini "● canlı" gösteriyordu. Analiz ucu bağlamı modelsiz
     kurar → fantom vekili (bkz. `_predictor`), bu yüzden modelsiz bağlam "fantom" sayılır."""
     global _ctx_nesli
+    odak_guncelle(None)  # ODK6: önceki seansın ODAK E'si yeni seansa SIZMAZ (yeni döngü ilk sürüşte yazar)
     ctx = get_context()
     if ctx is None:
         return
@@ -205,6 +230,9 @@ def compute(coils: list[dict]) -> dict | None:
       * ölçülen B modelin eğitim aralığı dışındaysa (`egitimAraligiDisi`) — model orada anlamsız sayı üretir
         (ölçüldü: E(0 mT)/E(1 mT) = 5,5, monoton değil),
       * aralık okunamıyorsa (`egitimAraligiBilinmiyor`)."""
+    od = odak_degeri()
+    if od is not None:
+        return _odak_hesabi(od, coils)
     ctx = get_context()
     if not ctx:
         return None
@@ -265,6 +293,34 @@ def compute(coils: list[dict]) -> dict | None:
         sonuc["dutyEgitimAraligiDisi"] = True
         sonuc["dutyEgitimAraligi"] = [round(_d_aralik[0], 2), round(_d_aralik[1], 2)]
     return sonuc
+
+
+def _odak_hesabi(od: dict, coils: list[dict]) -> dict:
+    """ODK6: ODAK planının CST E'si — bobinler çalışmıyorsa SIFIR (alan üretilmiyor). B / Σduty şeffaflık için telemetriden (vekil
+    girdisi DEĞİL). `kaynak: "cst"` → arayüz "hesaplanan — CST + ölçülen B kalibrasyonu; E ölçülmedi" der."""
+    achieved_b, duty_sum, n = telemetry_inputs(coils)
+    if n == 0:
+        return {
+            "healthy": 0.0,
+            "cancer": 0.0,
+            "avg": 0.0,
+            "activeCoils": 0,
+            "achievedB_T": 0.0,
+            "dutySum": 0.0,
+            "kaynak": "cst",
+            "ts": time.time(),
+        }
+    degerler = [v for v in (od.get("cancer"), od.get("healthy")) if isinstance(v, (int, float))]
+    return {
+        "healthy": od.get("healthy"),
+        "cancer": od.get("cancer"),
+        "avg": (sum(degerler) / len(degerler)) if degerler else None,
+        "activeCoils": n,
+        "achievedB_T": achieved_b,
+        "dutySum": duty_sum,
+        "kaynak": "cst",
+        "ts": time.time(),
+    }
 
 
 _pred_lock = threading.Lock()
@@ -350,7 +406,7 @@ def start_loop(read_coils, is_session_active, yayinla=None) -> threading.Thread:
         yayinda = False
         while True:
             try:
-                if is_session_active() and get_context():
+                if is_session_active() and (get_context() or odak_degeri()):
                     deger = compute(read_coils())
                 else:
                     deger = None

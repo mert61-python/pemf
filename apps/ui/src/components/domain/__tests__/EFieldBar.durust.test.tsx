@@ -57,10 +57,28 @@ it("KARŞIT: hesaplanan E sayı olarak görünür, uyarı yok", () => {
   expect(u.queryByText(/eğitim aralığı dışında/i)).toBeNull();
 });
 
-it("KRİTİK ODK (istem 45): canlı E hâlâ eski vekil modelden → 'yaklaşık' olduğu ve dozun ODAK'tan okunacağı SÖYLENİR", () => {
+it("KRİTİK ODK (istem 45): analiz bağlamında (vekil model) → 'yaklaşık' olduğu ve dozun ODAK'tan okunacağı SÖYLENİR", () => {
   mockLive.snapshot = { eField: { ...temel, healthy: 0.02, cancer: 0.05, avg: 0.035, achievedB_T: 0.001 } };
   const u = render(<EFieldBar />);
   expect(u.getByTestId("efield-yaklasik").props.children).toBe(
-    "Yaklaşık değer — eski vekil modelden, ODAK'a henüz bağlanmadı. Doz için onay ekranındaki ODAK değerlerine bakın.",
+    "Yaklaşık değer — AI analizinin vekil modelinden (ODAK seansında E, CST benzetiminden hesaplanır). Doz için onay ekranındaki ODAK değerlerine bakın.",
   );
+  expect(u.queryByTestId("efield-cst")).toBeNull();
+});
+
+it("KRİTİK ODK6: ODAK seansında E CST'den → 'hesaplanan, E ölçülmedi' SÖYLENİR, 'yaklaşık' YOK", () => {
+  mockLive.snapshot = { eField: { ...temel, healthy: 0.012, cancer: 0.034, avg: 0.023, achievedB_T: 0.0008, kaynak: "cst" } };
+  const u = render(<EFieldBar />);
+  expect(u.getByTestId("efield-cst").props.children).toBe(
+    "Hesaplanan değer (tepe |E|, V/m) — CST benzetimi + ölçülen B kalibrasyonu; E doğrudan ölçülmedi.",
+  );
+  expect(u.queryByTestId("efield-yaklasik")).toBeNull();
+  expect(u.getByText("0.0340")).toBeTruthy();
+});
+
+it("KARŞIT ODK6: çevresi olmayan kipte (tüm vücut / tüm petri) sağlıklı satırı '—'", () => {
+  mockLive.snapshot = { eField: { ...temel, healthy: null, cancer: 0.034, avg: 0.034, achievedB_T: 0.0008, kaynak: "cst" } };
+  const u = render(<EFieldBar />);
+  expect(u.getAllByText("—")).toHaveLength(1);
+  expect(u.queryByText("0.0000")).toBeNull();
 });

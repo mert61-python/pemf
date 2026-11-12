@@ -22,6 +22,7 @@
     "baslik": "Canlı E-Alanı",
     "bobinlerDurdu": "Bobinler durdu — alan üretilmiyor.",
     "canli": "● canlı",
+    "cst": "Hesaplanan değer (tepe |E|, V/m) — CST benzetimi + ölçülen B kalibrasyonu; E doğrudan ölçülmedi.",
     "duraklandi": "duraklandı",
     "dutyDisi": "⚠️ Σduty eğitim aralığı dışı — güvenilmez",
     "dutyDisiAralikli": "⚠️ Σduty eğitim aralığı dışı — güvenilmez (model {{min}}–{{max}} ile eğitildi)",
@@ -33,7 +34,7 @@
     "saglikli": "Sağlıklı",
     "satirEtiketi": "{{label}} alan {{deger}}",
     "tumor": "Tümör",
-    "yaklasik": "Yaklaşık değer — eski vekil modelden, ODAK'a henüz bağlanmadı. Doz için onay ekranındaki ODAK değerlerine bakın."
+    "yaklasik": "Yaklaşık değer — AI analizinin vekil modelinden (ODAK seansında E, CST benzetiminden hesaplanır). Doz için onay ekranındaki ODAK değerlerine bakın."
   },
   "ekran": {
     "aiProFantomPetri": "AI Pro — Fantom / Petri Kapalı-Döngü",

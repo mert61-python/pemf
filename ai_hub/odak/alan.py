@@ -133,6 +133,26 @@ def kalibrasyon_oku(veri_koku) -> dict:
     return K
 
 
+E_TABLOSU = "e_tablosu.npz"
+
+
+@functools.lru_cache(maxsize=2)
+def e_tablosu(yol: str | None = None) -> dict:
+    """ODK6 · CST E tablosu (AI model katmanı, Y282): `bobin1..7_ekutu.txt` (LF 100 Hz) B tablosuyla AYNI küresel faz + Eylül işaretiyle
+    gerçelleştirilmiş; E'nin SANAL (indüklenen, akım türevine orantılı) kısmı — gerçel kısım enerjinin < %0,2'si (12-11 ölçüldü). CST bobin
+    sırası, CST eksenleri, V/m (CST uyarımı başına), 10 mm ızgara = alan tablosununki."""
+    z = np.load(yol or model_katmani_yolu(E_TABLOSU))
+    E = z["E"].astype(np.float32)
+    return {
+        "E": E,
+        "kok": np.array([float(z["x0"]), float(z["y0"]), float(z["z0"])]),
+        "adim": float(z["adim_mm"]),
+        "boyut": np.array(E.shape[:3]),
+        "f_cst_hz": float(z["f_cst_hz"]),
+        "kimlik": str(z["kimlik"]),
+    }
+
+
 @functools.lru_cache(maxsize=2)
 def alan_tablosu(yol: str | None = None) -> dict:
     """CST birim alan tablosu (CST bobin sırası, Eylül normalli, CST eksenleri, mT; 10 mm ızgara). `yol` yoksa AI model katmanından (Y282)."""
@@ -212,6 +232,8 @@ class AlanModeli:
         # biçim[c, d] (kendi tepesine normalize); genlik td_tepe'de TAM a(d) ile (ızgaraya yuvarlama YOK — 12-11 ölçüldü: 0,01'lik ızgara küçük
         # duty'de bobin genliğini %5–10 kaydırıp doz denetimine yapay sapma katıyordu)
         self.bicim = np.stack([bic_b if BIPOLAR[c] else bic_u for c in range(N_BOBIN)])  # (7, 51, Nt)
+        self.f_hz = prm[3]
+        self._etablo = None  # ODK6: CST E tablosu (ilk `e_alan` çağrısında; yoksa FileNotFoundError — yalnız E gösterimi eksik kalır)
 
     # ── çerçeve ────────────────────────────────────────────────────────────────────────────────────────
     def olcum_to_cst(self, Pm) -> np.ndarray:
@@ -231,10 +253,26 @@ class AlanModeli:
     # ── alan ──────────────────────────────────────────────────────────────────────────────────────────
     def alan_olcum(self, Pm) -> np.ndarray:
         """Ölçüm çerçevesi noktaları (..., 3) → M (..., 3, 7): GERÇEK bobin sırası, kazanç × işaret uygulanmış, CST eksenleri, mT / genlik."""
+        return self._ara_deger(self.tablo, "B", Pm)
+
+    def e_alan(self, P_backend) -> np.ndarray:
+        """ODK6 · backend kabin noktaları (..., 3) → ME (..., 3, 7): CST E (V/m, indüklenen) B ile AYNI eşleme / kazanç × işaret / çerçeve —
+        bobin akımı ölçekleme B kalibrasyonundan (E DOĞRUDAN ÖLÇÜLMEDİ). Zaman domeni tepe için `td_e_tepe`."""
+        if self._etablo is None:
+            et = e_tablosu()
+            for k in ("kok", "boyut"):
+                if not np.allclose(et[k], self.tablo[k]):
+                    raise ValueError(f"E tablosu ızgarası alan tablosuyla aynı değil ({k})")
+            if et["adim"] != self.tablo["adim"]:
+                raise ValueError("E tablosu adımı alan tablosuyla aynı değil")
+            self._etablo = et
+        return self._ara_deger(self._etablo, "E", backend_to_olcum(P_backend))
+
+    def _ara_deger(self, T: dict, ad: str, Pm) -> np.ndarray:
+        """Tablo (B ya da E) üç doğrusal ara değerleme + GERÇEK bobin sırası + kazanç × işaret."""
         Pm = np.asarray(Pm, dtype=float)
         sh = Pm.shape[:-1]
         P = self.olcum_to_cst(Pm.reshape(-1, 3))
-        T = self.tablo
         idx, tt = [], []
         for ax in range(3):
             f = (P[:, ax] - T["kok"][ax]) / T["adim"]
@@ -242,7 +280,7 @@ class AlanModeli:
             idx.append(i)
             tt.append(np.clip(f - i, 0.0, 1.0))
         (i, j, k), (tx, ty, tz) = idx, tt
-        B = T["B"]
+        B = T[ad]
         out = np.zeros((len(P), 3, N_BOBIN))
         for a, wa in ((0, 1 - tx), (1, tx)):
             for b, wb in ((0, 1 - ty), (1, ty)):
@@ -282,7 +320,23 @@ class AlanModeli:
     # ── zaman domeni (Y280 hizalı) ───────────────────────────────────────────────────────────────────
     def td_tepe(self, M, sd, hizala: bool = True) -> np.ndarray:
         """M (nT, 3, 7), işaretli duty (7,) → her noktada tepe |B(t)| (nT,) — fazlar `fazlar(sd)` ile (firmware gecikme anlamı)."""
-        M = np.asarray(M, dtype=float)
+        W = self._td_dalga(sd, hizala)
+        Bt = np.einsum("tij,jk->tik", np.asarray(M, dtype=float), W)  # (nT, 3, Nt)
+        return np.linalg.norm(Bt, axis=1).max(axis=1)
+
+    def td_e_tepe(self, ME, sd, hizala: bool = True) -> np.ndarray:
+        """ODK6 · ME (nT, 3, 7) (`e_alan`), işaretli duty → her noktada tepe |E(t)| (nT,) V/m. Faraday (CST LF, indüklenen alan): E(t) =
+        Σ_c Ê_c · i_c′(t) / ω_CST — Ê_c CST'de sinüs akımda E genliği, i_c(t) B ile AYNI genlik / dalga biçimi / Y280 hizalaması."""
+        W = self._td_dalga(sd, hizala)
+        Nt = W.shape[1]
+        dW = (np.roll(W, -1, axis=1) - np.roll(W, 1, axis=1)) * (Nt * self.f_hz / 2.0)  # dalga türevi, 1 / s (periyodik)
+        f_cst = float((self._etablo or e_tablosu())["f_cst_hz"])
+        Et = np.einsum("tij,jk->tik", np.asarray(ME, dtype=float), dW) / (2.0 * np.pi * f_cst)
+        return np.linalg.norm(Et, axis=1).max(axis=1)
+
+    def _td_dalga(self, sd, hizala: bool = True) -> np.ndarray:
+        """İşaretli duty (7,) → bobin akım dalgaları W (7, Nt) (genlik a(d) × biçim; Y280 hizalı; ters işaret: bipolar −, tek yönlü yarım
+        periyot kayması)."""
         sd = np.asarray(sd, dtype=float)
         d = np.clip(np.abs(sd), 0.0, DUTY_AZAMI)
         f = d / DUTY_AZAMI * (self.N_DUTY - 1)
@@ -297,8 +351,7 @@ class AlanModeli:
         for c in range(N_BOBIN):
             if sd[c] < 0:
                 W[c] = -W[c] if BIPOLAR[c] else np.roll(W[c], Nt // 2)
-        Bt = np.einsum("tij,jk->tik", M, W)  # (nT, 3, Nt)
-        return np.linalg.norm(Bt, axis=1).max(axis=1)
+        return W
 
     def dogrusal_tepe(self, M, a) -> np.ndarray:
         """Tepe akımlar aynı anda varsayımıyla |Σ a_c M_c| (nT,) — çözücü / model ölçeği."""

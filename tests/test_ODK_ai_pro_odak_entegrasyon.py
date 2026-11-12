@@ -315,3 +315,22 @@ def test_KRITIK_odak_plani_PETRI_izgarasi_META_dan_ve_tavan_ENGELI(monkeypatch, 
     p2 = hedef.odak_plani(_Petri(kuyular[:5]), {"target_label": "Kuyu C2"}, 5, None, "TUM_PETRI")
     assert p2["engel"] == "plakaYok" and p2["doz_mT"] is None and p2["duty"] == [0.0] * 7
     assert json.loads(json.dumps(plan))  # mühüre yazılabilir (JSON)
+
+
+def test_KRITIK_ODK6_kare_SURUSUNDEN_SONRA_canli_E_ODAK_CST_ve_durdurmada_TEMIZ(o):
+    """ODK6: GERÇEK `/frame` + GERÇEK `_drive_coils_ai_pro` → sürülen ODAK planının CST E'si canlı E çubuğuna yazılır; durdurma siler."""
+    from servers import ai_approval
+    from servers import efield_live as ef
+
+    ef.odak_guncelle(None)
+    _hazirlik(o)
+    pid = _oner(o, doz_mT=0.4).json()["proposalId"]
+    ai_approval.approve(pid, "arastirmaci@test.local")
+    assert o.c.post("/api/ai/pro/start", json={"proposal_id": pid}).status_code == 200
+    _Hat.sonuc = _Sonuc([(P2, M2, 300)])
+    j = ap.kare(o).json()
+    assert j.get("driven") is True, j
+    od = ef.odak_degeri()
+    assert od is not None and od["cancer"] > 0 and od["healthy"] > 0, od
+    o.c.post("/api/ai/pro/stop")
+    assert ef.odak_degeri() is None, "durdurmadan sonra ODAK E'si kaldı"

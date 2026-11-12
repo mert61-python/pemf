@@ -22,6 +22,7 @@
     "baslik": "Live E-Field",
     "bobinlerDurdu": "Coils stopped — no field is being produced.",
     "canli": "● live",
+    "cst": "Computed value (peak |E|, V/m) — CST simulation + measured B calibration; E was not measured directly.",
     "duraklandi": "paused",
     "dutyDisi": "⚠️ Σduty is outside the training range — unreliable",
     "dutyDisiAralikli": "⚠️ Σduty is outside the training range — unreliable (the model was trained on {{min}}–{{max}})",
@@ -33,7 +34,7 @@
     "saglikli": "Healthy",
     "satirEtiketi": "{{label}} E-field {{deger}}",
     "tumor": "Tumor",
-    "yaklasik": "Approximate value — from the old surrogate model, not yet connected to ODAK. For the dose, see the ODAK values on the approval screen."
+    "yaklasik": "Approximate value — from the AI analysis surrogate model (in an ODAK session E is computed from the CST simulation). For the dose, see the ODAK values on the approval screen."
   },
   "ekran": {
     "aiProFantomPetri": "AI Pro — Tumor Phantom / Well Plate Closed-Loop",
