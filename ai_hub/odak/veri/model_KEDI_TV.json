@@ -9,10 +9,10 @@
  ],
  "yerel_alan": "M (3×7, CST ekseni, kalibrasyonlu) + M / doz",
  "cikti": "doz başına genlik a / D",
- "sinir": 12.578071301980893,
- "n_egitim": 8000,
+ "sinir": 14.313264535618606,
+ "n_egitim": 7828,
  "kalibrasyon_kimligi": "234e319a18835517",
  "f16": true,
- "kaynak": "DENETIM/odak/model/a4_disa_aktar.py · veri veri_kal · A3 kazananı KNN k=1 + yerel alan",
+ "kaynak": "DENETIM/odak/model/a4_disa_aktar.py · veri veri_kal_td · A3 kazananı KNN k=1 + yerel alan",
  "onnx_sklearn_esit_oran": 1.0
 }

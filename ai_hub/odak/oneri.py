@@ -2,7 +2,8 @@
 # Author: mertaygn, cglrgrkn
 """ODAK önerisi (istem 45 A2–A4): kip girdisi + istenen DOZ → model (KNN) → işaretli duty + Y280 fazı → FİZİK DENETİMİ (karar vermez, denetler).
 
-Fizik denetimi (zaman domeni, Y280 hizalı tepe |B|): beklenen doz hedefin EN ZAYIF noktasında; tavan (duty ≤ 0,5 köşe taraması); çevre ortalaması
+Fizik denetimi (zaman domeni, Y280 hizalı tepe |B|): beklenen doz hedefin EN ZAYIF noktasında; tavan (duty ≤ 0,5 köşe taraması, AYNI zaman
+domeni tanımıyla); çevre ortalaması
 ve oran (odak kiplerinde hedef / çevre, düzgünlük kiplerinde en zayıf / en güçlü); konum payı (hedef ±10 mm kayınca doz değişimi); petride 24 kuyunun
 her birinde beklenen tepe |B| (onay ekranı haritası). SÜRME (engel kodu → i18n `ai.pro.odak.engel.<kod>`, eylem söyleyen metin):
   hedefKabinDisi · dozGecersiz · dozTavanUstu · dozSapmasi (|beklenen / istenen − 1| > %10) · modelEski (eğitim kalibrasyonu ≠ sürüşteki) ·
@@ -24,7 +25,7 @@ from ai_hub.odak.alan import (
     AlanModeli,
     backend_to_olcum,
     olcum_to_backend,
-    tavan,
+    tavan_td,
 )
 from ai_hub.odak.model import model_al, yerel_nokta
 
@@ -156,7 +157,7 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
         if not np.all(A.cam_icinde(T)):
             raise Engel("hedefKabinDisi")
         MT = A.alan(T)
-        plan["tavan_mT"] = _yuvarla(tavan(MT))
+        plan["tavan_mT"] = _yuvarla(tavan_td(A, MT))
         if g["kuyu"] is not None:
             plan["kuyular"] = [{"etiket": k["etiket"], "px": k.get("px"), "mT": None, "secili": i == g["secili"]} for i, k in enumerate(g["kuyu"])]
         D = float(doz_mT)
@@ -211,7 +212,7 @@ def hedef_tavani(kip: str, A: AlanModeli, **girdi) -> dict:
         g = kip_girdisi(kip, A, **girdi)
         if not np.all(A.cam_icinde(g["T"])):
             raise Engel("hedefKabinDisi")
-        return {"tavan_mT": _yuvarla(tavan(A.alan(g["T"]))), "engel": None, "engel_ek": {}}
+        return {"tavan_mT": _yuvarla(tavan_td(A, A.alan(g["T"]))), "engel": None, "engel_ek": {}}
     except Engel as e:
         return {"tavan_mT": None, "engel": e.kod, "engel_ek": e.ek}
 

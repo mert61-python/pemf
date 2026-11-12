@@ -163,6 +163,18 @@ def test_KRITIK_TD_tepe_HIZALI_hizasizdan_KUCUK_DEGIL_ve_dogrusala_YAKIN(A):
     assert np.isfinite(A.td_tepe(M, sd2)).all()
 
 
+def test_KRITIK_TD_doz_duty_IZGARASINA_yuvarlanmaz_SUREKLI(A):
+    """12-11 ölçüldü: 0,01'lik duty ızgarasına yuvarlama küçük duty'de bobin genliğini %5–10 kaydırıyor, doz denetimine yapay sapma katıyordu.
+    Doz duty'de SÜREKLİ olmalı: %0,5'lik duty değişimi dozu en çok ~%1,5 değiştirir. MUTANT: biçim ara değerlemesini / tam a(d)'yi kaldırın → KIRMIZI."""
+    M = A.alan(np.array([[0.0, -150.0, 0.0]]))
+    for c, (d1, d2) in ((0, (0.063, 0.0649)), (3, (0.021, 0.0239))):  # aynı 0,01 ızgara hücresinde iki duty
+        s1, s2 = np.zeros(7), np.zeros(7)
+        s1[c], s2[c] = d1, d2
+        oran_td = A.td_tepe(M, s2)[0] / A.td_tepe(M, s1)[0]
+        oran_a = A.genlik(s2)[c] / A.genlik(s1)[c]
+        assert oran_a > 1.02 and oran_td == pytest.approx(oran_a, rel=0.02), (c, oran_td, oran_a)
+
+
 def test_KRITIK_TAVAN_kose_TARAMASI_her_isaret_deseninden_BUYUK_ESIT(A):
     from ai_hub.odak.alan import ISARETLER, tavan
 
@@ -170,6 +182,23 @@ def test_KRITIK_TAVAN_kose_TARAMASI_her_isaret_deseninden_BUYUK_ESIT(A):
     t = tavan(M)
     assert ISARETLER.shape == (128, 7)
     assert all(t >= float(np.linalg.norm(M[0] @ s)) - 1e-9 for s in ISARETLER)
+
+
+def test_KRITIK_TAVAN_ZAMAN_DOMENI_fizik_denetimiyle_AYNI_tanim(A):
+    """Seçicinin üst sınırı (`tavan_td`) = 128 köşe deseninde zaman domeni hizalı dozun en büyüğü = fizik denetiminin geçireceği en büyük doz.
+    12-11 ölçüldü: tek noktada doğrusalla aynı; ÇOK noktalı kümede (kedi tüm vücut, 47 nokta) tek yönlü 6–7'nin öbür yarım periyodu yüzünden
+    %16 DÜŞÜK — doğrusal tavanla seçici, fizik denetiminin geçirmeyeceği bir dozu da sunardı. MUTANT: `tavan_td` → doğrusal `tavan` → KIRMIZI."""
+    from ai_hub.odak import oneri
+    from ai_hub.odak.alan import DUTY_AZAMI, ISARETLER, tavan, tavan_td
+
+    kw = {"hedef_P": [0.0, -120.0, 0.0], "kedi": {"theta": 0.2}}
+    M = A.alan(oneri.kip_girdisi("KEDI_TV", A, **kw)["T"])
+    t = tavan_td(A, M)
+    en = max(A.td_tepe(M, DUTY_AZAMI * s).min() for s in ISARETLER)
+    assert t == pytest.approx(en) and t > 0
+    assert 0.7 * tavan(M) <= t < 0.95 * tavan(M), (t, tavan(M))
+    # seçici (onay ekranı doz üst sınırı) ve öneri AYNI tanımı kullanır
+    assert oneri.hedef_tavani("KEDI_TV", A, **kw)["tavan_mT"] == pytest.approx(t, abs=1e-3)
 
 
 def test_YAPISAL_rl_dalga_bicimi_KENDI_tepesine_normalize():
@@ -296,7 +325,10 @@ def test_KARSIT_ONERI_KEDI_hesaplanir(A, kip):
     T = [0.0, -120.0, 0.0]
     g = oneri.kip_girdisi(kip, A, hedef_P=T, kedi={"theta": 0.2})
     m = _DogruModel(A, g["T"])
-    plan = oneri.oner(kip, A, 0.3, model=m, hedef_P=T, kedi={"theta": 0.2})
+    # doz TAVANA göre (zaman domeni tavanı konuma bağlı: kedi tüm vücutta ~0,3 mT olabilir — sabit doz tavanı aşıp `dozTavanUstu` verirdi)
+    tv = oneri.hedef_tavani(kip, A, hedef_P=T, kedi={"theta": 0.2})
+    assert tv["engel"] is None and tv["tavan_mT"] > 0, tv
+    plan = oneri.oner(kip, A, 0.5 * tv["tavan_mT"], model=m, hedef_P=T, kedi={"theta": 0.2})
     assert plan["engel"] is None, plan
     assert (plan["cevre_mT"] is None) == (kip == "KEDI_TV")
 

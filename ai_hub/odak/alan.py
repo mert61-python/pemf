@@ -163,7 +163,8 @@ def rl_dalga_bicimi(dg, bipolar: bool, V: float, R: float, L_mH: float, f: float
 class AlanModeli:
     """Kalibrasyon + tablo → gerçek bobin sırasıyla alan, duty ↔ genlik, Y280 fazı, zaman domeni tepe dozu."""
 
-    N_DUTY = 51  # 0..0,5 duty ızgarası (dalga tablosu)
+    N_DUTY = 51  # 0..0,5 duty ızgarası (dalga biçimi tablosu; aralar doğrusal ara değerlenir)
+    N_ZAMAN = 1000  # periyot başına örnek (hizalama kayması çözünürlüğü %0,1 periyot = 10 µs @ 100 Hz)
 
     def __init__(self, K: dict, tablo: dict | None = None):
         self.K = K
@@ -189,10 +190,11 @@ class AlanModeli:
         self.a_tab = np.array(a_tab)  # (7, 51) kesin artan
         rl = K["rl"]
         prm = (float(rl["V"]), float(rl["R_ohm"]), float(rl["L_mH"]), float(rl.get("f_hz", 100.0)), float(rl.get("sonum_kati", 1.0)))
-        bic_b = rl_dalga_bicimi(self.dg, True, *prm)
-        bic_u = rl_dalga_bicimi(self.dg, False, *prm)
-        # dalga[c, d] = biçim × ölçülen a(d) → tepe genliği ölçümle tutarlı
-        self.dalga = np.stack([(bic_b if BIPOLAR[c] else bic_u) * self.a_tab[c][:, None] for c in range(N_BOBIN)])  # (7, 51, Nt)
+        bic_b = rl_dalga_bicimi(self.dg, True, *prm, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN)
+        bic_u = rl_dalga_bicimi(self.dg, False, *prm, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN)
+        # biçim[c, d] (kendi tepesine normalize); genlik td_tepe'de TAM a(d) ile (ızgaraya yuvarlama YOK — 12-11 ölçüldü: 0,01'lik ızgara küçük
+        # duty'de bobin genliğini %5–10 kaydırıp doz denetimine yapay sapma katıyordu)
+        self.bicim = np.stack([bic_b if BIPOLAR[c] else bic_u for c in range(N_BOBIN)])  # (7, 51, Nt)
 
     # ── çerçeve ────────────────────────────────────────────────────────────────────────────────────────
     def olcum_to_cst(self, Pm) -> np.ndarray:
@@ -266,9 +268,12 @@ class AlanModeli:
         M = np.asarray(M, dtype=float)
         sd = np.asarray(sd, dtype=float)
         d = np.clip(np.abs(sd), 0.0, DUTY_AZAMI)
-        di = np.clip(np.rint(d / DUTY_AZAMI * (self.N_DUTY - 1)).astype(int), 0, self.N_DUTY - 1)
-        Nt = self.dalga.shape[2]
-        W = np.stack([self.dalga[c, di[c]] for c in range(N_BOBIN)])  # (7, Nt)
+        f = d / DUTY_AZAMI * (self.N_DUTY - 1)
+        i0 = np.clip(np.floor(f).astype(int), 0, self.N_DUTY - 2)
+        w = np.clip(f - i0, 0.0, 1.0)
+        Nt = self.bicim.shape[2]
+        a = self.genlik(d)
+        W = np.stack([((1 - w[c]) * self.bicim[c, i0[c]] + w[c] * self.bicim[c, i0[c] + 1]) * a[c] for c in range(N_BOBIN)])  # (7, Nt)
         if hizala:
             kay = np.rint((d.max() - d) * Nt).astype(int)
             W = np.stack([np.roll(W[c], kay[c]) for c in range(N_BOBIN)])
@@ -288,6 +293,14 @@ ISARETLER = np.array([[1.0 if (k >> c) & 1 else -1.0 for c in range(N_BOBIN)] fo
 
 
 def tavan(M) -> float:
-    """Hedef kümesi M (nT, 3, 7) → duty ≤ 0,5 ile verilebilen en büyük doz (köşe taraması: nokta hedefte kesin, kümede alt sınır)."""
+    """Hedef kümesi M (nT, 3, 7) → duty ≤ 0,5 ile verilebilen en büyük doz, DOĞRUSAL (tepeler aynı anda) köşe taraması."""
     Bv = np.einsum("tij,vj->vti", np.asarray(M, dtype=float), ISARETLER)
     return float(np.linalg.norm(Bv, axis=2).min(axis=1).max())
+
+
+def tavan_td(A: "AlanModeli", M) -> float:
+    """Doz seçicinin ÜST SINIRI — fizik denetimiyle AYNI tanım (Y280 hizalı zaman domeni tepe |B|): 128 işaret deseninde bütün bobinler duty
+    0,5 iken hedef kümesinin en zayıf noktasındaki tepe; en büyüğü. (Doğrusal tavandan tek yönlü 6–7'nin öbür yarım periyodu yüzünden ±%3–8
+    farklı olabilir — ölçüldü 12-11.)"""
+    M = np.asarray(M, dtype=float)
+    return float(max(A.td_tepe(M, DUTY_AZAMI * s).min() for s in ISARETLER))
