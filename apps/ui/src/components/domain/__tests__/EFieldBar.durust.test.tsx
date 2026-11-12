@@ -56,3 +56,11 @@ it("KARŞIT: hesaplanan E sayı olarak görünür, uyarı yok", () => {
   expect(u.queryByText("—")).toBeNull();
   expect(u.queryByText(/eğitim aralığı dışında/i)).toBeNull();
 });
+
+it("KRİTİK ODK (istem 45): canlı E hâlâ eski vekil modelden → 'yaklaşık' olduğu ve dozun ODAK'tan okunacağı SÖYLENİR", () => {
+  mockLive.snapshot = { eField: { ...temel, healthy: 0.02, cancer: 0.05, avg: 0.035, achievedB_T: 0.001 } };
+  const u = render(<EFieldBar />);
+  expect(u.getByTestId("efield-yaklasik").props.children).toBe(
+    "Yaklaşık değer — eski vekil modelden, ODAK'a henüz bağlanmadı. Doz için onay ekranındaki ODAK değerlerine bakın.",
+  );
+});

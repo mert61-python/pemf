@@ -126,30 +126,19 @@ def _sonuc_kuyruguna(izler, *sonuclar):
     izler["sonuclar"] = list(sonuclar)
 
 
-def test_KRITIK_E_anahtari_SINIFA_gore_eslenir(sag):
-    """MUTASYON: `predict`te `result_E` (kedi anahtarı) okuyun → e_field 0 → KIRMIZI."""
+def test_KRITIK_ODAK_hoca_modeli_SURUS_KAYNAGI_degil_muhursuz_predict_SIFIR(sag):
+    """ODAK (istem 45): araştırma sağlayıcısının `predict`i hocanın EM modelini (`predictor`) ÇAĞIRMAZ; mühürlü ODAK ayarı yoksa SIFIR
+    döner (bobin sürülmez). MUTASYON: `predict`e eski `cache["predictor"].predict` yolunu geri koyun → çağrı kaydı + duty ≠ 0 → KIRMIZI.
+    (Eski "E anahtarı sınıfa göre eşlenir" testleri bu sözleşmeyle EMEKLİ — hedefteki alan artık onay ekranında ODAK fizik denetiminden.)"""
     hedef, fantom, petri, pred, izler = sag
     _sonuc_kuyruguna(izler, _SahteSonuc(tumor=[_SahteBolge((10, 10), (-40.0, 0.0, 0.0), organ_id=1)]))
-
     fantom.localize("kare", 0)
-    D, P, e = fantom.predict(-40.0, 0.0, 0.0, 0)
-
-    assert len(D) == 7 and len(P) == 7
-    assert e == pytest.approx(0.77), f"kanserli hedefte e_field {e} — sınıfa göre E eşlenmiyor"
-    assert pred.cagrilar[-1]["organ_id"] == 1, "EM doku sınıfı seçili hedeften gelmiyor"
-    assert pred.cagrilar[-1]["duty_sum"] == pytest.approx(2.4), "ekstra girdi kabin cfg'sinden değil"
-
-
-def test_KRITIK_saglikli_hedefte_E_HEALTHY_okunur(sag):
-    """Kontrol dozu (sahip kararı #2): sağlıklı kuyuda E, sağlıklı sınıfın değeri olmalı."""
-    hedef, fantom, petri, pred, izler = sag
-    _sonuc_kuyruguna(izler, _SahteSonuc(wells=[_SahteBolge((5, 5), (0.0, 0.0, 0.0), organ_id=0)]))
-
-    petri.localize("kare", 0)
-    _D, _P, e = petri.predict(0.0, 0.0, 0.0, 0)
-
-    assert pred.cagrilar[-1]["organ_id"] == 0
-    assert e == pytest.approx(0.11), f"sağlıklı hedefte kanser E'si kullanıldı: {e}"
+    once = len(pred.cagrilar)
+    for s_ in (fantom, petri):
+        s_.odak_ayari = None
+        D, P, e = s_.predict(-40.0, 0.0, 0.0, 0)
+        assert D == [0.0] * 7 and P == [0.0] * 7 and e == 0.0, f"{s_.ad}: mühürsüz predict sürüş üretti: {D}"
+    assert len(pred.cagrilar) == once, "hocanın EM modeli sürüş yolunda çağrıldı"
 
 
 def test_KRITIK_ARUCO_zorunlu_piksel_modunda_hedef_BULUNAMADI(sag):

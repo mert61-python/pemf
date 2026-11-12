@@ -1,0 +1,130 @@
+{
+ "surum": 2,
+ "esleme_dogrulandi": true,
+ "dogrulandi": false,
+ "esleme_gercek_cst": {
+  "1": 1,
+  "2": 2,
+  "3": 5,
+  "4": 3,
+  "5": 4,
+  "6": 7,
+  "7": 6
+ },
+ "kazanc": [
+  0.4797,
+  0.43,
+  0.7653,
+  0.6392,
+  0.6034,
+  0.5894,
+  0.4782
+ ],
+ "isaret": [
+  -1,
+  -1,
+  1,
+  -1,
+  -1,
+  -1,
+  -1
+ ],
+ "bipolar": [
+  1,
+  1,
+  1,
+  1,
+  1,
+  0,
+  0
+ ],
+ "rl": {
+  "V": 24.0,
+  "R_ohm": 8.7,
+  "L_mH": 27.0,
+  "f_hz": 100.0,
+  "sonum_kati": 1.5,
+  "duty_azami": 0.5
+ },
+ "duty_egrisi_olcum": {
+  "duty": [
+   0.05,
+   0.1,
+   0.2,
+   0.3,
+   0.4,
+   0.5
+  ],
+  "tepe_akim_A": [
+   [
+    0.4649,
+    0.9266,
+    1.683,
+    2.1349,
+    2.4738,
+    2.5224
+   ],
+   [
+    0.4097,
+    0.8591,
+    1.517,
+    2.0678,
+    2.3694,
+    2.5224
+   ],
+   [
+    0.5449,
+    1.0375,
+    1.7463,
+    2.2002,
+    2.4342,
+    2.5224
+   ],
+   [
+    0.4928,
+    0.9527,
+    1.6168,
+    2.0304,
+    2.3505,
+    2.5224
+   ],
+   [
+    0.4953,
+    0.9384,
+    1.6111,
+    2.0369,
+    2.3134,
+    2.5224
+   ],
+   [
+    0.5712,
+    1.0676,
+    1.6745,
+    2.1763,
+    2.3837,
+    2.6405
+   ],
+   [
+    0.4903,
+    0.9922,
+    1.722,
+    2.1746,
+    2.4651,
+    2.6405
+   ]
+  ]
+ },
+ "cerceve": {
+  "taban_cst_x": -118.0,
+  "yukseklik_ofset_mm": -12.4,
+  "cam_ic_mm": [
+   555.0,
+   350.0,
+   405.0
+  ],
+  "merkez_cst_y": 9.34,
+  "merkez_cst_z": 25.2,
+  "aciklama": "Kabin (ON tanimi): orijin cam ici kutunun merkezi; x = genislik (+ onden bakana SAG), y = yukseklik (+ yukari, taban cami ic yuzu y = -175), z = derinlik (+ ONE dogru). CST: X = yukseklik, Y = genislik (+ SOL), Z = derinlik (+ on). Donusum TEK yerde: ortak.kabin_to_cst. EV'de backend kabin cercevesiyle eslenir."
+ },
+ "kaynak": "TEST ÖRNEĞİ — 12 Kasım 2026 tezgâh kalibrasyonunun (DENETIM/odak/olcum/kalibrasyon_olcum.json) özü; kimlik aynı"
+}

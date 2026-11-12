@@ -324,3 +324,7 @@ firmware/*/MqttKimlikYerel.h
 MqttKimlikYerel.h
 # Y73: kabin CV MQTT kimligi (SIR) - `PEMF_Backend.exe --mqtt-kimlik hazirla --kabin <kabin YAML dizini>` uretir.
 cabin_mqtt_kimlik.yaml
+
+# ODK (istem 45, 12 Kasım 2026): ODAK KNN modelleri (ai_hub/odak/veri/model_<KIP>.onnx) küçük (< 5 MB, test_ODK kapısı) ve
+# kalibrasyon kimliğine bağlı ürün verisi — app katmanında ai_hub ile sevk edilir. İstisna SONDA kalmalı (git son eşleşen kuralı uygular).
+!ai_hub/odak/veri/*.onnx

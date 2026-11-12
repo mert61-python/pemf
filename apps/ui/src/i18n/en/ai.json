@@ -1155,6 +1155,27 @@
       "kosulsuz": "⚠ UNCONDITIONAL proposal: plate, quality and confidence checks were skipped; the position may be unverified. If you approve, the session runs in this mode.",
       "leadDeney": "An experiment session <kalin>does not start without approval</kalin>. Review the parameters below and approve, or reject with a reason.",
       "leadOtonom": "An autonomous session <kalin>does not start without approval</kalin>. Review the parameters below and approve, or reject with a reason.",
+      "odak": {
+        "beklenen": "Expected (physics check): {{beklenen}} mT · ceiling {{tavan}} mT",
+        "cevre": "Surrounding average {{cevre}} mT · ratio {{oran}}×",
+        "doz": "Dose: {{doz}} mT (± {{pay}}% position margin)",
+        "dozGecersiz": "Enter a dose greater than 0 and at most {{tavan}} mT.",
+        "dozSec": "Dose (mT, max {{tavan}})",
+        "duzgunluk": "Uniformity (weakest / strongest): {{oran}}",
+        "haritaBaslik": "24 wells — expected peak field (mT), plate as seen by the camera",
+        "kaynak": "Phase / duty: ODAK model (nearest neighbour + local field), checked by physics",
+        "kip": {
+          "KUYUCUK": "Single well",
+          "TUM_PETRI": "Whole well plate"
+        },
+        "kipEtiket": "Well plate mode",
+        "komsuUyari": "Neighbouring wells also receive field — these coils cannot isolate a single well.",
+        "kuyuEtiket": "{{etiket}}: {{deger}} mT",
+        "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
+        "olcek": "Colour: {{min}} – {{maks}} mT (blue low, red high)",
+        "secili": "selected well",
+        "yenidenHesapla": "Recalculate"
+      },
       "onaylaBaslat": "Approve and Start",
       "onaylaEtiket": "Approve the recommendation and start the session",
       "oneriyiReddet": "Reject the recommendation",

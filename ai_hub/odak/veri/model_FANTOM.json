@@ -1,0 +1,20 @@
+{
+ "kip": "FANTOM",
+ "ozellik_ad": [
+  "tumor_x",
+  "tumor_z",
+  "fantom_x",
+  "fantom_z",
+  "sin2t",
+  "cos2t",
+  "doz_mT"
+ ],
+ "yerel_alan": "M (3×7, CST ekseni, kalibrasyonlu) + M / doz",
+ "cikti": "doz başına genlik a / D",
+ "sinir": 14.065807026604832,
+ "n_egitim": 20000,
+ "kalibrasyon_kimligi": "234e319a18835517",
+ "f16": true,
+ "kaynak": "DENETIM/odak/model/a4_disa_aktar.py · veri veri_kal · A3 kazananı KNN k=1 + yerel alan",
+ "onnx_sklearn_esit_oran": 1.0
+}

@@ -32,7 +32,8 @@
     "ozet_other": "{{count}} bobin · B={{b}} mT · Σduty={{duty}}",
     "saglikli": "Sağlıklı",
     "satirEtiketi": "{{label}} alan {{deger}}",
-    "tumor": "Tümör"
+    "tumor": "Tümör",
+    "yaklasik": "Yaklaşık değer — eski vekil modelden, ODAK'a henüz bağlanmadı. Doz için onay ekranındaki ODAK değerlerine bakın."
   },
   "ekran": {
     "aiProFantomPetri": "AI Pro — Fantom / Petri Kapalı-Döngü",

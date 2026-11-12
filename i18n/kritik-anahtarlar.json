@@ -3459,6 +3459,83 @@
    "tur": "seans",
    "kaynak": "launcher/app/ui/index.html",
    "aciklama": "zorunlu güvenlik güncellemesi bildirimi (Y254 c) — sorulmadan iner, etkin seans bitince kurulur ve yeniden başlatılır"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.hedefKabinDisi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.dozGecersiz",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.dozTavanUstu",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.dozSapmasi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.modelEski",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.plakaYok",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.kuyuYok",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.kalibrasyonYok",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.kalibrasyonBozuk",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.kalibrasyonEski",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.eslemeDogrulanmadi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
   }
  ],
  "bekleyen": [

@@ -1155,6 +1155,27 @@
       "kosulsuz": "⚠ KOŞULSUZ öneri: plaka, kalite ve güven engelleri atlandı; konum doğrulanmamış olabilir. Onaylarsanız seans bu kipte sürer.",
       "leadDeney": "Deney seansı <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
       "leadOtonom": "Otonom seans <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
+      "odak": {
+        "beklenen": "Beklenen (fizik denetimi): {{beklenen}} mT · tavan {{tavan}} mT",
+        "cevre": "Çevre ortalaması {{cevre}} mT · oran {{oran}}×",
+        "doz": "Doz: {{doz}} mT (± %{{pay}} konum payı)",
+        "dozGecersiz": "0'dan büyük ve en çok {{tavan}} mT bir doz girin.",
+        "dozSec": "Doz (mT, en çok {{tavan}})",
+        "duzgunluk": "Düzgünlük (en zayıf / en güçlü): {{oran}}",
+        "haritaBaslik": "24 kuyu — beklenen tepe alan (mT), plaka kameradaki yönüyle",
+        "kaynak": "Faz / duty: ODAK modeli (en yakın komşu + yerel alan), fizikle denetlendi",
+        "kip": {
+          "KUYUCUK": "Kuyucuk",
+          "TUM_PETRI": "Tüm petri"
+        },
+        "kipEtiket": "Petri kipi",
+        "komsuUyari": "Komşu kuyular da alan alır — bu bobinlerle tek kuyu ayrılamaz.",
+        "kuyuEtiket": "{{etiket}}: {{deger}} mT",
+        "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
+        "olcek": "Renk: {{min}} – {{maks}} mT (mavi düşük, kırmızı yüksek)",
+        "secili": "seçili kuyu",
+        "yenidenHesapla": "Yeniden hesapla"
+      },
       "onaylaBaslat": "Onayla ve Başlat",
       "onaylaEtiket": "Öneriyi onayla ve seansı başlat",
       "oneriyiReddet": "Öneriyi reddet",

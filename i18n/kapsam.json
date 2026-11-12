@@ -13247,6 +13247,17 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "apps/ui/src/components/domain/aipro/OdakOzeti.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-06b-ai-bilesen",
+   "sira": 6,
+   "durum": "tamam",
+   "metin": 15,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "ODAK (istem 45) onay özeti + 24 kuyu haritası; bütün metin katalogdan"
   }
  }
 }

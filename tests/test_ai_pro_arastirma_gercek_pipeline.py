@@ -129,11 +129,26 @@ def test_ENTEGRASYON_fantom_gercek_kareden_hedef_ve_doz(kedi_izi):
     assert meta["pemf_kapisi"]["surulebilir"] is True and lz is False and meta.get("method") == "coil_ring"
     assert "kabin işareti" in sag.ipucu(True, "Tümör T1")
 
-    D, P, e = sag.predict(-43.645, 0.215, 3.335, 0)  # CST fantom kutusu merkezi (eğitim aralığı içi)
+    D, P, e = _em_doz(sag, -43.645, 0.215, 3.335)  # CST fantom kutusu merkezi (eğitim aralığı içi)
     print(f"[OLCUM] fantom doz: max(D)={max(D):.3f} · e_field={e:.4f} · ood={meta.get('ood')}")
     assert len(D) == 7 and len(P) == 7
     assert any(d > 0 for d in D), "gerçek ağırlıkla tüm duty 0 — sürülebilir parametre üretilmedi"
     assert e > 0, "e_field 0 — E anahtarı eşlemesi gerçek çıktıda tutmuyor"
+
+
+def _em_doz(sag, x, y, z):
+    """Hocanın EM öngörücüsü GERÇEK ağırlıkla (AI Hub analizi bunu kullanır). ODAK (istem 45): sağlayıcının `predict`i artık ODAK sürüş
+    yoludur ve mühürsüz SIFIR döner — hoca modeli SÜRÜŞ KAYNAĞI DEĞİL (o sözleşme burada da denetlenir)."""
+    assert sag.predict(x, y, z, 0) == ([0.0] * 7, [0.0] * 7, 0.0), "mühürsüz ODAK predict sürüş üretti"
+    with sag._kilit:
+        sinif = int(sag._meta.get("secili_organ_id", 1))
+    out = sag._onbellek()["predictor"].predict(
+        x=x, y=y, z=z, organ_id=sinif, achieved_B=sag.achieved_B, duty_sum=sag.duty_sum
+    )
+    D = [float(out.get(f"D{i}", 0.0)) for i in range(1, 8)]
+    P = [float(out.get(f"P{i}", 0.0)) for i in range(1, 8)]
+    e = float(out.get("result_E_cancer" if sinif == 1 else "result_E_healthy", out.get("result_E_avg", 0.0)) or 0.0)
+    return D, P, e
 
 
 def _sentetik_aruco_yapistir(kare, kenar_px: int = 300, konum: tuple = (700, 250), isaret_id: int = 0):
@@ -184,7 +199,7 @@ def test_ENTEGRASYON_fantom_SENTETIK_ArUco_karede_LOKALIZE_ve_doz_A21(kedi_izi):
     assert meta["pemf_kapisi"]["surulebilir"] is True, meta.get("pemf_kapisi")
     assert ozne is True and meta.get("targets"), "işaretli karede tümör hedefi üretilmedi"
     assert lz is True and guven >= hedef.MIN_GUVEN, f"ArUco'lu karede hedef lokalize SAYILMADI (lz={lz}, güven={guven})"
-    D, P, e = sag.predict(x, y, z, 0)  # LOKALİZE hedefin kabin koordinatında (sabit nokta DEĞİL)
+    D, P, e = _em_doz(sag, x, y, z)  # LOKALİZE hedefin kabin koordinatında (sabit nokta DEĞİL)
     print(f"[OLCUM] fantom doz (lokalize hedef): max(D)={max(D):.3f} · e_field={e:.4f}")
     assert len(D) == 7 and any(d > 0 for d in D), (
         "lokalize hedefte gerçek ağırlıkla tüm duty 0 — sürülebilir parametre yok"
@@ -249,7 +264,7 @@ def test_ENTEGRASYON_petri_gercek_kareden_hedef_ve_SURE_olcumu(kedi_izi):
     assert "pemf_gecersiz" in meta["pemf_kapisi"]["nedenler"], meta.get("pemf_kapisi")
 
     # Doz adımı (gerçek ağırlık): kabin merkezinde, öngörücüyle doğrudan.
-    D, P, e = sag.predict(0.0, 0.0, 0.0, 0)
+    D, P, e = _em_doz(sag, 0.0, 0.0, 0.0)
     print(f"[OLCUM] petri doz: max(D)={max(D):.3f} · e_field={e:.4f} · sinif={meta.get('secili_organ_id', 1)}")
     assert len(D) == 7 and any(d > 0 for d in D), "gerçek ağırlıkla sürülebilir parametre üretilmedi"
     assert e > 0, "e_field 0 — E anahtarı eşlemesi gerçek çıktıda tutmuyor"

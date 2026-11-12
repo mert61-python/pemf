@@ -1,0 +1,240 @@
+// Author: mertaygn, cglrgrkn
+/**
+ * ODAK ÖZETİ (istem 45 · Y273 / Y274): AI Pro onay penceresinde faz / duty'yi üreten ODAK planının fizik denetimi.
+ * Eski "hedefte · çevrede · oran" satırının (hoca modelinin birimsiz E'si — yanlış) YERİNE:
+ *  - seçilen DOZ (hedefte tepe |B|, mT) ± konum payı (hedef 1 cm kayınca doz değişimi), beklenen (zaman domeni, Y280 hizalı), TAVAN
+ *    (o konumda duty ≤ %50 ile verilebilen en büyük doz), çevre ortalaması + oran (odak kipleri) ya da düzgünlük (TÜM PETRİ / tüm vücut);
+ *  - PETRİDE ZORUNLU 24 kuyu KÜÇÜK HARİTASI: plakanın KAMERADAKİ yönüyle (kuyular karedeki piksel konumlarına yerleşir), seçili kuyu
+ *    işaretli, her kuyuda mT + renk ölçeği + "komşu kuyular da alan alır" (renk + sayı birlikte — renk körlüğü);
+ *  - DOZ SEÇİCİ (üst sınır = tavan) + petri kipi (TÜM PETRİ / KUYUCUK) → "Yeniden hesapla" yeni öneri ister (mühür yeni öneride).
+ */
+import { useState } from "react";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
+
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+
+export type OdakKuyu = { etiket: string; px?: number[] | null; mT: number | null; secili?: boolean };
+export type OdakOzet = {
+  kip: string;
+  doz_mT: number;
+  beklenen_mT?: number;
+  tavan_mT?: number;
+  cevre_mT?: number | null;
+  oran?: number;
+  pay_yuzde?: number;
+  sapma_yuzde?: number;
+  kuyular?: OdakKuyu[];
+};
+
+export const PETRI_KIPLERI = ["KUYUCUK", "TUM_PETRI"] as const;
+
+/** Dile uyan ondalık (TR "1,25", EN "1.25"). */
+export function sayi(n: number | null | undefined, basamak = 2): string {
+  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+  return n.toFixed(basamak).replace(".", i18n.language === "en" ? "." : ",");
+}
+
+/** Kullanıcının yazdığı doz ("1,2" / "1.2") → sayı; geçersiz → NaN. */
+export function dozCoz(metin: string): number {
+  const t = String(metin ?? "").trim().replace(",", ".");
+  return /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+}
+
+const DUSUK = [37, 99, 235]; // mavi (düşük)
+const YUKSEK = [220, 38, 38]; // kırmızı (yüksek)
+
+/** mT → renk "#rrggbb" (düşük mavi → yüksek kırmızı, doğrusal). */
+export function kuyuRengi(v: number | null, min: number, maks: number): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return colors.bgAlt;
+  const t = maks > min ? Math.min(1, Math.max(0, (v - min) / (maks - min))) : 1;
+  return "#" + DUSUK.map((d, i) => Math.round(d + (YUKSEK[i] - d) * t).toString(16).padStart(2, "0")).join("");
+}
+
+const SATIR = "ABCD";
+const HUCRE = 40;
+const KUTU_G = 6 * (HUCRE + 4);
+const KUTU_Y = 4 * (HUCRE + 4);
+
+/** Kuyunun haritadaki yeri (0..1): kameradaki piksel konumu (yön korunur); px yoksa etiketten ızgara (A1 sol üst). */
+export function kuyuKonumlari(kuyular: OdakKuyu[]): { x: number; y: number }[] {
+  const pxVar = kuyular.length > 0 && kuyular.every((k) => Array.isArray(k.px) && k.px.length >= 2 && k.px.every(Number.isFinite));
+  if (pxVar) {
+    const us = kuyular.map((k) => Number(k.px![0]));
+    const vs = kuyular.map((k) => Number(k.px![1]));
+    const [u0, u1, v0, v1] = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
+    return kuyular.map((_, i) => ({
+      x: u1 > u0 ? (us[i] - u0) / (u1 - u0) : 0.5,
+      y: v1 > v0 ? (vs[i] - v0) / (v1 - v0) : 0.5,
+    }));
+  }
+  return kuyular.map((k) => {
+    const r = SATIR.indexOf(String(k.etiket).charAt(0).toUpperCase());
+    const c = Number(String(k.etiket).slice(1)) - 1;
+    return r >= 0 && c >= 0 && c <= 5 ? { x: c / 5, y: r / 3 } : { x: 0.5, y: 0.5 };
+  });
+}
+
+export function KuyuHaritasi({ kuyular }: { kuyular: OdakKuyu[] }) {
+  const { t } = useTranslation();
+  const degerler = kuyular.map((k) => k.mT).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const min = degerler.length ? Math.min(...degerler) : 0;
+  const maks = degerler.length ? Math.max(...degerler) : 0;
+  const yer = kuyuKonumlari(kuyular);
+  return (
+    <View testID="odak-kuyu-haritasi" accessibilityLabel={t("ai.pro.onay.odak.haritaBaslik")}>
+      <Text style={s.haritaBaslik}>{t("ai.pro.onay.odak.haritaBaslik")}</Text>
+      <View style={[s.kutu, { width: rs(KUTU_G), height: rs(KUTU_Y) }]}>
+        {kuyular.map((k, i) => (
+          <View
+            key={k.etiket}
+            testID={k.secili ? "odak-kuyu-secili" : `odak-kuyu-${k.etiket}`}
+            accessibilityLabel={
+              k.secili
+                ? t("ai.pro.onay.odak.kuyuEtiketSecili", { etiket: k.etiket, deger: sayi(k.mT), secili: t("ai.pro.onay.odak.secili") })
+                : t("ai.pro.onay.odak.kuyuEtiket", { etiket: k.etiket, deger: sayi(k.mT) })
+            }
+            style={[
+              s.hucre,
+              {
+                left: yer[i].x * rs(KUTU_G - HUCRE - 4),
+                top: yer[i].y * rs(KUTU_Y - HUCRE - 4),
+                backgroundColor: kuyuRengi(k.mT, min, maks),
+              },
+              k.secili && s.hucreSecili,
+            ]}
+          >
+            <Text style={s.hucreEtiket}>{k.etiket}</Text>
+            <Text style={s.hucreDeger}>{sayi(k.mT)}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={s.olcek}>{t("ai.pro.onay.odak.olcek", { min: sayi(min), maks: sayi(maks) })}</Text>
+      <Text style={s.uyari}>{t("ai.pro.onay.odak.komsuUyari")}</Text>
+    </View>
+  );
+}
+
+export function OdakOzeti({
+  odak, busy, onYenidenHesapla,
+}: {
+  odak: OdakOzet;
+  busy?: boolean;
+  /** Doz / petri kipi değişince yeni öneri iste (yeni mühür). Verilmezse seçici gösterilmez. */
+  onYenidenHesapla?: (doz: number, kip: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [dozMetni, setDozMetni] = useState(sayi(odak.doz_mT));
+  const [kip, setKip] = useState(odak.kip);
+  const tavan = typeof odak.tavan_mT === "number" ? odak.tavan_mT : NaN;
+  const doz = dozCoz(dozMetni);
+  const dozGecerli = Number.isFinite(doz) && doz > 0 && (!Number.isFinite(tavan) || doz <= tavan);
+  const petri = (PETRI_KIPLERI as readonly string[]).includes(odak.kip);
+  const duzgunluk = odak.kip === "TUM_PETRI" || odak.kip === "KEDI_TV";
+
+  return (
+    <View testID="odak-ozeti" style={s.wrap}>
+      <Text style={s.satirKalin}>
+        {t("ai.pro.onay.odak.doz", { doz: sayi(odak.doz_mT), pay: sayi(odak.pay_yuzde, 0) })}
+      </Text>
+      <Text style={s.satir}>
+        {t("ai.pro.onay.odak.beklenen", { beklenen: sayi(odak.beklenen_mT), tavan: sayi(odak.tavan_mT) })}
+      </Text>
+      {duzgunluk ? (
+        <Text style={s.satir}>{t("ai.pro.onay.odak.duzgunluk", { oran: sayi(odak.oran) })}</Text>
+      ) : (
+        <Text style={s.satir}>{t("ai.pro.onay.odak.cevre", { cevre: sayi(odak.cevre_mT), oran: sayi(odak.oran, 1) })}</Text>
+      )}
+      <Text style={s.kaynak}>{t("ai.pro.onay.odak.kaynak")}</Text>
+
+      {Array.isArray(odak.kuyular) && odak.kuyular.length ? <KuyuHaritasi kuyular={odak.kuyular} /> : null}
+
+      {onYenidenHesapla ? (
+        <View style={s.secici}>
+          {petri ? (
+            <View style={s.kipSatiri} accessibilityRole="radiogroup" accessibilityLabel={t("ai.pro.onay.odak.kipEtiket")}>
+              {PETRI_KIPLERI.map((k) => (
+                <TouchableOpacity
+                  key={k}
+                  testID={`odak-kip-${k}`}
+                  style={[s.kipDugme, kip === k && s.kipDugmeSecili, { minHeight: touch.min }]}
+                  onPress={() => setKip(k)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: kip === k }}
+                >
+                  <Text style={[s.kipYazi, kip === k && s.kipYaziSecili]}>{t(`ai.pro.onay.odak.kip.${k}`)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          <Text style={s.satir}>{t("ai.pro.onay.odak.dozSec", { tavan: sayi(odak.tavan_mT) })}</Text>
+          <View style={s.dozSatiri}>
+            <TextInput
+              testID="odak-doz-girdi"
+              style={[s.girdi, { minHeight: touch.min }]}
+              value={dozMetni}
+              onChangeText={setDozMetni}
+              keyboardType="decimal-pad"
+              accessibilityLabel={t("ai.pro.onay.odak.dozSec", { tavan: sayi(odak.tavan_mT) })}
+            />
+            <TouchableOpacity
+              testID="odak-yeniden-hesapla"
+              style={[s.dugme, (!dozGecerli || busy) && s.dugmePasif, { minHeight: touch.min }]}
+              disabled={!dozGecerli || !!busy}
+              onPress={() => onYenidenHesapla(doz, kip)}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !dozGecerli || !!busy }}
+            >
+              <Text style={s.dugmeYazi}>{t("ai.pro.onay.odak.yenidenHesapla")}</Text>
+            </TouchableOpacity>
+          </View>
+          {!dozGecerli ? (
+            <Text testID="odak-doz-hata" style={s.uyari}>{t("ai.pro.onay.odak.dozGecersiz", { tavan: sayi(odak.tavan_mT) })}</Text>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  wrap: { gap: spacing.xs, marginTop: spacing.xs },
+  satir: { color: colors.text, fontSize: rf(12), fontWeight: "600" },
+  satirKalin: { color: colors.text, fontSize: rf(13), fontWeight: "800" },
+  kaynak: { color: colors.textMuted, fontSize: rf(11) },
+  uyari: { color: colors.warning, fontSize: rf(11), fontWeight: "700" },
+  haritaBaslik: { color: colors.text, fontSize: rf(12), fontWeight: "700", marginTop: spacing.xs },
+  kutu: { position: "relative", marginTop: spacing.xs, backgroundColor: colors.bgAlt, borderRadius: radius.md },
+  hucre: {
+    position: "absolute",
+    width: rs(HUCRE),
+    height: rs(HUCRE),
+    borderRadius: rs(HUCRE / 2),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hucreSecili: { borderWidth: 3, borderColor: colors.text },
+  hucreEtiket: { color: "#FFFFFF", fontSize: rf(9), fontWeight: "800" },
+  hucreDeger: { color: "#FFFFFF", fontSize: rf(9), fontWeight: "700" },
+  olcek: { color: colors.textMuted, fontSize: rf(11) },
+  secici: { gap: spacing.xs, marginTop: spacing.sm },
+  kipSatiri: { flexDirection: "row", gap: spacing.xs },
+  kipDugme: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+  kipDugmeSecili: { backgroundColor: colors.primary, borderColor: colors.primary },
+  kipYazi: { color: colors.text, fontSize: rf(12), fontWeight: "700" },
+  kipYaziSecili: { color: "#04121F" },
+  dozSatiri: { flexDirection: "row", gap: spacing.xs, alignItems: "center" },
+  girdi: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    color: colors.text,
+    fontSize: rf(13),
+  },
+  dugme: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, justifyContent: "center" },
+  dugmePasif: { opacity: 0.5 },
+  dugmeYazi: { color: "#04121F", fontSize: rf(12), fontWeight: "800" },
+});

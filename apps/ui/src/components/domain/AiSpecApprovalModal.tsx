@@ -23,6 +23,7 @@ import { CheckCircle2, X, XCircle } from "lucide-react-native";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { modelProfili } from "@/components/domain/aiProProfilleri";
 import { KalibrasyonRozeti } from "@/components/domain/aipro/KalibrasyonRozeti";
+import { OdakOzeti, type OdakOzet } from "@/components/domain/aipro/OdakOzeti";
 import { Trans, useTranslation } from "react-i18next";
 import i18n from "i18next";
 
@@ -49,6 +50,8 @@ export interface AiProposalSpecs {
   patient_name?: string;
   /** T3 · Y189: KOŞULSUZ öneri (engeller atlandı) — mühürde; `/start` seansı bu kipte açar. Alan yoksa koşullu. */
   kosulsuz?: boolean;
+  /** ODAK (istem 45): faz / duty'yi üreten planın fizik denetimi (doz, tavan, çevre, oran, konum payı, petride 24 kuyu). */
+  odak?: OdakOzet;
 }
 
 export interface AiProposalMeta {
@@ -110,7 +113,7 @@ function tr(n: number, basamak = 2): string {
 }
 
 export function AiSpecApprovalModal({
-  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali,
+  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali, onYenidenHesapla,
 }: {
   visible: boolean;
   specs: AiProposalSpecs | null;
@@ -123,6 +126,8 @@ export function AiSpecApprovalModal({
   /** Y142 (sahip 2026-10-13): doluysa bu öneriyle SÜRÜŞ BAŞLATILAMAZ — değeri NEDEN metnidir (backend `surusKapaliNedeni`).
    *  Öneri yine incelenir ve reddedilebilir; onay düğmesi pasiftir ve bunu SÖYLER (düğme etiketi gerçeği söyler). */
   surusKapali?: string;
+  /** ODAK: doz / petri kipi değişince yeni öneri iste (yeni mühür). Verilmezse doz seçici gösterilmez. */
+  onYenidenHesapla?: (doz: number, kip: string) => void;
 }) {
   const { t } = useTranslation();
   const [rejecting, setRejecting] = useState(false);
@@ -285,9 +290,15 @@ export function AiSpecApprovalModal({
             </Text>
           ) : null}
 
+          {/* ODAK (istem 45): faz / duty ODAK planından → doz ± konum payı, tavan, çevre / oran, petride 24 kuyu haritası + doz seçici.
+              Eski "hedefte · çevrede · oran" satırı (hoca modelinin birimsiz E'si) ODAK önerisinde GÖSTERİLMEZ. */}
+          {specs.odak ? (
+            <OdakOzeti odak={specs.odak} busy={busy} onYenidenHesapla={onYenidenHesapla} />
+          ) : null}
+
           {/* GÖRELİ ALAN: model birimsiz bir göreli değer üretir; "V/m" yazmak uydurma olurdu.
               Çevre değeri ölçülebilir düzeydeyse (>0,01) SEÇİCİLİK oranı da gösterilir. */}
-          {arastirma ? (
+          {arastirma && !specs.odak ? (
             <Text style={s.konum}>
               {t("ai.pro.onay.alan", { hedef: tr(eHedef) }) +
                 (eCevre > 0.01 ? t("ai.pro.onay.alanCevre", { cevre: tr(eCevre), oran: tr(eHedef / eCevre, 1) }) : "")}

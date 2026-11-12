@@ -381,6 +381,21 @@
         "hazirlikBasladi": "Hazırlık başladı",
         "hazirlikCalisiyor": "Hazırlık zaten çalışıyor"
       },
+      "odak": {
+        "engel": {
+          "dozGecersiz": "Doz geçersiz — sürülmedi. 0'dan büyük bir doz (mT) seçin.",
+          "dozSapmasi": "Model bu konumda istenen dozu tutturamadı (beklenen {{beklenen}} mT, istenen {{istenen}} mT; sınır %10) — sürülmedi. Dozu biraz değiştirip yeniden hesaplayın ya da numuneyi hafifçe kaydırın.",
+          "dozTavanUstu": "Bu konumda en çok {{tavan}} mT verilebilir (bobinler %50) — sürülmedi. Dozu {{tavan}} mT ya da altına indirin ya da numuneyi kabin ortasına yaklaştırın.",
+          "eslemeDogrulanmadi": "Bobin eşlemesi doğrulanmamış — sürülmedi. Tezgâhta bobin–alan eşlemesini MLX ile doğrulayın.",
+          "hedefKabinDisi": "Hedef cam içi kabin kutusunun dışında — sürülmedi. Numuneyi kabinin ortasına doğru kaydırıp konumu yeniden bulun.",
+          "kalibrasyonBozuk": "Alan kalibrasyonu okunamadı ya da bozuk — sürülmedi. Kalibrasyonu yeniden kaydedin (tezgâh ölçümü).",
+          "kalibrasyonEski": "Alan kalibrasyonu eski sürümde — sürülmedi. Tezgâh ölçümünü bu sürümle yineleyin.",
+          "kalibrasyonYok": "Alan kalibrasyonu yok (tezgâh ölçümü) — sürülmedi. Bobin alanı MLX ile ölçülüp kalibrasyon kaydedilmeden bu sürüş yapılamaz.",
+          "kuyuYok": "Seçilen kuyu ({{hedef}}) plaka ızgarasında yok — sürülmedi. Kuyuyu kare üstünde yeniden seçin.",
+          "modelEski": "ODAK modeli bu kabin kalibrasyonuyla eğitilmemiş — sürülmedi. Uygulamayı güncelleyin ya da alan ölçümünü (tezgâh) modelle aynı sürüme getirin.",
+          "plakaYok": "24'lük plakanın kuyu ızgarası tam bulunamadı ({{bulunan}} / {{beklenen}}) — sürülmedi. Plakayı kadraja tam alın, ışığı düzeltip konumu yeniden bulun."
+        }
+      },
       "sonuc": {
         "baslatilmadi": "AI Pro BAŞLATILMADI"
       }

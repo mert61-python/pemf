@@ -372,6 +372,14 @@
    "onek": "ai.",
    "degerler": ["hata.xaiEnFazla25", "sonuc.aciklamaUretilemedi"],
    "gerekce": "DEV-D5.GPU (22-SON): GPU servisinin bilinen iki `xai_error` metni `_XAI_HATA_METINLERI` (modül düzeyi kapalı tablo) ile istek dilindeki katalog ANAHTARINA eşlenir; tanınmayan metin aynen"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/servers/ai_pro_hedef.py",
+   "ifade": "ceviri.t(f\"ai.pro.odak.engel.",
+   "onek": "ai.pro.odak.engel.",
+   "degerler": ["hedefKabinDisi", "dozGecersiz", "dozTavanUstu", "dozSapmasi", "modelEski", "plakaYok", "kuyuYok", "kalibrasyonYok", "kalibrasyonBozuk", "kalibrasyonEski", "eslemeDogrulanmadi"],
+   "gerekce": "ODAK (istem 45): engel kodu KAPALI küme — ai_hub.odak.oneri.Engel kodları + ai_hub.odak.alan.KalibrasyonHatasi kodları"
   }
  ]
 }

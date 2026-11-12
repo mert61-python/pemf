@@ -232,6 +232,96 @@ def hedef_gosterim_adi(saglayici, hedef_id: int) -> str:
     return yap(hedef_id)
 
 
+# ══════════════════════════════════════════════════════════════════════════════════════════
+# ODAK (istem 45 · Y268–Y274 · Y280): petri / fantom / kedi faz + duty'si ODAK modelinden (KNN + yerel alan, fizik denetimli).
+# Hoca modelleri (em_fantom / em_petri / em_kedi) SİLİNMEZ ama SÜRÜŞ KAYNAĞI OLMAZ. ai_hub importu fonksiyon içinde (kod koruması).
+# ══════════════════════════════════════════════════════════════════════════════════════════
+ODAK_PETRI_KIPLERI = ("TUM_PETRI", "KUYUCUK")
+#: Doz verilmeden istenen öneride başlangıç dozu = tavanın bu kesri (kullanıcı onay penceresinde değiştirir; sabit 1 mT YOK — Y273).
+ODAK_VARSAYILAN_DOZ_KESRI = 0.8
+
+
+#: ODAK'ın SÜRÜŞ kaynağı olduğu modeller. ⚠️ Kedi (Y142 gereği sürüşü kapalı) bu committe eski öneri yolunda kalır: kedi öneri / onay
+#: hesabının ODAK'a geçişi (gövde konumu + organ yükseklikleri CST kedi modelinden) ayrı iş (`DENETIM\\ODAK.md` "kalan").
+ODAK_MODELLERI = ("petri", "fantom")
+
+
+def odak_destekli(saglayici) -> bool:
+    return getattr(saglayici, "ad", "") in ODAK_MODELLERI
+
+
+def odak_kipi(saglayici, hedef_id: int, istenen: str = "") -> str:
+    """petri: istenen (TUM_PETRI | KUYUCUK; varsayılan KUYUCUK) · fantom: FANTOM · kedi: 0 → KEDI_TV (Tüm Vücut), organ → KEDI_ORGAN."""
+    ad = getattr(saglayici, "ad", "")
+    if ad == "petri":
+        k = str(istenen or "").strip().upper()
+        return k if k in ODAK_PETRI_KIPLERI else "KUYUCUK"
+    if ad == "fantom":
+        return "FANTOM"
+    if ad == "kedi":
+        return "KEDI_TV" if int(hedef_id) == 0 else "KEDI_ORGAN"
+    raise ValueError(ad)
+
+
+def _etiket_eki(saglayici, etiket) -> str:
+    """'Kuyu A1' → 'A1' (VERİ etiketi ön eki sağlayıcının `hedef_etiketi`)."""
+    on = f"{getattr(saglayici, 'hedef_etiketi', '')} "
+    e = str(etiket or "")
+    return e[len(on) :] if on.strip() and e.startswith(on) else e
+
+
+def _odak_engeli(kip: str, kod: str, doz_mT, ek=None) -> dict:
+    return {"kip": kip, "doz_mT": doz_mT, "engel": kod, "engel_ek": dict(ek or {}), "duty": [0.0] * 7, "faz": [0.0] * 7}
+
+
+def odak_plani(saglayici, konum: dict, hedef_id: int, doz_mT, istenen_kip: str = "") -> dict:
+    """Lokalizasyon (`konum`: x_mm / y_mm / z_mm / target_label, BACKEND kabin çerçevesi) + doz → ODAK planı (`ai_hub.odak.oneri.oner`).
+    Kalibrasyon yok / bozuk / eski / eşleme doğrulanmamış → engelli plan (duty 0). `doz_mT` None → tavanın %80'i (başlangıç önerisi)."""
+    from ai_hub.odak import alan as odak_alan
+    from ai_hub.odak import oneri as odak_oneri
+
+    kip = odak_kipi(saglayici, hedef_id, istenen_kip)
+    try:
+        A = odak_oneri.alan_modeli(duzlem_veri_koku())
+    except odak_alan.KalibrasyonHatasi as e:
+        return _odak_engeli(kip, e.kod, doz_mT)
+    if kip in ODAK_PETRI_KIPLERI:
+        meta = saglayici.son_lokalizasyon_meta()
+        girdi = {
+            "kuyular": meta.get("odak_adaylar") or [],
+            "hedef_etiket": _etiket_eki(saglayici, konum.get("target_label")),
+        }
+    else:
+        girdi = {"hedef_P": [float(konum["x_mm"]), float(konum["y_mm"]), float(konum["z_mm"])]}
+    if doz_mT is None:
+        tv = odak_oneri.hedef_tavani(kip, A, **girdi)
+        if tv["engel"]:
+            return _odak_engeli(kip, tv["engel"], None, tv["engel_ek"])
+        doz_mT = max(0.01, round(ODAK_VARSAYILAN_DOZ_KESRI * float(tv["tavan_mT"]), 2))
+    return odak_oneri.oner(kip, A, float(doz_mT), **girdi)
+
+
+def odak_engel_metni(plan: dict) -> str:
+    """Engel kodu → eylem söyleyen metin (istek dili). Sayılar 2 basamak."""
+    ek = {k: (f"{float(v):.2f}" if isinstance(v, float) else v) for k, v in (plan.get("engel_ek") or {}).items()}
+    return ceviri.t(f"ai.pro.odak.engel.{plan.get('engel')}", **ek)
+
+
+def odak_ayarla(saglayici, odak, hedef_etiket: str = "") -> None:
+    """Seans: MÜHÜRDEKİ ODAK ayarı (doz, kip, hedef etiketi) → döngünün `predict`i kullanır; None = temizle (durdurma).
+    Kedi sağlayıcısında yok sayılır (kedi sürüşü Y142 gereği kapalı)."""
+    if not hasattr(saglayici, "odak_ayari"):
+        return
+    if not odak or odak.get("doz_mT") is None:
+        saglayici.odak_ayari = None
+        return
+    saglayici.odak_ayari = {
+        "doz_mT": float(odak["doz_mT"]),
+        "kip": str(odak.get("kip") or ""),
+        "hedef_etiket": str(hedef_etiket or ""),
+    }
+
+
 def kosulsuz_ayarla(saglayici, deger) -> bool:
     """T3 · Y189: araştırma sağlayıcısının (fantom / petri) KOŞULSUZ kipini ayarla; kedi sağlayıcısında yok sayılır (False).
     @return etkin değer. Hazırlık bunu istekten, seans ÖNERİ MÜHRÜNDEN (`specs.kosulsuz`) verir; durdurma False'a döndürür."""
@@ -592,6 +682,8 @@ class _EmCvSaglayici:
         #: yöntem tavanı + `MIN_GUVEN` eşiği sürüşü KESMEZ. Kalanlar: sonuç var, konum KABİN çerçevesinde (`pemf_valid`), kabin
         #: içi + sonlu hedef (D1.85), Y145 bayrağı, hekim onayı, ACİL DURDUR. Varsayılan False = davranış AYNI.
         self.kosulsuz = False
+        #: ODAK (istem 45): seansın MÜHÜRLÜ doz / kip / hedef etiketi (`odak_ayarla`); None = sürüş yok.
+        self.odak_ayari: dict | None = None
 
     # ── alt sınıf sözleşmesi ────────────────────────────────────────────────────────────
     def _yukleyici(self):
@@ -815,6 +907,15 @@ class _EmCvSaglayici:
             "frame_h": _kare_h,
             "targets": [_hedef_tel(a, _kare_w, _kare_h) for a in adaylar],
             "hata": hata,
+            # ODAK (istem 45): bütün adaylar kabin konumuyla — petride 24 kuyu (TÜM PETRİ hedefi / KUYUCUK çevresi + onay haritası).
+            "odak_adaylar": [
+                {
+                    "etiket": _etiket_eki(self, a.get("label")),
+                    "P": [float(a["x"]), float(a["y"]), float(a["z"])],
+                    "px": a.get("px"),
+                }
+                for a in adaylar
+            ],
         }
         # ⚠️ AI-2 (plan §3.9 · hocanın ENTEGRASYON §3): bobine giden yolda tüketim kapısı — `success`, `pemf_valid`,
         # fantomda `reliable`, engelleyici uyarılar (`layout_mismatch`, `control_cancer_missed`, `control_healthy_flagged`)
@@ -887,28 +988,20 @@ class _EmCvSaglayici:
             return None
 
     def predict(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int) -> tuple:
-        """EM doz modeli → (D[7], P[7], e_field). HAM döner; kırpma ai_router zarfında.
+        """ODAK (istem 45) → (duty[7], faz[7], 0.0). Faz / duty MÜHÜRDEKİ doz + kiple ODAK modelinden (`odak_plani`; seans
+        başlangıcında `odak_ayarla`). Hoca modeli (`cache["predictor"]`) SÜRÜŞ KAYNAĞI OLMAZ. Ayar YOK ya da plan ENGELLİ
+        (fizik denetimi / kalibrasyon) → SIFIR (bobin sürülmez — `_predict_and_drive` sıfırı "doz yok" sayar)."""
+        ayar = self.odak_ayari
+        if not ayar:
+            return [0.0] * 7, [0.0] * 7, 0.0
+        konum = {"x_mm": x_mm, "y_mm": y_mm, "z_mm": z_mm, "target_label": ayar.get("hedef_etiket")}
+        plan = odak_plani(self, konum, hedef_id, ayar["doz_mT"], ayar.get("kip", ""))
+        if plan.get("engel"):
+            from servers import ai_router as air
 
-        ⚠️ EM `organ_id` = DOKU SINIFI (0 sağlıklı / 1 kanserli), UI hedef indeksi DEĞİL. Sınıf son
-        lokalizasyonun SEÇİLİ hedefinden gelir; e_field o sınıfın E'sidir (`result_E_cancer` /
-        `result_E_healthy`). Kedi modelinin tek `result_E` anahtarını okumak fantom/petri'de
-        e_field'ı SESSİZCE 0 yapardı (keşif bulgusu)."""
-        cache = self._onbellek()
-        with self._kilit:
-            sinif = int(self._meta.get("secili_organ_id", 1))
-        out = cache["predictor"].predict(
-            x=x_mm,
-            y=y_mm,
-            z=z_mm,
-            organ_id=sinif,
-            achieved_B=self.achieved_B,
-            duty_sum=self.duty_sum,
-        )
-        D = [float(out.get(f"D{i}", 0.0)) for i in range(1, 8)]
-        P = [float(out.get(f"P{i}", 0.0)) for i in range(1, 8)]
-        e_anahtar = "result_E_cancer" if sinif == 1 else "result_E_healthy"
-        e_field = float(out.get(e_anahtar, out.get("result_E_avg", 0.0)) or 0.0)
-        return D, P, e_field
+            air.logger.warning("%s ODAK planı ENGELLİ (%s) → sürülmez", self.ad, plan.get("engel"))
+            return [0.0] * 7, [0.0] * 7, 0.0
+        return [float(d) for d in plan["duty"]], [float(p) for p in plan["faz"]], 0.0
 
     def xai_sensitivity(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int):
         """Onay ekranı için hafif duyarlılık — dozun FİİLEN kullandığı baz noktasıyla (karar #9)."""

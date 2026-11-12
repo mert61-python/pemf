@@ -2482,6 +2482,10 @@ class AiProProposePayload(BaseModel):
     #: T3 · Y189: panelin seçili kipi. Önizleme konumu FARKLI kipte bulunduysa öneri 409 (kip değişti → önizleme yeniden);
     #: eşleşirse MÜHÜRE yazılır (`specs.kosulsuz`), `/start` seansı o kipte açar.
     kosulsuz: bool = False
+    #: ODAK (istem 45 · Y273): kullanıcının SEÇTİĞİ doz (hedefte tepe |B|, mT). None → tavanın %80'i (onay penceresinde değiştirilir).
+    doz_mT: float | None = None
+    #: ODAK petri kipi: "TUM_PETRI" (24 kuyunun en zayıfı = doz) | "KUYUCUK" (seçili kuyu = doz; varsayılan). Diğer modellerde yok sayılır.
+    odak_kip: str = ""
 
 
 def _uzaktan_kimliksiz_mi(request) -> bool:
@@ -2504,6 +2508,26 @@ def _uzaktan_kimliksiz_mi(request) -> bool:
     except Exception:
         logger.exception("AI Pro önerisi: uzak istek kimlik denetimi yapılamadı → hasta BAĞLANMAZ (fail-closed)")
         return True
+
+
+_ODAK_OZET_ALANLARI = (
+    "kip",
+    "doz_mT",
+    "beklenen_mT",
+    "tavan_mT",
+    "cevre_mT",
+    "oran",
+    "pay_yuzde",
+    "sapma_yuzde",
+    "kuyular",
+    "kalibrasyon",
+    "model",
+)
+
+
+def _odak_ozet(plan: dict) -> dict:
+    """ODAK planının MÜHÜRE yazılan kısmı (onay penceresi + `/start`)."""
+    return {k: plan.get(k) for k in _ODAK_OZET_ALANLARI if plan.get(k) is not None}
 
 
 @ai_router.post("/api/ai/pro/propose")
@@ -2577,8 +2601,16 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     # Sağlayıcıyı bu isteğin thread'ine bağla → `_predict_and_drive` MÜHÜRLENEN modelin dozunu
     # üretir (imza değişmez: mevcut testlerin 4 argümanlı mock'ları çalışmaya devam eder).
     _ai_hedef_yerel.saglayici = _saglayici
+    _odak = None
     try:
-        D, P, e_field = _predict_and_drive(c["x_mm"], c["y_mm"], c["z_mm"], oid)
+        if ai_pro_hedef.odak_destekli(_saglayici):
+            # ODAK (istem 45): faz / duty istenen DOZLA ODAK modelinden; fizik denetimi engellerse SÜRME (eylem söyleyen 409).
+            _odak = ai_pro_hedef.odak_plani(_saglayici, c, _muhur_hedefi, payload.doz_mT, payload.odak_kip)
+            if _odak.get("engel"):
+                raise HTTPException(status_code=409, detail=ai_pro_hedef.odak_engel_metni(_odak))
+            D, P, e_field = [float(d) for d in _odak["duty"]], [float(p) for p in _odak["faz"]], 0.0
+        else:
+            D, P, e_field = _predict_and_drive(c["x_mm"], c["y_mm"], c["z_mm"], oid)
     finally:
         _ai_hedef_yerel.saglayici = None
     if not any(float(d) > 0 for d in D):
@@ -2594,7 +2626,8 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     # ⚠️ Açıklama İKİNCİL: hatası ÖNERİYİ asla düşürmez (zarif düşüş).
     xai_meta = {}
     try:
-        _duyarlilik = _saglayici.xai_sensitivity(c["x_mm"], c["y_mm"], c["z_mm"], oid)
+        # ODAK önerisinde hoca modelinin duyarlılığı dozu AÇIKLAMAZ (sürüş kaynağı değil) → gösterilmez.
+        _duyarlilik = None if _odak is not None else _saglayici.xai_sensitivity(c["x_mm"], c["y_mm"], c["z_mm"], oid)
         if _duyarlilik:
             xai_meta["xaiSensitivity"] = _duyarlilik
     except Exception as xe:
@@ -2631,6 +2664,9 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
             "patient_name": _hasta_adi,
             # T3 · Y189: KOŞULSUZ öneri mühürde (onay penceresi söyler; `/start` seansı bu kipte açar). Koşulluda alan YOK (eski mühür).
             **({"kosulsuz": True} if _kosulsuz else {}),
+            # ODAK (istem 45): seçilen doz + kip + fizik denetimi (onay penceresi: doz ± konum payı, tavan, çevre, oran, 24 kuyu haritası);
+            # `/start` doz / kipi BURADAN okur (döngü aynı dozla yeniden hesaplar).
+            **({"odak": _odak_ozet(_odak)} if _odak is not None else {}),
         },
         meta={
             "x_mm": c["x_mm"],
@@ -2894,6 +2930,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         _ai_hedef_modeli = _saglayici.ad  # döngü ve /frame bu modeli kullanır (mühürle aynı)
         # T3 · Y189: kip MÜHÜRDEN (gövde yok sayılır)
         ai_pro_hedef.kosulsuz_ayarla(_saglayici, _spec.get("kosulsuz") is True)
+        # ODAK (istem 45): doz / kip / hedef MÜHÜRDEN — döngünün `predict`i bunlarla yeniden hesaplar (mühürsüz → sürülmez).
+        ai_pro_hedef.odak_ayarla(_saglayici, _spec.get("odak"), _spec.get("target_label") or "")
         _ai_duration_min = _sure_dk
         # DENETIM P2: DUVAR SAATI idi. AI Pro sure siniri gecen-sure farkiyla hesaplandigindan
         # NTP duzeltmesi/DST/elle saat degisimi GERI giderse maruziyet UZAR (donanim deadline'i
@@ -3009,6 +3047,7 @@ def stop_ai_pro():
         _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
         for _s in ai_pro_hedef.SAGLAYICILAR.values():  # T3 · Y189: koşulsuz kip seansla biter
             ai_pro_hedef.kosulsuz_ayarla(_s, False)
+            ai_pro_hedef.odak_ayarla(_s, None)  # ODAK (istem 45): mühürlü doz / kip seansla biter
         # [B1] Sahiplik kilidin İÇİNDE temizlenir: stop'tan sonra başka bir modern istemci AI
         # Pro'yu devralabilsin (stale owner kimseyi kilitlemesin).
         _ai_owner_client = ""
@@ -3265,6 +3304,7 @@ def ai_pro_hazirlik_durdur():
     if not _ai_loop_active and _ai_pro_surus_muhru() is None:
         for _s in ai_pro_hedef.SAGLAYICILAR.values():
             ai_pro_hedef.kosulsuz_ayarla(_s, False)
+            ai_pro_hedef.odak_ayarla(_s, None)  # ODAK (istem 45): mühürlü doz / kip seansla biter
     return {"status": "success"}
 
 

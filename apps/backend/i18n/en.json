@@ -381,6 +381,21 @@
         "hazirlikBasladi": "Preparation started",
         "hazirlikCalisiyor": "Preparation is already running"
       },
+      "odak": {
+        "engel": {
+          "dozGecersiz": "Invalid dose — not driven. Choose a dose (mT) greater than 0.",
+          "dozSapmasi": "The model could not meet the requested dose at this position (expected {{beklenen}} mT, requested {{istenen}} mT; limit 10%) — not driven. Change the dose slightly and recalculate, or move the sample slightly.",
+          "dozTavanUstu": "At most {{tavan}} mT can be delivered at this position (coils at 50%) — not driven. Lower the dose to {{tavan}} mT or less, or move the sample closer to the cabin centre.",
+          "eslemeDogrulanmadi": "The coil mapping is not verified — not driven. Verify the coil–field mapping with the MLX at the bench.",
+          "hedefKabinDisi": "The target is outside the inner glass box of the cabin — not driven. Move the sample toward the cabin centre and locate it again.",
+          "kalibrasyonBozuk": "The field calibration could not be read or is damaged — not driven. Save the calibration again (bench measurement).",
+          "kalibrasyonEski": "The field calibration is from an old version — not driven. Repeat the bench measurement with this version.",
+          "kalibrasyonYok": "No field calibration (bench measurement) — not driven. This drive needs the coil field measured with the MLX and the calibration saved.",
+          "kuyuYok": "The selected well ({{hedef}}) is not in the plate grid — not driven. Select the well again on the frame.",
+          "modelEski": "The ODAK model was not trained with this cabin calibration — not driven. Update the application or bring the field measurement (bench) to the model's version.",
+          "plakaYok": "The well grid of the 24-well plate was not fully found ({{bulunan}} / {{beklenen}}) — not driven. Bring the whole plate into view, adjust the lighting and locate it again."
+        }
+      },
       "sonuc": {
         "baslatilmadi": "AI Pro was NOT STARTED"
       }

@@ -21,6 +21,9 @@ import numpy as np
 import pytest
 import sabit_duzlem_sahne as sh
 from fastapi.testclient import TestClient
+from kd_kalibrasyon_yardimci import (
+    odak_tahminci,  # noqa: F401  ODAK sahtesi (bu dosya DÜZLEM kapısını ölçer; ODAK test_ODK_*)
+)
 
 
 def _sag(ad: str):

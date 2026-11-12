@@ -1,0 +1,32 @@
+{
+ "surum": 1,
+ "kaynak": "ODK eğitim varsayımları (DENETIM/odak/model/numune_on.json); fantom KD-3b ölçüleriyle güncellenir",
+ "plaka": {
+  "satir": 4,
+  "sutun": 6,
+  "aralik_mm": 19.3,
+  "sivi_orta_mm": 5.0
+ },
+ "fantom": {
+  "boyut_mm": [
+   150.0,
+   100.0,
+   50.0
+  ],
+  "tumor_yukseklik_mm": 20.0,
+  "cevre_haric_yaricap_mm": 25.0
+ },
+ "kedi": {
+  "govde_yari_mm": [
+   193.145,
+   70.43465,
+   73.71
+  ],
+  "govde_olcek": [
+   0.8,
+   0.6,
+   0.6
+  ],
+  "cevre_haric_yaricap_mm": 30.0
+ }
+}

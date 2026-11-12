@@ -32,7 +32,8 @@
     "ozet_other": "{{count}} coils · B={{b}} mT · Σduty={{duty}}",
     "saglikli": "Healthy",
     "satirEtiketi": "{{label}} E-field {{deger}}",
-    "tumor": "Tumor"
+    "tumor": "Tumor",
+    "yaklasik": "Approximate value — from the old surrogate model, not yet connected to ODAK. For the dose, see the ODAK values on the approval screen."
   },
   "ekran": {
     "aiProFantomPetri": "AI Pro — Tumor Phantom / Well Plate Closed-Loop",

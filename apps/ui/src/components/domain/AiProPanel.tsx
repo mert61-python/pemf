@@ -852,6 +852,33 @@ export function AiProPanel({
     }
   }, [proposal, operatorEmail, patientName, kediSurusAcik]);
 
+  /** ODAK (istem 45 · Y273): hekim dozu / petri kipini değiştirdi → AYNI lokalizasyonla yeni öneri (yeni mühür). Başarısızsa (ör. doz
+   *  tavanın üstünde, lokalizasyon bayat) sunucunun eylem söyleyen 409 metni bildirim olarak gösterilir, eski öneri açık kalır. */
+  const yenidenHesapla = useCallback(async (doz: number, kip: string) => {
+    if (!proposal?.proposalId || onayAkisiRef.current) return;
+    setApprovalBusy(true);
+    try {
+      const prop = await apiPost<AiProposeResponse | null>(
+        "/ai/pro/propose",
+        {
+          organ_id: proposal.specs?.organ_id ?? organId,
+          duration_minutes: proposal.specs?.duration_minutes ?? (parseInt(duration) || 20),
+          model: proposal.specs?.model ?? hedefModeliRef.current,
+          client_mode: kullaniciKipiRef.current,
+          patient_id: hastaRef.current.id,
+          patient_name: hastaRef.current.name,
+          kosulsuz: kosulsuzRef.current,
+          doz_mT: doz,
+          odak_kip: kip,
+        },
+        null
+      );
+      if (prop?.proposalId) setProposal(prop);
+    } finally {
+      setApprovalBusy(false);
+    }
+  }, [proposal, organId, duration]);
+
   /** Hekim REDDETTİ → gerekçeyle kaydet; tedavi BAŞLAMAZ. */
   const rejectProposal = useCallback(async (reason: string) => {
     if (!proposal?.proposalId) return;
@@ -1185,6 +1212,7 @@ export function AiProPanel({
         onApprove={approveAndStart}
         onReject={rejectProposal}
         onDismiss={() => setProposal(null)}
+        onYenidenHesapla={yenidenHesapla}
       />
       {/* SİHİRBAZ (yalnız araştırma): neredeyim + geri nasıl dönerim. Veterinerde RENDER EDİLMEZ →
           bugünkü ekran birebir korunur. */}
