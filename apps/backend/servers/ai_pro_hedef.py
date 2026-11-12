@@ -285,6 +285,9 @@ def odak_plani(saglayici, konum: dict, hedef_id: int, doz_mT, istenen_kip: str =
         A = odak_oneri.alan_modeli(duzlem_veri_koku())
     except odak_alan.KalibrasyonHatasi as e:
         return _odak_engeli(kip, e.kod, doz_mT)
+    except FileNotFoundError:
+        # Y282: alan tablosu AI model katmanında — yoksa SÜRMEZ (eylem: AI model paketini kur / güncelle).
+        return _odak_engeli(kip, "modelYok", doz_mT)
     if kip in ODAK_PETRI_KIPLERI:
         meta = saglayici.son_lokalizasyon_meta()
         girdi = {

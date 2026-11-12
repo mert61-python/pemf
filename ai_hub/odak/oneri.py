@@ -7,7 +7,7 @@ domeni tanımıyla); çevre ortalaması
 ve oran (odak kiplerinde hedef / çevre, düzgünlük kiplerinde en zayıf / en güçlü); konum payı (hedef ±10 mm kayınca doz değişimi); petride 24 kuyunun
 her birinde beklenen tepe |B| (onay ekranı haritası). SÜRME (engel kodu → i18n `ai.pro.odak.engel.<kod>`, eylem söyleyen metin):
   hedefKabinDisi · dozGecersiz · dozTavanUstu · dozSapmasi (|beklenen / istenen − 1| > %10) · modelEski (eğitim kalibrasyonu ≠ sürüşteki) ·
-  plakaYok (24 kuyu ızgarası çıkarılamadı) · kuyuYok (seçili kuyu ızgarada yok) · kalibrasyonYok / kalibrasyonBozuk / kalibrasyonEski / eslemeDogrulanmadi (alan.KalibrasyonHatasi).
+  modelYok (Y282: AI model katmanında ODAK dosyası yok) · plakaYok (24 kuyu ızgarası çıkarılamadı) · kuyuYok (seçili kuyu ızgarada yok) · kalibrasyonYok / kalibrasyonBozuk / kalibrasyonEski / eslemeDogrulanmadi (alan.KalibrasyonHatasi).
 Girdiler BACKEND kabin çerçevesindedir (X sol, Y yukarı, Z arka; mm); çeviri `alan.backend_to_olcum`'da (tek yer).
 """
 from __future__ import annotations
@@ -165,7 +165,10 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
             raise Engel("dozGecersiz")
         if D > plan["tavan_mT"] * (1 + 1e-6):
             raise Engel("dozTavanUstu", tavan=plan["tavan_mT"])
-        m = model or model_al(kip)
+        try:
+            m = model or model_al(kip)
+        except FileNotFoundError:
+            raise Engel("modelYok") from None
         if m.kalibrasyon_kimligi != A.kimlik:
             raise Engel("modelEski")
         Py = yerel_nokta(kip, g["oz"], A.taban_y)

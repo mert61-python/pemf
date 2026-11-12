@@ -27,6 +27,18 @@ BIPOLAR = (True, True, True, True, True, False, False)
 DUTY_AZAMI = 0.5
 VERI_DIZINI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "veri")
 ALAN_TABLOSU = "alan_tablosu.npz"
+#: Y282 (sahip 12 Kasım 2026): alan tablosu + ONNX modelleri (CST'den türetilmiş) AÇIK DEPODA YOK — diğer ağırlıklar gibi AI MODEL
+#: KATMANINDA (`release_assets/ai_models/ai_hub/odak/veri/`; kurulu: model dizini). `VERI_DIZINI`de yalnız küçük üst veri (model
+#: `.json`, `numune.json`) kalır. Çözüm + bütünlük (takipli manifest SHA-256, fail-closed) `utils.model_downloader`.
+MODEL_GORELI = "ai_hub/odak/veri"
+
+
+def model_katmani_yolu(ad: str) -> str:
+    """AI model katmanındaki ODAK dosyası (`alan_tablosu.npz` / `model_<KIP>.onnx`). Bulunamazsa FileNotFoundError (çağıran:
+    ODAK engeli `modelYok` — SÜRMEZ); özeti tutmazsa `ModelButunlukHatasi` (YÜKLENMEZ)."""
+    from utils.model_downloader import download_model_sync
+
+    return download_model_sync(f"{MODEL_GORELI}/{ad}")
 #: Veri kökü altındaki kalibrasyon (0. adım; düzlem kalibrasyonuyla AYNI klasör).
 KALIBRASYON_DIZINI = "kabin_kalibrasyonu"
 KALIBRASYON_DOSYASI = "alan_kalibrasyonu.json"
@@ -117,9 +129,9 @@ def kalibrasyon_oku(veri_koku) -> dict:
 
 
 @functools.lru_cache(maxsize=2)
-def alan_tablosu(yol: str = os.path.join(VERI_DIZINI, ALAN_TABLOSU)) -> dict:
-    """Paketli CST birim alan tablosu (CST bobin sırası, Eylül normalli, CST eksenleri, mT; 10 mm ızgara)."""
-    z = np.load(yol)
+def alan_tablosu(yol: str | None = None) -> dict:
+    """CST birim alan tablosu (CST bobin sırası, Eylül normalli, CST eksenleri, mT; 10 mm ızgara). `yol` yoksa AI model katmanından (Y282)."""
+    z = np.load(yol or model_katmani_yolu(ALAN_TABLOSU))
     B = z["B"].astype(np.float32)
     return {
         "B": B,

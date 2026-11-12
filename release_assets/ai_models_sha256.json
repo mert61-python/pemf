@@ -220,6 +220,30 @@
       "bayt": 900013354,
       "sha256": "c61bf550438d86afd85c1c31274adbda323fa9f633beb37a827b7423e3300794"
     },
+    "ai_hub/odak/veri/alan_tablosu.npz": {
+      "bayt": 3879705,
+      "sha256": "d67fb41812755ae75ba997666dd2948d9aeca60baae978e94654f43c9360af56"
+    },
+    "ai_hub/odak/veri/model_FANTOM.onnx": {
+      "bayt": 2580608,
+      "sha256": "924a3e5b65e4a1d36acd5046b9cf67c0e0e99e8b851f027ace87e2043af01b8e"
+    },
+    "ai_hub/odak/veri/model_KEDI_ORGAN.onnx": {
+      "bayt": 2634564,
+      "sha256": "2e826691b95d923c39d0f58ae35fc4ed38e7c825b7de7dcb70e98b44615c6096"
+    },
+    "ai_hub/odak/veri/model_KEDI_TV.onnx": {
+      "bayt": 987197,
+      "sha256": "49a0334f5dd8e8e1de58a4beb5b6221c84394cb11a5f20322654e79c52379734"
+    },
+    "ai_hub/odak/veri/model_KUYUCUK.onnx": {
+      "bayt": 3883283,
+      "sha256": "ea0dc36c9b09273a9528f0213d626c98334050b896683b83b729abe8932fa650"
+    },
+    "ai_hub/odak/veri/model_TUM_PETRI.onnx": {
+      "bayt": 1497455,
+      "sha256": "67cc3ea21cbe678944be6142da1fccfd9dac6712f76df4495dc744aebb714b1e"
+    },
     "ai_hub/petri_dish/yolo11m-seg.onnx": {
       "bayt": 89662211,
       "sha256": "1fe920ff22dedf2e1f43e1eeb472d25d5eece0c1c9b278ed15e1b428475ea181"

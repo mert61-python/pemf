@@ -393,6 +393,7 @@
           "kalibrasyonYok": "Alan kalibrasyonu yok (tezgâh ölçümü) — sürülmedi. Bobin alanı MLX ile ölçülüp kalibrasyon kaydedilmeden bu sürüş yapılamaz.",
           "kuyuYok": "Seçilen kuyu ({{hedef}}) plaka ızgarasında yok — sürülmedi. Kuyuyu kare üstünde yeniden seçin.",
           "modelEski": "ODAK modeli bu kabin kalibrasyonuyla eğitilmemiş — sürülmedi. Uygulamayı güncelleyin ya da alan ölçümünü (tezgâh) modelle aynı sürüme getirin.",
+          "modelYok": "ODAK model dosyaları (alan tablosu / model) bu bilgisayarda bulunamadı — sürülmedi. Uygulamanın AI model paketini kurun ya da güncelleyin (başlatıcı → Güncellemeler).",
           "plakaYok": "24'lük plakanın kuyu ızgarası tam bulunamadı ({{bulunan}} / {{beklenen}}) — sürülmedi. Plakayı kadraja tam alın, ışığı düzeltip konumu yeniden bulun."
         }
       },

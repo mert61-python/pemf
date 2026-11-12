@@ -423,20 +423,27 @@ def test_KRITIK_YEREL_alan_noktasi_EGITIMLE_ayni():
     assert list(yerel_nokta("KEDI_ORGAN", {"organ_x": 1, "organ_y": 2, "organ_z": 3}, ty)) == [1, 2, 3]
 
 
-def test_YAPISAL_URUN_MODELLERI_kalibrasyon_kimligi_ve_BOYUT(K):
-    """Paketli ONNX modelleri (A4 dışa aktarımı) örnek kalibrasyonla AYNI kimlikte ve app katmanı sınırının (< 5 MB) altında."""
-    from ai_hub.odak.alan import VERI_DIZINI, kalibrasyon_kimligi
+def test_YAPISAL_URUN_MODELLERI_kalibrasyon_kimligi_ve_AI_MODEL_KATMANINDA(K):
+    """ONNX modelleri (A4 dışa aktarımı) örnek kalibrasyonla AYNI kimlikte; Y282: dosyalar AI MODEL KATMANINDAN çözülür
+    (`release_assets/ai_models/ai_hub/odak/veri/`), depodaki `VERI_DIZINI`de YOK (yalnız üst veri)."""
+    from ai_hub.odak.alan import ALAN_TABLOSU, VERI_DIZINI, kalibrasyon_kimligi, model_katmani_yolu
     from ai_hub.odak.model import KIPLER, model_al
 
     kim = kalibrasyon_kimligi(K)
     for kip in KIPLER:
-        yol = os.path.join(VERI_DIZINI, f"model_{kip}.onnx")
-        assert os.path.isfile(yol), f"{kip}: model dosyası yok"
-        assert os.path.getsize(yol) < 5 * 1024 * 1024
+        yol = model_katmani_yolu(f"model_{kip}.onnx")
+        assert os.path.normcase(os.path.dirname(os.path.abspath(yol))) != os.path.normcase(
+            os.path.abspath(VERI_DIZINI)
+        ), yol
+        assert not os.path.exists(os.path.join(VERI_DIZINI, f"model_{kip}.onnx")), (
+            f"{kip}: ONNX depodaki veri dizininde (Y282)"
+        )
         m = model_al(kip)
+        assert os.path.samefile(m._yol, yol)
         assert m.kalibrasyon_kimligi == kim, f"{kip}: model başka kalibrasyonla eğitilmiş"
         assert "doz_mT" in m.ozellik_ad
-    assert os.path.getsize(os.path.join(VERI_DIZINI, "alan_tablosu.npz")) < 5 * 1024 * 1024
+    assert os.path.isfile(model_katmani_yolu(ALAN_TABLOSU))
+    assert not os.path.exists(os.path.join(VERI_DIZINI, ALAN_TABLOSU)), "alan tablosu depodaki veri dizininde (Y282)"
 
 
 def test_KRITIK_GERCEK_MODEL_tum_petri_ortada_FIZIK_denetiminden_gecer(A):

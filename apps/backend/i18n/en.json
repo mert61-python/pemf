@@ -393,6 +393,7 @@
           "kalibrasyonYok": "No field calibration (bench measurement) — not driven. This drive needs the coil field measured with the MLX and the calibration saved.",
           "kuyuYok": "The selected well ({{hedef}}) is not in the plate grid — not driven. Select the well again on the frame.",
           "modelEski": "The ODAK model was not trained with this cabin calibration — not driven. Update the application or bring the field measurement (bench) to the model's version.",
+          "modelYok": "ODAK model files (field table / model) were not found on this computer — not driven. Install or update the app's AI model package (launcher → Updates).",
           "plakaYok": "The well grid of the 24-well plate was not fully found ({{bulunan}} / {{beklenen}}) — not driven. Bring the whole plate into view, adjust the lighting and locate it again."
         }
       },

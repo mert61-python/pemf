@@ -45,7 +45,15 @@ MANIFEST = KOK / "release_assets" / "ai_models_sha256.json"
 
 #: Yalnız model AĞIRLIKLARI özetlenir. `.json`/`.txt` yardımcıları sık ve masum değişir
 #: (etiket listesi, config) — onları kapıya sokmak kapıyı gürültüden kullanılamaz yapar.
-AGIRLIK_UZANTILARI = {".onnx", ".pt", ".pth", ".pkl", ".safetensors", ".bin"}
+AGIRLIK_UZANTILARI = {
+    ".onnx",
+    ".pt",
+    ".pth",
+    ".pkl",
+    ".safetensors",
+    ".bin",
+    ".npz",
+}  # .npz: Y282 ODAK alan tablosu (doza girer)
 
 
 def _ozet(p: Path) -> str:

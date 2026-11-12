@@ -51,6 +51,14 @@
   },
   {
    "yuzey": "arayuz",
+   "dosya": "apps/ui/src/components/domain/aipro/OdakOzeti.tsx",
+   "ifade": "t(`ai.pro.onay.odak.kip.${k}`)",
+   "onek": "ai.pro.onay.odak.kip.",
+   "degerler": ["KUYUCUK", "TUM_PETRI"],
+   "gerekce": "ODK (istem 45): onay ekranındaki petri kipi seçicisi — değer kümesi KAPALI (`PETRI_KIPLERI` = KUYUCUK / TUM_PETRI, sunucu `ai_pro_hedef.ODAK_PETRI_KIPLERI` ile aynı), kullanıcı girdisi değil"
+  },
+  {
+   "yuzey": "arayuz",
    "dosya": "apps/ui/src/screens/AiHubScreen.tsx",
    "ifade": "i18n.t(k as never)",
    "onek": "",
@@ -378,7 +386,7 @@
    "dosya": "apps/backend/servers/ai_pro_hedef.py",
    "ifade": "ceviri.t(f\"ai.pro.odak.engel.",
    "onek": "ai.pro.odak.engel.",
-   "degerler": ["hedefKabinDisi", "dozGecersiz", "dozTavanUstu", "dozSapmasi", "modelEski", "plakaYok", "kuyuYok", "kalibrasyonYok", "kalibrasyonBozuk", "kalibrasyonEski", "eslemeDogrulanmadi"],
+   "degerler": ["hedefKabinDisi", "dozGecersiz", "dozTavanUstu", "dozSapmasi", "modelEski", "modelYok", "plakaYok", "kuyuYok", "kalibrasyonYok", "kalibrasyonBozuk", "kalibrasyonEski", "eslemeDogrulanmadi"],
    "gerekce": "ODAK (istem 45): engel kodu KAPALI küme — ai_hub.odak.oneri.Engel kodları + ai_hub.odak.alan.KalibrasyonHatasi kodları"
   }
  ]

@@ -43,12 +43,7 @@ repos:
         # DIS bir makinede (`/home/user02/dr/`) ve depoda YOK; `models_em_kedi/scaler_{X,y}.pkl`
         # uretimdekinden FARKLI ozellik uzayina (10 vs 5) ait, yeniden fit EDILEMEZ. Tek kopyasi
         # versiyonlanmayan yerel bir klasordeydi. Ayni 100 MiB tavani burada da test ile kilitli.
-        #
-        # UCUNCU ISTISNA (2026-11-12, ODK istem 45): `ai_hub/odak/veri/` - ODAK alan tablosu (CST birim alanlari, 3,8 MB) ve kip basina
-        # KNN ONNX modelleri (1-3,9 MB). Calisma aninda ZORUNLU urun verisi (app katmani; spec ai_hub icindeki < 5 MB dosyalari alir),
-        # kalibrasyon kimligine bagli. Bu yolda tek dosya tavani 5 MB: `tests/test_ODK_odak_alan_ve_oneri.py::
-        # test_YAPISAL_URUN_MODELLERI_kalibrasyon_kimligi_ve_BOYUT` ile kilitli. Genel 2 MB esigi DEGISMEDI.
-        exclude: '^(release_assets/ai_models|training_archive|firmware/stm32_pemf|ai_hub/odak/veri)/'
+        exclude: '^(release_assets/ai_models|training_archive|firmware/stm32_pemf)/'
       - id: detect-private-key   # *.p8/*.p12/PEM özel anahtarı commit'e girerse DURDUR
 
   # ── SIR TARAMASI (denetim 2026-08-04, P0) ──────────────────────────────────

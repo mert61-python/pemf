@@ -14,7 +14,7 @@ import os
 
 import numpy as np
 
-from ai_hub.odak.alan import VERI_DIZINI
+from ai_hub.odak.alan import VERI_DIZINI, model_katmani_yolu
 
 KIPLER = ("TUM_PETRI", "KUYUCUK", "FANTOM", "KEDI_TV", "KEDI_ORGAN")
 #: Yerel alanın alındığı nokta (eğitimdeki `FizikOzellik._X` ile AYNI): kip → (temel öznitelik adlarından konum kuralı)
@@ -36,18 +36,19 @@ def yerel_nokta(kip: str, oz: dict, taban_y: float) -> np.ndarray:
 
 
 class OdakModeli:
-    """Bir kipin ONNX KNN'i + üst verisi (`model_<KIP>.onnx` + `model_<KIP>.json`)."""
+    """Bir kipin ONNX KNN'i + üst verisi (`model_<KIP>.onnx` + `model_<KIP>.json`). Y282: `dizin` verilmezse üst veri depodaki
+    `VERI_DIZINI`den, ONNX AI MODEL KATMANINDAN (`alan.model_katmani_yolu`; yoksa FileNotFoundError → ODAK engeli `modelYok`)."""
 
-    def __init__(self, kip: str, dizin: str = VERI_DIZINI):
+    def __init__(self, kip: str, dizin: str | None = None):
         if kip not in KIPLER:
             raise ValueError(kip)
         self.kip = kip
-        with open(os.path.join(dizin, f"model_{kip}.json"), encoding="utf-8") as fh:
+        with open(os.path.join(dizin or VERI_DIZINI, f"model_{kip}.json"), encoding="utf-8") as fh:
             self.meta = json.load(fh)
         self.ozellik_ad = list(self.meta["ozellik_ad"])
         self.kalibrasyon_kimligi = str(self.meta["kalibrasyon_kimligi"])
         self.sinir = float(self.meta["sinir"])
-        self._yol = os.path.join(dizin, f"model_{kip}.onnx")
+        self._yol = os.path.join(dizin, f"model_{kip}.onnx") if dizin else model_katmani_yolu(f"model_{kip}.onnx")
         self._oturum = None
 
     def _sess(self):
@@ -73,5 +74,5 @@ class OdakModeli:
 
 
 @functools.lru_cache(maxsize=8)
-def model_al(kip: str, dizin: str = VERI_DIZINI) -> OdakModeli:
+def model_al(kip: str, dizin: str | None = None) -> OdakModeli:
     return OdakModeli(kip, dizin)

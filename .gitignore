@@ -325,6 +325,6 @@ MqttKimlikYerel.h
 # Y73: kabin CV MQTT kimligi (SIR) - `PEMF_Backend.exe --mqtt-kimlik hazirla --kabin <kabin YAML dizini>` uretir.
 cabin_mqtt_kimlik.yaml
 
-# ODK (istem 45, 12 Kasım 2026): ODAK KNN modelleri (ai_hub/odak/veri/model_<KIP>.onnx) küçük (< 5 MB, test_ODK kapısı) ve
-# kalibrasyon kimliğine bağlı ürün verisi — app katmanında ai_hub ile sevk edilir. İstisna SONDA kalmalı (git son eşleşen kuralı uygular).
-!ai_hub/odak/veri/*.onnx
+# Y282 (sahip 12 Kasım 2026): ODAK alan tablosu + ONNX modelleri AÇIK DEPOYA GİRMEZ — AI model katmanında
+# (release_assets/ai_models/ai_hub/odak/veri/, yukarıdaki release_assets kuralıyla yok sayılır). Eski yerine geri girmesin:
+ai_hub/odak/veri/*.npz
