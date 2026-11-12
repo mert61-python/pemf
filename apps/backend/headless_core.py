@@ -1171,6 +1171,15 @@ class HeadlessCore:
                 priority=EventPriority.HIGH,
             )
 
+    def _mlx_ofset(self):
+        """MLX sıfır ofseti durumu (tembel kurulur — `__new__` ile kurulan test çekirdekleri de taşır)."""
+        o = getattr(self, "_mlx_ofset_durumu", None)
+        if o is None:
+            from utils.mlx_ofset import MlxOfset
+
+            o = self._mlx_ofset_durumu = MlxOfset()
+        return o
+
     def _handle_stm_line(
         self,
         decoded: str,
@@ -1190,6 +1199,12 @@ class HeadlessCore:
             govde = self._parse_stm_tele(decoded)
             _stm_tele_gunluge_yaz(self, decoded, govde)
             if govde is not None:
+                # ODK · sahip 12 Kasım 2026: MLX sıfır ofseti (bobinler kapalıyken öğrenilen eksen merkezi) çıkarılır (`utils/mlx_ofset.py`).
+                # Hata satırı DÜŞÜRMEZ — ham değer kalır.
+                try:
+                    self._mlx_ofset().pencere(govde)
+                except Exception:
+                    self.logger.debug("[STM32] MLX ofseti uygulanamadı (ham değer yayınlanıyor)", exc_info=True)
                 self._publish_event("hardware.stm.telemetry", govde)
             return
 
@@ -1207,6 +1222,13 @@ class HeadlessCore:
             except Exception:
                 self.logger.debug("[STM32] STM_SENS islenemedi", exc_info=True)
             return
+
+        if "STM_OK:" in decoded:
+            # ODK · sahip 12 Kasım 2026: kartın duty yankısı → MLX boşta mı (ofset öğrenimi yalnız bütün duty 0 iken).
+            try:
+                self._mlx_ofset().duty_yankisi(decoded)
+            except Exception:
+                self.logger.debug("[STM32] MLX ofseti için duty yankısı işlenemedi", exc_info=True)
 
         if "STM_OK:" in decoded or "STM_NACK" in decoded:
             # TD1: kartın paketimize yanıtı paket boyu KANITIDIR (banner 120 / 121 baytı ayırt edemez — tezgâh ölçtü).

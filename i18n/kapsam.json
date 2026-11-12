@@ -6403,6 +6403,17 @@
    "birlesikIstisna": [],
    "not": ""
   },
+  "apps/backend/utils/mlx_ofset.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10f-bildirim-ws",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": true,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
   "apps/backend/utils/panel_yayin.py": {
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
