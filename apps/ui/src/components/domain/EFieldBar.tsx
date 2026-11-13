@@ -67,7 +67,8 @@ export function EFieldBar() {
   const stale = now - alinisRef.current > 5000;
   const peak = peakRef.current || 1;
   const pct = (v: number | null) => (v === null ? 0 : Math.max(0, Math.min(100, (v / peak) * 100)));
-  const fmt = (v: number | null) => (v === null ? "—" : v >= 1 ? v.toFixed(3) : v.toFixed(4));
+  // ODK10: kuyu sıvısı içindeki E mV/m düzeyinde → 0,001'in altında 3 anlamlı basamak ("0.0000" yuvarlaması "sıfır" diye okunurdu).
+  const fmt = (v: number | null) => (v === null ? "—" : v >= 1 ? v.toFixed(3) : v >= 0.001 || v === 0 ? v.toFixed(4) : v.toPrecision(3));
   const bMetni = Number.isFinite(e.achievedB_T) ? ((e.achievedB_T as number) * 1000).toFixed(2) : "—";
   const dutyMetni = Number.isFinite(e.dutySum) ? e.dutySum.toFixed(2) : "—";
   const neden = e.egitimAraligiDisi
@@ -85,8 +86,11 @@ export function EFieldBar() {
         <Text style={styles.title}>{t("kontrol.efield.baslik")}</Text>
         <Text style={stale ? styles.stale : styles.live}>{stale ? t("kontrol.efield.duraklandi") : t("kontrol.efield.canli")}</Text>
       </View>
-      {/* ODK6 (istem 45): ODAK seansında E = sürülen planın CST E'si (hesaplanan; E ölçülmedi). Analiz bağlamında vekil model → "yaklaşık". */}
-      {e.kaynak === "cst" ? (
+      {/* ODK6 (istem 45): ODAK seansında E = sürülen planın E'si (hesaplanan; E ölçülmedi). ODK10: petri → kuyu SIVISI içinde; diğer → havada.
+          Analiz bağlamında vekil model → "yaklaşık". */}
+      {e.kaynak === "cst" && e.ortam === "kuyu" ? (
+        <Text testID="efield-cst-kuyu" style={styles.foot}>{t("kontrol.efield.cstKuyu")}</Text>
+      ) : e.kaynak === "cst" ? (
         <Text testID="efield-cst" style={styles.foot}>{t("kontrol.efield.cst")}</Text>
       ) : (
         <Text testID="efield-yaklasik" style={styles.foot}>{t("kontrol.efield.yaklasik")}</Text>

@@ -201,7 +201,7 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
         plan["sapma_yuzde"] = _yuvarla(100.0 * (beklenen / D - 1.0), 1)
         if abs(beklenen / D - 1.0) > DOZ_SAPMA_SINIRI:
             raise Engel("dozSapmasi", beklenen=plan["beklenen_mT"], istenen=plan["doz_mT"])
-        plan["e_hedef_Vm"], plan["e_cevre_Vm"] = _e_degerleri(A, T, C, sd)
+        plan["e_hedef_Vm"], plan["e_cevre_Vm"], plan["e_ortam"] = _e_degerleri(A, T, C, sd, kip)
         plan["duty"] = [round(float(v), 4) for v in np.abs(sd)]
         plan["faz"] = [round(float(v), 2) for v in faz]
     except Engel as e:
@@ -211,16 +211,30 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
     return plan
 
 
-def _e_degerleri(A: AlanModeli, T, C, sd) -> tuple:
-    """ODK6 · canlı E çubuğu / onay için CST E (tepe |E|, V/m): hedef noktaları ortalaması · çevre ortalaması (çevre yoksa None). YALNIZ
-    GÖSTERİM: E tablosu yok / bozuk / ızgara uyuşmuyor → (None, None), plan SÜRÜLÜR (doz denetimi B ile)."""
+#: ODK10: E'si kuyu SIVISI içinde hesaplanan kipler (ortam "kuyu"); diğerleri havada (ortamsız) CST E (ortam "hava").
+KUYU_E_KIPLERI = ("TUM_PETRI", "KUYUCUK")
+
+
+def _e_degerleri(A: AlanModeli, T, C, sd, kip: str = "") -> tuple:
+    """Canlı E çubuğu / onay için E (tepe |E|, V/m): hedef ortalaması · çevre ortalaması (çevre yoksa None) · ortam.
+    ODK10 petri (`KUYU_E_KIPLERI`): kuyu SIVISI içinde (`kuyu_e`, CST petri benzetimiyle doğrulandı; T / C = kuyu merkezleri) — havadaki
+    E'ye ASLA düşmez (kuyuda ~190 kat yüksek gösterirdi). Diğer kipler (ODK6): havada CST E tablosu. YALNIZ GÖSTERİM: hesaplanamazsa
+    (None, None, ortam), plan SÜRÜLÜR (doz denetimi B ile)."""
+    ortam = "kuyu" if kip in KUYU_E_KIPLERI else "hava"
     try:
-        e_h = float(A.td_e_tepe(A.e_alan(T), sd).mean())
-        e_c = float(A.td_e_tepe(A.e_alan(C), sd).mean()) if C is not None and len(C) else None
+        if ortam == "kuyu":
+            from ai_hub.odak.kuyu_e import kuyu_e_tepe
+
+            H = 2.0 * float(numune()["plaka"]["sivi_orta_mm"])
+            e_h = float(kuyu_e_tepe(A, T, sd, H).mean())
+            e_c = float(kuyu_e_tepe(A, C, sd, H).mean()) if C is not None and len(C) else None
+        else:
+            e_h = float(A.td_e_tepe(A.e_alan(T), sd).mean())
+            e_c = float(A.td_e_tepe(A.e_alan(C), sd).mean()) if C is not None and len(C) else None
     except Exception:
-        logging.getLogger(__name__).warning("ODAK: CST E hesaplanamadı (yalnız gösterim eksik; sürüş etkilenmez)", exc_info=True)
-        return None, None
-    return _yuvarla(e_h, 4), (None if e_c is None else _yuvarla(e_c, 4))
+        logging.getLogger(__name__).warning("ODAK: E hesaplanamadı (%s; yalnız gösterim eksik, sürüş etkilenmez)", ortam, exc_info=True)
+        return None, None, ortam
+    return _yuvarla(e_h, 6), (None if e_c is None else _yuvarla(e_c, 6)), ortam
 
 
 def hedef_tavani(kip: str, A: AlanModeli, **girdi) -> dict:

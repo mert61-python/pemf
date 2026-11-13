@@ -193,6 +193,9 @@ export interface EFieldLive {
   dutySum: number;
   /** ODK6: "cst" = ODAK seansında sürülen planın CST E'si (tepe |E|, V/m; hesaplanan, E ölçülmedi); yoksa vekil model ("yaklaşık"). */
   kaynak?: "cst" | "vekil";
+  /** ODK10: `kaynak: "cst"` iken E'nin hesaplandığı ortam — "kuyu" = petri kuyusu SIVISI içinde (CST petri benzetimiyle doğrulandı),
+   *  "hava" / yok = havada (ortamsız; doku içinde çok daha düşük). */
+  ortam?: "kuyu" | "hava" | null;
   /** D1.76 · İG-5.83: E neden hesaplanmadı (yalnız-ek alanlar; eski backend göndermez). */
   egitimAraligiDisi?: boolean;
   bOlculmuyor?: boolean;

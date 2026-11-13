@@ -52,13 +52,18 @@ _odak: dict | None = None
 
 
 def odak_guncelle(deger: dict | None) -> None:
-    """ODK6: {"cancer": hedef E, "healthy": çevre E | None} (V/m, CST) ya da None (temizle)."""
+    """ODK6: {"cancer": hedef E, "healthy": çevre E | None, "ortam": "kuyu" | "hava" (ODK10)} (V/m) ya da None (temizle)."""
     global _odak
     with _odak_lock:
         _odak = (
             None
             if deger is None
-            else {"cancer": deger.get("cancer"), "healthy": deger.get("healthy"), "set_at": time.time()}
+            else {
+                "cancer": deger.get("cancer"),
+                "healthy": deger.get("healthy"),
+                "ortam": deger.get("ortam") if deger.get("ortam") in ("kuyu", "hava") else None,
+                "set_at": time.time(),
+            }
         )
 
 
@@ -297,7 +302,8 @@ def compute(coils: list[dict]) -> dict | None:
 
 def _odak_hesabi(od: dict, coils: list[dict]) -> dict:
     """ODK6: ODAK planının CST E'si — bobinler çalışmıyorsa SIFIR (alan üretilmiyor). B / Σduty şeffaflık için telemetriden (vekil
-    girdisi DEĞİL). `kaynak: "cst"` → arayüz "hesaplanan — CST + ölçülen B kalibrasyonu; E ölçülmedi" der."""
+    girdisi DEĞİL). `kaynak: "cst"` → arayüz "hesaplanan — CST + ölçülen B kalibrasyonu; E ölçülmedi" der; ODK10 `ortam` "kuyu" →
+    "kuyu sıvısı içinde", "hava" / yok → "havada (ortamsız)"."""
     achieved_b, duty_sum, n = telemetry_inputs(coils)
     if n == 0:
         return {
@@ -308,6 +314,7 @@ def _odak_hesabi(od: dict, coils: list[dict]) -> dict:
             "achievedB_T": 0.0,
             "dutySum": 0.0,
             "kaynak": "cst",
+            "ortam": od.get("ortam"),
             "ts": time.time(),
         }
     degerler = [v for v in (od.get("cancer"), od.get("healthy")) if isinstance(v, (int, float))]
@@ -319,6 +326,7 @@ def _odak_hesabi(od: dict, coils: list[dict]) -> dict:
         "achievedB_T": achieved_b,
         "dutySum": duty_sum,
         "kaynak": "cst",
+        "ortam": od.get("ortam"),
         "ts": time.time(),
     }
 

@@ -165,7 +165,7 @@ def test_KRITIK_saglayici_SURULEN_planin_E_sini_tutar_ENGELDE_None(monkeypatch):
     plan = {"engel": None, "duty": [0.2] * 7, "faz": [0.0] * 7, "e_hedef_Vm": 0.04, "e_cevre_Vm": 0.02}
     monkeypatch.setattr(hedef, "odak_plani", lambda *a, **k: dict(plan))
     f.predict(0.0, -150.0, 0.0, 1)
-    assert f.son_odak_e == {"cancer": 0.04, "healthy": 0.02}
+    assert f.son_odak_e == {"cancer": 0.04, "healthy": 0.02, "ortam": None}  # ODK10: plan e_ortam vermedi
     monkeypatch.setattr(
         hedef, "odak_plani", lambda *a, **k: {"engel": "dozSapmasi", "duty": [0.0] * 7, "faz": [0.0] * 7}
     )

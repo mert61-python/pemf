@@ -352,12 +352,16 @@ class AlanModeli:
     def td_e_tepe(self, ME, sd, hizala: bool = True) -> np.ndarray:
         """ODK6 · ME (nT, 3, 7) (`e_alan`), işaretli duty → her noktada tepe |E(t)| (nT,) V/m. Faraday (CST LF, indüklenen alan): E(t) =
         Σ_c Ê_c · i_c′(t) / ω_CST — Ê_c CST'de sinüs akımda E genliği, i_c(t) B ile AYNI genlik / dalga biçimi / Y280 hizalaması."""
-        W = self._td_dalga(sd, hizala)
-        Nt = W.shape[1]
-        dW = (np.roll(W, -1, axis=1) - np.roll(W, 1, axis=1)) * (Nt * self.f_hz / 2.0)  # dalga türevi, 1 / s (periyodik)
+        dW = self.td_turev(sd, hizala)
         f_cst = float((self._etablo or e_tablosu())["f_cst_hz"])
         Et = np.einsum("tij,jk->tik", np.asarray(ME, dtype=float), dW) / (2.0 * np.pi * f_cst)
         return np.linalg.norm(Et, axis=1).max(axis=1)
+
+    def td_turev(self, sd, hizala: bool = True) -> np.ndarray:
+        """Bobin akım dalgalarının zaman türevi dW/dt (7, Nt), 1 / s (periyodik merkezi fark) — Faraday E (`td_e_tepe`, ODK10 kuyu E)."""
+        W = self._td_dalga(sd, hizala)
+        Nt = W.shape[1]
+        return (np.roll(W, -1, axis=1) - np.roll(W, 1, axis=1)) * (Nt * self.f_hz / 2.0)
 
     def _td_dalga(self, sd, hizala: bool = True) -> np.ndarray:
         """İşaretli duty (7,) → bobin akım dalgaları W (7, Nt) (genlik a(d) × biçim; Y280 hizalı; ters işaret: bipolar −, tek yönlü yarım

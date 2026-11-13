@@ -398,8 +398,13 @@ def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: in
         air.logger.warning("%s ODAK planı ENGELLİ (%s) → sürülmez", saglayici.ad, plan.get("engel"))
         saglayici.son_odak_e = None
         return [0.0] * 7, [0.0] * 7, 0.0
-    # ODK6: bu planın CST E'si (hedef / çevre, tepe V/m) — döngü sürüşten sonra canlı E çubuğuna yazar (`efield_live.odak_guncelle`)
-    saglayici.son_odak_e = {"cancer": plan.get("e_hedef_Vm"), "healthy": plan.get("e_cevre_Vm")}
+    # ODK6: bu planın E'si (hedef / çevre, tepe V/m) — döngü sürüşten sonra canlı E çubuğuna yazar (`efield_live.odak_guncelle`);
+    # ODK10: ortam "kuyu" (petri: kuyu sıvısı içinde) | "hava" (kedi: ortamsız CST) — arayüz etiketi buna göre
+    saglayici.son_odak_e = {
+        "cancer": plan.get("e_hedef_Vm"),
+        "healthy": plan.get("e_cevre_Vm"),
+        "ortam": plan.get("e_ortam"),
+    }
     return [float(d) for d in plan["duty"]], [float(p) for p in plan["faz"]], 0.0
 
 
