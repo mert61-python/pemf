@@ -1,0 +1,20 @@
+{
+ "kip": "TUM_PETRI",
+ "ozellik_ad": [
+  "plaka_x",
+  "plaka_z",
+  "altlik",
+  "sin2t",
+  "cos2t",
+  "doz_mT"
+ ],
+ "yerel_alan": "M (3×7, CST ekseni, kalibrasyonlu) + M / doz",
+ "cikti": "doz başına genlik a / D",
+ "sinir": 14.551894838988492,
+ "n_egitim": 7180,
+ "kalibrasyon_kimligi": "234e319a18835517@147Hz",
+ "f16": true,
+ "frek_hz": 147.0,
+ "kaynak": "DENETIM/odak/model/a4_disa_aktar.py · veri veri_kal_td_f147 · A3 kazananı KNN k=1 + yerel alan",
+ "onnx_sklearn_esit_oran": 0.9995
+}

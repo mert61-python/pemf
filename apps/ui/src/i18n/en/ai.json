@@ -1055,6 +1055,10 @@
       "hazirlaniyor": "🔎 Preparing…",
       "hazirligiBaslat": "🚀 Start Preparation"
     },
+    "frekans": {
+      "etiket": "AI Pro frequency",
+      "secenek": "{{f}} Hz"
+    },
     "gecikmeIpucu": " · Not found: increase the ambient light, move 1-2 meters away, and get the animal fully in the frame.",
     "guven": {
       "anatomikGecti": " · anatomical check passed",
@@ -1162,6 +1166,7 @@
         "dozGecersiz": "Enter a dose greater than 0 and at most {{tavan}} mT.",
         "dozSec": "Dose (mT, max {{tavan}})",
         "duzgunluk": "Uniformity (weakest / strongest): {{oran}}",
+        "frekans": "Frequency: {{f}} Hz (proposal from this frequency's model and calibration)",
         "haritaBaslik": "24 wells — expected peak field (mT), plate as seen by the camera",
         "kaynak": "Phase / duty: ODAK model (nearest neighbour + local field), checked by physics",
         "kip": {

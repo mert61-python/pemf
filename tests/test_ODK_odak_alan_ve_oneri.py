@@ -418,7 +418,7 @@ def test_KRITIK_YEREL_alan_noktasi_EGITIMLE_ayni():
     ty = -175.0
     assert list(yerel_nokta("TUM_PETRI", {"plaka_x": 1, "plaka_z": 2, "altlik": 10}, ty)) == [1, ty + 15, 2]
     assert list(yerel_nokta("KUYUCUK", {"hedef_x": 3, "hedef_z": 4, "altlik": 0}, ty)) == [3, ty + 5, 4]
-    assert list(yerel_nokta("FANTOM", {"tumor_x": 5, "tumor_z": 6}, ty)) == [5, ty + 20, 6]
+    assert list(yerel_nokta("FANTOM", {"tumor_x": 5, "tumor_z": 6}, ty)) == [5, ty + 15, 6]  # ODK8: fantom 3 cm
     assert list(yerel_nokta("KEDI_TV", {"kedi_x": 7, "kedi_z": 8}, ty)) == [7, pytest.approx(ty + 73.7), 8]
     assert list(yerel_nokta("KEDI_ORGAN", {"organ_x": 1, "organ_y": 2, "organ_z": 3}, ty)) == [1, 2, 3]
 

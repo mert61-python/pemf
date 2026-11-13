@@ -22,7 +22,7 @@
     "baslik": "Live E-Field",
     "bobinlerDurdu": "Coils stopped — no field is being produced.",
     "canli": "● live",
-    "cst": "Computed value (peak |E|, V/m) — CST simulation + measured B calibration; E was not measured directly.",
+    "cst": "Value computed in air (without medium) — the E inside the petri liquid / tumor is much lower (CST medium simulation in progress). E was not measured directly.",
     "duraklandi": "paused",
     "dutyDisi": "⚠️ Σduty is outside the training range — unreliable",
     "dutyDisiAralikli": "⚠️ Σduty is outside the training range — unreliable (the model was trained on {{min}}–{{max}})",

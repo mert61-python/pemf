@@ -1055,6 +1055,10 @@
       "hazirlaniyor": "🔎 Hazırlanıyor…",
       "hazirligiBaslat": "🚀 Hazırlığı Başlat"
     },
+    "frekans": {
+      "etiket": "AI Pro frekansı",
+      "secenek": "{{f}} Hz"
+    },
     "gecikmeIpucu": " · Bulunamıyor: ortamın ışığını artırın, 1-2 metre mesafeye gelin, hayvanı kadraja tam alın.",
     "guven": {
       "anatomikGecti": " · anatomik kontrol geçti",
@@ -1162,6 +1166,7 @@
         "dozGecersiz": "0'dan büyük ve en çok {{tavan}} mT bir doz girin.",
         "dozSec": "Doz (mT, en çok {{tavan}})",
         "duzgunluk": "Düzgünlük (en zayıf / en güçlü): {{oran}}",
+        "frekans": "Frekans: {{f}} Hz (öneri bu frekansın modeli ve kalibrasyonuyla)",
         "haritaBaslik": "24 kuyu — beklenen tepe alan (mT), plaka kameradaki yönüyle",
         "kaynak": "Faz / duty: ODAK modeli (en yakın komşu + yerel alan), fizikle denetlendi",
         "kip": {

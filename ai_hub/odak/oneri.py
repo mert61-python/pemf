@@ -151,7 +151,7 @@ def _yuvarla(v, n=3):
 def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
     """Plan (JSON'lanabilir). Engel varsa `plan["engel"]` dolu ve duty / faz SIFIR (sürülmez)."""
     plan = {"kip": kip, "doz_mT": _yuvarla(doz_mT), "duty": [0.0] * N_BOBIN, "faz": [0.0] * N_BOBIN, "engel": None, "engel_ek": {},
-            "kalibrasyon": A.kimlik, "model": "KNN k=1 + yerel alan"}
+            "kalibrasyon": A.kimlik, "model": "KNN k=1 + yerel alan", "frek_hz": A.f_hz}
     try:
         g = kip_girdisi(kip, A, **girdi)
         T, C = g["T"], g["C"]
@@ -167,14 +167,14 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
         if D > plan["tavan_mT"] * (1 + 1e-6):
             raise Engel("dozTavanUstu", tavan=plan["tavan_mT"])
         try:
-            m = model or model_al(kip)
+            m = model or model_al(kip, f_hz=A.f_hz)
         except FileNotFoundError:
             raise Engel("modelYok") from None
         if m.kalibrasyon_kimligi != A.kimlik:
             raise Engel("modelEski")
         Py = yerel_nokta(kip, g["oz"], A.taban_y)
         X = m.ozellik(g["oz"], A.alan_olcum(Py[None])[0], D)
-        a = np.clip(m.tahmin(X)[0] * D, -1.0, 1.0)
+        a = np.clip(m.tahmin(X)[0] * D, -A.a_azami, A.a_azami)
         sd = A.isaretli_duty(a)
         faz = A.fazlar(sd)
         # FİZİK (karar vermez): zaman domeni, Y280 hizalı
@@ -234,21 +234,23 @@ def hedef_tavani(kip: str, A: AlanModeli, **girdi) -> dict:
         return {"tavan_mT": None, "engel": e.kod, "engel_ek": e.ek}
 
 
-def alan_modeli(veri_koku) -> AlanModeli:
+def alan_modeli(veri_koku, f_hz: float | None = None) -> AlanModeli:
     """Veri kökündeki kalibrasyonla alan modeli. Kalibrasyon yok / bozuk / eski / eşleme doğrulanmamış → KalibrasyonHatasi (çağıran SÜRMEZ)."""
     from ai_hub.odak.alan import kalibrasyon_oku
 
-    return _alan_modeli_onbellek(kalibrasyon_oku(veri_koku))
+    return _alan_modeli_onbellek(kalibrasyon_oku(veri_koku), f_hz)
 
 
 _SON: dict = {}
 
 
-def _alan_modeli_onbellek(K: dict) -> AlanModeli:
+def _alan_modeli_onbellek(K: dict, f_hz: float | None = None) -> AlanModeli:
     """Aynı kalibrasyon içeriği için modeli yeniden kurmaz (RL dalga tablosu ~0,2 sn)."""
     from ai_hub.odak.alan import kalibrasyon_kimligi
 
-    kim = kalibrasyon_kimligi(K)
-    if _SON.get("kimlik") != kim:
-        _SON["model"], _SON["kimlik"] = AlanModeli(K), kim
-    return _SON["model"]
+    kim = (kalibrasyon_kimligi(K), float(f_hz) if f_hz else None)
+    if kim not in _SON:
+        if len(_SON) >= 8:
+            _SON.clear()
+        _SON[kim] = AlanModeli(K, f_hz=f_hz)
+    return _SON[kim]

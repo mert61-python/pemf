@@ -703,6 +703,10 @@ _AI_PRO_MAX_DURATION_MIN = 120
 # Eskiden 1 Hz'di (yalnız "eski PyQt DDS varsayılanı"). Vekil doz modellerinin girdisinde frekans YOK → öneri (duty / faz) değişmez,
 # yalnız karta giden F. Sabit; backend'de limit/clamp EKLEME. Kapı: tests/test_KD3a_dogrulama_2cm_AIPro_100Hz_kapi_eylemi.py
 _AI_PRO_FREQ_HZ = 100.0
+# ODK8 (sahip 13 Kasım 2026: "ai pro kısmına frekans seçme de koy 76 100 107 147"): seçilebilir AI Pro frekansları; seçim ÖNERİ MÜHRÜNE
+# yazılır, `/start` seansın sürüş frekansını mühürden kurar (`_ai_pro_frek_hz`), durdurma 100'e döndürür. Varsayılan 100 (KD-3a kararı).
+AI_PRO_FREKANSLARI = (76.0, 100.0, 107.0, 147.0)
+_ai_pro_frek_hz = _AI_PRO_FREQ_HZ
 # em_kedi modelinin sabit ekstra girdileri (eski camera_ai_thread ile birebir: 0.001 T = 1 mT · 1.5).
 # ⚠️ D7.02 (DENETIM-12 P2): TEK KAYNAK `ai_pro_hedef.KEDI_*` — sürüş (`_predict_and_drive_cpu/_gpu`) bu adları, XAI açıklaması
 # ve onay metası `KediSaglayici.achieved_B/duty_sum`'ı okur; iki ayrı literal sahip kararı #9'u ("açıklama dozun FİİLEN
@@ -1744,7 +1748,7 @@ def _drive_coils_ai_pro(D, P) -> list:
         try:
             kabul = state.hardware.update_coil(
                 cid,
-                freq=_AI_PRO_FREQ_HZ,
+                freq=_ai_pro_frek_hz,
                 duty=duty_pct,
                 phase=phase_i,
                 duration=_kalan_dk,
@@ -1833,7 +1837,7 @@ def _build_ai_pro_percoil(D, P, surulen=(), teldeki=None):
         out.append(
             {
                 "id": idx + 1,
-                "freq": round(_AI_PRO_FREQ_HZ, 1),
+                "freq": round(_ai_pro_frek_hz, 1),
                 "duty": round(normalize_ai_pro_duty_ratio(D[idx]) * 100.0, 1),
                 "phase": round(normalize_phase_deg(P[idx]), 1),
                 "suruldu": (idx + 1) in _s,
@@ -2301,7 +2305,7 @@ def _ai_pro_loop(dongu_muhru=None):
             update_live_session_state(
                 is_active=True,
                 mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
-                freq=_AI_PRO_FREQ_HZ,
+                freq=_ai_pro_frek_hz,
                 intensity=0.0,
                 duty_temsil=rep_duty,
                 remaining_min=remaining // 60,
@@ -2507,6 +2511,8 @@ class AiProProposePayload(BaseModel):
     doz_mT: float | None = None
     #: ODAK petri kipi: "TUM_PETRI" (24 kuyunun en zayıfı = doz) | "KUYUCUK" (seçili kuyu = doz; varsayılan). Diğer modellerde yok sayılır.
     odak_kip: str = ""
+    #: ODK8: AI Pro frekansı (Hz) — `AI_PRO_FREKANSLARI`; None → 100. Mühüre yazılır, `/start` sürüşü bu frekansla yapar.
+    frek_hz: float | None = None
 
 
 def _uzaktan_kimliksiz_mi(request) -> bool:
@@ -2538,6 +2544,7 @@ _ODAK_OZET_ALANLARI = (
     "tavan_mT",
     "cevre_mT",
     "oran",
+    "frek_hz",
     "e_hedef_Vm",
     "e_cevre_Vm",
     "pay_yuzde",
@@ -2628,7 +2635,12 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     try:
         if ai_pro_hedef.odak_destekli(_saglayici):
             # ODAK (istem 45): faz / duty istenen DOZLA ODAK modelinden; fizik denetimi engellerse SÜRME (eylem söyleyen 409).
-            _odak = ai_pro_hedef.odak_plani(_saglayici, c, _muhur_hedefi, payload.doz_mT, payload.odak_kip)
+            _frek = float(payload.frek_hz) if payload.frek_hz is not None else _AI_PRO_FREQ_HZ
+            if not any(abs(_frek - f) < 1e-6 for f in AI_PRO_FREKANSLARI):
+                _izinli = ", ".join(f"{f:g}" for f in AI_PRO_FREKANSLARI)
+                _metin = ceviri.t("ai.pro.hata.frekansGecersiz", frek=f"{_frek:g}", izinli=_izinli)
+                raise HTTPException(status_code=422, detail=_metin)
+            _odak = ai_pro_hedef.odak_plani(_saglayici, c, _muhur_hedefi, payload.doz_mT, payload.odak_kip, _frek)
             if _odak.get("engel"):
                 raise HTTPException(status_code=409, detail=ai_pro_hedef.odak_engel_metni(_odak))
             D, P, e_field = [float(d) for d in _odak["duty"]], [float(p) for p in _odak["faz"]], 0.0
@@ -2955,6 +2967,9 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         ai_pro_hedef.kosulsuz_ayarla(_saglayici, _spec.get("kosulsuz") is True)
         # ODAK (istem 45): doz / kip / hedef MÜHÜRDEN — döngünün `predict`i bunlarla yeniden hesaplar (mühürsüz → sürülmez).
         ai_pro_hedef.odak_ayarla(_saglayici, _spec.get("odak"), _spec.get("target_label") or "")
+        global _ai_pro_frek_hz
+        # ODK8: seansın sürüş frekansı MÜHÜRDEN (eski / ODAK'sız mühür → 100 Hz)
+        _ai_pro_frek_hz = float(((_spec.get("odak") or {}).get("frek_hz")) or _AI_PRO_FREQ_HZ)
         _ai_duration_min = _sure_dk
         # DENETIM P2: DUVAR SAATI idi. AI Pro sure siniri gecen-sure farkiyla hesaplandigindan
         # NTP duzeltmesi/DST/elle saat degisimi GERI giderse maruziyet UZAR (donanim deadline'i
@@ -3071,6 +3086,7 @@ def stop_ai_pro():
         for _s in ai_pro_hedef.SAGLAYICILAR.values():  # T3 · Y189: koşulsuz kip seansla biter
             ai_pro_hedef.kosulsuz_ayarla(_s, False)
             ai_pro_hedef.odak_ayarla(_s, None)  # ODAK (istem 45): mühürlü doz / kip seansla biter
+            globals()["_ai_pro_frek_hz"] = _AI_PRO_FREQ_HZ  # ODK8: sürüş frekansı varsayılana
         # [B1] Sahiplik kilidin İÇİNDE temizlenir: stop'tan sonra başka bir modern istemci AI
         # Pro'yu devralabilsin (stale owner kimseyi kilitlemesin).
         _ai_owner_client = ""
@@ -3328,6 +3344,7 @@ def ai_pro_hazirlik_durdur():
         for _s in ai_pro_hedef.SAGLAYICILAR.values():
             ai_pro_hedef.kosulsuz_ayarla(_s, False)
             ai_pro_hedef.odak_ayarla(_s, None)  # ODAK (istem 45): mühürlü doz / kip seansla biter
+            globals()["_ai_pro_frek_hz"] = _AI_PRO_FREQ_HZ  # ODK8: sürüş frekansı varsayılana
     return {"status": "success"}
 
 
@@ -3613,7 +3630,7 @@ async def ai_pro_frame(
                     update_live_session_state(
                         is_active=True,
                         mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
-                        freq=_AI_PRO_FREQ_HZ,
+                        freq=_ai_pro_frek_hz,
                         intensity=0.0,  # D1.89: duty mT alanına yazılmaz
                         duty_temsil=rep_duty,
                         remaining_min=remaining // 60,

@@ -26,6 +26,8 @@ export type OdakOzet = {
   pay_yuzde?: number;
   sapma_yuzde?: number;
   kuyular?: OdakKuyu[];
+  /** ODK8: sürüş frekansı (Hz) — mühürde; yoksa eski mühür (100 Hz). */
+  frek_hz?: number;
 };
 
 export const PETRI_KIPLERI = ["KUYUCUK", "TUM_PETRI"] as const;
@@ -137,6 +139,9 @@ export function OdakOzeti({
     <View testID="odak-ozeti" style={s.wrap}>
       <Text style={s.satirKalin}>
         {t("ai.pro.onay.odak.doz", { doz: sayi(odak.doz_mT), pay: sayi(odak.pay_yuzde, 0) })}
+      </Text>
+      <Text testID="odak-frekans" style={s.satir}>
+        {t("ai.pro.onay.odak.frekans", { f: odak.frek_hz ?? 100 })}
       </Text>
       <Text style={s.satir}>
         {t("ai.pro.onay.odak.beklenen", { beklenen: sayi(odak.beklenen_mT), tavan: sayi(odak.tavan_mT) })}

@@ -1,0 +1,19 @@
+{
+ "kip": "KEDI_TV",
+ "ozellik_ad": [
+  "kedi_x",
+  "kedi_z",
+  "sin2t",
+  "cos2t",
+  "doz_mT"
+ ],
+ "yerel_alan": "M (3×7, CST ekseni, kalibrasyonlu) + M / doz",
+ "cikti": "doz başına genlik a / D",
+ "sinir": 14.746163485463756,
+ "n_egitim": 7998,
+ "kalibrasyon_kimligi": "234e319a18835517@76Hz",
+ "f16": true,
+ "frek_hz": 76.0,
+ "kaynak": "DENETIM/odak/model/a4_disa_aktar.py · veri veri_kal_td_f76 · A3 kazananı KNN k=1 + yerel alan",
+ "onnx_sklearn_esit_oran": 1.0
+}

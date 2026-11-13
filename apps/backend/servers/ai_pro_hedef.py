@@ -339,7 +339,9 @@ def _odak_engeli(kip: str, kod: str, doz_mT, ek=None) -> dict:
     return {"kip": kip, "doz_mT": doz_mT, "engel": kod, "engel_ek": dict(ek or {}), "duty": [0.0] * 7, "faz": [0.0] * 7}
 
 
-def odak_plani(saglayici, konum: dict, hedef_id: int, doz_mT, istenen_kip: str = "") -> dict:
+def odak_plani(
+    saglayici, konum: dict, hedef_id: int, doz_mT, istenen_kip: str = "", frek_hz: float | None = None
+) -> dict:
     """Lokalizasyon (`konum`: x_mm / y_mm / z_mm / target_label, BACKEND kabin çerçevesi) + doz → ODAK planı (`ai_hub.odak.oneri.oner`).
     Kalibrasyon yok / bozuk / eski / eşleme doğrulanmamış → engelli plan (duty 0). `doz_mT` None → tavanın %80'i (başlangıç önerisi)."""
     from ai_hub.odak import alan as odak_alan
@@ -347,7 +349,7 @@ def odak_plani(saglayici, konum: dict, hedef_id: int, doz_mT, istenen_kip: str =
 
     kip = odak_kipi(saglayici, hedef_id, istenen_kip)
     try:
-        A = odak_oneri.alan_modeli(duzlem_veri_koku())
+        A = odak_oneri.alan_modeli(duzlem_veri_koku(), frek_hz)
     except odak_alan.KalibrasyonHatasi as e:
         return _odak_engeli(kip, e.kod, doz_mT)
     except FileNotFoundError:
@@ -382,7 +384,7 @@ def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: in
     """Döngü sürüşü (mühürlü ODAK ayarıyla): AYNI dozla yeniden hesap; plan ENGELLİ → SIFIR (bobin sürülmez)."""
     ayar = saglayici.odak_ayari
     konum = {"x_mm": x_mm, "y_mm": y_mm, "z_mm": z_mm, "target_label": ayar.get("hedef_etiket")}
-    plan = odak_plani(saglayici, konum, hedef_id, ayar["doz_mT"], ayar.get("kip", ""))
+    plan = odak_plani(saglayici, konum, hedef_id, ayar["doz_mT"], ayar.get("kip", ""), ayar.get("frek_hz"))
     if plan.get("engel"):
         from servers import ai_router as air
 
@@ -412,6 +414,8 @@ def odak_ayarla(saglayici, odak, hedef_etiket: str = "") -> None:
         "doz_mT": float(odak["doz_mT"]),
         "kip": str(odak.get("kip") or ""),
         "hedef_etiket": str(hedef_etiket or ""),
+        # ODK8: mühürdeki frekans (yoksa 100 Hz — eski mühür)
+        "frek_hz": float(odak.get("frek_hz") or 100.0),
     }
 
 

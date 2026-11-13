@@ -14,11 +14,11 @@ import os
 
 import numpy as np
 
-from ai_hub.odak.alan import VERI_DIZINI, model_katmani_yolu
+from ai_hub.odak.alan import TEMEL_FREKANS, VERI_DIZINI, model_katmani_yolu
 
 KIPLER = ("TUM_PETRI", "KUYUCUK", "FANTOM", "KEDI_TV", "KEDI_ORGAN")
 #: Yerel alanın alındığı nokta (eğitimdeki `FizikOzellik._X` ile AYNI): kip → (temel öznitelik adlarından konum kuralı)
-YEREL_Y_SABIT = {"FANTOM": 20.0, "KEDI_TV": 73.7}  # taban camından mm (eğitim varsayımı; fantom KD-3b ölçüsüyle güncellenir)
+YEREL_Y_SABIT = {"FANTOM": 15.0, "KEDI_TV": 73.7}  # taban camından mm (eğitim varsayımı) · ODK8: fantom 3 cm (sahip 13-11) → tümör 15; KD-3b ölçüsüyle güncellenir
 SIVI_ORTA_PAYI = 5.0  # petri: taban + altlık + 5 mm (eğitimle aynı)
 
 
@@ -35,20 +35,28 @@ def yerel_nokta(kip: str, oz: dict, taban_y: float) -> np.ndarray:
     return np.array([oz["organ_x"], oz["organ_y"], oz["organ_z"]])
 
 
+def model_koku(kip: str, f_hz: float | None = None) -> str:
+    """ODK8: dosya kökü — temel frekansta (100 Hz) `model_<KIP>` (eskisiyle aynı), diğerlerinde `model_<KIP>_<f>Hz`."""
+    if f_hz is None or abs(float(f_hz) - TEMEL_FREKANS) < 1e-9:
+        return f"model_{kip}"
+    return f"model_{kip}_{float(f_hz):g}Hz"
+
+
 class OdakModeli:
     """Bir kipin ONNX KNN'i + üst verisi (`model_<KIP>.onnx` + `model_<KIP>.json`). Y282: `dizin` verilmezse üst veri depodaki
     `VERI_DIZINI`den, ONNX AI MODEL KATMANINDAN (`alan.model_katmani_yolu`; yoksa FileNotFoundError → ODAK engeli `modelYok`)."""
 
-    def __init__(self, kip: str, dizin: str | None = None):
+    def __init__(self, kip: str, dizin: str | None = None, f_hz: float | None = None):
         if kip not in KIPLER:
             raise ValueError(kip)
         self.kip = kip
-        with open(os.path.join(dizin or VERI_DIZINI, f"model_{kip}.json"), encoding="utf-8") as fh:
+        kok = model_koku(kip, f_hz)
+        with open(os.path.join(dizin or VERI_DIZINI, f"{kok}.json"), encoding="utf-8") as fh:
             self.meta = json.load(fh)
         self.ozellik_ad = list(self.meta["ozellik_ad"])
         self.kalibrasyon_kimligi = str(self.meta["kalibrasyon_kimligi"])
         self.sinir = float(self.meta["sinir"])
-        self._yol = os.path.join(dizin, f"model_{kip}.onnx") if dizin else model_katmani_yolu(f"model_{kip}.onnx")
+        self._yol = os.path.join(dizin, f"{kok}.onnx") if dizin else model_katmani_yolu(f"{kok}.onnx")
         self._oturum = None
 
     def _sess(self):
@@ -74,5 +82,5 @@ class OdakModeli:
 
 
 @functools.lru_cache(maxsize=8)
-def model_al(kip: str, dizin: str | None = None) -> OdakModeli:
-    return OdakModeli(kip, dizin)
+def model_al(kip: str, dizin: str | None = None, f_hz: float | None = None) -> OdakModeli:
+    return OdakModeli(kip, dizin, f_hz)

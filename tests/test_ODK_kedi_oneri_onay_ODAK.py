@@ -138,7 +138,7 @@ def _plan_kur(monkeypatch, A, tmp_path, kip, geo):
         hedef_P=(geo["merkez_P"] if kip == "KEDI_TV" else list(BOBREK)),
         kedi={"merkez_P": geo["merkez_P"], "theta": geo["theta"]},
     )["T"]
-    monkeypatch.setattr(oneri, "model_al", lambda k: _DogruModel(A, T))
+    monkeypatch.setattr(oneri, "model_al", lambda k, **_k: _DogruModel(A, T))
 
 
 @pytest.mark.parametrize("hedef_id,kip", [(0, "KEDI_TV"), (2, "KEDI_ORGAN")])
@@ -207,7 +207,7 @@ def o(monkeypatch, tmp_path, A):
     T = oneri.kip_girdisi(
         "KEDI_TV", A, hedef_P=geo["merkez_P"], kedi={"merkez_P": geo["merkez_P"], "theta": geo["theta"]}
     )["T"]
-    monkeypatch.setattr(oneri, "model_al", lambda k: _DogruModel(A, T))
+    monkeypatch.setattr(oneri, "model_al", lambda k, **_k: _DogruModel(A, T))
     monkeypatch.setattr(ns.air, "_ai_hedef_modeli", "kedi")
     monkeypatch.setattr(ns.air, "_ai_organ_id", 0)
     monkeypatch.delenv("PEMF_KEDI_AIPRO_SURUS", raising=False)

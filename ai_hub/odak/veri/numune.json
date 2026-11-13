@@ -11,9 +11,9 @@
   "boyut_mm": [
    150.0,
    100.0,
-   50.0
+   30.0
   ],
-  "tumor_yukseklik_mm": 20.0,
+  "tumor_yukseklik_mm": 15.0,
   "cevre_haric_yaricap_mm": 25.0
  },
  "kedi": {

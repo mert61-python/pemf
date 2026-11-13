@@ -66,11 +66,11 @@ it("KRİTİK ODK (istem 45): analiz bağlamında (vekil model) → 'yaklaşık' 
   expect(u.queryByTestId("efield-cst")).toBeNull();
 });
 
-it("KRİTİK ODK6: ODAK seansında E CST'den → 'hesaplanan, E ölçülmedi' SÖYLENİR, 'yaklaşık' YOK", () => {
+it("KRİTİK ODK8: ODAK seansında E havada (ortamsız) CST'den → sıvı / tümör içinde ÇOK DAHA DÜŞÜK olduğu SÖYLENİR", () => {
   mockLive.snapshot = { eField: { ...temel, healthy: 0.012, cancer: 0.034, avg: 0.023, achievedB_T: 0.0008, kaynak: "cst" } };
   const u = render(<EFieldBar />);
   expect(u.getByTestId("efield-cst").props.children).toBe(
-    "Hesaplanan değer (tepe |E|, V/m) — CST benzetimi + ölçülen B kalibrasyonu; E doğrudan ölçülmedi.",
+    "Havada (ortamsız) hesaplanan değer — petri sıvısı / tümör içindeki E çok daha düşüktür (CST ortam benzetimi sürüyor). E doğrudan ölçülmedi.",
   );
   expect(u.queryByTestId("efield-yaklasik")).toBeNull();
   expect(u.getByText("0.0340")).toBeTruthy();

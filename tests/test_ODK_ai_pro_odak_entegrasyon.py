@@ -130,7 +130,7 @@ def o(monkeypatch, tmp_path):
     A = oneri.alan_modeli(ns.kok)
     ns.A = A
     ns.model = _DogruModel(A, [M2])
-    monkeypatch.setattr(oneri, "model_al", lambda kip: ns.model)
+    monkeypatch.setattr(oneri, "model_al", lambda kip, **_k: ns.model)
     tekil = hedef.SAGLAYICILAR["fantom"]
     snap = {
         a: (list(v) if isinstance(v, list) else dict(v) if isinstance(v, dict) else v) for a, v in vars(tekil).items()
@@ -223,7 +223,7 @@ def test_KRITIK_ODAK_MUHUR_doz_kip_DONGUYE_gecer_SURER_durdurma_TEMIZLER(o):
     ai_approval.approve(pid, "arastirmaci@test.local")
     s = o.c.post("/api/ai/pro/start", json={"proposal_id": pid})
     assert s.status_code == 200, s.text[:300]
-    assert o.tekil.odak_ayari == {"doz_mT": 0.4, "kip": "FANTOM", "hedef_etiket": "Tümör 1"}
+    assert o.tekil.odak_ayari == {"doz_mT": 0.4, "kip": "FANTOM", "hedef_etiket": "Tümör 1", "frek_hz": 100.0}
     once = o.model.cagri
     _Hat.sonuc = _Sonuc([(P2, M2, 300)])
     j = ap.kare(o).json()
@@ -275,7 +275,7 @@ def test_KRITIK_odak_ayarla_KEDIDE_yok_sayilir_ve_dozsuz_TEMIZLER():
     assert not hasattr(kedi, "odak_ayari")
     f = hedef.FantomSaglayici()
     hedef.odak_ayarla(f, {"doz_mT": 0.7, "kip": "FANTOM"}, "Tümör 3")
-    assert f.odak_ayari == {"doz_mT": 0.7, "kip": "FANTOM", "hedef_etiket": "Tümör 3"}
+    assert f.odak_ayari == {"doz_mT": 0.7, "kip": "FANTOM", "hedef_etiket": "Tümör 3", "frek_hz": 100.0}
     hedef.odak_ayarla(f, {"kip": "FANTOM"})
     assert f.odak_ayari is None
     hedef.odak_ayarla(f, {"doz_mT": 0.7})
@@ -308,7 +308,7 @@ def test_KRITIK_odak_plani_PETRI_izgarasi_META_dan_ve_tavan_ENGELI(monkeypatch, 
             return {"odak_adaylar": self.k}
 
     hedefP = next(k["P"] for k in kuyular if k["etiket"] == "C2")
-    monkeypatch.setattr(oneri, "model_al", lambda kip: _DogruModel(A, [hedefP]))
+    monkeypatch.setattr(oneri, "model_al", lambda kip, **_k: _DogruModel(A, [hedefP]))
     plan = hedef.odak_plani(_Petri(kuyular), {"target_label": "Kuyu C2"}, 5, None, "KUYUCUK")
     assert plan["engel"] is None and plan["kip"] == "KUYUCUK" and len(plan["kuyular"]) == 24, plan
     # ızgara eksik + doz yok → tavan hesabı engeller (doz None kalır)

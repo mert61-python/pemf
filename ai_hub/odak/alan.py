@@ -31,6 +31,10 @@ ALAN_TABLOSU = "alan_tablosu.npz"
 #: KATMANINDA (`release_assets/ai_models/ai_hub/odak/veri/`; kurulu: model dizini). `VERI_DIZINI`de yalnız küçük üst veri (model
 #: `.json`, `numune.json`) kalır. Çözüm + bütünlük (takipli manifest SHA-256, fail-closed) `utils.model_downloader`.
 MODEL_GORELI = "ai_hub/odak/veri"
+#: ODK8 (sahip 13 Kasım 2026): AI Pro sürüş frekansları. Kalibrasyon (duty → genlik eğrisi, kazançlar) 100 Hz'de ÖLÇÜLDÜ; diğer
+#: frekanslarda duty → genlik, kalibre RL modelinin tepe akım oranıyla taşınır (B adımında MLX ile doğrulanacak).
+FREKANSLAR = (76.0, 100.0, 107.0, 147.0)
+TEMEL_FREKANS = 100.0
 
 
 def model_katmani_yolu(ad: str) -> str:
@@ -167,8 +171,11 @@ def alan_tablosu(yol: str | None = None) -> dict:
     }
 
 
-def rl_dalga_bicimi(dg, bipolar: bool, V: float, R: float, L_mH: float, f: float, sonum_kati: float, n_kayit=200, n_ince=1000, periyot=12):
-    """Kararlı durum akım dalgası (darbe başı t = 0), her duty için KENDİ tepesine normalize. (len(dg), n_kayit)."""
+def rl_dalga_bicimi(
+    dg, bipolar: bool, V: float, R: float, L_mH: float, f: float, sonum_kati: float, n_kayit=200, n_ince=1000, periyot=12, tepe_dondur=False
+):
+    """Kararlı durum akım dalgası (darbe başı t = 0), her duty için KENDİ tepesine normalize. (len(dg), n_kayit).
+    `tepe_dondur` → (biçim, mutlak tepe akım A (len(dg),)) — ODK8: frekans başına duty → genlik oranı için."""
     dg = np.asarray(dg, dtype=float)
     tau = (L_mH * 1e-3) / R
     dt = 1.0 / f / n_ince
@@ -194,7 +201,7 @@ def rl_dalga_bicimi(dg, bipolar: bool, V: float, R: float, L_mH: float, f: float
             if p == periyot - 1 and n % adim == 0:
                 dalga[:, n // adim] = i
     tepe = np.maximum(np.abs(dalga).max(axis=1, keepdims=True), 1e-12)
-    return dalga / tepe
+    return (dalga / tepe, tepe[:, 0]) if tepe_dondur else dalga / tepe
 
 
 class AlanModeli:
@@ -203,9 +210,12 @@ class AlanModeli:
     N_DUTY = 51  # 0..0,5 duty ızgarası (dalga biçimi tablosu; aralar doğrusal ara değerlenir)
     N_ZAMAN = 1000  # periyot başına örnek (hizalama kayması çözünürlüğü %0,1 periyot = 10 µs @ 100 Hz)
 
-    def __init__(self, K: dict, tablo: dict | None = None):
+    def __init__(self, K: dict, tablo: dict | None = None, f_hz: float | None = None):
         self.K = K
-        self.kimlik = kalibrasyon_kimligi(K)
+        self.f_cal = float(K["rl"].get("f_hz", TEMEL_FREKANS))
+        self.f_hz = float(f_hz) if f_hz else self.f_cal
+        # ODK8: kimlik frekansı da taşır (100 Hz'de eskisiyle AYNI) — model meta'sı aynı frekansla eğitilmiş olmalı (`modelEski`)
+        self.kimlik = kalibrasyon_kimligi(K) if abs(self.f_hz - self.f_cal) < 1e-9 else f"{kalibrasyon_kimligi(K)}@{self.f_hz:g}Hz"
         self.tablo = tablo if tablo is not None else alan_tablosu()
         es = K["esleme_gercek_cst"]
         self.cst_sira = [int(es[str(r + 1)]) - 1 for r in range(N_BOBIN)]
@@ -226,9 +236,19 @@ class AlanModeli:
             a_tab.append(np.maximum.accumulate(a / max(a[-1], 1e-12) + np.linspace(0, 1e-9, len(self.dg))))
         self.a_tab = np.array(a_tab)  # (7, 51) kesin artan
         rl = K["rl"]
-        prm = (float(rl["V"]), float(rl["R_ohm"]), float(rl["L_mH"]), float(rl.get("f_hz", 100.0)), float(rl.get("sonum_kati", 1.0)))
-        bic_b = rl_dalga_bicimi(self.dg, True, *prm, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN)
-        bic_u = rl_dalga_bicimi(self.dg, False, *prm, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN)
+        prm = (float(rl["V"]), float(rl["R_ohm"]), float(rl["L_mH"]), self.f_hz, float(rl.get("sonum_kati", 1.0)))
+        bic_b, tepe_b = rl_dalga_bicimi(self.dg, True, *prm, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN, tepe_dondur=True)
+        bic_u, tepe_u = rl_dalga_bicimi(self.dg, False, *prm, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN, tepe_dondur=True)
+        if abs(self.f_hz - self.f_cal) > 1e-9:
+            # ODK8: ölçülen (kalibrasyon frekansı) duty → genlik eğrisi × RL tepe akımı oranı (f / f_cal), bobin başına bipolar / tek yönlü
+            prm_cal = prm[:3] + (self.f_cal,) + prm[4:]
+            _, tb0 = rl_dalga_bicimi(self.dg, True, *prm_cal, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN, tepe_dondur=True)
+            _, tu0 = rl_dalga_bicimi(self.dg, False, *prm_cal, n_kayit=self.N_ZAMAN, n_ince=self.N_ZAMAN, tepe_dondur=True)
+            oran_b, oran_u = tepe_b / np.maximum(tb0, 1e-12), tepe_u / np.maximum(tu0, 1e-12)
+            oran_b[0], oran_u[0] = oran_b[1], oran_u[1]  # duty 0: 0 / 0 → komşu
+            for c in range(N_BOBIN):
+                a = self.a_tab[c] * (oran_b if BIPOLAR[c] else oran_u)
+                self.a_tab[c] = np.maximum.accumulate(a) + np.linspace(0, 1e-6, len(a))  # KESİN artan (ters çevrilebilir)
         # biçim[c, d] (kendi tepesine normalize); genlik td_tepe'de TAM a(d) ile (ızgaraya yuvarlama YOK — 12-11 ölçüldü: 0,01'lik ızgara küçük
         # duty'de bobin genliğini %5–10 kaydırıp doz denetimine yapay sapma katıyordu)
         self.bicim = np.stack([bic_b if BIPOLAR[c] else bic_u for c in range(N_BOBIN)])  # (7, 51, Nt)
@@ -299,9 +319,14 @@ class AlanModeli:
         d = np.clip(np.abs(np.asarray(d, dtype=float)), 0.0, DUTY_AZAMI)
         return np.stack([np.interp(d[..., c], self.dg, self.a_tab[c]) for c in range(N_BOBIN)], axis=-1)
 
+    @property
+    def a_azami(self) -> np.ndarray:
+        """ODK8: bobin başına duty 0,5'teki genlik (100 Hz'de 1; 76 Hz'de > 1, 147 Hz'de < 1 — RL oranı)."""
+        return self.a_tab[:, -1]
+
     def duty(self, a) -> np.ndarray:
-        """|a| (..., 7) → duty (..., 7) ∈ [0, 0,5]."""
-        a = np.clip(np.abs(np.asarray(a, dtype=float)), 0.0, 1.0)
+        """|a| (..., 7) → duty (..., 7) ∈ [0, 0,5] (genlik bobinin o frekanstaki azamisine kırpılır)."""
+        a = np.minimum(np.abs(np.asarray(a, dtype=float)), self.a_azami)
         return np.stack([np.interp(a[..., c], self.a_tab[c], self.dg) for c in range(N_BOBIN)], axis=-1)
 
     def isaretli_duty(self, a) -> np.ndarray:

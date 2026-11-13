@@ -339,6 +339,7 @@
         "baslatmaSirasindaDurduruldu": "Başlatma sırasında durdurma/acil durdurma geldi; AI Pro BAŞLATILMADI.",
         "dozUretmedi": "Model bu konum için sürülebilir bir parametre üretmedi (tüm duty=0). Lokalizasyonu tekrarlayın.",
         "fantomSurusKapali": "Fantom AI Pro sürüşü KAPALI: fantom hattı tezgâhta doğrulanmadı (boş kabinde de tümör bulabiliyor). Analiz ve önizleme çalışır; seansı Kontrol ekranından elle başlatın.",
+        "frekansGecersiz": "AI Pro frekansı {{frek}} Hz desteklenmiyor — şunlardan birini seçin: {{izinli}} Hz.",
         "guncellemeSuruyor": "Güncelleme uygulanıyor; işlem bitene kadar AI Pro başlatılamaz.",
         "hedefDesteklenmiyor": "Hedef {{oid}} '{{model}}' için desteklenmiyor (geçerli: {{gecerli}}).",
         "kediSurusKapali": "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; seansı Kontrol ekranından elle başlatın.",

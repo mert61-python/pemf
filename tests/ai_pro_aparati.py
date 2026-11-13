@@ -130,6 +130,7 @@ def kur(monkeypatch, tmp_path, *, dongu_noop: bool = True):
         "_ai_hedef_modeli",
         "_ai_relocalize",
         "_ai_thread",
+        "_ai_pro_frek_hz",
     ):
         monkeypatch.setattr(air, ad, getattr(air, ad))
     monkeypatch.setattr(air, "_ai_loop_active", False)

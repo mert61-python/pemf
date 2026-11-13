@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 
 
-def _odak_plani_tahminciden(saglayici, konum, hedef_id, doz_mT, istenen_kip=""):
+def _odak_plani_tahminciden(saglayici, konum, hedef_id, doz_mT, istenen_kip="", frek_hz=None):
     """ODAK planı yerine testin doz sahtesi: yönlendiricinin SAHTELENMİŞ `_predict_and_drive`'ı varsa o; yoksa sağlayıcının sahte
     `predictor.predict`'i; ikisi de yoksa her bobin 0,3 (kapı testleri dozun DEĞERİNE bakmaz)."""
     from servers import ai_pro_hedef
@@ -50,6 +50,7 @@ def _odak_plani_tahminciden(saglayici, konum, hedef_id, doz_mT, istenen_kip=""):
             D, P = [0.3] * 7, [0.0] * 7
     return {
         "kip": ai_pro_hedef.odak_kipi(saglayici, hedef_id, istenen_kip),
+        "frek_hz": float(frek_hz or 100.0),
         "doz_mT": 1.0 if doz_mT is None else float(doz_mT),
         "duty": [float(d) for d in D],
         "faz": [float(p) for p in P],

@@ -22,7 +22,7 @@
     "baslik": "Canlı E-Alanı",
     "bobinlerDurdu": "Bobinler durdu — alan üretilmiyor.",
     "canli": "● canlı",
-    "cst": "Hesaplanan değer (tepe |E|, V/m) — CST benzetimi + ölçülen B kalibrasyonu; E doğrudan ölçülmedi.",
+    "cst": "Havada (ortamsız) hesaplanan değer — petri sıvısı / tümör içindeki E çok daha düşüktür (CST ortam benzetimi sürüyor). E doğrudan ölçülmedi.",
     "duraklandi": "duraklandı",
     "dutyDisi": "⚠️ Σduty eğitim aralığı dışı — güvenilmez",
     "dutyDisiAralikli": "⚠️ Σduty eğitim aralığı dışı — güvenilmez (model {{min}}–{{max}} ile eğitildi)",

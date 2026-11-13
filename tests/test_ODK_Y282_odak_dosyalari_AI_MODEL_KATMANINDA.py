@@ -19,8 +19,15 @@ from test_her_model_agirligi_bir_PAKETE_duser_D427 import (  # noqa: F401 — ap
 )
 
 KOK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOSYALAR = ("alan_tablosu.npz", "e_tablosu.npz") + tuple(
-    f"model_{k}.onnx" for k in ("TUM_PETRI", "KUYUCUK", "FANTOM", "KEDI_TV", "KEDI_ORGAN")
+DOSYALAR = (
+    ("alan_tablosu.npz", "e_tablosu.npz")
+    + tuple(f"model_{k}.onnx" for k in ("TUM_PETRI", "KUYUCUK", "FANTOM", "KEDI_TV", "KEDI_ORGAN"))
+    # ODK8: frekans modelleri (76 / 107 / 147 Hz)
+    + tuple(
+        f"model_{k}_{f}Hz.onnx"
+        for f in (76, 107, 147)
+        for k in ("TUM_PETRI", "KUYUCUK", "FANTOM", "KEDI_TV", "KEDI_ORGAN")
+    )
 )
 
 
@@ -77,7 +84,7 @@ def test_KRITIK_Y282_dosya_YOKSA_SURMEZ_engel_modelYok_EYLEM_iki_dilde(monkeypat
     monkeypatch.setattr(alan, "model_katmani_yolu", yok)
     alan.alan_tablosu.cache_clear()
     oneri._SON.clear()
-    monkeypatch.setattr(oneri, "alan_modeli", lambda kok: alan.AlanModeli(_ornek_kalibrasyon()))
+    monkeypatch.setattr(oneri, "alan_modeli", lambda kok, *_a: alan.AlanModeli(_ornek_kalibrasyon()))
 
     class _Fantom:
         ad = "fantom"

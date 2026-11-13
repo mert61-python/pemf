@@ -291,6 +291,9 @@ interface AiProposeResponse {
  *   ⚠️ Panele bilinçli olarak `useUserMode` SOKULMADI: profil ControlScreen'de okunur, panel yalnız
  *   listeyi alır — böylece 5 panel testine provider mock'u eklemek gerekmez.
  */
+/** ODK8: AI Pro sürüş frekansları (backend `ai_router.AI_PRO_FREKANSLARI` ile AYNI). */
+export const AI_PRO_FREKANSLARI = [76, 100, 107, 147] as const;
+
 export function AiProPanel({
   patientName = "",
   secilebilirModeller = ["kedi"],
@@ -332,6 +335,13 @@ export function AiProPanel({
   useEffect(() => {
     kosulsuzRef.current = kosulsuz;
   }, [kosulsuz]);
+  /** ODK8 (sahip 13 Kasım 2026): AI Pro sürüş frekansı — 76 / 100 / 107 / 147 Hz (varsayılan 100). Öneri MÜHRÜNE yazılır (`frek_hz`),
+   *  `/start` karta mühürdeki frekansı gönderir. Ref: `kosulsuzRef` ile AYNI gerekçe (öneri efektinin bağımlılık dizisi kaynak-regex kapısı). */
+  const [frek, setFrek] = useState<number>(100);
+  const frekRef = useRef(100);
+  useEffect(() => {
+    frekRef.current = frek;
+  }, [frek]);
   /** Denetim izi için taşınan profil — `hedefModeliRef` ile AYNI gerekçe (öneri efektinin
    *  bağımlılık dizisi kaynak-regex kapısıdır, prop'u diziye sokmak onu kırardı). */
   const kullaniciKipiRef = useRef(kullaniciKipi);
@@ -700,6 +710,8 @@ export function AiProPanel({
           patient_name: hastaRef.current.name,
           // T3 · Y189: panelin kipi — önizleme konumu farklı kipte bulunduysa backend 409 (mühür karışmaz).
           kosulsuz: kosulsuzRef.current,
+          // ODK8: seçilen AI Pro frekansı (mühüre yazılır)
+          frek_hz: frekRef.current,
         },
         null,
         { silent: true }
@@ -754,6 +766,8 @@ export function AiProPanel({
           patient_name: hastaRef.current.name,
           // T3 · Y189: panelin kipi — önizleme konumu farklı kipte bulunduysa backend 409 (mühür karışmaz).
           kosulsuz: kosulsuzRef.current,
+          // ODK8: seçilen AI Pro frekansı (mühüre yazılır)
+          frek_hz: frekRef.current,
         },
         null,
         { silent: true }
@@ -870,6 +884,8 @@ export function AiProPanel({
           kosulsuz: kosulsuzRef.current,
           doz_mT: doz,
           odak_kip: kip,
+          // ODK8: yeniden hesap AYNI frekansla (mühürdeki)
+          frek_hz: proposal.specs?.odak?.frek_hz ?? frekRef.current,
         },
         null
       );
@@ -1413,6 +1429,25 @@ export function AiProPanel({
       </View>
         </>
       )}
+
+      {/* ODK8: AI Pro frekansı (Hz) — öneri mühürüne yazılır; seans sürerken değiştirilemez */}
+      <Text style={styles.label}>{t("ai.pro.frekans.etiket")}</Text>
+      <View style={styles.organGrid} accessibilityRole="radiogroup" accessibilityLabel={t("ai.pro.frekans.etiket")}>
+        {AI_PRO_FREKANSLARI.map((f) => (
+          <TouchableOpacity
+            key={f}
+            testID={`aipro-frek-${f}`}
+            style={[styles.organChip, frek === f && styles.organChipActive]}
+            onPress={() => setFrek(f)}
+            disabled={running}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: frek === f, disabled: running }}
+            accessibilityLabel={t("ai.pro.frekans.secenek", { f })}
+          >
+            <Text style={[styles.organText, frek === f && styles.organTextActive]}>{t("ai.pro.frekans.secenek", { f })}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* Süre + kalibrasyon */}
       <View style={styles.row}>
