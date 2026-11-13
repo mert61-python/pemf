@@ -87,9 +87,10 @@ def test_KRITIK_PLAN_hedef_ve_cevre_E_ODAK_fizik_denetimiyle_AYNI(A):
     plan = oneri.oner("FANTOM", A, 0.5, model=_DogruModel(A, [T]), hedef_P=T, fantom=fan)
     assert plan["engel"] is None and plan["e_hedef_Vm"] > 0 and plan["e_cevre_Vm"] > 0, plan
     g = oneri.kip_girdisi("FANTOM", A, hedef_P=T, fantom=fan)
-    sd = np.asarray(plan["duty"]) * np.where(
-        np.mod(np.asarray(plan["faz"]) - (max(plan["duty"]) - np.asarray(plan["duty"])) * 360, 360) > 90, -1, 1
-    )
+    # Y280 faz → işaret; yuvarlı duty / faz artık açısı 359,98° olabilir → negatif = (90°, 270°) (ODK12'de ODK10 testinde ölçüldü)
+    d = np.asarray(plan["duty"])
+    artik = np.mod(np.asarray(plan["faz"]) - (d.max() - d) * 360, 360)
+    sd = d * np.where((artik > 90) & (artik < 270), -1, 1)
     assert plan["e_hedef_Vm"] == pytest.approx(float(A.td_e_tepe(A.e_alan(g["T"]), sd).mean()), rel=0.05)
 
 

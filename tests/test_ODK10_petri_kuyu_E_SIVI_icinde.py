@@ -128,9 +128,11 @@ def test_KRITIK_KUYU_E_TEPE_faraday_birimleri_ve_zaman_turevi(A):
 
 
 def _sd(plan):
-    return np.asarray(plan["duty"]) * np.where(
-        np.mod(np.asarray(plan["faz"]) - (max(plan["duty"]) - np.asarray(plan["duty"])) * 360, 360) > 90, -1, 1
-    )
+    """Plandan işaretli duty (Y280: faz = (d_maks − d)·360 + 180 negatifse, mod 360). ⚠️ duty 4, faz 2 basamağa yuvarlı → artık açı 0
+    yerine 359,98° çıkabilir (ODK12 kazançlarında ölçüldü: `> 90` testi pozitif bobini NEGATİF sayıyordu) → negatif = (90°, 270°)."""
+    d = np.asarray(plan["duty"])
+    artik = np.mod(np.asarray(plan["faz"]) - (d.max() - d) * 360, 360)
+    return d * np.where((artik > 90) & (artik < 270), -1, 1)
 
 
 def test_KRITIK_PLAN_KUYUCUK_E_kuyu_SIVISINDA_havadakinden_COK_KUCUK(A):
