@@ -2284,7 +2284,49 @@
       function setOffline(on) {
         netOffline = !!on;
         $("offline-badge").hidden = !netOffline;
+        agDenemeyiPlanla(false); // çevrimdışıysa yeniden deneme zinciri başlar; çevrimiçiyse durur
       }
+
+      // ---------- AĞ GERİ GELİNCE ÇEVRİMİÇİNE DÖN (sahip 13-11) ----------
+      // ÖLÇÜLEN: internetsiz açılan client "Çevrimdışı"da KALIYORDU — makine internete bağlansa da rozet kapanmıyor, oturum / profil /
+      // güncelleme adımı yeniden koşmuyordu (tek dönüş yolu 6 saatlik güncelleme turuydu; o da rozeti ve oturumu tazelemiyordu).
+      // Artık çevrimdışıyken artan aralıklarla (+ işletim sisteminin `online` olayında HEMEN) sunucu denenir; ulaşılınca rozet kapanır,
+      // oturum tazelenir, giriş ekranındaki "çevrimdışı başlat" uyarısı kalkar, oturum açıksa ağ adımı (profil + güncelleme) yeniden koşar.
+      // Kurulum / onarım sürerken (busy) araya GİRMEZ — sonraki denemeye kalır.
+      const AG_DENEME_MS = [5000, 10000, 20000, 30000, 60000];
+      let agDenemeTimer = null;
+      let agDenemeSayac = 0;
+      let agDeneniyor = false;
+      function agDenemeyiPlanla(hemen) {
+        if (agDenemeTimer) { clearTimeout(agDenemeTimer); agDenemeTimer = null; }
+        if (!netOffline) { agDenemeSayac = 0; return; }
+        const ms = hemen ? 0 : AG_DENEME_MS[Math.min(agDenemeSayac, AG_DENEME_MS.length - 1)];
+        agDenemeTimer = setTimeout(() => { agDenemeTimer = null; agiYenidenDene().catch(() => {}); }, ms);
+      }
+      async function agiYenidenDene() {
+        if (!netOffline || agDeneniyor) return;
+        if (busy) { agDenemeyiPlanla(false); return; }
+        agDeneniyor = true;
+        try {
+          try {
+            await invoke("fetch_profiles"); // sunucuya ulaşılıyor mu (çevrimdışıysa fırlatır)
+          } catch (_) {
+            agDenemeSayac++;
+            agDenemeyiPlanla(false);
+            return;
+          }
+          agDenemeSayac = 0;
+          setOffline(false);
+          const st = await refreshAuth(); // oturum çevrimiçi yeniden doğrulanır (st.offline → rozet yeniden açılır)
+          if (netOffline) return;
+          $("btn-offline-start").hidden = true;
+          if (!authed) { if (curScreen() === "s-login") clearNotice(); return; }
+          if (curScreen() !== "s-login") await bootNetwork(envCache || {});
+        } finally {
+          agDeneniyor = false;
+        }
+      }
+      window.addEventListener("online", () => agDenemeyiPlanla(true));
       function setAuthUi(st) {
         authed = !!(st && st.logged_in);
         authEmail = (st && st.email) || "";
