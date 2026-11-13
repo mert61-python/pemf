@@ -264,6 +264,11 @@ ODAK_VARSAYILAN_DOZ_KESRI = 0.8
 #: KEDI_ORGAN); kedi SÜRÜŞÜ Y142 gereği KAPALI kalır (onay / başlatma / sürüş katı ayrı kapılarla).
 ODAK_MODELLERI = ("petri", "fantom", "kedi")
 
+#: Y283 (sahip 13 Kasım 2026): fantom çalışması İPTAL / ERTELENDİ — fantom AI Pro önerisi / sürüşü ODAK katmanında FAIL-CLOSED kapalı
+#: (araştırma bayrağından BAĞIMSIZ; engel `fantomErtelendi`, TR + EN eylem söyler). Fantom yeniden eğitim / doğrulama / E-ortamı
+#: benzetimi istem 45 "F"de; açmak bu sabiti değiştiren bir commit ister.
+FANTOM_ODAK_ERTELENDI = True
+
 #: ODK5 · kedi gövde ekseni organlardan: kranial grup (kalp, sağ / sol akciğer, karaciğer) ortalaması → kaudal grup (mesane, bağırsak)
 #: ortalaması. Organ kimlikleri `ai_router._ORGAN_ADLARI` ile aynı. Güven eşiği kedi hattıyla aynı (0,3).
 KEDI_KRANIAL = (7, 9, 10, 3)
@@ -348,6 +353,8 @@ def odak_plani(
     from ai_hub.odak import oneri as odak_oneri
 
     kip = odak_kipi(saglayici, hedef_id, istenen_kip)
+    if kip == "FANTOM" and FANTOM_ODAK_ERTELENDI:
+        return _odak_engeli(kip, "fantomErtelendi", doz_mT)  # Y283: fantom ertelendi — SÜRMEZ
     try:
         A = odak_oneri.alan_modeli(duzlem_veri_koku(), frek_hz)
     except odak_alan.KalibrasyonHatasi as e:

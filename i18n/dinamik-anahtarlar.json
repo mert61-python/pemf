@@ -386,7 +386,7 @@
    "dosya": "apps/backend/servers/ai_pro_hedef.py",
    "ifade": "ceviri.t(f\"ai.pro.odak.engel.",
    "onek": "ai.pro.odak.engel.",
-   "degerler": ["hedefKabinDisi", "dozGecersiz", "dozTavanUstu", "dozSapmasi", "modelEski", "modelYok", "kediGovdeYok", "plakaYok", "kuyuYok", "kalibrasyonYok", "kalibrasyonBozuk", "kalibrasyonEski", "eslemeDogrulanmadi"],
+   "degerler": ["hedefKabinDisi", "dozGecersiz", "dozTavanUstu", "dozSapmasi", "modelEski", "modelYok", "kediGovdeYok", "fantomErtelendi", "plakaYok", "kuyuYok", "kalibrasyonYok", "kalibrasyonBozuk", "kalibrasyonEski", "eslemeDogrulanmadi"],
    "gerekce": "ODAK (istem 45): engel kodu KAPALI küme — ai_hub.odak.oneri.Engel kodları + ai_hub.odak.alan.KalibrasyonHatasi kodları"
   }
  ]

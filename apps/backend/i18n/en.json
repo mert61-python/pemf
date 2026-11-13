@@ -388,6 +388,7 @@
           "dozSapmasi": "The model could not meet the requested dose at this position (expected {{beklenen}} mT, requested {{istenen}} mT; limit 10%) — not driven. Change the dose slightly and recalculate, or move the sample slightly.",
           "dozTavanUstu": "At most {{tavan}} mT can be delivered at this position (coils at 50%) — not driven. Lower the dose to {{tavan}} mT or less, or move the sample closer to the cabin centre.",
           "eslemeDogrulanmadi": "The coil mapping is not verified — not driven. Verify the coil–field mapping with the MLX at the bench.",
+          "fantomErtelendi": "Phantom AI Pro driving is disabled for now (owner decision: phantom work postponed) — not driven. Use the Well Plate module or a manual session; it will be enabled once the phantom measurements and validation are complete.",
           "hedefKabinDisi": "The target is outside the inner glass box of the cabin — not driven. Move the sample toward the cabin centre and locate it again.",
           "kalibrasyonBozuk": "The field calibration could not be read or is damaged — not driven. Save the calibration again (bench measurement).",
           "kalibrasyonEski": "The field calibration is from an old version — not driven. Repeat the bench measurement with this version.",

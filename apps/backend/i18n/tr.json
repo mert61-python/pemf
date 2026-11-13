@@ -388,6 +388,7 @@
           "dozSapmasi": "Model bu konumda istenen dozu tutturamadı (beklenen {{beklenen}} mT, istenen {{istenen}} mT; sınır %10) — sürülmedi. Dozu biraz değiştirip yeniden hesaplayın ya da numuneyi hafifçe kaydırın.",
           "dozTavanUstu": "Bu konumda en çok {{tavan}} mT verilebilir (bobinler %50) — sürülmedi. Dozu {{tavan}} mT ya da altına indirin ya da numuneyi kabin ortasına yaklaştırın.",
           "eslemeDogrulanmadi": "Bobin eşlemesi doğrulanmamış — sürülmedi. Tezgâhta bobin–alan eşlemesini MLX ile doğrulayın.",
+          "fantomErtelendi": "Fantom AI Pro sürüşü şimdilik kapalı (sahip kararı: fantom çalışması ertelendi) — sürülmedi. Petri ya da elle seans kullanın; fantom ölçüleri ve doğrulaması tamamlanınca açılacak.",
           "hedefKabinDisi": "Hedef cam içi kabin kutusunun dışında — sürülmedi. Numuneyi kabinin ortasına doğru kaydırıp konumu yeniden bulun.",
           "kalibrasyonBozuk": "Alan kalibrasyonu okunamadı ya da bozuk — sürülmedi. Kalibrasyonu yeniden kaydedin (tezgâh ölçümü).",
           "kalibrasyonEski": "Alan kalibrasyonu eski sürümde — sürülmedi. Tezgâh ölçümünü bu sürümle yineleyin.",

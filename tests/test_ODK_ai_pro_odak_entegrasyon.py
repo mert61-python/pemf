@@ -125,6 +125,9 @@ def o(monkeypatch, tmp_path):
     monkeypatch.setenv("PEMF_ARASTIRMA_AIPRO", "1")
     monkeypatch.setenv("PEMF_ARASTIRMA_AIPRO_FANTOM", "1")
     monkeypatch.setattr(hedef, "duzlem_surus_engeli", lambda _s: None)  # düzlem kapısı bu dosyanın konusu değil
+    monkeypatch.setattr(
+        hedef, "FANTOM_ODAK_ERTELENDI", False
+    )  # Y283 kapısı ayrı testte (test_ODK9_*); burada ODAK makinesi sınanır
     ns.kok = _kok_kur(str(tmp_path / "veri_koku"))
     monkeypatch.setattr(hedef, "duzlem_veri_koku", lambda: ns.kok)
     A = oneri.alan_modeli(ns.kok)

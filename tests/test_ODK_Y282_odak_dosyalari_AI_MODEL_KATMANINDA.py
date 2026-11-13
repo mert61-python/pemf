@@ -82,6 +82,7 @@ def test_KRITIK_Y282_dosya_YOKSA_SURMEZ_engel_modelYok_EYLEM_iki_dilde(monkeypat
 
     # alan tablosu yok → `odak_plani` SÜRMEZ (duty 0), kod `modelYok` (istisna yukarı — 500 — sızmaz)
     monkeypatch.setattr(alan, "model_katmani_yolu", yok)
+    monkeypatch.setattr(ai_pro_hedef, "FANTOM_ODAK_ERTELENDI", False)  # Y283 kapısı ayrı testte
     alan.alan_tablosu.cache_clear()
     oneri._SON.clear()
     monkeypatch.setattr(oneri, "alan_modeli", lambda kok, *_a: alan.AlanModeli(_ornek_kalibrasyon()))
