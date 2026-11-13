@@ -5693,6 +5693,13 @@
      ]
     },
     {
+     "metin": "[STM32] MLX bekcisi tiklanamadi (okuyucu SURUYOR)",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
      "metin": "[STM32] ilk baglanti denemesi basarisiz — dongu yeniden deneyecek",
      "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır",
      "turler": [
@@ -6398,6 +6405,17 @@
    "sira": 10,
    "durum": "tamam",
    "metin": 1,
+   "kritik": true,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/backend/utils/mlx_bekci.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10f-bildirim-ws",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
    "kritik": true,
    "muaf": [],
    "birlesikIstisna": [],

@@ -56,6 +56,23 @@
 #define I2C_KURTARMA_ESIGI 5U
 
 /**
+ * Y285 (sahip 13 Kasım 2026: "MLX'in I2C hattı reconnect algoritmasını düzgünce ekle, kopsa bile bağlanır"): açılış yoklamasında
+ * BULUNAMAYAN MLX90393 (kablo takılı değil / açılışta temas oynadı / takılı SDA) eskiden bir daha HİÇ aranmıyordu → kart reset'ine
+ * kadar `B=` yok (tezgâh 13-11: iki kez). Artık adres 0 olan hatta bu aralıkla (BOŞTA iken) yeniden yoklanır; her
+ * `MAG_YENIDEN_KURTARMA_HER` denemede bir önce hat kurtarması (9 SCL + STOP + SWRST). Bulununca ayar BLOKLAMADAN zamanlanır
+ * (`mag_ayar_zamanla`) — ölçüm, ayar geri okunup DOĞRULANINCA başlar (TD2). Ayar tutmazsa (reset uzun sürdü) RT tekrarlanmadan
+ * `MLX90393_AYAR_DENEME` kez daha denenir, yine tutmazsa bu aralıkla yeni RT'yle baştan. Bulunduktan sonra kopan sensör hata → kazanç
+ * denetimi → yeniden ayar yolundan toparlanır; kopukken denetim okuması `MAG_DENETIM_ARALIGI_MS`'de bir (hattı dövmez, kurtarma
+ * `I2C_KURTARMA_ESIGI` hatada bir). Kullanıcı uyarısı backend'de (`utils/mlx_bekci.py`).
+ * ⚠️ ÖLÇÜLEN İKİ KUSUR (koşum takımı, ilk Y285 taslağı): (1) adres NACK'inde (AF) ADDR beklemesi bütçe sonuna dek dönüyordu (~2 ms/adres;
+ * sensörsüz I2C1'in 5 adaylı yoklaması ~10 ms) ve (2) ayar damgası turun BAŞINDAKİ zamandan kuruluyordu → damga RT'den önce doluyor,
+ * meşgul MLX'e okuma gidip ayar düşüyordu (sonraki deneme 10 sn sonra). İkisi de giderildi: `i2c_adres_bekle`, damga RT'den SONRA.
+ */
+#define MAG_YENIDEN_YOKLAMA_MS 2000U
+#define MAG_YENIDEN_KURTARMA_HER 3U
+#define MAG_DENETIM_ARALIGI_MS 50U
+
+/**
  * ZİRVE PENCERESİ (ms) — telemetri periyodu da budur.
  *
  * SAHİP KARARI 2026-09-11: "saniyede 1 sonuç verir en yükseğini". Manyetik sensör
@@ -202,8 +219,9 @@
  * (fail-closed: yanlış ölçekli alan seans CSV'sine / AI Pro `achieved_B`'ye gitmesin). Çarpanı geri okunan kazançtan türetmek
  * SEÇİLMEDİ: GAIN 7'de tam ölçek ±4,92 mT ve taşma SARAR (sessiz) — sahibin 1–10 mT bandını ölçemez (bkz. yukarıdaki gerekçe).
  * ⚠️ HAL_Delay YOK (sensör kodu ana döngüyü tutamaz — tests/test_stm_sensor_firmware.py): AÇILIŞTA (ana döngü ve DDS ISR'ı
- * başlamadan) bütçeli tick beklemesi; ÇALIŞMA ANINDA doğrulanamamış hat seyrek aralıkla (SENSOR_YENIDEN_ARAMA_TUR) RT alır ve
- * damga dolunca TEK deneme yapılır (bloklamayan durum makinesi — diğer Poll adımları gibi birkaç kısa I2C işlemi).
+ * başlamadan) bütçeli tick beklemesi; ÇALIŞMA ANINDA doğrulanamamış hat `MAG_YENIDEN_YOKLAMA_MS` aralıkla (Y285; eskiden 10 pencere)
+ * RT alır ve damga dolunca deneme yapılır, tutmazsa RT'siz `MLX90393_AYAR_DENEME` kez (bloklamayan durum makinesi — diğer Poll
+ * adımları gibi birkaç kısa I2C işlemi).
  */
 #define MLX90393_RT_BEKLEME_MS 10U /**< RT sonrası reset süresi payı (gerçek süre tezgâhta ölçülür — Tezgâh-2) */
 #define MLX90393_AYAR_DENEME 3U
@@ -268,6 +286,10 @@ typedef struct {
   bool ayar_bekliyor;    /**< TD2: RT gönderildi, damga dolunca (`ayar_hazir_ms`) ayar denemesi yapılacak */
   bool ayar_denetle;     /**< TD2: BOŞTA'da CONF1 geri okunup kazanç denetlenecek (hat hatası / pencere kapanışı) */
   uint32_t ayar_hazir_ms;
+  uint32_t yeniden_yokla_ms; /**< Y285: MLX90393 bulunamadıysa bir sonraki yoklama zamanı */
+  uint32_t yeniden_deneme;   /**< Y285: üst üste başarısız yeniden yoklama sayısı (kurtarma her MAG_YENIDEN_KURTARMA_HER'de) */
+  uint32_t denetim_sonraki_ms; /**< Y285: başarısız kazanç denetiminden sonra bir sonraki deneme */
+  uint8_t ayar_kalan;          /**< Y285: bu RT'den sonra kalan ayar denemesi (RT tekrarlanmadan) */
   PEMF_SensorVerisi_t veri;
 } SensorHat_t;
 
@@ -309,11 +331,29 @@ static bool i2c_bekle(volatile uint32_t *sr, uint32_t maske, bool set_olsun) {
   return false;
 }
 
-/** Hattı temizle: STOP üret ve bayrakları düşür (arıza sonrası her zaman çağrılır). */
+/** Hattı temizle: STOP üret ve bayrakları düşür (arıza sonrası her zaman çağrılır). Y285: AF / ARLO / BERR rc_w0'dır — yalnız 0
+ * YAZILARAK iner (okumak indirmez); 1 yazılan öteki bitler etkilenmez. */
 static void i2c_iptal(I2C_TypeDef *i2c) {
   i2c->CR1 |= I2C_CR1_STOP;
+  i2c->SR1 = ~(uint32_t)(I2C_SR1_AF | I2C_SR1_ARLO | I2C_SR1_BERR) & 0xFFFFU;
   (void)i2c->SR1;
   (void)i2c->SR2;
+}
+
+/** Y285: ADDR beklemesi — köle adresi NACK'lerse (AF) ADDR hiç gelmez; bütçe sonuna kadar dönmek yok olan sensörün her
+ * yoklamasını ~2 ms'ye çıkarıyordu. AF görülünce hemen `false` (çağıran `i2c_iptal`le STOP + AF temizler). */
+static bool i2c_adres_bekle(I2C_TypeDef *i2c) {
+  uint32_t butce = I2C_SPIN_BUTCESI;
+  while (butce-- > 0U) {
+    const uint32_t sr1 = i2c->SR1;
+    if ((sr1 & I2C_SR1_ADDR) != 0U) {
+      return true;
+    }
+    if ((sr1 & I2C_SR1_AF) != 0U) {
+      return false;
+    }
+  }
+  return false;
 }
 
 static bool i2c_start(I2C_TypeDef *i2c, uint8_t adres, bool okuma) {
@@ -322,7 +362,7 @@ static bool i2c_start(I2C_TypeDef *i2c, uint8_t adres, bool okuma) {
     return false;
   }
   i2c->DR = (uint32_t)((adres << 1U) | (okuma ? 1U : 0U));
-  if (!i2c_bekle(&i2c->SR1, I2C_SR1_ADDR, true)) {
+  if (!i2c_adres_bekle(i2c)) {
     return false; /* NACK / cihaz yok */
   }
   (void)i2c->SR1; /* ADDR temizleme: SR1 oku, sonra SR2 oku */
@@ -369,7 +409,7 @@ static bool i2c_oku(I2C_TypeDef *i2c, uint8_t adres, uint8_t *veri, uint32_t n) 
     return false;
   }
   i2c->DR = (uint32_t)((adres << 1U) | 1U);
-  if (!i2c_bekle(&i2c->SR1, I2C_SR1_ADDR, true)) {
+  if (!i2c_adres_bekle(i2c)) {
     i2c_iptal(i2c);
     return false;
   }
@@ -622,12 +662,15 @@ static bool mag_yapilandir_acilis(SensorHat_t *h) {
   return false;
 }
 
-/** TD2 ÇALIŞMA ANI (bloklamaz): RT gönder, denemeyi damgaya bağla — `hat_ilerlet` S_BOSTA'da süre dolunca TEK deneme. */
-static void mag_ayar_zamanla(SensorHat_t *h, uint32_t simdi_ms) {
+/** TD2 ÇALIŞMA ANI (bloklamaz): RT gönder, denemeyi damgaya bağla — `hat_ilerlet` S_BOSTA'da süre dolunca deneme (tutmazsa RT'siz
+ * `MLX90393_AYAR_DENEME` kez). ⚠️ Y285: damga RT GÖNDERİLDİKTEN SONRAKİ tick'ten — turun başındaki `simdi_ms`ten kurulunca aynı turdaki
+ * öteki hattın yoklaması süreyi yiyor, damga RT'den önce doluyor, okuma meşgul MLX'e gidiyordu (ölçüldü). */
+static void mag_ayar_zamanla(SensorHat_t *h) {
   h->veri.alan_ayar_dogrulandi = false;
   (void)mag_tek_komut(h, MLX90393_KOMUT_EX);
   (void)mag_tek_komut(h, MLX90393_KOMUT_RT);
-  h->ayar_hazir_ms = simdi_ms + MLX90393_RT_BEKLEME_MS;
+  h->ayar_hazir_ms = HAL_GetTick() + MLX90393_RT_BEKLEME_MS;
+  h->ayar_kalan = (uint8_t)MLX90393_AYAR_DENEME;
   h->ayar_bekliyor = true;
 }
 
@@ -709,6 +752,10 @@ void PEMF_Sensor_Init(void) {
     h->ayar_bekliyor = false;
     h->ayar_hazir_ms = 0U;
     h->ayar_denetle = false;
+    h->yeniden_yokla_ms = HAL_GetTick() + MAG_YENIDEN_YOKLAMA_MS;
+    h->yeniden_deneme = 0U;
+    h->denetim_sonraki_ms = 0U;
+    h->ayar_kalan = 0U;
   }
   /* AFR kaydırmaları: PB8/PB9 → AFR[1] bit 0/4 · PB10/PB11 → AFR[1] bit 8/12 */
   hat_donanim_kur(&g_hat[0], 0U, 4U);
@@ -802,19 +849,10 @@ static void pencere_kapat(SensorHat_t *h, uint32_t simdi_ms) {
     h->pencere_bitis_ms = simdi_ms + SENSOR_ZIRVE_PENCERE_MS;
   }
 
-  /* Sonradan takılan cihazı periyodik ara (her pencerede aramak boşa START harcar). */
-  if ((h->tur_sayaci % SENSOR_YENIDEN_ARAMA_TUR) == 0U) {
-    if (h->sicaklik_adres == 0U) {
-      h->sicaklik_adres = cihaz_var(h, MLX90614_ADRES) ? MLX90614_ADRES : 0U;
-    }
-    if (h->mag_adres == 0U) {
-      h->mag_adres = mag_adres_bul(h);
-      if (h->mag_adres != 0U) {
-        mag_ayar_zamanla(h, simdi_ms); /* TD2: sonradan takılan sensör — bloklamadan ayar */
-      }
-    } else if (!h->veri.alan_ayar_dogrulandi && !h->ayar_bekliyor) {
-      mag_ayar_zamanla(h, simdi_ms); /* TD2: doğrulanamamış ayar seyrek aralıkla yeniden denenir (bloklamaz) */
-    }
+  /* Sonradan takılan SICAKLIK sensörünü periyodik ara (her pencerede aramak boşa START harcar). Manyetik sensörün yeniden
+   * yoklaması ve doğrulanamamış ayarın yeniden denenmesi Y285'ten beri `hat_ilerlet` S_BOSTA'da (`MAG_YENIDEN_YOKLAMA_MS`). */
+  if (((h->tur_sayaci % SENSOR_YENIDEN_ARAMA_TUR) == 0U) && (h->sicaklik_adres == 0U)) {
+    h->sicaklik_adres = cihaz_var(h, MLX90614_ADRES) ? MLX90614_ADRES : 0U;
   }
 }
 
@@ -840,24 +878,56 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
 
   switch (h->durum) {
   case S_BOSTA:
-    /* TD2: zamanlanmış ayar denemesi — reset süresi DAMGAYLA beklenir (bloklamaz), süre dolunca TEK deneme. */
+    /* Y285: kayıp MLX90393'ü yeniden ara / doğrulanamamış ayarı yeni RT'yle baştan dene (dosya başındaki açıklama). */
+    if (((h->mag_adres == 0U) || (!h->veri.alan_ayar_dogrulandi && !h->ayar_bekliyor)) &&
+        ((int32_t)(simdi_ms - h->yeniden_yokla_ms) >= 0)) {
+      h->yeniden_yokla_ms = simdi_ms + MAG_YENIDEN_YOKLAMA_MS;
+      if (h->mag_adres == 0U) {
+        h->yeniden_deneme++;
+        if ((h->yeniden_deneme % MAG_YENIDEN_KURTARMA_HER) == 0U) {
+          i2c_hat_kurtar(h);
+        }
+        h->mag_adres = mag_adres_bul(h);
+        if (h->mag_adres == 0U) {
+          break;
+        }
+        h->yeniden_deneme = 0U;
+        h->ardisik_hata = 0U;
+      }
+      mag_ayar_zamanla(h);
+      break;
+    }
+    /* TD2: zamanlanmış ayar denemesi — reset süresi DAMGAYLA beklenir (bloklamaz). Y285: tutmazsa RT TEKRARLANMADAN (her RT meşgul
+     * pencereyi yeniden başlatır) `ayar_kalan` kez daha; o da tutmazsa `MAG_YENIDEN_YOKLAMA_MS` sonra yukarıdaki dal yeni RT'yle. */
     if (h->ayar_bekliyor && (h->mag_adres != 0U) && ((int32_t)(simdi_ms - h->ayar_hazir_ms) >= 0)) {
       h->ayar_bekliyor = false;
       h->veri.alan_ayar_dogrulandi = mag_ayar_dene(h);
+      if (!h->veri.alan_ayar_dogrulandi) {
+        if (h->ayar_kalan > 1U) {
+          h->ayar_kalan--;
+          h->ayar_hazir_ms = HAL_GetTick() + MLX90393_RT_BEKLEME_MS;
+          h->ayar_bekliyor = true;
+        } else {
+          h->yeniden_yokla_ms = simdi_ms + MAG_YENIDEN_YOKLAMA_MS;
+        }
+      }
       break;
     }
     /* TD2: doğrulanmış kazanç hâlâ yerinde mi? (sensör kablosu çıkıp takılınca adres aynı, kayıtlar varsayılan) Okunamazsa
-     * ölçüm BAŞLAMAZ, denetim bekler; saptıysa ölçüm durur ve ayar bloklamadan yeniden yapılır. */
-    if (h->ayar_denetle && (h->mag_adres != 0U) && h->veri.alan_ayar_dogrulandi) {
+     * ölçüm BAŞLAMAZ, denetim bekler; saptıysa ölçüm durur ve ayar bloklamadan yeniden yapılır. Y285: okunamayınca bir sonraki
+     * deneme `MAG_DENETIM_ARALIGI_MS` sonra (kopuk sensörde her turda okuma + her 5 hatada kurtarma hattı dövüyordu). */
+    if (h->ayar_denetle && (h->mag_adres != 0U) && h->veri.alan_ayar_dogrulandi &&
+        ((int32_t)(simdi_ms - h->denetim_sonraki_ms) >= 0)) {
       uint16_t c1 = 0U;
       if (!mag_kayit_oku(h, MLX90393_CONF1, &c1)) {
         i2c_hata_islet(h);
+        h->denetim_sonraki_ms = simdi_ms + MAG_DENETIM_ARALIGI_MS;
       } else {
         h->ayar_denetle = false;
         h->ardisik_hata = 0U;
         if ((c1 & MLX90393_CONF1_KAZANC_MASKE) != ((uint16_t)MLX90393_GAIN_SEL << 4U)) {
           h->veri.alan_kazanc = (uint8_t)((c1 >> 4U) & 7U);
-          mag_ayar_zamanla(h, simdi_ms);
+          mag_ayar_zamanla(h);
         }
       }
     }

@@ -2538,6 +2538,20 @@
   },
   {
    "yuzey": "sunucu",
+   "anahtar": "bildirim.mlxDustu",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "manyetik alan sensörü düştü: sensörü çıkarıp takın / kartın gücünü kesin"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "bildirim.mlxGeriGeldi",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/api_server.py",
+   "aciklama": "manyetik alan sensörü yeniden bağlandı"
+  },
+  {
+   "yuzey": "sunucu",
    "anahtar": "bildirim.alanDoygun",
    "tur": "bobin",
    "kaynak": "apps/backend/servers/api_server.py",

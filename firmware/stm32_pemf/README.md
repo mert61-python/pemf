@@ -39,7 +39,8 @@ DOĞRULAR): `python scripts/stm_workspace_kopyala.py`.
 4. Ölçülen referans (2026-09-11, printf-float düzeltmesinden SONRA): **0 hata 0 uyarı**
    (`-Wall -Wextra`), **33.272 B flash / 4.472 B bss**. (Düzeltme öncesi 21.340 B idi;
    fark `_printf_float`ın ~11,5 KB'ı — aşağıya bakın.)
-   Banner (T2D-3, 2026-10-23'ten beri): `STM_READY: DDS v2.5 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121`
+   Banner (Y285, 2026-11-13'ten beri; kayıp MLX90393 çalışırken yeniden aranır): `STM_READY: DDS v2.6 (7-ch KARMA uni=0x60 + HW_SYNC@PB1) proto=3 pkt=121`
+   (T2D-3 · 2026-10-23: `DDS v2.5` — açılışta I2C hat kurtarması)
    (v2.4 → v2.5: açılışta I2C hat kurtarması — yazılım reset'inden sonra MLX90393 kaybolmaz; protokol / paket aynı).
    (`DDS v2.3` basan kart ESKİ imajdır — 120 ya da 121 baytlık olabilir, banner'dan ayırt edilemez; kesin karar `proto=` / `pkt=`.)
    ⚠️ **`5-ch` görüyorsanız ESKİ ikili yüklenmiştir** — Clean → Build → Debug tekrar.

@@ -671,6 +671,14 @@ class HeadlessCore:
             if self.stm_is_connected == connected:
                 return
             self.stm_is_connected = bool(connected)  # gecisi kilit ALTINDA muhurle
+            # Y285: MLX bekcisi yalniz bagliyken sayar; baglaninca izlenen bobinlerin suresi BU andan baslar. Hata gecisi BOZMAZ.
+            try:
+                if connected:
+                    self._mlx_bekci().baglandi()
+                else:
+                    self._mlx_bekci().koptu()
+            except Exception:
+                self.logger.debug("[STM32] MLX bekcisi baglanti gecisini alamadi", exc_info=True)
             self.stm_connected_signal.emit(connected)
 
     def _stm_kimligini_isle(self, banner: str) -> None:
@@ -1171,6 +1179,25 @@ class HeadlessCore:
                 priority=EventPriority.HIGH,
             )
 
+    def _mlx_bekci(self):
+        """Y285: MLX90393 bekçisi (tembel kurulur — `__new__` ile kurulan test çekirdekleri de taşır). `utils/mlx_bekci.py`."""
+        b = getattr(self, "_mlx_bekci_durumu", None)
+        if b is None:
+            from utils.mlx_bekci import MlxBekci
+
+            b = self._mlx_bekci_durumu = MlxBekci()
+        return b
+
+    def _mlx_bekci_tikla(self) -> None:
+        """Y285: `B=` eşik süresince gelmeyen bobin → telemetri olayı `alan_kayip` (arayüz uyarısı `api_server`da). Okuyucu döngüsü her
+        okumada (boş okuma dahil: port zaman aşımı 0,3 sn) çağırır."""
+        for coil_id in self._mlx_bekci().tikla():
+            self.logger.warning(
+                "[STM32] bobin %s manyetik alan sensoru (MLX90393) veri gondermiyor — firmware yeniden ariyor, kullanici uyarildi",
+                coil_id,
+            )
+            self._publish_event("hardware.stm.telemetry", {"coil_id": coil_id, "alan_kayip": True})
+
     def _mlx_ofset(self):
         """MLX sıfır ofseti durumu (tembel kurulur — `__new__` ile kurulan test çekirdekleri de taşır)."""
         o = getattr(self, "_mlx_ofset_durumu", None)
@@ -1205,6 +1232,12 @@ class HeadlessCore:
                     self._mlx_ofset().pencere(govde)
                 except Exception:
                     self.logger.debug("[STM32] MLX ofseti uygulanamadı (ham değer yayınlanıyor)", exc_info=True)
+                # Y285: `B=` (doğrulanmamışı da: sensör YAŞIYOR) bekçiye — hata satırı DÜŞÜRMEZ.
+                if "magnetic_field" in govde or govde.get("alan_dogrulanamadi"):
+                    try:
+                        self._mlx_bekci().veri(govde["coil_id"])
+                    except Exception:
+                        self.logger.debug("[STM32] MLX bekcisi satiri alamadi", exc_info=True)
                 self._publish_event("hardware.stm.telemetry", govde)
             return
 
@@ -1485,6 +1518,15 @@ class HeadlessCore:
                         decoded = line.decode("utf-8", errors="ignore").strip()
                         self._handle_stm_line(
                             decoded, retry_last_payload, baglanti_etkin=lambda: baglanti.aktif() is conn
+                        )
+                    # Y285: MLX bekçisi — boş okumada da (zaman aşımı) sayar; hata okuyucuyu DURDURMAZ.
+                    try:
+                        self._mlx_bekci_tikla()
+                    except Exception:
+                        dongu_hatasini_bildir(
+                            "[STM32] MLX bekcisi tiklanamadi (okuyucu SURUYOR)",
+                            logger=self.logger,
+                            seviye=logging.DEBUG,
                         )
             finally:
                 # ⚠️ KİMLİK KONTROLÜ — bu blok olmadan eski reader YENİ bağlantıyı öldürür.

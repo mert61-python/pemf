@@ -531,6 +531,8 @@
     "mandalSifirlandi": "Acil durdurma mandalı SIFIRLANDI — bobinler başlatılmadı; tedavi için başlatmayı ayrıca verin.",
     "mandalStmKopma": "🔒 Bobin çalışırken STM32 bağlantısı koptu — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
     "mandalStmWatchdog": "🔒 Bobin çalışırken STM32 watchdog zaman aşımı — ACİL DURDUR mandalı kuruldu. Bobinleri kontrol edin; yeniden başlatmak için önce \"Sıfırla\".",
+    "mlxDustu": "⚠️ Bobin {{coil}} manyetik alan sensörü veri göndermiyor — kart sensörü yeniden arıyor. Düzelmezse sensör kablosunu çıkarıp yeniden takın ya da kartın gücünü kesip yeniden bağlayın.",
+    "mlxGeriGeldi": "Bobin {{coil}} manyetik alan sensörü yeniden bağlandı — alan ölçümü sürüyor.",
     "notAdEslesmesiBelirsiz": "Eski uygulamadan (hasta kimliği göndermeyen) gelen gözlem notu, hasta adıyla eşleşen en son seansa kaydedildi; aynı adla son 12 saatte {{aday}} seans var — Seans Geçmişi'nden notun doğru seansa gittiğini kontrol edin.",
     "sebepYok": "sebep bildirilmedi",
     "selfTestAtlandi": "Bobin {{coil}} self-test: atlandı (PWM pasif)",

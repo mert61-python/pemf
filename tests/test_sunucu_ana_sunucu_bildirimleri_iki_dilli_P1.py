@@ -93,6 +93,13 @@ BILDIRIMLER = [
         "⚠️ Bobin 2: Akım ölçümü bu bobinde güvenilir değil — doz kaydına akım yazılmadı.",
     ),
     (
+        "bildirim.mlxDustu",
+        {"coil": 6},
+        "⚠️ Bobin 6 manyetik alan sensörü veri göndermiyor — kart sensörü yeniden arıyor. Düzelmezse sensör kablosunu çıkarıp yeniden "
+        "takın ya da kartın gücünü kesip yeniden bağlayın.",
+    ),
+    ("bildirim.mlxGeriGeldi", {"coil": 6}, "Bobin 6 manyetik alan sensörü yeniden bağlandı — alan ölçümü sürüyor."),
+    (
         "bildirim.alanDogrulanamadi",
         {"coil": 2},
         "⚠️ Bobin 2 alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",

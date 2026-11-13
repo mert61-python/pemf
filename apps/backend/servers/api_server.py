@@ -2014,12 +2014,25 @@ def _handle_backend_event(event) -> None:
             elif "current" in data:
                 _t_coil["akimGuvenilmez"] = False
             _t_akim_degisti = _t_akim_onceki != bool(_t_coil.get("akimGuvenilmez"))
+            # Y285: MLX bekçisi (headless_core `_mlx_bekci_tikla`) — `B=` eşik süresince gelmedi → sensör DÜŞTÜ; `B=` (doğrulanmamışı
+            # da) gelince bayrak iner ve "yeniden bağlandı" bildirilir. Bildirim yalnız GEÇİŞTE (tekrar eden olay yeniden uyarmaz).
+            _t_kayip_onceki = bool(_t_coil.get("alanKayip"))
+            if data.get("alan_kayip"):
+                _t_coil["alanKayip"] = True
+            elif "magnetic_field" in data or data.get("alan_dogrulanamadi"):
+                _t_coil["alanKayip"] = False
+            _t_kayip_degisti = _t_kayip_onceki != bool(_t_coil.get("alanKayip"))
             if _t_yazildi:
                 # D1.67: liste = TAZE alanlar (bu satirda gelmeyen ama pencere icindekiler dahil).
                 _t_coil["measuredFields"] = sorted(_taze_alanlar_locked(_t_idx, _t_simdi))
             _t_snap = dict(_t_coil)
-        if _t_alan_degisti or _t_akim_degisti:
+        if _t_alan_degisti or _t_akim_degisti or _t_kayip_degisti:
             _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})
+        if _t_kayip_degisti:
+            if _t_snap.get("alanKayip"):
+                _bildir(lambda d: ceviri.t("bildirim.mlxDustu", dil=d, coil=_t_coil_id), "warning")
+            else:
+                _bildir(lambda d: ceviri.t("bildirim.mlxGeriGeldi", dil=d, coil=_t_coil_id), "info")
         if data.get("akim_guvenilmez") and _t_idx not in _akim_guvenilmez_bildirildi:
             _akim_guvenilmez_bildirildi.add(_t_idx)
             _bildir(lambda d: ceviri.t("bildirim.akimGuvenilmez", dil=d, coil=_t_coil_id), "warning")
