@@ -1437,7 +1437,7 @@ export function AiProPanel({
           <TouchableOpacity
             key={f}
             testID={`aipro-frek-${f}`}
-            style={[styles.organChip, frek === f && styles.organChipActive]}
+            style={[styles.organChip, { minHeight: touch.min }, frek === f && styles.organChipActive]}
             onPress={() => setFrek(f)}
             disabled={running}
             accessibilityRole="radio"

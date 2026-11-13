@@ -18,8 +18,14 @@
  *
  * ⚠️ Perde ve kart `Pressable`'dır ama DOKUNMA HEDEFİ DEĞİLDİR (dokunuş yutucu) —
  * dokunma-hedefi kapısı için muaf yorumları aşağıdadır.
+ *
+ * SÜRÜKLEYEREK SEÇİM PENCEREYİ KAPATMAZ (sahip 13 Kasım 2026: AI önerisinde doz kutusundaki değeri fare sol tuşu basılı sürükleyerek
+ * seçerken pencere kendi kendine kapanıyordu). Neden: web'de (react-native-web) `onPress` tarayıcının `click` olayıdır; basış kartın
+ * İÇİNDE (metin kutusu) başlayıp perdede bırakılınca `click` ikisinin ortak atasına — PERDEYE — gider → "perdeye dokunuldu" sanılırdı.
+ * Artık kartta başlayan basış işaretlenir (`onPressIn`); perdeye düşen İLK `click` kapatmaz. Perdede başlayıp perdede biten dokunuş
+ * eskisi gibi kapatır.
  */
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, rs, spacing } from "@/theme/tokens";
@@ -67,17 +73,36 @@ export function ScrollableModalCard({
   // cihazlarda kartı ekran dışına taşırıyordu.
   const maxHeight = Math.max(rs(220), height - insets.top - insets.bottom - 2 * spacing.md);
 
+  // Kartın içinde başlayan basış (metin seçmek için sürükleme dahil) — perdeye düşen ilk `click` KAPATMAZ.
+  const kartBasisi = useRef(false);
+  useEffect(() => {
+    kartBasisi.current = false;
+  }, [visible]);
+  const perdeBasildi = () => {
+    if (kartBasisi.current) {
+      kartBasisi.current = false;
+      return;
+    }
+    onBackdropPress?.();
+  };
+
   return (
     <Modal visible={visible} transparent animationType={align === "bottom" ? "slide" : "fade"} onRequestClose={onRequestClose}>
       <KeyboardAvoidingView style={styles.kav} behavior={KAV_BEHAVIOR_MODAL}>
         {/* dokunma-hedefi: muaf (perde — hedef değil, dokunuş yutucu) */}
         <Pressable
           style={[styles.backdrop, align === "bottom" ? styles.backdropBottom : styles.backdropCenter]}
-          onPress={onBackdropPress}
+          onPress={onBackdropPress ? perdeBasildi : undefined}
+          testID={testID ? `${testID}-perde` : undefined}
         >
           {/* dokunma-hedefi: muaf (kart — hedef değil, perde dokunuşunu yutar) */}
           <Pressable
-            onPress={() => {}}
+            onPressIn={() => {
+              kartBasisi.current = true;
+            }}
+            onPress={() => {
+              kartBasisi.current = false;
+            }}
             style={[
               styles.card,
               align === "bottom" ? styles.cardBottom : null,
