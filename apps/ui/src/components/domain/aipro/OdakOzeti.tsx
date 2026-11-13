@@ -15,7 +15,8 @@ import i18n from "i18next";
 
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
-export type OdakKuyu = { etiket: string; px?: number[] | null; mT: number | null; secili?: boolean };
+/** ODK11: `bos` = kamerada sıvı görülmeyen kuyu (yeri plakanın görülen kuyularından hesaplandı) — soluk çizilir, hedef olamaz. */
+export type OdakKuyu = { etiket: string; px?: number[] | null; mT: number | null; secili?: boolean; bos?: boolean };
 export type OdakOzet = {
   kip: string;
   doz_mT: number;
@@ -84,6 +85,7 @@ export function KuyuHaritasi({ kuyular }: { kuyular: OdakKuyu[] }) {
   const min = degerler.length ? Math.min(...degerler) : 0;
   const maks = degerler.length ? Math.max(...degerler) : 0;
   const yer = kuyuKonumlari(kuyular);
+  const bosSayi = kuyular.filter((k) => k.bos).length;
   return (
     <View testID="odak-kuyu-haritasi" accessibilityLabel={t("ai.pro.onay.odak.haritaBaslik")}>
       <Text style={s.haritaBaslik}>{t("ai.pro.onay.odak.haritaBaslik")}</Text>
@@ -95,7 +97,9 @@ export function KuyuHaritasi({ kuyular }: { kuyular: OdakKuyu[] }) {
             accessibilityLabel={
               k.secili
                 ? t("ai.pro.onay.odak.kuyuEtiketSecili", { etiket: k.etiket, deger: sayi(k.mT), secili: t("ai.pro.onay.odak.secili") })
-                : t("ai.pro.onay.odak.kuyuEtiket", { etiket: k.etiket, deger: sayi(k.mT) })
+                : k.bos
+                  ? t("ai.pro.onay.odak.kuyuEtiketBos", { etiket: k.etiket, deger: sayi(k.mT) })
+                  : t("ai.pro.onay.odak.kuyuEtiket", { etiket: k.etiket, deger: sayi(k.mT) })
             }
             style={[
               s.hucre,
@@ -105,6 +109,7 @@ export function KuyuHaritasi({ kuyular }: { kuyular: OdakKuyu[] }) {
                 backgroundColor: kuyuRengi(k.mT, min, maks),
               },
               k.secili && s.hucreSecili,
+              k.bos && s.hucreBos,
             ]}
           >
             <Text style={s.hucreEtiket}>{k.etiket}</Text>
@@ -114,6 +119,9 @@ export function KuyuHaritasi({ kuyular }: { kuyular: OdakKuyu[] }) {
       </View>
       <Text style={s.olcek}>{t("ai.pro.onay.odak.olcek", { min: sayi(min), maks: sayi(maks) })}</Text>
       <Text style={s.uyari}>{t("ai.pro.onay.odak.komsuUyari")}</Text>
+      {bosSayi > 0 ? (
+        <Text testID="odak-bos-kuyu" style={s.olcek}>{t("ai.pro.onay.odak.bosKuyu", { sayi: bosSayi })}</Text>
+      ) : null}
     </View>
   );
 }
@@ -220,6 +228,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   hucreSecili: { borderWidth: 3, borderColor: colors.text },
+  hucreBos: { opacity: 0.35, borderWidth: 1, borderStyle: "dashed", borderColor: colors.textMuted },
   hucreEtiket: { color: "#FFFFFF", fontSize: rf(9), fontWeight: "800" },
   hucreDeger: { color: "#FFFFFF", fontSize: rf(9), fontWeight: "700" },
   olcek: { color: colors.textMuted, fontSize: rf(11) },

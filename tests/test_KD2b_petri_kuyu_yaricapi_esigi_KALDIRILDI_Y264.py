@@ -119,12 +119,12 @@ def test_karsit_24px_kirpik_karede_IZGARA_nedenleri_HALA_KESER(tmp_path):
         "plate_cropped: plaka goruntu kenarina degiyor",
         "few_candidates: 2 aday dogrulandi",
         "ecc_failed: pembe maske ile ince hizalama yapilamadi",
-        "kuyu_skor_esigi: 3 hucrenin skoru 0.6 altinda",
         "kamera_oynamis: kuyu araligi %4 farkli",
         "kor_bolge_on: numune on camin dibinde",
     ],
 )
 def test_karsit_petride_OTEKI_kapi_nedenleri_AYNEN_KESER(uyari):
+    # Y284 (sahip 13-11): `kuyu_skor_esigi` (boş kuyu) artık KESMEZ — listeden çıktı, sözleşmesi test_ODK11_* / test_T3_Y191b
     from ai_hub.cv_ortak import pemf_kapisi
 
     k = pemf_kapisi.degerlendir({"success": True, "pemf_valid": True, "warnings": [uyari]}, model="petri")

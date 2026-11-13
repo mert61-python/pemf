@@ -121,7 +121,8 @@ def test_KRITIK_kirpik_plaka_UYDURULAN_izgara_SURULEMEZ(tmp_path, ad):
     # Varsayılan eşik (0,6): kadraj dışına düşen uydurma hücreler kuyu SAYILMAZ ve yeniden çekim nedeni eklenir
     r2, _ = _hough_boru_hatti(tmp_path, a1_cabin_mm=[0.0, 0.0, 0.0]).process_image(_sag_yarim(ad))
     k2 = pemf_kapisi.degerlendir(r2, model="petri")
-    assert r2.n_wells < 24 and "kuyu_skor_esigi" in k2["nedenler"] and k2["surulebilir"] is False, (
+    # Y284: elenen hücre (kuyu_skor_esigi) artık neden DEĞİL — kırpık plakayı `plate_cropped` yine keser
+    assert r2.n_wells < 24 and "kuyu_skor_esigi" not in k2["nedenler"] and k2["surulebilir"] is False, (
         r2.n_wells,
         k2["nedenler"],
     )
@@ -166,7 +167,8 @@ def test_KRITIK_kirpik_plaka_GERCEK_ONNX_SURULEMEZ(ad):
     pl2 = PetriCvPipeline(load_cabin_config(None), yolo_model_path=yolo, yolo_device="cpu", a1_cabin_mm=[0.0, 0.0, 0.0])
     r2, _ = pl2.process_image(_sag_yarim(ad))
     k2 = pemf_kapisi.degerlendir(r2, model="petri")
-    assert r2.n_wells < 24 and "kuyu_skor_esigi" in k2["nedenler"] and k2["surulebilir"] is False, (
+    # Y284: elenen hücre (kuyu_skor_esigi) artık neden DEĞİL — kırpık plakayı `plate_cropped` yine keser
+    assert r2.n_wells < 24 and "kuyu_skor_esigi" not in k2["nedenler"] and k2["surulebilir"] is False, (
         r2.n_wells,
         k2["nedenler"],
     )

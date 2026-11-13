@@ -39,12 +39,14 @@ ENGELLEYICI = ("layout_mismatch", "control_cancer_missed", "control_healthy_flag
 #: AII-1.1 (AI incelemesi): + hocanın petri README'sindeki çekim protokolü uyarıları — `plate_cropped` ("kadrajı genişlet"),
 #: `few_candidates` ("sonucu gözle kontrol et": kapalı döngüde göz yok), `ecc_failed` ("ışık / odak kontrol"). ÖLÇÜLDÜ: kırpık
 #: gerçek plakada uydurulan 24 kuyucuk (0/12 doğru, ~3 aralık kayık) yalnız bu ikisini taşıyıp "sürülebilir" geçiyordu.
-#: T3 · Y191b: + `kuyu_skor_esigi` — ızgara hücresi skoru eşiğin altında kaldı (hücre kuyu sayılmadı): ızgara plakadan taştı ya da
-#: kuyu boş → kalan kuyuların konumu da şüpheli; koşulluda bobine esas alınmaz, koşulsuzda uyarı.
+#: T3 · Y191b `kuyu_skor_esigi` (ızgara hücresi skoru eşiğin altında — hücre kuyu sayılmadı) ARTIK BURADA DEĞİL — Y284 (sahip 13 Kasım
+#: 2026: "yeniden çekim sayılmasın, yarı dolu plakayla da sürüş olabilmeli koşulluda"): deneyde kuyuların hepsi dolu OLMAZ; boş kuyu
+#: koşullu kipte de sürüşü KESMEZ (uyarı kodu sonuçta kalır; hücre kuyu sayılmaz). Kırpık plakayı `plate_cropped` yakalar; ODAK
+#: (ODK11) görülen kuyuları 24'lük düzene oturtur, sapma büyükse SÜRMEZ (`plakaUyumsuz`).
 #: KD-2b · Y264: petri hattı `low_resolution` ÜRETMEZ (kuyu yarıçapı eşiği kaldırıldı — sabit kabin kamerasında kuyu 24 px);
 #: kod burada fantom tümör eşiği (`tumor_detect`, < 6 px) için KALIR.
 YENIDEN_CEKIM = (
-    "oblique_view", "low_resolution", "ring_partial", "plate_cropped", "few_candidates", "ecc_failed", "kuyu_skor_esigi",
+    "oblique_view", "low_resolution", "ring_partial", "plate_cropped", "few_candidates", "ecc_failed",
 )
 
 #: KD · Y258–Y259 (sahip 2026-11-10): SABİT DÜZLEM kalibrasyonunun fiziksel engelleri (`cv_ortak.sabit_duzlem.ENGEL_KODLARI` +

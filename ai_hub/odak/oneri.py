@@ -7,7 +7,8 @@ domeni tanımıyla); çevre ortalaması
 ve oran (odak kiplerinde hedef / çevre, düzgünlük kiplerinde en zayıf / en güçlü); konum payı (hedef ±10 mm kayınca doz değişimi); petride 24 kuyunun
 her birinde beklenen tepe |B| (onay ekranı haritası). SÜRME (engel kodu → i18n `ai.pro.odak.engel.<kod>`, eylem söyleyen metin):
   hedefKabinDisi · dozGecersiz · dozTavanUstu · dozSapmasi (|beklenen / istenen − 1| > %10) · modelEski (eğitim kalibrasyonu ≠ sürüşteki) ·
-  modelYok (Y282: AI model katmanında ODAK dosyası yok) · plakaYok (24 kuyu ızgarası çıkarılamadı) · kuyuYok (seçili kuyu ızgarada yok) · kalibrasyonYok / kalibrasyonBozuk / kalibrasyonEski / eslemeDogrulanmadi (alan.KalibrasyonHatasi).
+  modelYok (Y282: AI model katmanında ODAK dosyası yok) · plakaYok (ODK11: plaka yeri / yönü için < 3 kuyu ya da hepsi tek satır / sütunda) ·
+  plakaUyumsuz (görülen kuyular 24'lük düzene oturmadı ya da iki yönlü belirsiz) · kuyuYok (seçili kuyu ızgarada yok ya da BOŞ) · kalibrasyonYok / kalibrasyonBozuk / kalibrasyonEski / eslemeDogrulanmadi (alan.KalibrasyonHatasi).
 Girdiler BACKEND kabin çerçevesindedir (X sol, Y yukarı, Z arka; mm); çeviri `alan.backend_to_olcum`'da (tek yer).
 """
 from __future__ import annotations
@@ -35,6 +36,12 @@ DOZ_SAPMA_SINIRI = 0.10
 #: Konum payı: hedef bu kadar kayınca doz ne kadar değişir (onay ekranında ±).
 KONUM_PAYI_MM = 10.0
 SATIRLAR = "ABCD"
+#: ODK11 (sahip 13 Kasım 2026: "kaç tane bulursa ona göre başlamalı, 24 şartını kaldır"): plaka yeri + yönü GÖRÜLEN (sıvılı) kuyulardan
+#: oturtulur, boş kuyuların yeri hesaplanır. Geometrinin gerektirdiği alt sınır: ≥ 3 kuyu, en az iki satır VE iki sütunda (tek çizgide
+#: yön / ayna belirsiz). Oturtma sapması (RMS) sınırı: ızgara kameranın tek dönüşümünden geldiği için görülen kuyular birkaç mm içinde
+#: düzene oturur; aşarsa plaka / kalibrasyon şüpheli → SÜRÜLMEZ.
+IZGARA_EN_AZ = 3
+IZGARA_SAPMA_SINIRI_MM = 5.0
 DUZGUNLUK_KIPLERI = ("TUM_PETRI", "KEDI_TV")
 
 
@@ -57,9 +64,38 @@ def _dondur(u, v, th):
 
 
 # ── kip girdileri (backend çerçevesi) → temel öznitelik (ölçüm çerçevesi) + hedef / çevre noktaları (backend) ─────────────────────
+def _kati_oturt(L: np.ndarray, Q: np.ndarray) -> list:
+    """Kafes düzlemi L (n, 2) → ölçüm düzlemi Q (n, 2) katı dönüşüm (ölçek 1): HER İKİ el yönü (dönme / ayna) için (R, t, rms)."""
+    Lo, Qo = L.mean(0), Q.mean(0)
+    U, _S, Vt = np.linalg.svd((L - Lo).T @ (Q - Qo))
+    det = float(np.sign(np.linalg.det(Vt.T @ U.T))) or 1.0
+    out = []
+    for el in (1.0, -1.0):
+        R = Vt.T @ np.diag([1.0, el * det]) @ U.T
+        t = Qo - R @ Lo
+        out.append((R, t, float(np.sqrt(np.mean(np.sum((L @ R.T + t - Q) ** 2, axis=1))))))
+    return out
+
+
+def _px_tamamla(tablo: dict, hucreler: list) -> dict:
+    """Boş kuyuların kamera piksel konumu: görülen kuyuların (sütun, satır) → px doğrusal (afin) oturtması (harita yönü korunur)."""
+    dolu = [(rc, v["px"]) for rc, v in tablo.items() if isinstance(v.get("px"), (list, tuple)) and len(v["px"]) >= 2]
+    try:
+        A = np.array([[c, r, 1.0] for (r, c), _ in dolu])
+        B = np.array([[float(p[0]), float(p[1])] for _, p in dolu])
+        if len(dolu) < 3 or np.linalg.matrix_rank(A) < 3 or not np.all(np.isfinite(B)):
+            return {}
+        X = np.linalg.lstsq(A, B, rcond=None)[0]
+    except (TypeError, ValueError):
+        return {}
+    return {(r, c): [round(float(v), 1) for v in np.array([c, r, 1.0]) @ X] for (r, c) in hucreler}
+
+
 def petri_izgarasi(kuyular: list) -> dict:
     """[{etiket 'A1'..'D6', P [X, Y, Z] backend, px [u, v]}] → 24 kuyu (satır-sütun sıralı) + plaka merkezi / yönü / altlığı (ölçüm çerçevesi).
-    Izgara tam değilse (ör. tekil kip W1…) Engel('plakaYok')."""
+    ODK11: kuyuların bir kısmı görülmediyse (boş — sıvı yok) plaka GÖRÜLENLERDEN katı oturtulur (kuyu aralığı numuneden), boşların yeri
+    hesaplanır (`bos: True`, px görülenlerden). < 3 kuyu ya da hepsi tek satır / sütunda → Engel('plakaYok'); sapma > sınır ya da iki el
+    yönü de oturuyorsa (ayna belirsiz) → Engel('plakaUyumsuz'). 24'ün hepsi görüldüyse ölçülen konumlar AYNEN (oturtma yok)."""
     N = numune()["plaka"]
     sat, sut = int(N["satir"]), int(N["sutun"])
     tablo = {}
@@ -68,15 +104,32 @@ def petri_izgarasi(kuyular: list) -> dict:
         if len(e) >= 2 and e[0] in SATIRLAR[:sat] and e[1:].isdigit() and 1 <= int(e[1:]) <= sut:
             P = np.asarray(k.get("P"), dtype=float)
             if P.shape == (3,) and np.all(np.isfinite(P)):
-                tablo[(SATIRLAR.index(e[0]), int(e[1:]) - 1)] = {"etiket": e, "P": P, "px": k.get("px")}
-    if len(tablo) != sat * sut:
-        raise Engel("plakaYok", bulunan=len(tablo), beklenen=sat * sut)
+                tablo[(SATIRLAR.index(e[0]), int(e[1:]) - 1)] = {"etiket": e, "P": P, "px": k.get("px"), "bos": False}
+    bulunan = len(tablo)
+    if bulunan < sat * sut:
+        if bulunan < IZGARA_EN_AZ or len({r for r, _ in tablo}) < 2 or len({c for _, c in tablo}) < 2:
+            raise Engel("plakaYok", bulunan=bulunan, beklenen=IZGARA_EN_AZ)
+        a = float(N["aralik_mm"])
+        rc = list(tablo)
+        L = np.array([[(c - (sut - 1) / 2.0) * a, (r - (sat - 1) / 2.0) * a] for r, c in rc])
+        Pm_g = backend_to_olcum(np.array([tablo[k]["P"] for k in rc]))
+        cozum = sorted(_kati_oturt(L, Pm_g[:, [0, 2]]), key=lambda x: x[2])
+        R, t, rms = cozum[0]
+        if rms > IZGARA_SAPMA_SINIRI_MM or cozum[1][2] <= IZGARA_SAPMA_SINIRI_MM:
+            raise Engel("plakaUyumsuz", bulunan=bulunan, sapma=round(rms, 1))
+        y = float(np.mean(Pm_g[:, 1]))
+        eksik = [(r, c) for r in range(sat) for c in range(sut) if (r, c) not in tablo]
+        pxler = _px_tamamla(tablo, eksik)
+        for r, c in eksik:
+            u, v = R @ np.array([(c - (sut - 1) / 2.0) * a, (r - (sat - 1) / 2.0) * a]) + t
+            tablo[(r, c)] = {"etiket": f"{SATIRLAR[r]}{c + 1}", "P": olcum_to_backend(np.array([u, y, v])), "px": pxler.get((r, c)),
+                             "bos": True}
     sira = [tablo[(r, c)] for r in range(sat) for c in range(sut)]
     Pm = backend_to_olcum(np.array([k["P"] for k in sira])).reshape(sat, sut, 3)
     merkez = Pm.reshape(-1, 3).mean(0)
     u = (Pm[:, -1, :] - Pm[:, 0, :]).mean(0)  # sütun artış yönü (ölçüm x, z)
     th = float(np.arctan2(u[2], u[0]))
-    return {"sira": sira, "Pm": Pm.reshape(-1, 3), "merkez": merkez, "theta": th, "sat": sat, "sut": sut}
+    return {"sira": sira, "Pm": Pm.reshape(-1, 3), "merkez": merkez, "theta": th, "sat": sat, "sut": sut, "bulunan": bulunan}
 
 
 def _taban_y(A: AlanModeli) -> float:
@@ -97,8 +150,8 @@ def kip_girdisi(kip: str, A: AlanModeli, hedef_P=None, kuyular=None, hedef_etike
             return {"oz": oz, "T": Pb, "C": None, "kuyu": g["sira"], "secili": None}
         etiketler = [k["etiket"] for k in g["sira"]]
         e = str(hedef_etiket or "").strip().upper()
-        if e not in etiketler:
-            raise Engel("kuyuYok", hedef=e)
+        if e not in etiketler or g["sira"][etiketler.index(e)].get("bos"):
+            raise Engel("kuyuYok", hedef=e)  # ODK11: boş (görülmeyen) kuyu hedef OLAMAZ
         w = etiketler.index(e)
         oz.update({"hedef_x": g["Pm"][w, 0], "hedef_z": g["Pm"][w, 2]})
         C = np.delete(Pb, w, axis=0)
@@ -160,7 +213,10 @@ def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
         MT = A.alan(T)
         plan["tavan_mT"] = _yuvarla(tavan_td(A, MT))
         if g["kuyu"] is not None:
-            plan["kuyular"] = [{"etiket": k["etiket"], "px": k.get("px"), "mT": None, "secili": i == g["secili"]} for i, k in enumerate(g["kuyu"])]
+            plan["kuyular"] = [
+                {"etiket": k["etiket"], "px": k.get("px"), "mT": None, "secili": i == g["secili"], "bos": bool(k.get("bos"))}
+                for i, k in enumerate(g["kuyu"])
+            ]
         D = float(doz_mT)
         if not np.isfinite(D) or D <= 0:
             raise Engel("dozGecersiz")

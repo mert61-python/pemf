@@ -234,9 +234,10 @@ def test_KRITIK_PETRI_izgarasi_MERKEZ_YON_ve_eksik_KUYU(A):
     g = oneri.petri_izgarasi(_plaka(th=0.3))
     assert np.allclose(g["merkez"], [0.0, -165.0, 0.0], atol=1e-6) and g["theta"] == pytest.approx(0.3)
     assert [k["etiket"] for k in g["sira"]][:7] == ["A1", "A2", "A3", "A4", "A5", "A6", "B1"]
-    with pytest.raises(oneri.Engel) as e:
-        oneri.petri_izgarasi(_plaka(eksik="C4"))
-    assert e.value.kod == "plakaYok" and e.value.ek == {"bulunan": 23, "beklenen": 24}
+    # ODK11: eksik kuyu artık ENGEL değil — yeri görülenlerden hesaplanır (`bos`); alt sınır / sapma test_ODK11_*'da
+    g23 = oneri.petri_izgarasi(_plaka(th=0.3, eksik="C4"))
+    c4 = next(k for k in g23["sira"] if k["etiket"] == "C4")
+    assert g23["bulunan"] == 23 and c4["bos"] is True and np.allclose(g23["merkez"], g["merkez"], atol=1e-6)
     with pytest.raises(oneri.Engel):
         oneri.petri_izgarasi(
             [{"etiket": "W1", "P": [0, 0, 0]}, {"etiket": "A9", "P": [0, 0, 0]}, {"etiket": "A1", "P": [0, 0]}]
@@ -355,7 +356,9 @@ def test_KRITIK_ONERI_ENGELLERI_duty_SIFIR(A):
     e, ek = kod(doz_mT=0.5 * tv, model=_DogruModel(A, [hedef["P"]], olcek=0.7), **ortak)
     assert e == "dozSapmasi" and ek["istenen"] == pytest.approx(round(0.5 * tv, 3))
     assert kod(doz_mT=0.5, model=m, kip="KUYUCUK", A=A, kuyular=kuyular, hedef_etiket="Z9")[0] == "kuyuYok"
-    assert kod(doz_mT=0.5, model=m, kip="KUYUCUK", A=A, kuyular=kuyular[:10], hedef_etiket="A1")[0] == "plakaYok"
+    assert (
+        kod(doz_mT=0.5, model=m, kip="KUYUCUK", A=A, kuyular=kuyular[:6], hedef_etiket="A1")[0] == "plakaYok"
+    )  # tek satır (ODK11)
     assert kod(doz_mT=0.5, model=m, kip="FANTOM", A=A, hedef_P=[0.0, 500.0, 0.0])[0] == "hedefKabinDisi"
     assert oneri.hedef_tavani("FANTOM", A, hedef_P=[0.0, 500.0, 0.0])["engel"] == "hedefKabinDisi"
     with pytest.raises(ValueError):

@@ -397,7 +397,8 @@
           "kuyuYok": "The selected well ({{hedef}}) is not in the plate grid — not driven. Select the well again on the frame.",
           "modelEski": "The ODAK model was not trained with this cabin calibration — not driven. Update the application or bring the field measurement (bench) to the model's version.",
           "modelYok": "ODAK model files (field table / model) were not found on this computer — not driven. Install or update the app's AI model package (launcher → Updates).",
-          "plakaYok": "The well grid of the 24-well plate was not fully found ({{bulunan}} / {{beklenen}}) — not driven. Bring the whole plate into view, adjust the lighting and locate it again."
+          "plakaUyumsuz": "The {{bulunan}} visible wells did not fit the 24-well plate layout (deviation {{sapma}} mm) — not driven. Check that the plate lies flat on the glass and that the cabin camera has not moved, then locate it again.",
+          "plakaYok": "The plate position and orientation could not be found: only {{bulunan}} wells were seen (at least {{beklenen}} wells, not all in one row or column) — not driven. Bring the whole plate into view and adjust the lighting; filled wells must span at least two rows and two columns."
         }
       },
       "sonuc": {

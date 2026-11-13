@@ -3525,6 +3525,13 @@
   },
   {
    "yuzey": "sunucu",
+   "anahtar": "ai.pro.odak.engel.plakaUyumsuz",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_pro_hedef.py",
+   "aciklama": "ODAK (istem 45): fizik denetimi / kalibrasyon kapısı bobini SÜRMEDİ — neden + eylem"
+  },
+  {
+   "yuzey": "sunucu",
    "anahtar": "ai.pro.odak.engel.kuyuYok",
    "tur": "bobin",
    "kaynak": "apps/backend/servers/ai_pro_hedef.py",

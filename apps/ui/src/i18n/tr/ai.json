@@ -1161,6 +1161,7 @@
       "leadOtonom": "Otonom seans <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
       "odak": {
         "beklenen": "Beklenen (fizik denetimi): {{beklenen}} mT · tavan {{tavan}} mT",
+        "bosKuyu": "Soluk kuyular boş ({{sayi}} kuyu; kamerada sıvı görülmedi) — yerleri plakanın görülen kuyularından hesaplandı.",
         "cevre": "Çevre ortalaması {{cevre}} mT · oran {{oran}}×",
         "doz": "Doz: {{doz}} mT (± %{{pay}} konum payı)",
         "dozGecersiz": "0'dan büyük ve en çok {{tavan}} mT bir doz girin.",
@@ -1176,6 +1177,7 @@
         "kipEtiket": "Petri kipi",
         "komsuUyari": "Komşu kuyular da alan alır — bu bobinlerle tek kuyu ayrılamaz.",
         "kuyuEtiket": "{{etiket}}: {{deger}} mT",
+        "kuyuEtiketBos": "{{etiket}}: boş kuyu, {{deger}} mT",
         "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
         "olcek": "Renk: {{min}} – {{maks}} mT (mavi düşük, kırmızı yüksek)",
         "secili": "seçili kuyu",

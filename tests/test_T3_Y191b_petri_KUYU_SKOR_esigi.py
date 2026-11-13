@@ -145,7 +145,9 @@ def test_KARSIT_TEKIL_kipte_esik_UYGULANMAZ_YOLO_guveni_ayri(petri_hatti):
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 
-def test_KRITIK_elenen_hucre_KOSULLUDA_yeniden_cekim_KOSULSUZDA_uyari():
+def test_KRITIK_Y284_elenen_hucre_KOSULLUDA_da_SURUSU_KESMEZ_uyari_kodu_KALIR():
+    """Y284 (sahip 13 Kasım 2026: "yeniden çekim sayılmasın … yarı dolu plakayla da sürüş olabilmeli koşulluda"): boş (eşik altı) hücre
+    kuyu SAYILMAZ ama koşullu kipte de sürüşü KESMEZ; uyarı kodu sonuçta görünür. (Eski Y191b: koşulluda yeniden çekimdi.)"""
     from ai_hub.cv_ortak import pemf_kapisi as pk
 
     sonuc = {
@@ -154,9 +156,15 @@ def test_KRITIK_elenen_hucre_KOSULLUDA_yeniden_cekim_KOSULSUZDA_uyari():
         "warnings": ["kuyu_skor_esigi: 2 hucrenin skoru 0.6 altinda - kuyu sayilmadi: D1, D2"],
     }
     k = pk.degerlendir(sonuc, model="petri")
-    assert k["surulebilir"] is False and "kuyu_skor_esigi" in k["yeniden_cekim"], k
-    assert any(m["kod"] == "kuyu_skor_esigi" and "yeniden çekin" in m["metin"] for m in k["mesajlar"]), k["mesajlar"]
+    assert k["surulebilir"] is True and "kuyu_skor_esigi" not in k["yeniden_cekim"], k
+    assert "kuyu_skor_esigi" in k["uyari_kodlari"], k
+    assert "kuyu_skor_esigi" not in pk.YENIDEN_CEKIM
     k2 = pk.degerlendir(sonuc, model="petri", kosulsuz=True)
-    assert k2["surulebilir"] is True and "kuyu_skor_esigi" in k2["atlanan"], k2
+    assert k2["surulebilir"] is True, k2
+    # KARŞIT: kırpık plaka (ızgara kadrajdan taştı) koşulluda YİNE yeniden çekim
+    k3 = pk.degerlendir(
+        {**sonuc, "warnings": sonuc["warnings"] + ["plate_cropped: plaka kenari kadraj disinda"]}, model="petri"
+    )
+    assert k3["surulebilir"] is False and "plate_cropped" in k3["yeniden_cekim"], k3
     k0 = pk.degerlendir({"success": True, "pemf_valid": True, "warnings": []}, model="petri")
     assert k0["surulebilir"] is True  # KARŞIT: eleme yoksa koşullu da sürülebilir

@@ -1161,6 +1161,7 @@
       "leadOtonom": "An autonomous session <kalin>does not start without approval</kalin>. Review the parameters below and approve, or reject with a reason.",
       "odak": {
         "beklenen": "Expected (physics check): {{beklenen}} mT · ceiling {{tavan}} mT",
+        "bosKuyu": "Faded wells are empty ({{sayi}} wells; no liquid seen by the camera) — their positions were computed from the plate's visible wells.",
         "cevre": "Surrounding average {{cevre}} mT · ratio {{oran}}×",
         "doz": "Dose: {{doz}} mT (± {{pay}}% position margin)",
         "dozGecersiz": "Enter a dose greater than 0 and at most {{tavan}} mT.",
@@ -1176,6 +1177,7 @@
         "kipEtiket": "Well plate mode",
         "komsuUyari": "Neighbouring wells also receive field — these coils cannot isolate a single well.",
         "kuyuEtiket": "{{etiket}}: {{deger}} mT",
+        "kuyuEtiketBos": "{{etiket}}: empty well, {{deger}} mT",
         "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
         "olcek": "Colour: {{min}} – {{maks}} mT (blue low, red high)",
         "secili": "selected well",
