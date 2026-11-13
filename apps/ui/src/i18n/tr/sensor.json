@@ -13,5 +13,15 @@
   "manyetik": "● Manyetik (mT)",
   "manyetikEtiket": "Manyetik",
   "rozetCanli": "CANLI",
-  "sicaklik": "-- Sıcaklık (°C)"
+  "sicaklik": "-- Sıcaklık (°C)",
+  "zaman": {
+    "canliyaDon": "Canlıya dön",
+    "etiket": "Zaman:",
+    "ipucu": "Yakınlaştırmak için grafikte fareyle sürükleyerek bir aralık seçin.",
+    "secili": "Seçili aralık: {{bas}} – {{son}}",
+    "son10dk": "Son 10 dk",
+    "son2dk": "Son 2 dk",
+    "son30sn": "Son 30 sn",
+    "tumu": "Tümü"
+  }
 }

@@ -11,7 +11,10 @@ import { rf } from "@/theme/tokens";
 import { View, StyleSheet, Platform, Text } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText, G, Circle } from "react-native-svg";
 import type { CoilSensorHistory, SensorDataPoint } from "@/types/domain";
-import { hesaplaPad, cizimAlani, canvasBoyutla, type TuvalGibi, type BaglamGibi } from "@/components/visual/chartLayout";
+import {
+  hesaplaPad, cizimAlani, canvasBoyutla, gorunurAralik, zamanIsaretleri,
+  type TuvalGibi, type BaglamGibi, type ZamanPenceresi,
+} from "@/components/visual/chartLayout";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
 import { useTranslation } from "react-i18next";
 
@@ -38,6 +41,33 @@ interface Props {
   showTemp?: boolean;
   width?: number;
   height?: number;
+  /** ZG-1: zaman penceresi (yok = tümü). */
+  pencere?: ZamanPenceresi;
+  /** ZG-1 (yalnız web): grafikte sürükleyerek seçilen aralık (saniye) — çağıran pencereyi `sabit` yapar. */
+  onAralikSec?: (bas: number, son: number) => void;
+}
+
+/** ZG-1: görünür pencereye düşen noktalar (zaman damgası yoksa — eski backend — seri olduğu gibi). */
+function pencereyeSuz(pts: SensorDataPoint[], g: { bas: number; son: number } | null): SensorDataPoint[] {
+  if (!g) return pts;
+  return pts.filter((p) => {
+    const t = Number(p.timestamp);
+    return !Number.isFinite(t) || (t >= g.bas && t <= g.son);
+  });
+}
+
+/** ZG-1: ortak zaman aralığı [tMin, tMax] (görünür bobinlerin tüm noktaları). */
+function veriAraligi(history: CoilSensorHistory, coils: Iterable<number>): [number, number] {
+  let tMin = Infinity, tMax = -Infinity;
+  for (const c of coils) {
+    for (const p of history[c] ?? []) {
+      const t = Number(p.timestamp);
+      if (!Number.isFinite(t)) continue;
+      if (t < tMin) tMin = t;
+      if (t > tMax) tMax = t;
+    }
+  }
+  return [tMin, tMax];
 }
 
 export function RealtimeChart({
@@ -47,10 +77,15 @@ export function RealtimeChart({
   showTemp = true,
   width = 800,
   height = 300,
+  pencere,
+  onAralikSec,
 }: Props) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
+  // ZG-1: son çizimin zaman eşlemesi (sürükleme → saniye) + süren sürükleme (piksel).
+  const eslemeRef = useRef<{ bas: number; son: number; sol: number; gen: number } | null>(null);
+  const surukRef = useRef<{ x0: number; x1: number } | null>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -93,13 +128,19 @@ export function RealtimeChart({
       ctx.stroke();
     }
 
+    // ZG-1: görünür zaman penceresi — eksen aralıkları ve eğriler YALNIZ penceredeki noktalardan.
+    const [vtMin, vtMax] = veriAraligi(history, visibleCoils);
+    const g = gorunurAralik(vtMin, vtMax, pencere);
+    const gorunur: Record<number, SensorDataPoint[]> = {};
+    for (const c of visibleCoils) gorunur[c] = pencereyeSuz(history[c] ?? [], g);
+
     // Collect ranges
     let magMin = Infinity, magMax = -Infinity;
     let tempMin = Infinity, tempMax = -Infinity;
     let maxPoints = 0;
 
     for (const coilId of visibleCoils) {
-      const pts = history[coilId] ?? [];
+      const pts = gorunur[coilId] ?? [];
       if (pts.length > maxPoints) maxPoints = pts.length;
       for (const p of pts) {
         if (showMagnetic && noktaOlculdu(p, "magneticMt")) {
@@ -139,16 +180,9 @@ export function RealtimeChart({
     // noktayla işaretleniyordu → veri akışı durmuş bir bobin, akan bobinle aynı anda ölçülmüş gibi
     // görünüyordu (tıbbi grafikte yanıltıcı). Artık ORTAK zaman penceresi kullanılır: veri gelmeyi
     // bırakan seri sağ uca ULAŞMAZ, eğrisi geldiği yerde biter.
-    let tMin = Infinity, tMax = -Infinity;
-    for (const coilId of visibleCoils) {
-      for (const p of (history[coilId] ?? [])) {
-        const t = Number(p.timestamp);
-        if (!Number.isFinite(t)) continue;
-        if (t < tMin) tMin = t;
-        if (t > tMax) tMax = t;
-      }
-    }
-    const timeAxisOk = Number.isFinite(tMin) && Number.isFinite(tMax) && tMax > tMin;
+    // ZG-1: pencere (tümü / son N sn / sabit) — veri aralığı yoksa indekse düşülür.
+    const tMin = g ? g.bas : Infinity, tMax = g ? g.son : -Infinity;
+    const timeAxisOk = g !== null;
     const tRange = timeAxisOk ? tMax - tMin : 1;
     /** Nokta → x koordinatı. Zaman damgaları kullanılamıyorsa (eski backend) indekse düşer. */
     const xOf = (p: { timestamp?: number }, i: number, len: number) =>
@@ -158,7 +192,7 @@ export function RealtimeChart({
 
     // Draw curves for each visible coil
     for (const coilId of visibleCoils) {
-      const pts = history[coilId] ?? [];
+      const pts = gorunur[coilId] ?? [];
       if (pts.length < 2) continue;
       const color = COIL_COLORS[(coilId - 1) % 8];
 
@@ -236,8 +270,62 @@ export function RealtimeChart({
     ctx.lineWidth = 1;
     ctx.strokeRect(PAD.left, PAD.top, plotW, plotH);
 
+    // ZG-1: ZAMAN EKSENİ — altta anlık saat (15:27:13) etiketleri + kısa işaret çizgileri.
+    if (timeAxisOk) {
+      eslemeRef.current = { bas: tMin, son: tMax, sol: PAD.left, gen: plotW };
+      ctx.fillStyle = "#94a3b8";
+      ctx.strokeStyle = "#475569";
+      ctx.font = "11px Inter, sans-serif";
+      ctx.textAlign = "center";
+      for (const is of zamanIsaretleri(tMin, tMax, plotW)) {
+        const x = PAD.left + ((is.t - tMin) / tRange) * plotW;
+        ctx.beginPath();
+        ctx.moveTo(x, PAD.top + plotH);
+        ctx.lineTo(x, PAD.top + plotH + 4);
+        ctx.stroke();
+        ctx.fillText(is.metin, x, PAD.top + plotH + 16);
+      }
+    } else {
+      eslemeRef.current = null;
+    }
+    // ZG-1: süren sürükleme seçimi (yarı saydam bant).
+    const sr = surukRef.current;
+    if (sr) {
+      ctx.fillStyle = "rgba(59,130,246,0.18)";
+      ctx.fillRect(Math.min(sr.x0, sr.x1), PAD.top, Math.abs(sr.x1 - sr.x0), plotH);
+    }
+
     // width/height artık draw() içinde kullanılıyor (tuval DPR kurulumu + PAD hesabı).
-  }, [history, visibleCoils, showMagnetic, showTemp, width, height, t]);
+  }, [history, visibleCoils, showMagnetic, showTemp, width, height, t, pencere]);
+
+  // ZG-1 (web): sürükleyerek aralık seç → `onAralikSec(bas, son)`; 6 px'ten kısa sürükleme tıklama sayılır (yok sayılır).
+  const sinirla = (x: number) => {
+    const e = eslemeRef.current;
+    return e ? Math.min(e.sol + e.gen, Math.max(e.sol, x)) : x;
+  };
+  const fareBas = (ev: any) => {
+    if (!onAralikSec || !eslemeRef.current) return;
+    const x = sinirla(Number(ev?.nativeEvent?.offsetX));
+    if (!Number.isFinite(x)) return;
+    surukRef.current = { x0: x, x1: x };
+  };
+  const fareHareket = (ev: any) => {
+    if (!surukRef.current) return;
+    const x = sinirla(Number(ev?.nativeEvent?.offsetX));
+    if (!Number.isFinite(x)) return;
+    surukRef.current = { ...surukRef.current, x1: x };
+    rafRef.current = requestAnimationFrame(draw);
+  };
+  const fareBirak = () => {
+    const sr = surukRef.current;
+    const e = eslemeRef.current;
+    surukRef.current = null;
+    if (sr && e && onAralikSec && Math.abs(sr.x1 - sr.x0) >= 6) {
+      const zaman = (x: number) => e.bas + ((x - e.sol) / e.gen) * (e.son - e.bas);
+      onAralikSec(zaman(Math.min(sr.x0, sr.x1)), zaman(Math.max(sr.x0, sr.x1)));
+    }
+    rafRef.current = requestAnimationFrame(draw);
+  };
 
   // Sürekli 60fps yerine yalnızca veri/ayar/boyut değişince çiz (CPU/batarya tasarrufu).
   useEffect(() => {
@@ -256,6 +344,7 @@ export function RealtimeChart({
         showTemp={showTemp}
         width={width}
         height={height}
+        pencere={pencere}
       />
     );
   }
@@ -264,14 +353,21 @@ export function RealtimeChart({
     <View style={styles.wrap}>
       {/* @ts-ignore — canvas is web-only */}
       {/* Boyut/DPR ölçeklemesi draw() içinde canvasBoyutla ile kurulur (CSS px = mantıksal px). */}
-      <canvas ref={canvasRef as any} style={{ display: "block", borderRadius: 8 }} />
+      <canvas
+        ref={canvasRef as any}
+        style={{ display: "block", borderRadius: 8, cursor: onAralikSec ? "crosshair" : "default" }}
+        onMouseDown={fareBas}
+        onMouseMove={fareHareket}
+        onMouseUp={fareBirak}
+        onMouseLeave={fareBirak}
+      />
     </View>
   );
 }
 
 /** React Native (APK/iOS) için react-native-svg tabanlı grafik — son ~120 nokta downsample. */
 function NativeRealtimeChart({
-  history, visibleCoils, showMagnetic = true, showTemp = true, width = 800, height = 300,
+  history, visibleCoils, showMagnetic = true, showTemp = true, width = 800, height = 300, pencere,
 }: Props) {
   const { t } = useTranslation();
   const PAD = hesaplaPad(width, showTemp);
@@ -287,8 +383,11 @@ function NativeRealtimeChart({
 
   const series: { id: number; pts: SensorDataPoint[] }[] = [];
   let magMin = Infinity, magMax = -Infinity, tempMin = Infinity, tempMax = -Infinity, maxPoints = 0;
+  // ZG-1: görünür pencere (web ile aynı tanım).
+  const [vtMin, vtMax] = veriAraligi(history, visibleCoils);
+  const g = gorunurAralik(vtMin, vtMax, pencere);
   for (const coilId of visibleCoils) {
-    const pts = downsample(history[coilId] ?? []);
+    const pts = downsample(pencereyeSuz(history[coilId] ?? [], g));
     series.push({ id: coilId, pts });
     if (pts.length > maxPoints) maxPoints = pts.length;
     for (const p of pts) {
@@ -316,16 +415,8 @@ function NativeRealtimeChart({
 
   // ORTAK zaman penceresi (web canvas ile aynı gerekçe): veri akışı durmuş bobinin eğrisi
   // grafiğin tamamına yayılıp sağ uçta "canlı" görünmesin.
-  let tMin = Infinity, tMax = -Infinity;
-  for (const s of series) {
-    for (const p of s.pts) {
-      const t = Number(p.timestamp);
-      if (!Number.isFinite(t)) continue;
-      if (t < tMin) tMin = t;
-      if (t > tMax) tMax = t;
-    }
-  }
-  const timeAxisOk = Number.isFinite(tMin) && Number.isFinite(tMax) && tMax > tMin;
+  const tMin = g ? g.bas : Infinity, tMax = g ? g.son : -Infinity;
+  const timeAxisOk = g !== null;
   const tRange = timeAxisOk ? tMax - tMin : 1;
   const xAt = (i: number, n: number, p?: SensorDataPoint) =>
     timeAxisOk && p && Number.isFinite(Number(p.timestamp))
@@ -375,6 +466,18 @@ function NativeRealtimeChart({
           return <SvgText key={`tl${i}`} x={PAD.left + plotW + 6} y={y + 4} fill="#fb923c" fontSize={rf(11)} textAnchor="start">{val.toFixed(1)}</SvgText>;
         }) : null}
         <Rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="none" stroke="#334155" strokeWidth={1} />
+        {/* ZG-1: zaman ekseni — anlık saat etiketleri */}
+        {timeAxisOk
+          ? zamanIsaretleri(tMin, tMax, plotW).map((is) => {
+            const x = PAD.left + ((is.t - tMin) / tRange) * plotW;
+            return (
+              <G key={`z${is.t}`}>
+                <Line x1={x} y1={PAD.top + plotH} x2={x} y2={PAD.top + plotH + 4} stroke="#475569" strokeWidth={1} />
+                <SvgText x={x} y={PAD.top + plotH + 16} fill="#94a3b8" fontSize={rf(11)} textAnchor="middle">{is.metin}</SvgText>
+              </G>
+            );
+          })
+          : null}
       </Svg>
     </View>
   );

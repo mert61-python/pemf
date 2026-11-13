@@ -13,5 +13,15 @@
   "manyetik": "● Magnetic (mT)",
   "manyetikEtiket": "Magnetic",
   "rozetCanli": "LIVE",
-  "sicaklik": "-- Temperature (°C)"
+  "sicaklik": "-- Temperature (°C)",
+  "zaman": {
+    "canliyaDon": "Back to live",
+    "etiket": "Time:",
+    "ipucu": "Drag across the chart with the mouse to zoom into a range.",
+    "secili": "Selected range: {{bas}} – {{son}}",
+    "son10dk": "Last 10 min",
+    "son2dk": "Last 2 min",
+    "son30sn": "Last 30 s",
+    "tumu": "All"
+  }
 }

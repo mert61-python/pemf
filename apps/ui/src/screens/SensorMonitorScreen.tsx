@@ -7,11 +7,13 @@
  */
 import { useState, useCallback, useMemo, memo } from "react";
 import {
+  Platform,
   Text,
   View,
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
+import { saatMetni, type ZamanPenceresi } from "@/components/visual/chartLayout";
 import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
@@ -42,6 +44,9 @@ export function SensorMonitorScreen() {
   // Grafik genişliği, sarmalayıcının GERÇEK genişliğinden (onLayout) ölçülür → her telefon/
   // yön için container'a tam oturur; tablet/geniş ekranda 1200'de sınırlanır.
   const [chartW, setChartW] = useState(0);
+  // ZG-1 (sahip 13-11): zaman penceresi — tümü / son N (canlıyı izler) / sabit (web'de grafikte sürükleyerek).
+  const [pencere, setPencere] = useState<ZamanPenceresi>({ tip: "tumu" });
+  const sonMu = (sn: number) => pencere.tip === "son" && pencere.sn === sn;
   const coils = snapshot.coils ?? [];
   // CH4 · Y154: akım sensörü KAPALIYKEN (varsayılan) "Akım" satırı hiç çizilmez.
   const akimOlcumu = akimOlcumuAcik(snapshot);
@@ -117,6 +122,24 @@ export function SensorMonitorScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ZG-1: zaman penceresi (yakınlaştırma) */}
+      <View style={styles.controlRow}>
+        <Text style={styles.controlLabel}>{t("sensor.zaman.etiket")}</Text>
+        <Chip testID="zaman-tumu" label={t("sensor.zaman.tumu")} active={pencere.tip === "tumu"} onPress={() => setPencere({ tip: "tumu" })} />
+        <Chip testID="zaman-600" label={t("sensor.zaman.son10dk")} active={sonMu(600)} onPress={() => setPencere({ tip: "son", sn: 600 })} />
+        <Chip testID="zaman-120" label={t("sensor.zaman.son2dk")} active={sonMu(120)} onPress={() => setPencere({ tip: "son", sn: 120 })} />
+        <Chip testID="zaman-30" label={t("sensor.zaman.son30sn")} active={sonMu(30)} onPress={() => setPencere({ tip: "son", sn: 30 })} />
+        {pencere.tip === "sabit" ? (
+          <>
+            <Text testID="zaman-secili" style={styles.controlLabel}>
+              {t("sensor.zaman.secili", { bas: saatMetni(pencere.bas), son: saatMetni(pencere.son) })}
+            </Text>
+            <Chip testID="zaman-canli" label={t("sensor.zaman.canliyaDon")} active onPress={() => setPencere({ tip: "tumu" })} />
+          </>
+        ) : null}
+      </View>
+      {Platform.OS === "web" ? <Text style={styles.zamanIpucu}>{t("sensor.zaman.ipucu")}</Text> : null}
+
       {/* Coil filter buttons */}
       <View style={styles.coilBtnRow}>
         {cizilecek.map((id) => {
@@ -155,6 +178,8 @@ export function SensorMonitorScreen() {
             // türetiliyor, geniş ekranda grafik kabı tam kullanır.
             width={chartW}
             height={grafikY}
+            pencere={pencere}
+            onAralikSec={(bas, son) => setPencere({ tip: "sabit", bas, son })}
           />
         )}
       </View>
@@ -316,6 +341,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   controlLabel: { color: colors.textMuted, fontSize: typography.small, fontWeight: "600" },
+  zamanIpucu: { color: colors.textSubtle, fontSize: typography.small, marginTop: -spacing.xs, marginBottom: spacing.xs },
   axisChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
