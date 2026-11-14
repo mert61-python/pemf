@@ -218,6 +218,20 @@ def acilacak_indeks(secim: dict) -> int:
     return int(indeks)
 
 
+def secim_baglanti(secim: dict | None) -> dict:
+    """AP-23: seçili kameranın BUGÜN bağlı olup olmadığı — kamera AÇILMAZ (yalnız MSMF aygıt listesi; `acilacak_indeks`le aynı eşleme).
+    `bagli`: True / False (liste okundu, kimlik yok) / None (kimliksiz eski seçim, ortam değişkeni ya da liste okunamadı → bilinmiyor);
+    `guncelIndeks`: kimliğin bugünkü MSMF indeksi (sıra değiştiyse saklı indeksten farklı) ya da None."""
+    from utils import kamera_kimligi
+
+    k = (secim or {}).get("kimlik")
+    aygitlar = kamera_kimligi.msmf_kameralar() if k else []
+    if not aygitlar:
+        return {"bagli": None, "guncelIndeks": None}
+    indeks, _yol = kamera_kimligi.esle(k, aygitlar)
+    return {"bagli": indeks is not None, "guncelIndeks": None if indeks is None else int(indeks)}
+
+
 def kamera_ac(cv2=None, *, canliyi_kapat: bool = True):
     """Seçili kabin kamerasını açar ve (açıldıysa) ilk okumadan ÖNCE çözünürlük ister (`_cozunurluk_iste`). @return (cap, indeks) — açılıp
     açılmadığını çağıran `cap.isOpened()` ile denetler. Seçim yoksa `KameraSecilmedi` (kamera hiç açılmaz).

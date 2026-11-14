@@ -747,6 +747,8 @@ _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
 #: başlığını koda göre seçebilir.
 _ai_hazirlik_hata_kodu = ""
 _ai_hazirlik_hata_saglayici = None  # hata anındaki sağlayıcı (model adı istek dilinde gösterilsin)
+#: AP-23: `kamera_bulunamadi` hatasındaki seçili kameranın kimliği (ad + VID/PID) — durum metni istek dilinde yeniden üretilir.
+_ai_hazirlik_hata_kamera: dict = {}
 
 _ORGAN_LOCALIZE_INTERVAL_S = 10.0
 _AI_LOST_STOP_STREAK = 3  # DENETIM P2: bu kadar ARDISIK hedef-kaybindan sonra bobinleri durdur
@@ -1362,12 +1364,23 @@ def _hazirlik_hata_metni(kod: str, ad: str, dil: str | None = "tr") -> str:
         return ceviri.t("ai.pro.hazirlik.kamera", dil=dil)
     if kod == "kamera_secilmedi":
         return ceviri.t("ai.pro.hazirlik.kameraSecilmedi", dil=dil)
+    if kod == "kamera_bulunamadi":
+        # AP-23: seçili kamera TAKILI DEĞİL — "seçilmedi" DEĞİL; eylem: kamerayı takın / yeniden tarayın (kimlik istek dilinde).
+        k = _ai_hazirlik_hata_kamera or {}
+        p = {"ad": str(k.get("ad") or "?"), "vidpid": str(k.get("vidpid") or "?")}
+        return ceviri.t("ayarlar.kabinKamerasi.kimlikBulunamadi", dil=dil, **p)
     return ""
 
 
 def _hazirlik_hata_goster() -> str:
     """Durum yanıtındaki hazırlık hatası: depolanan metin Türkçe (hazırlık iş parçacığı istek bağlamında değil); yanıt İSTEK dilinde."""
-    if _ai_hazirlik_hata and _ai_hazirlik_hata_kodu in ("model_paketi", "model_yukleme", "kamera", "kamera_secilmedi"):
+    if _ai_hazirlik_hata and _ai_hazirlik_hata_kodu in (
+        "model_paketi",
+        "model_yukleme",
+        "kamera",
+        "kamera_secilmedi",
+        "kamera_bulunamadi",
+    ):
         sag = _ai_hazirlik_hata_saglayici
         ad = ai_pro_hedef.model_adi(sag) if sag is not None else ""
         return _hazirlik_hata_metni(_ai_hazirlik_hata_kodu, ad, None)
@@ -1859,6 +1872,7 @@ def _ai_hazirlik_loop():
     ⚠️ Lokalizasyon yolu `_ai_pro_loop` ile BİREBİR (relocalize-tüket + organ-snapshot, denetim P2);
     değişirse İKİSİ birlikte güncellenmeli."""
     global _ai_hazirlik_active, _ai_relocalize, _ai_hazirlik_hata, _ai_hazirlik_hata_kodu, _ai_hazirlik_hata_saglayici
+    global _ai_hazirlik_hata_kamera
     _sag = _aktif_saglayici()
     logger.info("AI Pro HAZIRLIK önizlemesi BAŞLADI (model=%s, sunucu kamerası, sürüş YOK).", _sag.ad)
     # MODEL KAMERADAN ÖNCE (2026-09-09): eskiden kamera açılıp SONRA model yükleniyordu. Ağır
@@ -1880,12 +1894,12 @@ def _ai_hazirlik_loop():
         logger.error(
             "Hazırlık: kabin kamerası SEÇİLMEDİ / kimliği bulunamadı — kamera açılmadı (başka kameraya düşülmez)."
         )
-        _ai_hazirlik_hata_kodu = "kamera_secilmedi"
-        _ai_hazirlik_hata = (
-            kabin_kamerasi.secim_hatasi_metni(e)
-            if isinstance(e, kabin_kamerasi.KameraBulunamadi)
-            else _hazirlik_hata_metni("kamera_secilmedi", "")
-        )
+        # AP-23 (ev denemesi 14 Kasım): seçili kamera TAKILI DEĞİLSE kod ayrı (`kamera_bulunamadi`) — eskiden kod `kamera_secilmedi`
+        # kalıyor, durum yanıtı metni koddan yeniden üretince kimlik kayboluyor ve "seçilmedi" deniyordu.
+        _bulunamadi = isinstance(e, kabin_kamerasi.KameraBulunamadi)
+        _ai_hazirlik_hata_kamera = dict(e.secim.get("kimlik") or {}) if _bulunamadi else {}
+        _ai_hazirlik_hata_kodu = "kamera_bulunamadi" if _bulunamadi else "kamera_secilmedi"
+        _ai_hazirlik_hata = _hazirlik_hata_metni(_ai_hazirlik_hata_kodu, "")
         _ai_hazirlik_hata_saglayici = _sag
         _ai_hazirlik_active = False
         return

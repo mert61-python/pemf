@@ -188,11 +188,14 @@ def _ai_kamerasi_mesgul() -> bool:
 @router.get("/kabin-kamerasi")
 def kabin_kamerasi_al():
     """Seçili kabin kamerası (`null` = seçilmedi → AI Pro kamerası açılmaz) ve istenen çözünürlük (KD madde 0: sabit düzlem
-    kalibrasyonunun boyutu; `null` = kalibrasyon yok → kameranın en yüksek kendi modu)."""
+    kalibrasyonunun boyutu; `null` = kalibrasyon yok → kameranın en yüksek kendi modu).
+    AP-23: `bagli` (seçili kamera bugün takılı mı; None = bilinmiyor) + `guncelIndeks` — kart "şu an kamera 0" yerine "BAĞLI DEĞİL"
+    diyebilsin. Kamera AÇILMAZ (yalnız aygıt listesi)."""
     from utils import kabin_kamerasi as kk
 
     istenen = kk.istenen_cozunurluk()
-    return {"secili": kk.secili_kamera(), "istenenCozunurluk": list(istenen) if istenen else None}
+    secili = kk.secili_kamera()
+    return {"secili": secili, "istenenCozunurluk": list(istenen) if istenen else None, **kk.secim_baglanti(secili)}
 
 
 @router.post("/kabin-kamerasi")
@@ -214,7 +217,7 @@ def kabin_kamerasi_yaz(payload: KabinKamerasiModel):
     if kk.canli_acik():
         # Y190: canlı oturum ESKİ kamerayı tutuyor — seçim değişince bırakılır (sonraki canlı / tek kare YENİ kameradan).
         kk.canli_durdur()
-    return {"status": "success", "secili": secim}
+    return {"status": "success", "secili": secim, **kk.secim_baglanti(secim)}  # AP-23: kart bağlantı durumunu tazeler
 
 
 @router.post("/kabin-kamerasi/tara")
@@ -228,7 +231,13 @@ def kabin_kamerasi_tara():
     if kk.canli_acik():
         # Y190: canlı oturum seçili kamerayı tutuyor — tarama o indeksi açamaz ve yanlış "kamera yok" derdi.
         raise HTTPException(status_code=409, detail=ceviri.t("ayarlar.kabinKamerasi.taramaCanliAcik"))
-    return {"kameralar": kk.kameralari_tara(), "secili": kk.secili_kamera()}
+    kameralar = kk.kameralari_tara()
+    secili = kk.secili_kamera()
+    return {
+        "kameralar": kameralar,
+        "secili": secili,
+        **kk.secim_baglanti(secili),
+    }  # AP-23: takıldıysa kart "BAĞLI DEĞİL"den çıkar
 
 
 @router.post("/kabin-kamerasi/kare")

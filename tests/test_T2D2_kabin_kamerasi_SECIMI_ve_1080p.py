@@ -188,7 +188,13 @@ def ayar_istemcisi(veri):
 def test_uc_secim_yok_null_sonra_POST_ile_hatirlanir(ayar_istemcisi):
     ist, kk, _sr = ayar_istemcisi
     # KD madde 0 (b): kalibrasyon yok → `null` (kameranın en yüksek kendi modu).
-    assert ist.get("/api/settings/kabin-kamerasi").json() == {"secili": None, "istenenCozunurluk": None}
+    # AP-23: yalnız-ek `bagli` / `guncelIndeks` (seçim yokken None — bilinmiyor; kart "seçilmedi" satırını gösterir)
+    assert ist.get("/api/settings/kabin-kamerasi").json() == {
+        "secili": None,
+        "istenenCozunurluk": None,
+        "bagli": None,
+        "guncelIndeks": None,
+    }
     r = ist.post("/api/settings/kabin-kamerasi", json={"indeks": 1})
     assert r.status_code == 200 and r.json()["secili"]["indeks"] == 1
     assert ist.get("/api/settings/kabin-kamerasi").json()["secili"] == {"indeks": 1, "kaynak": "ayar"}

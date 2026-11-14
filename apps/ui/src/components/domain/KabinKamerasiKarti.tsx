@@ -25,6 +25,11 @@ interface Secim {
   /** KD-2: kamera kimliği (Windows adı + VID/PID) — seçim buna bağlı; MSMF sırası değişse de aynı kamera açılır. */
   kimlik?: { ad?: string | null; vidpid?: string | null } | null;
 }
+/** AP-23: seçili kamera bugün takılı mı (sunucu, aygıt listesinden; kamera açılmaz) + güncel indeks. Yoksa / null = bilinmiyor. */
+interface Baglanti {
+  bagli?: boolean | null;
+  guncelIndeks?: number | null;
+}
 interface Aday {
   indeks: number;
   ad?: string | null;
@@ -40,10 +45,20 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
   const [yuklendi, setYuklendi] = useState(false);
   const [adaylar, setAdaylar] = useState<Aday[] | null>(null);
   const [taraniyor, setTaraniyor] = useState(false);
+  // AP-23: seçili kamera BUGÜN takılı mı (sunucu aygıt listesinden; null = bilinmiyor / eski sunucu → eski satır) + güncel indeks.
+  const [bagli, setBagli] = useState<boolean | null>(null);
+  const [guncelIndeks, setGuncelIndeks] = useState<number | null>(null);
+
+  // AP-23: GET / tarama / seçim yanıtlarının hepsi sunucunun bağlantı durumunu taşır (alan yoksa — eski sunucu — bilinmiyor).
+  const baglantiyiAl = (r: Baglanti | null | undefined) => {
+    setBagli(typeof r?.bagli === "boolean" ? r.bagli : null);
+    setGuncelIndeks(typeof r?.guncelIndeks === "number" ? r.guncelIndeks : null);
+  };
 
   const yukle = useCallback(async () => {
-    const r = await apiGet<{ secili: Secim | null } | null>("/settings/kabin-kamerasi", null, { silent: true });
+    const r = await apiGet<({ secili: Secim | null } & Baglanti) | null>("/settings/kabin-kamerasi", null, { silent: true });
     setSecili(r?.secili ?? null);
+    baglantiyiAl(r);
     setYuklendi(r !== null);
   }, []);
 
@@ -57,13 +72,14 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
     try {
       // KD madde 0: kamera açılışı genel 8 sn sınırına bağlı değil (yavaş sürücüde "bağlı değil" sanılıyordu); zaman aşımı metni
       // KAMERAYA özgü ("model yüklemesi" DEĞİL).
-      const r = await apiPost<{ kameralar: Aday[]; secili: Secim | null } | null>("/settings/kabin-kamerasi/tara", {}, null, {
+      const r = await apiPost<({ kameralar: Aday[]; secili: Secim | null } & Baglanti) | null>("/settings/kabin-kamerasi/tara", {}, null, {
         timeoutMs: KAMERA_TIMEOUT_MS,
         zamanAsimiMesaji: t("ayarlar.kabinKamerasi.taramaZamanAsimi"),
       });
       if (r) {
         setAdaylar(r.kameralar);
         setSecili(r.secili);
+        baglantiyiAl(r); // AP-23: takıldıysa "BAĞLI DEĞİL"den çıkar
       }
     } finally {
       setTaraniyor(false);
@@ -72,10 +88,11 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
 
   const sec = async (indeks: number) => {
     if (kilitli) return;
-    const r = await apiPost<{ secili: Secim } | null>("/settings/kabin-kamerasi", { indeks }, null);
+    const r = await apiPost<({ secili: Secim } & Baglanti) | null>("/settings/kabin-kamerasi", { indeks }, null);
     if (r?.secili) {
       setSecili(r.secili);
       emitToast(t("ayarlar.kabinKamerasi.secildi", { indeks }), "success");
+      baglantiyiAl(r); // AP-23: yeni seçimin bağlantı durumu
     }
   };
 
@@ -88,9 +105,15 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
       <Text style={styles.aciklama}>{t("ayarlar.kabinKamerasi.aciklama")}</Text>
       {yuklendi ? (
         secili ? (
-          <Text style={styles.durum} testID="kabin-kamerasi-secili">
+          <Text style={[styles.durum, secili.kimlik?.ad && bagli === false ? styles.uyari : null]} testID="kabin-kamerasi-secili">
             {secili.kimlik?.ad
-              ? t("ayarlar.kabinKamerasi.seciliKameraAdli", { indeks: secili.indeks, ad: secili.kimlik.ad, vidpid: secili.kimlik.vidpid ?? "?" })
+              ? bagli === false
+                ? t("ayarlar.kabinKamerasi.seciliKameraBagliDegil", { ad: secili.kimlik.ad, vidpid: secili.kimlik.vidpid ?? "?" })
+                : t("ayarlar.kabinKamerasi.seciliKameraAdli", {
+                    indeks: guncelIndeks ?? secili.indeks,
+                    ad: secili.kimlik.ad,
+                    vidpid: secili.kimlik.vidpid ?? "?",
+                  })
               : t("ayarlar.kabinKamerasi.seciliKamera", { indeks: secili.indeks })}
           </Text>
         ) : (
