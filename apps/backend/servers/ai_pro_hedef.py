@@ -777,6 +777,21 @@ def _hedef_tel(aday: dict, kare_w: int, kare_h: int) -> dict:
     return d
 
 
+def _onizleme_karesi(panel, ctx):
+    """AP-B7 (istem 48 · S-AP.3, tezgâh 13-11): AI Pro önizlemesinde gösterilen TEK panel, hedef halkalarının koordinatında.
+    Eskiden `07_combined` (6 panel 3×2 ızgara + başlık bantları) yayınlanıyordu; halkaların `pxn`'i HAM kareye göre olduğundan halkalar
+    özetin ortasına düşüyordu. Render panelleri ÜSTE başlık bandı ekler (vstack) — bant kırpılınca panel, hattın çizdiği kareyle (`img_und`,
+    ham kareyle aynı boyut) AYNI piksel ızgarasındadır. Boyut uymazsa None → döngü ham kareyi yayınlar (halkalar yine doğru yerde)."""
+    kare = (ctx or {}).get("img_und") if isinstance(ctx, dict) else None
+    if panel is None or kare is None or not hasattr(panel, "shape"):
+        return None
+    h, w = kare.shape[:2]
+    ph, pw = panel.shape[:2]
+    if pw != w or ph < h:
+        return None
+    return panel[ph - h :]
+
+
 def _yaricap_px(bbox) -> float:
     """bbox (x, y, w, h) → yaklaşık yarıçap (px). Takip eşleşmesi için ölçek."""
     try:
@@ -812,6 +827,8 @@ class _EmCvSaglayici:
     varsayilan_hedef = 0
     #: Kabul edilen EN FAZLA hedef (0 = otomatik seçim, 1..N = kare üstünde elle seçim).
     azami_hedef = 8
+    #: AP-B7 (S-AP.3): önizlemede gösterilen render paneli (hedef halkaları bunun üstünde); alt sınıf verir, boşsa ham kare.
+    onizleme_paneli = ""
 
     def __init__(self):
         import threading
@@ -1126,7 +1143,7 @@ class _EmCvSaglayici:
         try:
             # I18NI-A3.3: önizleme döngüsü istek DIŞI → cihaz dili (`arayuz_dili.json`; yoksa tr = bugünkü görünüm).
             paneller = pl.render_panels(ctx, result, lang=ceviri.etkin_dil())
-            return paneller.get("07_combined")
+            return _onizleme_karesi(paneller.get(self.onizleme_paneli), ctx)
         except Exception:
             air.logger.debug("%s overlay üretilemedi", self.ad, exc_info=True)
             return None
@@ -1161,6 +1178,7 @@ class FantomSaglayici(_EmCvSaglayici):
     hedef_etiketi = "Tümör"
     hedef_etiketi_anahtari = "ai.pro.hedefOnek.tumor"
     join_timeout_s = 8.0
+    onizleme_paneli = "04_tumors"  # AP-B7: tümör odakları işaretli kare
 
     def _yukleyici(self):
         from servers import ai_router as air
@@ -1248,6 +1266,7 @@ class PetriSaglayici(_EmCvSaglayici):
     onbellek_anahtari = "em_petri_cv"
     hedef_etiketi = "Kuyu"
     hedef_etiketi_anahtari = "ai.pro.hedefOnek.kuyu"
+    onizleme_paneli = "04_classify"  # AP-B7: kuyular kanserli / sağlıklı renkte, A1–D6 etiketli kare
     #: AI-2: v2 plaka kipi TÜM kuyucukları verir (24'lük: 24, 96'lık: 96) — eski 8'lik tavan kuyu 9–24'ü seçilemez
     #: kılardı (`hedef_idleri` dört doğrulama noktasının TEK kaynağı). En büyük standart plaka 96.
     azami_hedef = 96
