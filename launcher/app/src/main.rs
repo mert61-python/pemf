@@ -4669,4 +4669,106 @@ Connection: close
         assert!(sira.borrow().is_empty(), "backend / oturum yokken çağrı yapıldı: {:?}", sira.borrow());
         let _ = std::fs::remove_dir_all(&kok);
     }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-5 B4b: güvenlik yolu yardımcılarının kalan KOLLARI davranışla — `son_oturumu_yakala` (oturum / çıkış) ve
+    // `yakma_bitene_kadar_bekle` (yakma BİTTİ / azami bütçe DOLDU). Sahte HTTP backend (rastgele port; yol başına sıralı yanıt).
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// Sıralı yanıt veren sahte backend: `yanitla(yol, o yola kaçıncı istek)` → gövde (200). `kapat` ile durur; gelen yollar kaydedilir.
+    fn kp5_yanitlayan(
+        yanitla: impl Fn(&str, usize) -> String + Send + 'static,
+    ) -> (u16, Arc<AtomicBool>, Arc<Mutex<Vec<String>>>, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        ln.set_nonblocking(true).unwrap();
+        let (kapat, yollar) = (Arc::new(AtomicBool::new(false)), Arc::new(Mutex::new(Vec::<String>::new())));
+        let (k, y) = (kapat.clone(), yollar.clone());
+        let h = std::thread::spawn(move || {
+            let bitis = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            while !k.load(Ordering::SeqCst) && std::time::Instant::now() < bitis {
+                let Ok((mut c, _)) = ln.accept() else {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    continue;
+                };
+                let _ = c.set_nonblocking(false);
+                let _ = c.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+                let mut buf = vec![0u8; 8192];
+                let n = c.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    continue;
+                }
+                let istek = String::from_utf8_lossy(&buf[..n]).to_string();
+                let yol = istek.lines().next().unwrap_or("").split_whitespace().nth(1).unwrap_or("").to_string();
+                let kac = {
+                    let mut g = y.lock().unwrap();
+                    g.push(yol.clone());
+                    g.iter().filter(|x| **x == yol).count() - 1
+                };
+                let govde = yanitla(&yol, kac);
+                let _ = c.write_all(
+                    format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{govde}", govde.len())
+                        .as_bytes(),
+                );
+                let _ = c.flush();
+            }
+        });
+        (port, kapat, yollar, h)
+    }
+
+    /// KRİTİK (KP-5 B4b · F5): söküm öncesi son oturum çekimi — backend döndürülmüş oturumu verirse "Beni hatırla" kaydı ve bellek
+    /// TAZELENİR (sonraki açılışta bayat jeton → SessionRevoked olmaz); pencerede çıkış yapılmışsa ({"cikis": true}) kayıt ve bellek SİLİNİR.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B4b_son_oturum_yakalama_OTURUM_tazeler_CIKIS_temizler() {
+        let kok = kp5_b4_kok("yakala");
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("r1", 0)));
+        let bellek = Mutex::new(Some(kp5_b4_oturum("r1", 0)));
+        let (port, kapat, yollar, h) = kp5_yanitlayan(|yol, _| {
+            if yol == "/api/auth/desktop-session" {
+                r#"{"access_token":"a-r2","refresh_token":"r2","email":"vet@klinik.tr","expires_at":0}"#.to_string()
+            } else {
+                "{}".to_string()
+            }
+        });
+        son_oturumu_yakala(port, &kok, &bellek);
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("r2".into()), "döndürülmüş jeton diske işlenmedi");
+        assert_eq!(bellek.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("r2".into()), "bellek tazelenmedi");
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert_eq!(*yollar.lock().unwrap(), vec!["/api/auth/desktop-session".to_string()]);
+        let (port, kapat, _y, h) = kp5_yanitlayan(|_, _| r#"{"cikis":true}"#.to_string());
+        son_oturumu_yakala(port, &kok, &bellek);
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert!(secret_store::load(&kok).is_none(), "pencere çıkışından sonra 'Beni hatırla' kaydı kaldı");
+        assert!(bellek.lock().unwrap().is_none(), "pencere çıkışından sonra bellekte oturum kaldı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-5 B4b · L3 / Y82): söküm STOP'tan sonra yakmayı bekler — yakma sürerken yoklar, BİTİNCE döner (en az bir aralık
+    /// bekledi); bütçe zaten dolmuşsa (aynı kapanışın önceki beklemesi tüketti — KI G1) yakma sürse de BEKLEMEDEN döner (tek yoklama).
+    #[test]
+    fn KRITIK_KP5_B4b_yakma_beklemesi_BITTI_ve_BUTCE_DOLDU() {
+        let yakiyor = |sure: bool| format!(r#"{{"service":"PEMF-Vet","firmwareGuncelleme":{{"yakiliyor":{sure}}}}}"#);
+        let (port, kapat, yollar, h) = kp5_yanitlayan(move |_, kac| yakiyor(kac == 0));
+        let t0 = std::time::Instant::now();
+        yakma_bitene_kadar_bekle(port, &backend::YakmaBeklemeSiniri::default());
+        let sure = t0.elapsed();
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert_eq!(yollar.lock().unwrap().len(), 2, "yakma sürerken yeniden yoklanmadı");
+        assert!(sure >= std::time::Duration::from_millis(900), "yakma sürerken BEKLEMEDİ ({sure:?})");
+        let (port, kapat, yollar, h) = kp5_yanitlayan(move |_, _| r#"{"firmwareGuncelleme":{"yakiliyor":true}}"#.to_string());
+        let sinir = backend::YakmaBeklemeSiniri::default();
+        let _ = sinir.son_an(std::time::Instant::now(), std::time::Duration::ZERO); // bütçe önceki beklemede tükendi
+        let t0 = std::time::Instant::now();
+        yakma_bitene_kadar_bekle(port, &sinir);
+        let sure = t0.elapsed();
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert_eq!(yollar.lock().unwrap().len(), 1, "bütçe dolmuşken yeniden yoklandı");
+        assert!(sure < std::time::Duration::from_millis(900), "bütçe dolmuşken BEKLEDİ ({sure:?}) — kapanış ikinci azamiyi bekler");
+    }
 }

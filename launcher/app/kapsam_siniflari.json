@@ -4,7 +4,7 @@
  "s_sayisi": 52,
  "ozet": {
   "K": {
-   "islev": 41,
+   "islev": 43,
    "eksik_satir": 0
   },
   "S": {
@@ -16,8 +16,8 @@
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 18,
-   "eksik_satir": 595
+   "islev": 16,
+   "eksik_satir": 578
   }
  },
  "islevler": {
@@ -31,18 +31,16 @@
    "eksik": 0
   },
   "yakma_bitene_kadar_bekle": {
-   "sinif": "Y",
-   "eksik": 6,
-   "neden": "GÜVENLİK YOLU (yakma bekleme); gerçek HTTP yoklama; bütçe ayrı ve testli; KP-4."
+   "sinif": "K",
+   "eksik": 0
   },
   "kapanis_yakma_siniri": {
    "sinif": "K",
    "eksik": 0
   },
   "son_oturumu_yakala": {
-   "sinif": "Y",
-   "eksik": 11,
-   "neden": "HTTP + DPAPI yazımı; sıra testli; KP-4."
+   "sinif": "K",
+   "eksik": 0
   },
   "pencere_cikisini_uygula": {
    "sinif": "K",
