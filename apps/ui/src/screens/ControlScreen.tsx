@@ -83,7 +83,7 @@ export function ControlScreen() {
   const { snapshot, telemetryStale } = useLiveData();
   // D1.89: WS'teki AKTİF seans (ölçülen yoğunluk + AI Pro duty temsili bunun alanlarıdır). Etkin değilse null.
   const wsSeans = snapshot.activeTreatment?.isActive === true ? snapshot.activeTreatment : null;
-  const { selectedPatient } = useAppNav();
+  const { selectedPatient, kontrolHafizasi } = useAppNav();
   const { session } = useAuth();
   const { operatorEmail } = useOperator();
   const {
@@ -105,7 +105,12 @@ export function ControlScreen() {
     if (gecis && wsSeans && !isActive && !loading && !stopping) benimse(wsSeans);
   }, [wsSeans, isActive, loading, stopping, benimse]);
 
-  const [activeTab, setActiveTab] = useState<TabKey>("manual");
+  // AP-B1 (S-AP.1): son sekme Kontrol belleğinden — AI Pro seansı sürerken Sensörler'e gidip dönen kullanıcı AI Pro sekmesine döner
+  // (eskiden ekran sökülüp "Manuel" ile açılıyordu). Bellek yoksa (sağlayıcısız çizim) eskisi gibi "Manuel".
+  const [activeTab, setActiveTab] = useState<TabKey>(() => kontrolHafizasi?.current.sekme ?? "manual");
+  useEffect(() => {
+    if (kontrolHafizasi) kontrolHafizasi.current.sekme = activeTab;
+  }, [activeTab, kontrolHafizasi]);
   // AI Pro hedef modelleri PROFİLE göre — tek kaynak `aiProProfilleri.MODELLER_PROFILE_GORE`
   // (sahip kararı #13: kedi araştırmacıda, fantom/petri veterinerde HİÇ görünmez).
   // ⚠️ Bazı testler `useUserMode`u yalnız `{ userMode }` ile mock'lar; liste bilinmeyen profilde

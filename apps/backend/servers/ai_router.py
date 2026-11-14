@@ -3403,6 +3403,12 @@ def ai_pro_status():
         # B3 (siyah ekran): web önizlemesi canlı mı + neden öldü (kamera/model). Panel `hazirlikHata`
         # doluysa hazırlığı sonlandırıp NEDENİ gösterir (120 sn kör bekleyiş yerine).
         "hazirlikActive": bool(_ai_hazirlik_active),
+        # YALNIZ-EK (AP-B1): sürmekte olan önizlemenin geçen süresi (sn) — yeniden açılan panel hazırlık saatini oradan sürdürür.
+        "hazirlikGecenSn": (
+            int(max(0.0, time.monotonic() - _ai_hazirlik_started_at))
+            if _ai_hazirlik_active and _ai_hazirlik_started_at
+            else 0
+        ),
         "hazirlikHata": _hazirlik_hata_goster(),
         "hazirlikHataKodu": _ai_hazirlik_hata_kodu,  # YALNIZ-EK (2026-09-09)
         # YALNIZ-EK (2026-09-09): araştırma modelleriyle sürüş açık mı? Panel model kartlarını

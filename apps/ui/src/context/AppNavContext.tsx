@@ -7,7 +7,7 @@
  * Böylece Hastalar ekranından "Seans Başlat" → Kontrol ekranına gidip hastayı
  * seansta kullanabiliriz.
  */
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import type { RouteKey } from "@/types/domain";
 
@@ -15,6 +15,17 @@ export interface SelectedPatient {
   id?: string;
   name?: string;
   species?: string;
+}
+
+/**
+ * AP-B1 (S-AP.1, sahip 13 Kasım 2026 "Seans sürsün"): Kontrol ekranının BU UYGULAMA OTURUMUNDAKİ belleği — rota / sekme değişince ekran
+ * sökülse de son sekme ve AI Pro panelinin seçimleri dönüşte geri gelir. KALICI DEĞİL (diske / hesaba yazılmaz: "profil seçimi kalıcı
+ * değil" ilkesi) ve kimlik değişince SİLİNİR (O-A3.6 deseni). Seansın / önizlemenin SÜRÜP SÜRMEDİĞİ bellekten değil sunucudan
+ * (`/ai/pro/status`) okunur — bellek yalnız seçimleri taşır.
+ */
+export interface KontrolHafizasi {
+  sekme?: "automatic" | "manual" | "aipro";
+  aiPro?: { hedefModeli: string; kosulsuz: boolean; frek: number; duration: string; organId: number };
 }
 
 interface AppNavValue {
@@ -33,6 +44,8 @@ interface AppNavValue {
    */
   aiProModeli: string;
   setAiProModeli: (m: string) => void;
+  /** AP-B1: Kontrol belleği (yalnız sağlayıcı varken; yoksa — tek başına çizilen ekran / test — bellek YOK, davranış eskisi). */
+  kontrolHafizasi?: MutableRefObject<KontrolHafizasi>;
 }
 
 const AppNavContext = createContext<AppNavValue>({
@@ -52,6 +65,7 @@ export function AppNavProvider({
 }) {
   const [selectedPatient, setSelectedPatient] = useState<SelectedPatient | null>(null);
   const [aiProModeli, setAiProModeli] = useState("");
+  const kontrolHafizasi = useRef<KontrolHafizasi>({});
   // ⚠️ O-A3.6 (2-B incelemesi): seçili hasta KİMLİĞE bağlıdır. Operatör değişince ya da kilitlenince (kimlik düşer) seçim
   // DÜŞER — eskiden kalıyordu: "Kilitle"den sonra önceki hekimin seçtiği hastaya kimliksiz (sahipsiz) analiz/seans
   // başlatılabiliyordu. Kimlik aynı kaldıkça seçim korunur (Kural 2: kimlik oturum e-postası, değişmez). Sağlayıcı yoksa
@@ -62,11 +76,12 @@ export function AppNavProvider({
     if (sonKimlik.current === kimlik) return;
     sonKimlik.current = kimlik;
     setSelectedPatient(null);
+    kontrolHafizasi.current = {}; // AP-B1: önceki hekimin seçimleri yeni kimliğe taşınmaz
   }, [kimlik]);
   // DÜŞÜK fix: value'yu memoize et → her render'da yeni obje üretip tüm useAppNav tüketicilerini
   // gereksiz yere render etme (setSelectedPatient stabil setter, navigateTo stabil prop).
   const value = useMemo(
-    () => ({ navigateTo, selectedPatient, setSelectedPatient, aiProModeli, setAiProModeli }),
+    () => ({ navigateTo, selectedPatient, setSelectedPatient, aiProModeli, setAiProModeli, kontrolHafizasi }),
     [navigateTo, selectedPatient, aiProModeli],
   );
   return (

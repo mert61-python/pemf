@@ -235,6 +235,8 @@ interface AiProStatus {
   /** B3: önizleme kamera/model hatasıyla öldüyse NEDENİ (boş = hata yok). Doluysa panel hazırlığı
    *  sonlandırıp operatöre gösterir — 120 sn "Hazırlanıyor…" kör bekleyişi yerine. */
   hazirlikHata?: string;
+  /** AP-B1: sürmekte olan sunucu önizlemesinin geçen süresi (sn) — yeniden açılan panelin hazırlık saati. Eski backend göndermez. */
+  hazirlikGecenSn?: number;
   // ── Araştırma hattı (Faz 2/3 yalnız-ek alanları; kedi hattında boş/varsayılan) ──
   /** Aktif hedef modeli ("kedi" | "fantom" | "petri"). */
   model?: string;
@@ -309,18 +311,25 @@ export function AiProPanel({
   const ORGANS = organListesi(t);
   const { width: pencereX, height: pencereY } = useResponsive();
   const { aiVisionData: v } = useLiveData();
+  /** AP-B1 (S-AP.1): Kontrol belleği — panel sökülüp yeniden açılınca (rota / sekme değişimi) seçimler geri gelir. Sağlayıcı yoksa YOK. */
+  const { kontrolHafizasi } = useAppNav();
+  const hafiza = kontrolHafizasi?.current.aiPro;
 
-  const [organId, setOrganId] = useState(0);
+  const [organId, setOrganId] = useState(() => hafiza?.organId ?? 0);
   // D1.60 (A-16): reddedilen/ulaşmayan organ değişiminde seçimi GERİ almak için son değer (boş bağımlılıklı
   // `changeOrgan` state'i kapanışta bayat görür → ref).
-  const organIdRef = useRef(0);
+  const organIdRef = useRef(hafiza?.organId ?? 0);
   useEffect(() => {
     organIdRef.current = organId;
   }, [organId]);
   // AKTİF HEDEF MODELİ: liste tek elemanlıysa (veteriner → "kedi") doğrudan o; araştırma modunda
   // araştırmacı Adım 1'de kartlardan seçer (seçilmeden hazırlık başlatılamaz).
   const [hedefModeli, setHedefModeli] = useState<HedefModeli | "">(
-    secilebilirModeller.length === 1 ? secilebilirModeller[0] : "",
+    secilebilirModeller.length === 1
+      ? secilebilirModeller[0]
+      : hafiza && (secilebilirModeller as string[]).includes(hafiza.hedefModeli)
+        ? (hafiza.hedefModeli as HedefModeli)
+        : "",
   );
   // ⚠️ REF ŞART: modeli istek gövdelerine `hedefModeli` STATE'i ile koymak, öneri efektinin
   // bağımlılık dizisini ([hazirlik, mobileResult, organId, duration]) değiştirmeyi gerektirirdi —
@@ -332,15 +341,15 @@ export function AiProPanel({
   /** T3 · Y189: Koşullu | Koşulsuz (yalnız araştırma modelleri — petri / fantom). Varsayılan koşullu, hatırlanmaz. Ref:
    *  `hedefModeliRef` ile AYNI gerekçe (öneri efektinin bağımlılık dizisi kaynak-regex kapısıdır). Backend kipi hazırlıkta alır,
    *  öneri MÜHRÜNE yazar; `/start` mühürden okur. */
-  const [kosulsuz, setKosulsuz] = useState(false);
-  const kosulsuzRef = useRef(false);
+  const [kosulsuz, setKosulsuz] = useState(() => hafiza?.kosulsuz === true);
+  const kosulsuzRef = useRef(hafiza?.kosulsuz === true);
   useEffect(() => {
     kosulsuzRef.current = kosulsuz;
   }, [kosulsuz]);
   /** ODK8 (sahip 13 Kasım 2026): AI Pro sürüş frekansı — 76 / 100 / 107 / 147 Hz (varsayılan 100). Öneri MÜHRÜNE yazılır (`frek_hz`),
    *  `/start` karta mühürdeki frekansı gönderir. Ref: `kosulsuzRef` ile AYNI gerekçe (öneri efektinin bağımlılık dizisi kaynak-regex kapısı). */
-  const [frek, setFrek] = useState<number>(100);
-  const frekRef = useRef(100);
+  const [frek, setFrek] = useState<number>(() => hafiza?.frek ?? 100);
+  const frekRef = useRef(hafiza?.frek ?? 100);
   useEffect(() => {
     frekRef.current = frek;
   }, [frek]);
@@ -364,6 +373,9 @@ export function AiProPanel({
   /** AP-B5: boş bağımlılıklı `changeOrgan` kapanışı için güncel değer. */
   const arastirmaKipiRef = useRef(arastirmaKipi);
   arastirmaKipiRef.current = arastirmaKipi;
+  /** AP-B1: boş bağımlılıklı durum yoklaması (sync) için güncel model listesi. */
+  const secilebilirRef = useRef(secilebilirModeller);
+  secilebilirRef.current = secilebilirModeller;
   /**
    * ⚠️ ARAŞTIRMA HATTI YALNIZ KABİN KAMERASIYLA (sahip kararı #15): fantom/petri 3B konumu kabin
    * işaretine (arka duvardaki ArUco) ve ölçülmüş kabin geometrisine dayanır. Telefon kamerası o
@@ -388,7 +400,11 @@ export function AiProPanel({
   const [kediSurusAcik, setKediSurusAcik] = useState<boolean | null>(null);
   /** Model kurulum durumu — `GET /api/ai/hazirlik` envanterinden BİR KEZ okunur (poll YOK). */
   const [kurulum, setKurulum] = useState<Partial<Record<HedefModeli, KurulumDurumu>>>({});
-  const [duration, setDuration] = useState("20");
+  const [duration, setDuration] = useState(() => hafiza?.duration ?? "20");
+  // AP-B1: seçimler Kontrol belleğine (yalnız uygulama oturumu; sağlayıcı yoksa yazılmaz).
+  useEffect(() => {
+    if (kontrolHafizasi) kontrolHafizasi.current.aiPro = { hedefModeli, kosulsuz, frek, duration, organId };
+  }, [kontrolHafizasi, hedefModeli, kosulsuz, frek, duration, organId]);
   const [running, setRunning] = useState(false);
   const [localized, setLocalized] = useState(false);
   /** Sunum-katmanı XAI (2026-08-26): web yolunda güven dökümü status poll'dan gelir. */
@@ -421,6 +437,10 @@ export function AiProPanel({
   const [hazirlik, setHazirlik] = useState(false);
   /** `/ai/pro/status` en az bir kez okundu mu — mount'taki "seans yok" varsayımını önler. */
   const [durumOkundu, setDurumOkundu] = useState(false);
+  /** AP-B1: yeniden açılışta sunucu durumu YALNIZ İLK okumada benimsenir (Vazgeç sonrası gecikmiş poll hazırlığı geri açmasın). */
+  const ilkDurumRef = useRef(false);
+  /** AP-B1: yeniden açılışta sunucu önizlemesinin geçen süresi (ms) — hazırlık saati oradan sürer (sunucu tavanıyla aynı anda biter). */
+  const hazirlikDevamMsRef = useRef(0);
   const hazirlikRef = useRef(false);
   useEffect(() => { hazirlikRef.current = hazirlik; }, [hazirlik]);
   /**
@@ -543,6 +563,25 @@ export function AiProPanel({
           : active && !!st.ownerClientId && st.ownerClientId === clientIdRef.current;
       setRunning(active);
       setDurumOkundu(true);
+      // AP-B1 (S-AP.1): panel sökülüp yeniden açıldı (rota / sekme değişimi) — İLK okumada sunucudaki durum benimsenir: süren seansın /
+      // önizlemenin modeli; web önizlemesi sürüyorsa hazırlık kaldığı yerden (hedef, kip, geçen süre). Mobil önizleme panelin kendi kare
+      // akışıdır (sunucuda `hazirlikActive` yok) — geri açılmaz.
+      if (!ilkDurumRef.current) {
+        ilkDurumRef.current = true;
+        const surenModel = typeof st.model === "string" ? st.model : "";
+        if ((active || st.hazirlikActive === true) && !hedefModeliRef.current && (secilebilirRef.current as string[]).includes(surenModel)) {
+          hedefModeliRef.current = surenModel as HedefModeli;
+          setHedefModeli(surenModel as HedefModeli);
+        }
+        if (IS_WEB && !active && st.hazirlikActive === true && !hazirlikRef.current) {
+          if (typeof st.organId === "number") setOrganId(st.organId);
+          kosulsuzRef.current = st.kosulsuz === true;
+          setKosulsuz(st.kosulsuz === true);
+          hazirlikDevamMsRef.current = Math.max(0, Number(st.hazirlikGecenSn) || 0) * 1000;
+          oneriIstendiRef.current = false;
+          setHazirlik(true);
+        }
+      }
       setLocalized(Boolean(st.localized));
       setWebGuvenDokumu(st.guvenDokumu ?? null); // sunum-katmanı XAI (web: status poll'dan)
       setWebCatDetected(Boolean(st.catDetected)); // B3: hazırlık metni için ikinci kaynak
@@ -807,7 +846,9 @@ export function AiProPanel({
    */
   useEffect(() => {
     if (!hazirlik) { setHazirlikGecen(0); hazirlikBasRef.current = 0; return; }
-    hazirlikBasRef.current = Date.now();
+    // AP-B1: yeniden açılışta sunucudaki önizleme ne kadar sürdüyse saat oradan sürer.
+    hazirlikBasRef.current = Date.now() - hazirlikDevamMsRef.current;
+    hazirlikDevamMsRef.current = 0;
     setHazirlikGecen(0);
     const id = setInterval(() => {
       const gecen = Date.now() - hazirlikBasRef.current;
@@ -1075,22 +1116,18 @@ export function AiProPanel({
     if (IS_WEB) apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null);
   }, []);
 
-  // Unmount'ta: interval'i temizle + ÇALIŞAN otonom tedaviyi DURDUR.
-  // YÜKSEK fix: panel kapanınca (tab/modül değişimi) backend bobinleri BAŞSIZ sürmeye devam ediyordu
-  // (operatör göremez/kontrol edemez = güvenlik riski). runningRef güncel durumu tutar (cleanup closure'u
-  // stale 'running' yakalamasın). Best-effort fire-and-forget stop (unmount'ta await edilemez).
+  // Unmount'ta: interval'i temizle.
+  // AP-B1 (S-AP.1, sahip 13 Kasım 2026 "Seans sürsün"): WEB / masaüstünde (sunucu kameralı döngü) panel sökülünce (Sensörler'e ya da
+  // Kontrol'deki başka sekmeye geçiş) seans ve önizleme SÜRER — eskiden kendi seansımıza `/ai/pro/stop` gidiyordu (13-11 16:18:18 seans
+  // 29 habersiz kesildi). Eski gerekçe ("başsız bobin, operatör durduramaz") kayan ACİL DURDUR her rotada çizildiği için (AppShell
+  // `GlobalEmergencyStop`) geçersiz; dönüşte panel durumu sunucudan + Kontrol belleğinden geri gelir. Çıkış / profil değişimi ayrıca
+  // onay ister (`useTeardownGuard`).
+  // ⚠️ MOBİLDE eski kural KALIR: kare akışı bu panelin kendi zamanlayıcısıdır; panel sökülünce kare GELMEZ ve sunucu hedef kaybı
+  // saymaz → bobinler son dozla seans sonuna dek sürerdi. Kendi (sahibi olduğumuz) seansımız durdurulur; başkasınınki kesilmez.
   useEffect(() => () => {
     if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
-    // ⚠️ `ownedRef` ŞART: seansı biz başlatmadıysak BAŞKASININ tedavisini kesmeyiz.
-    // Operatörün AÇIK "Durdur" dokunuşu (`stop()`) bu koşuldan ETKİLENMEZ — her istemcinin
-    // operatörü tedaviyi durdurabilmeli.
-    if (runningRef.current && ownedRef.current) {
+    if (!IS_WEB && runningRef.current && ownedRef.current) {
       apiPost<AiProAction | null>("/ai/pro/stop", {}, null, { durdurma: true }).catch(() => {});
-    }
-    // WEB hazırlık önizlemesi açıkken panel kapanırsa sunucu kamerasını bırak (backend 120 sn'de
-    // kendisi de durur; bu yalnız kamerayı erken serbest bırakır).
-    if (IS_WEB && hazirlikRef.current) {
-      apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null).catch(() => {});
     }
   }, []);
 
