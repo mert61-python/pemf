@@ -2758,10 +2758,15 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     # Y142: öneri GÖRÜNÜR kalır ama onay ekranı sürüşün kapalı olduğunu SÖYLER (mühüre/denetim izine girmez — yanıt alanı).
     # Araştırma modeli buraya ancak kendi bayrağı açıkken gelir (`_arastirma_aipro_kapisi`).
     _surus_acik = not (_kedi_modeli_mi(_saglayici) and not _kedi_aipro_surus_acik())
+    # AP-22 (D ekran görüntüsü 14-11): onay penceresi hedefi ham VERİ etiketiyle ("Kuyu C2") yazıyordu → EN arayüzde Türkçe kalıyordu.
+    # Gösterim İSTEK dilinde ve YALNIZ yanıtta; mühürdeki `target_label` VERİ kalır (`/start` + seans kaydı). Yöntemi yoksa (kedi) "".
+    _gosterim = getattr(_saglayici, "etiket_gosterim", None)
+    _hedef_gosterim = _gosterim(str(rec["specs"].get("target_label") or "")) if callable(_gosterim) else ""
     return {
         "status": "success",
         "proposalId": rec["id"],
         "specs": rec["specs"],
+        "hedefGosterim": _hedef_gosterim,
         "meta": rec["meta"],
         "expiresAt": rec["expires_at"],
         "surusAcik": _surus_acik,

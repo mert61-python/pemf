@@ -113,7 +113,7 @@ function tr(n: number, basamak = 2): string {
 }
 
 export function AiSpecApprovalModal({
-  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali, onYenidenHesapla, hata,
+  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali, onYenidenHesapla, hata, hedefGosterim,
 }: {
   visible: boolean;
   specs: AiProposalSpecs | null;
@@ -130,6 +130,8 @@ export function AiSpecApprovalModal({
   onYenidenHesapla?: (doz: number, kip: string, kuyu?: string) => void;
   /** AP-B4: bu penceredeki isteğin (yeniden hesapla / onay / başlat) hatası — HER ZAMAN görünen alt şeritte, düğmelerin üstünde. */
   hata?: string;
+  /** AP-22: hedefin İSTEK dilindeki gösterim adı (öneri yanıtı `hedefGosterim`). Boş / yoksa ham `specs.target_label` (eski backend, kedi). */
+  hedefGosterim?: string;
 }) {
   const { t } = useTranslation();
   const [rejecting, setRejecting] = useState(false);
@@ -151,7 +153,8 @@ export function AiSpecApprovalModal({
   const arastirma = model !== "kedi";
   const modelAdi = arastirma ? modelProfili(model).baslik : "";
   const hedefEtiketi = arastirma ? modelProfili(model).hedefEtiketi : t("ai.pro.profil.kedi.hedefEtiketi");
-  const hedefAdi = specs.target_label || organName || `#${specs.organ_id}`;
+  // AP-22: gösterim adı önce — ham VERİ etiketi ("Kuyu C6") EN arayüzde Türkçe kalıyordu (D ekran görüntüsü 14-11).
+  const hedefAdi = hedefGosterim || specs.target_label || organName || `#${specs.organ_id}`;
   const eHedef = Number(specs.e_cancer ?? specs.e_field);
   const eCevre = Number(specs.e_healthy ?? 0);
   const konumVar =

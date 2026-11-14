@@ -302,6 +302,8 @@ interface AiProposeResponse {
   surusAcik?: boolean;
   /** Y142: kapalıysa NEDEN + EYLEM metni (backend tek kaynak). */
   surusKapaliNedeni?: string;
+  /** AP-22 yalnız-ek: hedefin İSTEK dilindeki gösterim adı ("Well C6"); mühürdeki `specs.target_label` VERİ kalır. */
+  hedefGosterim?: string;
 }
 
 /**
@@ -1344,6 +1346,7 @@ export function AiProPanel({
         visible={!!proposal}
         specs={proposal?.specs ?? null}
         meta={proposal?.meta ?? null}
+        hedefGosterim={proposal?.hedefGosterim}
         organName={
           arastirmaKipi
             ? hedefEtiket || modelProf.hedefEtiketi
