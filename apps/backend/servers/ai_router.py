@@ -1332,6 +1332,8 @@ def _saglayici_cache_alanlari() -> dict:
         "kosulsuz": bool(getattr(_aktif_saglayici(), "kosulsuz", False)),
         # KD-3a (B-KD3a.1): kapı FİZİKSEL nedenle (kalibrasyon / kamera oynamış / kör bölge …) kestiyse ilk eylem metni (dile çevrilmiş).
         "kapi_eylem": _kapi_fiziksel_eylemi(m.get("pemf_kapisi")),
+        # AP-B6 (S-AP.6): kapı FİZİKSEL OLMAYAN nedenle (kalite / yerleşim) ya da plaka makullik reddiyle kestiyse NEDEN + EYLEM (dile çevrilmiş).
+        "kapi_uyari": ai_pro_hedef.kapi_uyari_metni(m.get("pemf_kapisi"), m.get("hata") or ""),
     }
 
 
@@ -3418,6 +3420,8 @@ def ai_pro_status():
         "method": _ai_organ_cache.get("method") or "",
         # YALNIZ-EK (KD-3a · B-KD3a.1): kapının FİZİKSEL eylem metni (kesmediyse ""). Panel rozeti / şeridi ArUco metni yerine bunu yazar.
         "kapiEylem": _ai_organ_cache.get("kapi_eylem") or "",
+        # YALNIZ-EK (AP-B6): kapının fiziksel OLMAYAN nedeni / makullik reddi (neden + eylem; kesmediyse "") — hazırlık şeridi ve zaman aşımı iletisi.
+        "kapiUyari": _ai_organ_cache.get("kapi_uyari") or "",
         "mmPerPx": _ai_organ_cache.get("mm_per_px"),
         "targetLabel": _ai_organ_cache.get("target_label") or "",
         "ood": bool(_ai_organ_cache.get("ood")),

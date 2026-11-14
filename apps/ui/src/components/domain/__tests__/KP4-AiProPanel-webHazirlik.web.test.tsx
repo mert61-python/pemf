@@ -110,7 +110,7 @@ it("KRİTİK: web hazırlık TAVANI (120 sn) — hazırlık biter, operatör uya
   expect(postlar("/ai/pro/hazirlik/durdur")).toHaveLength(0);
   await ilerle(1000);
   expect(postlar("/ai/pro/hazirlik/durdur")).toHaveLength(1);
-  expect(uyari).toHaveBeenCalledWith(`${T("ai.pro.uyari.konumlandirmaTamamlanamadi")}\n${T("ai.pro.uyari.konumlandirmaTamamlanamadiGovde")}`);
+  expect(uyari).toHaveBeenCalledWith(`${T("ai.pro.uyari.konumlandirmaTamamlanamadi")}\n${T("ai.pro.uyari.konumlandirmaTamamlanamadiGovdeKabin") /* AP-B6: web = kabin (sunucu) kamerası */}`);
   expect(u.queryByTestId("aipro-hazirlik-metni")).toBeNull();
   expect(u.getByText(T("ai.pro.kamera.durdu"))).toBeTruthy();
 });

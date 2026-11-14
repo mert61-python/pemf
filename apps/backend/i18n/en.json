@@ -314,6 +314,15 @@
       "tumorler": "Tumors"
     },
     "pemf": {
+      "canliUyari": {
+        "eccFailed": "The plate grid could not be fine-aligned — check the cabin light and that the plate lies flat; nothing should cover the wells.",
+        "fewCandidates": "The well grid could not be verified — keep the wells visible (no sensor or cable covering them), the plate flat and the cabin light on.",
+        "guvenilirDegil": "The tumor detection is not reliable — place the phantom flat in the middle of the cabin and check the cabin light.",
+        "kontrolKuyusu": "A control well is not in the expected class — the thresholds are not reliable on this plate; check the control wells and the light.",
+        "layoutMismatch": "The tumor layout does not match the reference — place the correct phantom in the cabin.",
+        "obliqueView": "The plate does not appear square to the camera — place the plate flat on the tray.",
+        "plateCropped": "Part of the plate is outside the image — move the plate to the middle of the cabin camera's view."
+      },
       "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis.",
       "kapi": {
         "fantomAyariYok": "Phantom thickness / tumor depth has not been entered — enter it in the Cabin calibration section.",

@@ -1013,6 +1013,7 @@
     "asamaArastirma": {
       "hedefAraniyor": "🔎 {{ozne}} görünüyor, {{hedefEtiketiKucuk}} aranıyor…{{gecikmeIpucu}}",
       "kalibrasyonEngeli": "⚠️ {{hedefEtiketi}} konumu ölçülemedi — {{eylem}}",
+      "kapiUyari": "⚠️ {{hedefEtiketi}} konumu doğrulanamadı — {{uyari}}{{gecikmeIpucu}}",
       "konumOlculemedi": "✓ {{hedefEtiketi}} bulundu, konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın.",
       "konumlandi": "✓ {{hedefEtiketi}} konumlandı — güven %{{guvenYuzde}} · öneri hesaplanıyor…",
       "ozneAraniyor": "🔎 {{ozne}} aranıyor… {{ozneIpucu}}{{gecikmeIpucu}}"
@@ -1060,6 +1061,8 @@
       "secenek": "{{f}} Hz"
     },
     "gecikmeIpucu": " · Bulunamıyor: ortamın ışığını artırın, 1-2 metre mesafeye gelin, hayvanı kadraja tam alın.",
+    "gecikmeIpucuArastirma": " · Hâlâ bulunamadı: numuneyi kabinin ortasına düz yerleştirin ve kabin ışığını kontrol edin.",
+    "gecikmeIpucuKabin": " · Bulunamıyor: hayvanı kabinin ortasına alın ve kabin ışığını kontrol edin.",
     "guven": {
       "anatomikGecti": " · anatomik kontrol geçti",
       "anatomikTutarsiz": " · ⚠️ anatomik tutarsızlık — organ yerleşimi doğrulanamadı; açıyı değiştirip yeniden konumlayın",
@@ -1227,7 +1230,7 @@
         "hedefEtiketi": "Kuyu",
         "hedefEtiketiKucuk": "kuyu",
         "ozne": "petri plakası",
-        "ozneIpucu": "Plakayı tepsiye düz yerleştirin; kamerayı tepeden tam kadraja alın."
+        "ozneIpucu": "Plakayı tepsiye düz yerleştirin; kabin kamerasının görüş alanının ortasında olsun."
       }
     },
     "sure": "⏱ Süre (dk)",
@@ -1256,6 +1259,8 @@
       "komutUlasmadi": "Komut sunucuya ulaşmadı — tekrar deneyin.",
       "konumlandirmaTamamlanamadi": "Konumlandırma tamamlanamadı",
       "konumlandirmaTamamlanamadiGovde": "Hayvan iki dakikadır kadrajda bulunamadı; kamera durduruldu (pil koruması). Ortamın ışığını artırın, telefonu 1-2 metre mesafeye getirin ve hayvanı kadraja tam alın, sonra tekrar başlatın.",
+      "konumlandirmaTamamlanamadiGovdeArastirma": "İki dakikadır {{ozne}} kabin kamerasında konumlandırılamadı; önizleme durduruldu. {{neden}}{{ozneIpucu}} Sonra Hazırlığı yeniden başlatın.",
+      "konumlandirmaTamamlanamadiGovdeKabin": "Hayvan iki dakikadır kabin kamerasında bulunamadı; önizleme durduruldu. Hayvanı kabinin ortasına alın, kabin ışığını kontrol edin ve tekrar başlatın.",
       "modelSecilmedi": "Model seçilmedi",
       "modelSecilmediGovde": "Önce Adım 1'de Fantom ya da Petri kartını seçin.",
       "organDegistirilemedi": "Organ değiştirilemedi",

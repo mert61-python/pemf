@@ -1013,6 +1013,7 @@
     "asamaArastirma": {
       "hedefAraniyor": "🔎 The {{ozne}} is visible, looking for the {{hedefEtiketiKucuk}}…{{gecikmeIpucu}}",
       "kalibrasyonEngeli": "⚠️ {{hedefEtiketi}} position not measured — {{eylem}}",
+      "kapiUyari": "⚠️ {{hedefEtiketi}} position not verified — {{uyari}}{{gecikmeIpucu}}",
       "konumOlculemedi": "✓ {{hedefEtiketi}} found, but the position could not be measured — the cabin marker (the square code on the back wall) is not visible in the frame. Adjust the camera so that the marker and the target stay in the same frame.",
       "konumlandi": "✓ {{hedefEtiketi}} located — confidence {{guvenYuzde}}% · calculating the recommendation…",
       "ozneAraniyor": "🔎 Looking for the {{ozne}}… {{ozneIpucu}}{{gecikmeIpucu}}"
@@ -1060,6 +1061,8 @@
       "secenek": "{{f}} Hz"
     },
     "gecikmeIpucu": " · Not found: increase the ambient light, move 1-2 meters away, and get the animal fully in the frame.",
+    "gecikmeIpucuArastirma": " · Still not found: place the sample flat in the middle of the cabin and check the cabin light.",
+    "gecikmeIpucuKabin": " · Not found: place the animal in the middle of the cabin and check the cabin light.",
     "guven": {
       "anatomikGecti": " · anatomical check passed",
       "anatomikTutarsiz": " · ⚠️ anatomical inconsistency — the organ placement could not be verified; change the angle and re-locate",
@@ -1227,7 +1230,7 @@
         "hedefEtiketi": "Well",
         "hedefEtiketiKucuk": "well",
         "ozne": "well plate",
-        "ozneIpucu": "Place the plate flat on the tray; frame it fully with the camera from above."
+        "ozneIpucu": "Place the plate flat on the tray, in the middle of the cabin camera's view."
       }
     },
     "sure": "⏱ Duration (min)",
@@ -1256,6 +1259,8 @@
       "komutUlasmadi": "The command did not reach the server — try again.",
       "konumlandirmaTamamlanamadi": "Localization could not be completed",
       "konumlandirmaTamamlanamadiGovde": "The animal could not be found in the frame for two minutes; the camera was stopped (battery protection). Increase the light, bring the phone 1-2 meters away, get the animal fully in the frame, then start again.",
+      "konumlandirmaTamamlanamadiGovdeArastirma": "For two minutes the {{ozne}} could not be located by the cabin camera; the preview was stopped. {{neden}}{{ozneIpucu}} Then start the preparation again.",
+      "konumlandirmaTamamlanamadiGovdeKabin": "The animal could not be found by the cabin camera for two minutes; the preview was stopped. Place the animal in the middle of the cabin, check the cabin light and start again.",
       "modelSecilmedi": "No model selected",
       "modelSecilmediGovde": "First select the Tumor Phantom or Well Plate card in Step 1.",
       "organDegistirilemedi": "Could not change the organ",

@@ -650,6 +650,41 @@ def kapi_cevir(kapi):
     return out
 
 
+def kapi_uyari_metni(kapi, hata: str = "") -> str:
+    """AP-B6 (istem 48 · S-AP.6, sahip 14-11 "neden + eylem"): canlı hazırlıkta kare tüketim kapısının FİZİKSEL OLMAYAN (kalite /
+    yerleşim) nedeni ya da plaka makullik reddi → istek dilinde NEDEN + EYLEM. Eskiden arayüze hiç gelmiyordu: şerit "kuyu / plaka aranıyor"
+    deyip 120 sn sonra kedi + telefon iletisi veriyordu (13-11 tezgâh: koşullu kipte her kare `few_candidates` / `ecc_failed` / makullik
+    reddi). Hocanın `pemf_kapisi._EYLEM` metinleri (AI Hub tek-foto bağlamı, "yeniden çekin") sabit kabin kamerasında yanlış eylemdir → canlı
+    metin ayrı (`ai.pemf.canliUyari.*`). Koşulsuz kip ÖNERİLMEZ (sahip). Fiziksel neden kendi metniyle gider (`kapi_metni` / `kapiEylem`)
+    → burada "". Yalnız GÖSTERİM: kapı kararı değişmez."""
+    from ai_hub.cv_ortak import pemf_kapisi as _pk
+    from ai_hub.inference_petri_dish import plausibility as _pl
+
+    if str(hata or "").startswith(_pl.PETRI_REJECT):
+        return ceviri.t("ai.pemf.canliUyari.fewCandidates")  # plaka bölgesi var, ızgara (ECC + aday) doğrulanamadı
+    if not isinstance(kapi, dict) or kapi.get("surulebilir") is not False:
+        return ""
+    nedenler = [str(n) for n in kapi.get("nedenler") or []]
+    if any(n in _pk.FIZIKSEL for n in nedenler):
+        return ""
+    for n in nedenler:
+        if n == "few_candidates":
+            return ceviri.t("ai.pemf.canliUyari.fewCandidates")
+        if n == "ecc_failed":
+            return ceviri.t("ai.pemf.canliUyari.eccFailed")
+        if n == "plate_cropped":
+            return ceviri.t("ai.pemf.canliUyari.plateCropped")
+        if n == "oblique_view":
+            return ceviri.t("ai.pemf.canliUyari.obliqueView")
+        if n == "layout_mismatch":
+            return ceviri.t("ai.pemf.canliUyari.layoutMismatch")
+        if n == "guvenilir_degil":
+            return ceviri.t("ai.pemf.canliUyari.guvenilirDegil")
+        if n in ("control_cancer_missed", "control_healthy_flagged"):
+            return ceviri.t("ai.pemf.canliUyari.kontrolKuyusu")
+    return ""
+
+
 def kabin_yari_boyut_mm():
     """Kabin YARI boyutları (mm) — TEK KAYNAK: kedi hattının (`catorgan_predictor`) yüklediği AYNI paketli kabin
     yapılandırması (`geometry.cabin_extent_cm`; bugün [65, 50, 50] cm → (325, 250, 250) mm). Literal YAZILMAZ: kabin

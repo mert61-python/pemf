@@ -751,7 +751,7 @@ describe("aipro/* alt bileşenler ve profil tablosu", () => {
       "petri plakası",
       "Kuyu",
       "kuyu",
-      "Plakayı tepsiye düz yerleştirin; kamerayı tepeden tam kadraja alın.",
+      "Plakayı tepsiye düz yerleştirin; kabin kamerasının görüş alanının ortasında olsun.", // AP-B6: sabit kabin kamerası (eski: "kamerayı tepeden tam kadraja alın")
     ]);
     expect(modelProfili("kedi").ozneIpucu).toBe("Kamerayı hastaya doğrultun.");
     expect(modelProfili("fantom").hedefEtiketiKucuk).toBe("tümör");
@@ -788,7 +788,7 @@ describe("aipro/* alt bileşenler ve profil tablosu", () => {
       "well plate",
       "Well",
       "well",
-      "Place the plate flat on the tray; frame it fully with the camera from above.",
+      "Place the plate flat on the tray, in the middle of the cabin camera's view.", // AP-B6
     ]);
     expect(modelProfili("kedi").ozneIpucu).toBe("Point the camera at the patient.");
     expect(T("ai.pro.adim.model")).toBe("Model");

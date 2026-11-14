@@ -162,6 +162,8 @@ export function asamaMetniArastirma(a: {
   yontem: string;
   /** KD-3a: kapının FİZİKSEL eylem metni (kesmediyse ""). */
   kapiEylem?: string;
+  /** AP-B6: kapının fiziksel OLMAYAN nedeni / makullik reddi (neden + eylem; kesmediyse ""). */
+  kapiUyari?: string;
   guvenYuzde: number;
   gecikmeIpucu: string;
 }): string {
@@ -172,6 +174,11 @@ export function asamaMetniArastirma(a: {
   // — "plaka görünüyor, kuyu aranıyor" ya da ArUco "kabin işareti" metni değil (plaka ve kuyular bulundu, konum kalibrasyonda kesildi).
   if (a.yontem === "sabit_duzlem" && a.kapiEylem) {
     return i18n.t("ai.pro.asamaArastirma.kalibrasyonEngeli", { hedefEtiketi: a.hedefEtiketi, eylem: a.kapiEylem });
+  }
+  // AP-B6 (S-AP.6): kapı kalite / yerleşim nedeniyle kestiyse (ya da makullik reddi — hat bunu "özne yok" sayar) NEDEN + EYLEM; "aranıyor"
+  // demek operatörü 120 sn bekletiyordu. Koşulsuz kip önerilmez.
+  if (a.kapiUyari) {
+    return i18n.t("ai.pro.asamaArastirma.kapiUyari", { hedefEtiketi: a.hedefEtiketi, uyari: a.kapiUyari, gecikmeIpucu: a.gecikmeIpucu });
   }
   if (!a.ozneVar) {
     return i18n.t("ai.pro.asamaArastirma.ozneAraniyor", { ozne: a.ozne, ozneIpucu: a.ozneIpucu, gecikmeIpucu: a.gecikmeIpucu });
@@ -256,6 +263,8 @@ interface AiProStatus {
   method?: string;
   /** KD-3a (yalnız-ek): kapı FİZİKSEL nedenle kestiyse sunucunun eylem metni (kesmediyse ""; eski backend göndermez). */
   kapiEylem?: string;
+  /** AP-B6 (yalnız-ek): kapının fiziksel OLMAYAN nedeni / plaka makullik reddi — neden + eylem (eski backend göndermez). */
+  kapiUyari?: string;
   /** Seçili hedefin adı ("Tümör 1", "Kuyu 3 · Kanserli"). */
   targetLabel?: string;
   /** Konum modelin eğitim aralığı dışında mı (onay ekranı uyarısı). */
@@ -395,6 +404,9 @@ export function AiProPanel({
   const [hedefler, setHedefler] = useState<HedefAdayi[]>([]);
   const [yontem, setYontem] = useState("");
   const [kapiEylem, setKapiEylem] = useState(""); // KD-3a: status poll'un `kapiEylem`i
+  const [kapiUyari, setKapiUyari] = useState(""); // AP-B6: status poll'un `kapiUyari`ı
+  /** AP-B6: son kapı nedeni (fiziksel ya da değil) — 120 sn zaman aşımı iletisi NEDENİ söyler (zamanlayıcı kapanışı için ref). */
+  const sonKapiNedeniRef = useRef("");
   const [hedefEtiket, setHedefEtiket] = useState("");
   const [ood, setOod] = useState(false);
   /** T3 · Y189: backend'in ETKİN kipi (rozet bunu gösterir — panelin seçimi değil, sürülen kip). */
@@ -610,6 +622,8 @@ export function AiProPanel({
       setHedefler(Array.isArray(st.targets) && adaylarBizim ? st.targets : []);
       setYontem(typeof st.method === "string" ? st.method : "");
       setKapiEylem(typeof st.kapiEylem === "string" ? st.kapiEylem : "");
+      setKapiUyari(typeof st.kapiUyari === "string" ? st.kapiUyari : "");
+      if (st.kapiEylem || st.kapiUyari) sonKapiNedeniRef.current = String(st.kapiEylem || st.kapiUyari);
       setHedefEtiket(typeof st.targetLabel === "string" ? st.targetLabel : "");
       setOod(Boolean(st.ood));
       setSunucuKosulsuz(st.kosulsuz === true);  // T3 · Y189
@@ -871,6 +885,7 @@ export function AiProPanel({
    */
   useEffect(() => {
     if (!hazirlik) { setHazirlikGecen(0); hazirlikBasRef.current = 0; return; }
+    sonKapiNedeniRef.current = ""; // AP-B6: her hazırlık kendi nedenini söyler
     // AP-B1: yeniden açılışta sunucudaki önizleme ne kadar sürdüyse saat oradan sürer.
     hazirlikBasRef.current = Date.now() - hazirlikDevamMsRef.current;
     hazirlikDevamMsRef.current = 0;
@@ -886,7 +901,19 @@ export function AiProPanel({
         webLokalizeSayacRef.current = 0;
         if (IS_WEB) apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null); // sunucu önizlemesini bırak
         setOneriHatasi("");
-        platformAlert(i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadi"), i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadiGovde"));
+        // AP-B6 (tezgâh 13-11): ileti model + kamera türüne göre — petri / fantom kabin kamerasında da "Hayvan … telefonu 1-2 metre"
+        // diyordu. Araştırmada son kapı nedeni (varsa) ve modelin yerleşim ipucu; kedi web'de kabin (sunucu) kamerası.
+        const prof = modelProfili(hedefModeliRef.current || "kedi");
+        const govde = arastirmaKipiRef.current
+          ? i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadiGovdeArastirma", {
+              ozne: prof.ozne,
+              ozneIpucu: prof.ozneIpucu,
+              neden: sonKapiNedeniRef.current ? `${sonKapiNedeniRef.current} ` : "",
+            })
+          : IS_WEB
+            ? i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadiGovdeKabin")
+            : i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadiGovde");
+        platformAlert(i18n.t("ai.pro.uyari.konumlandirmaTamamlanamadi"), govde);
       }
     }, 1000);
     return () => clearInterval(id);
@@ -1222,9 +1249,14 @@ export function AiProPanel({
   const guvenYuzde = Math.round((Number(reliability) || 0) * 100);
   const dusukGuven = detected && (Number(reliability) || 0) < DUSUK_GUVEN;
   /** Gecikmede SOMUT yönlendirme (yalnız "tekrar deneyin" demek işe yaramaz). */
+  // AP-B6: ipucu kameraya / modele göre — kedi + telefon (mesafe, ışık), kedi + kabin (sunucu) kamerası, araştırma (kabin kamerası).
   const gecikmeIpucu =
     hazirlik && hazirlikGecen >= HAZIRLIK_UYARI_MS
-      ? t("ai.pro.gecikmeIpucu")
+      ? arastirmaKipi
+        ? t("ai.pro.gecikmeIpucuArastirma")
+        : IS_WEB
+          ? t("ai.pro.gecikmeIpucuKabin")
+          : t("ai.pro.gecikmeIpucu")
       : "";
   const asamaMetni = !hazirlik
     ? ""
@@ -1268,6 +1300,7 @@ export function AiProPanel({
           hedefSayisi: hedefAdaylari.length,
           yontem: yontemAktif,
           kapiEylem: kapiEylemAktif,
+          kapiUyari: hazirlik ? kapiUyari : "",
           guvenYuzde,
           gecikmeIpucu,
         })
