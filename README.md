@@ -7,7 +7,7 @@ tüm build/dağıtım zinciri — hepsi **tek klasörde**.
 > **Yeni geliştiriciysen buradan başla.** Aşağıdaki **dizin haritası** her üst-klasörün kendi `README.md`'sine
 > link verir; oradan alt-sisteme inersin. Build için → [`BUILD.md`](BUILD.md). Mimari için → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Önemli:** AI modelleri EXE'ye **gömülüdür** (offline, self-contained). **İstisna (2026-08-26, Faz 4.5):** iki büyük `.pt` (renal XAI ~858 MB + scratch CPN ~872 MB) 2 GiB release sınırı yüzünden ana profil zip'ine sığmaz → ayrı parça `research-2.zip` olarak manifest `model_parts.research` ile iner (launcher ≥1.9.39, yalnız Araştırma profili; `build_tools/make_model_zip.py` `PARCALAR`). Parçası olmayan kurulumda XAI zarif düşer ("Açıklama üretilemedi"). **Hugging Face indirme kaldırıldı** — runtime internet gerektirmez.
+> **Önemli (AI ağırlıkları):** küçük tabular / ONNX modeller ve scaler'lar kaynakta gömülüdür; büyük ağırlıklar **profil model paketleriyle** gelir (`home.zip` / `vet.zip` / `research.zip` + büyük iki `.pt` için ayrı `research-2.zip` — manifest `model_parts`, [`build_tools/make_model_zip.py`](build_tools/README.md)). Başlatıcı profile göre indirir; kurulumdan sonra çalışma **çevrimdışıdır** (`apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar — **Hugging Face indirmesi yok**). **ODAK** (AI Pro sürüşü) alan tablosu + modelleri **veteriner ve araştırma** model paketlerindedir — paket yoksa ODAK sürmez ve "AI model paketini kurun / güncelleyin" der (açık depoya girmezler). Parçası olmayan kurulumda XAI zarif düşer ("Açıklama üretilemedi").
 
 ---
 
@@ -95,7 +95,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 ### Yapay Zekâ
 | Klasör | Ne işe yarar |
 |---|---|
-| [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (14+ model; yeni: Yara Kapanma/Scratch CPN) + gömülü küçük ağırlıklar + `PEMF_AI_Test_Girdileri/` |
+| [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (14+ model; Yara Kapanma / Scratch CPN dahil) + gömülü küçük ağırlıklar + **ODAK** (`ai_hub/odak/` — AI Pro petri / fantom / kedi faz + duty'si: CST bobin alanı + tezgâh MLX kalibrasyonu + KNN, fizikle denetimli) + **kabin kamerası sabit düzlem kalibrasyonu** (`ai_hub/cv_ortak/sabit_duzlem.py`) + `PEMF_AI_Test_Girdileri/` |
 | [`ai_service/`](ai_service/README.md) | Bağımsız **GPU (CUDA) inference mikroservisi** (:8100, onnxruntime-gpu + torch cu128 — scratch CPN; opsiyonel) |
 | `release_assets/` | **Model ağırlık deposu (~3,9 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` — git'te yalnız [`release_assets/ai_models/`](release_assets/ai_models/) altındaki küçük dosyalar izlenir; `README.md` ve büyük ağırlıklar yalnız yerelde |
 | [`training_archive/`](training_archive/) | **DONMUŞ eğitim arşivi** (doktora/TÜBİTAK; silinen `esp` dalından kurtarıldı; 435 takipli dosya — `git ls-files training_archive | wc -l`, 2026-10-28). Lint/format **muaf** — değeri sadakati; elleme |
@@ -130,8 +130,8 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | Klasör | Ne işe yarar |
 |---|---|
 | [`firmware/`](firmware/README.md) | STM32F429 bobin-sürücü firmware'i (`main.c`, yazılım DDS PWM + güvenlik watchdog) |
-| [`tests/`](tests/README.md) | pytest paketi (358 dosya / 3303 test — ölçüm 2026-09-22, güncel sayı için `pytest --collect-only -q`; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları) |
-| [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) |
+| [`tests/`](tests/README.md) | pytest paketi (sayı belgede TUTULMAZ — `pytest --collect-only -q`; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları, i18n kapıları). Kapsam eşikleri CI'da ve yalnız YÜKSELİR (backend · istemci jest · site vitest · başlatıcı cargo) |
+| [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) + **uçtan uca testler** `tools/e2e_smoke.py` / `tools/e2e_full.py` (gerçek backend ayrı süreçte, alt port, sanal donanım) |
 | [`.github/`](.github/README.md) | CI (tests/lint/security/**frontend/site**/linux-mac backend/launcher) + dependabot — **yalnız KÖK `.github/` geçerli** (TestFlight iş akışı arşivli, S-4B.4) |
 | [`docs/`](docs/README.md) | Dokümanlar (mimari, launcher-sözleşmesi, runbook, doğrulama, sistem-raporu) + ekran görüntüleri |
 | `apple-mac-cert/` | **YEREL** (git'te izlenmez, gitignore'lu — kapı ölçer) — ⚠️ Apple kod-imzalama/notarization materyali (SIR — rotate gerekir) |
@@ -168,22 +168,24 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 - 🌐 **AI offline** — `apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
 - ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/` yalnız üretilen `dist` aynasıdır (takipli `frontend/src` YOK — `git ls-files frontend` boş).
 - 🚀 **Launcher AYRI yayınlanır** (base-app/APK republish onu güncellemez).
-- 🌍 **Çok dillilik (TR + EN):** kullanıcıya görünen her metin katalogdan gelir; yeni metin **iki dilde birlikte** eklenir, var olan Türkçe bayt bayt aynı kalır. İngilizce bayrağı kapalı (`i18n/bayrak.json`). Kısa kural: [`CLAUDE.md`](CLAUDE.md) · ayrıntı: [`i18n/KURALLAR.md`](i18n/KURALLAR.md) · göç durumu: `i18n/kapsam.json` · araçlar `scripts/i18n/`.
+- 🌍 **Çok dillilik (TR + EN):** kullanıcıya görünen her metin katalogdan gelir; yeni metin **iki dilde birlikte** eklenir, var olan Türkçe bayt bayt aynı kalır. İngilizce **AÇIK** (`i18n/bayrak.json` → `I18N_EN_ACIK: true`). Kısa kural: [`CLAUDE.md`](CLAUDE.md) · ayrıntı: [`i18n/KURALLAR.md`](i18n/KURALLAR.md) · göç durumu: `i18n/kapsam.json` · araçlar `scripts/i18n/`.
 
 ---
 İlgili: [BUILD.md](BUILD.md) · [docs/ (doküman indeksi)](docs/README.md) · [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [RUNBOOK.md](docs/RUNBOOK.md)
 
-## Son değişiklikler — 2026-08-06
+## Son değişiklikler — Kasım 2026 (geliştirme dalı; bir kısmı henüz yayında değil)
+
+Ayrıntı ve yayın durumu: [`CHANGELOG.md`](CHANGELOG.md). Eski "2026-08-06" tablosu CHANGELOG'da.
 
 | Alan | Değişiklik |
 |---|---|
-| **AI güvenliği** | Görüntü **modalite denetimi** (`apps/backend/utils/image_domain.py`) — yanlış türde görüntüye güvenle teşhis üretilmesi engellendi (CT → Patoloji "Grade 4 · %100" vakası). Petri için ayrıca **geometri makullik** katmanı (`ai_hub/inference_petri_dish/plausibility.py`). Kapatma: `PEMF_AI_DOMAIN_GUARD=0`. |
-| **Client girişi** | Client açılışta Supabase girişi + **Beni hatırla** (DPAPI). Oturum backend'e devredilir (`/api/auth/desktop-session` — yalnız 127.0.0.1, yalnız bellekte) → **uygulamada çift login yok**. Mobilde client olmadığı için mevcut akış aynı kalır. |
-| **Çevrimdışı açılış** | Manifest ve kimlik kapısı artık boot'u BLOKLAMIYOR — internetsiz klinikte client açılır, kurulu cihazda "Başlat" çalışır. Eskiden "Ortam algılanıyor…" ekranında kilitleniyordu. |
-| **Profiller** | Araştırma Modu'na Kontrol · Hastalar · Sensörler · Raporlar · Simülasyon eklendi; **üç profilde de** Ayarlar'dan sonra "Çıkış Yap" (bobin çalışırken teardown-guard'a bağlı). |
-| **MQTT** | `client_id` süreç/çağrı başına benzersiz — sabit kimlik, paralel yayın yapan acil-durdurmada STOP komutunu kaybettirebiliyordu. |
-| **Android imzalama** | **Release keystore üretildi** (4096-bit RSA, 2053'e kadar geçerli). APK artık release-imzalı. ⚠️ Anahtar yedeği ve uyarılar: `keys/README.md` (yalnız yerelde — `keys/` gitignore'lu, git'te izlenmez) — kaybolursa uygulama bir daha güncellenemez. |
-| **Site** | İndirme öncesi kayıt/giriş kapısı. Windows client `launcher-v1.9.9`; Android **kendi etiketine** taşındı — eskiden mac/linux ile ortak etiket kullandığından site APK güncellense bile hep eski sürümü veriyordu. |
+| **AI Pro → ODAK** | Petri (kuyucuk / tüm petri), fantom ve kedi için **faz + duty** artık `ai_hub/odak/` modelinden: CST bobin alanı × tezgâhta MLX ile ölçülen kalibrasyon (veri kökünde `kabin_kalibrasyonu/alan_kalibrasyonu.json`) → KNN (k = 1, yerel alan). Kullanıcı **dozu seçer** (tepe \|B\| mT; üst sınır o konumda duty ≤ %50 tavanı); her öneri **fizikle denetlenir** (zaman domeni tepe \|B\|, doz sapması > %10 → SÜRMEZ, eylem söyleyen neden). Onay ekranı: doz ± konum payı, tavan, çevre oranı, frekans seçici, petride 24 kuyu haritası. Hocanın em_* modelleri silinmedi ama **sürüş kaynağı değil**. Fantom sürüşü doğrulanana dek kapalı; kedi sürüşü bayrakla kapalı. |
+| **Kabin kamerası** | Üst kapağa sabit kamera + **sabit düzlem kalibrasyonu** (iki konumlu, ArUco'suz; araştırma profilinde kalibrasyon ekranı, "Doğrula" ≤ 2 cm), kör bölge uyarısı, numune altlığı, kamera kimliği ad + VID/PID ile (sıra değişse de doğru kamera). Kedi hattı ArUco'yu kullanmaya devam eder. |
+| **Manyetik alan sensörü** | MLX90393 sıfır kayması backend'de çıkarılır (bobinler kapalıyken ölçülen eksen merkezi); firmware kayıp sensörü kendisi yeniden arar, 10 sn içinde dönmezse uygulama bir kez "sensör düştü" uyarısı verir. |
+| **Güncelleme** | Yeni sürüm **kullanıcı onayıyla** iner ve kurulur (tek pencere, "Şimdi değil"); seans sürerken bekler, bitince bobinler durdurulup kurulur ve uygulama yeniden başlar. |
+| **İkinci Windows hesabı** | Başlatıcıdaki paylaşım kartı veri dizinini "PEMF Data Users" grubuyla ikinci hesaba açar (tek yönetici onayı); erişim yokken uygulama sonsuz yüklenmek yerine nedenini söyler. Güvenlik duvarı "İzin ver" yalnız PEMF'in kendi backend'i ve mosquitto'su için Windows engel kuralını kaldırıp izin kurar. |
+| **Bağlantı / ACİL DURDUR** | Mobil yeniden bağlanma hızlandı; boşta kapanışta ve bağlantı yokken gereksiz mandal bandı kalktı; ESP satırları gizli (ESP kodu silinmedi). Çevrimdışı açılan istemci ağ gelince çevrimiçine döner. |
+| **Dil** | İngilizce arayüz açık; her yeni metin TR + EN birlikte. |
 
 Yayındaki sürümler için **[`versions.json`](versions.json)**'a bakın — bu belgeye sürüm yazılmaz
 (bkz. yukarıdaki *Sürümler* bölümü). Senkronizasyon: `build_tools/sync_versions.ps1`.

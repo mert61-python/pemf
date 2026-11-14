@@ -2,7 +2,7 @@
 
 `ai_hub` inference kodunu **GPU'da** servis eden ayrı bir FastAPI uygulaması. `onnxruntime-CUDA` +
 otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→GPU çağrıları auth-muaf;
-ör. AI-Pro kapalı-döngü sürücüsü `/infer/em_kedi`'yi çağırır). İstemci tarafı: [`../servers/ai_client.py`](../apps/backend/servers/README.md).
+ör. GPU varsa analiz uçları). ⚠️ AI Pro **sürüşü** artık bu servisten gelmez: faz / duty backend içindeki ODAK'tan (`ai_hub/odak/`); `em_fantom` / `em_petri` / `em_kedi` uçları yalnız analiz / karşılaştırma içindir. İstemci tarafı: [`../servers/ai_client.py`](../apps/backend/servers/README.md).
 
 ## Dosyalar
 | Dosya | Görev |

@@ -35,7 +35,7 @@ PEMF Vet projesinin teknik dokümanları. (Kod alt-sistemleri için ilgili klas�
 | Dosya | İçerik | Kime |
 |---|---|---|
 | [`KLASOR-YAPISI-PLANI.md`](KLASOR-YAPISI-PLANI.md) | Monorepo klasör düzeni — **kısmen uygulandı** (F1 + F4 + bootstrap taşıması) | Mimari |
-| [`arastirma-ai-pro-fantom-petri-plani.md`](arastirma-ai-pro-fantom-petri-plani.md) | Araştırma modu AI Pro — fantom + petri entegrasyonu; ✅ tüm fazlar (app 1.9.44) | AI |
+| [`arastirma-ai-pro-fantom-petri-plani.md`](arastirma-ai-pro-fantom-petri-plani.md) | Araştırma modu AI Pro — fantom + petri entegrasyonu; ✅ tüm fazlar (app 1.9.44). ⚠️ Kasım 2026'dan beri sürüş faz / duty'si **ODAK**'tan (`ai_hub/odak/` — bkz. [`../ai_hub/README.md`](../ai_hub/README.md)); bu plandaki em_* sürüş yolu artık sürüş kaynağı değil | AI |
 | [`xai-entegrasyon-plani.md`](xai-entegrasyon-plani.md) | XAI (açıklanabilirlik) entegrasyonu — Faz 1 ✅ + Faz 2 çekirdeği ✅ | AI |
 | [`scratch-entegrasyon-plani.md`](scratch-entegrasyon-plani.md) | Scratch / wound-healing entegrasyonu — ✅ Faz 1-4.5 (2026-08-27) | AI |
 | [`ai-hub-gorsel-sahne-plani-2026-09-10.md`](ai-hub-gorsel-sahne-plani-2026-09-10.md) | AI Hub görsel sahnesi — ✅ **tamamlandı** (2026-09-12), 13 AI modülü | Ön-yüz/AI |

@@ -11,7 +11,7 @@ Tüm build tarifleri. **Tam adım-adım rehber kökte: [`../BUILD.md`](../BUILD.
 | `sync_versions.ps1` | **`../versions.json` (tek-kaynak)** değerlerini hedef dosyalara (`apps/ui\app.json` vb.) yazar; `build_apk.ps1`/`build_installer.ps1` otomatik çağırır; PS 5.1 için ASCII-only |
 | `PEMF_Backend_onedir.spec` | PyInstaller **onedir** spec (birincil) — mosquitto, cloudflared, web `frontend/dist`, `deploy/` env, ai_models gömer |
 | `PEMF_Backend_Setup.iss` | Inno Setup scripti → `PEMFBackendSetup_device_vX.exe` (DiskSpanning `.bin` dilimleri); `[Run]`'da `setup_services.ps1` çağırır |
-| `make_model_zip.py` | Profil model paketlerini üretir → **`home.zip`/`vet.zip`/`research.zip`** (manifest `models`/`profiles`); `inference_cat_organ` çekirdek modelinin hangi zip'te olduğunu kilitler |
+| `make_model_zip.py` | Profil model paketlerini üretir → **`home.zip`/`vet.zip`/`research.zip`** (manifest `models`/`profiles`); `inference_cat_organ` çekirdek modelinin hangi zip'te olduğunu kilitler. **ODAK** alan tablosu + KNN modelleri (`ai_hub/odak/veri/` adları) **vet + research** paketlerine girer — paketsiz kurulumda ODAK sürmez |
 | `compile_pyd.py` | Kaynak koruması — `.py → .pyd` **NATIVE (Cython) derleme**; kaynağı geri-alınamaz biçimde yok eder |
 | `encrypt_sources.py` + `source_crypto.py` | Kaynak koruması — build çıktısındaki `.py`'leri şifreler (`.pyenc`); çözücü `../apps/backend/utils/source_crypto.py`'de durur (frozen EXE'ye bundle edilen o) |
 | `make_cloud_provision.py` | E-stop **bulut aynası** sır provizyonu → `../data/cloud_mqtt_provision.json` (git-dışı; varsa spec'e gömülür — ⚠️sahip kararı) |

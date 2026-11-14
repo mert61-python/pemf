@@ -27,7 +27,7 @@ Klinik cihazının bobinlerini süren gömülü firmware'ler. 2026-08-19'dan ber
 > [`stm32_pemf/README.md`](stm32_pemf/README.md).
 
 Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
-`stm32_pemf/Core/Src/main.c` (**2643 satır** — `wc -l` 2026-10-28; ~~~1670~~; elle yazılmış; v2.3.0 SYM-BIPOLAR + derleme-kapılı NTC).
+`stm32_pemf/Core/Src/main.c` (elle yazılmış; satır sayısı belgede TUTULMAZ — `wc -l`; SYM-BIPOLAR + derleme-kapılı NTC). Güncel DDS banner'ı, sensör katmanı (MLX90393 yeniden bağlanma dahil) ve uyum eşikleri: [`stm32_pemf/README.md`](stm32_pemf/README.md).
 ⚠️ Eski `firmware/main.c` kök kopyası 2026-08-19'da SİLİNDİ — iki kopya sessiz ayrışma üretiyordu
 (`tests/test_stm_main_saglik.py` geri gelmesini engeller). Derleme: CubeIDE'de `stm32_pemf/` aç → Build.
 

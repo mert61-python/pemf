@@ -78,7 +78,8 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 ## Kabin / AI kalibrasyon
 | Script | Görev |
 |---|---|
-| `kabin_marker_a4.py` | **A4 basılabilir ArUco marker sayfası** — kabin kalibrasyonu (DICT_5X5_50 · ID 0 · kenar 15,0 cm), 300 DPI. ⚠️ Eski PNG DPI taşımadığı için yazıcının "sayfaya sığdır"ı ölçeği bozuyor, mm/px ve 3B konum yanlış çıkıyordu; %100 basılmalı (alttaki cetvel çubuğu basımı doğrular). [`../ai_hub/KABIN_KURULUM_KILAVUZU.md`](../ai_hub/KABIN_KURULUM_KILAVUZU.md) bunu çağırır (`--masaustu`) |
+| `kabin_marker_a4.py` | **A4 basılabilir ArUco marker sayfası** — kabin kalibrasyonu (bugün **kedi** AI Pro hattı; petri / fantom sabit düzlem kalibrasyonunu kullanır, marker gerekmez) (DICT_5X5_50 · ID 0 · kenar 15,0 cm), 300 DPI. ⚠️ Eski PNG DPI taşımadığı için yazıcının "sayfaya sığdır"ı ölçeği bozuyor, mm/px ve 3B konum yanlış çıkıyordu; %100 basılmalı (alttaki cetvel çubuğu basımı doğrular). [`../ai_hub/KABIN_KURULUM_KILAVUZU.md`](../ai_hub/KABIN_KURULUM_KILAVUZU.md) bunu çağırır (`--masaustu`) |
+| `petri_kare_topla.py` | **Kabin kamerası kare toplayıcı** — petri kuyu dedektörünün (YOLO) yeniden eğitimi / ızgara eşikleri için tezgâhta kare toplar (veri kökü DIŞINA yazar; eğitim bu betikte değil) |
 
 ## ⚠️ Dikkat
 - Cihaz-güvenliği: teardown/uninstall bobinleri **her kill'den önce** E-stop'lar (regresyon yapma).

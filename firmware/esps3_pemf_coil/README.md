@@ -6,6 +6,7 @@
 > geriye ESP olarak yalnız **slot 8** kalmıştı ve o da artık takılı değil.
 >
 > **Tek kaldıraç:** `PEMF_ESP_ENABLED` (varsayılan `0`) → `apps/backend/servers/live_state.esp_etkin()`
+> **Kimlikli broker (A-04):** makinede broker kimliği hazırlanmışsa (`PEMF_Backend.exe --mqtt-kimlik hazirla`) anonim bağlantı reddedilir; ESP geri dönerken kimlik başlığı `MqttKimlik.h` (aynı komutun `--firmware <dizin>` çıktısı) sketch'e kopyalanır → derle / yak → PEMF uygulamasını kapatıp aç. ESP kodu bunun için DEĞİŞMEZ.
 > * `0` — MQTT dinleyicisi hiç başlamaz, `_mqtt_publish` yayın yapmadan `False` döner,
 >   arayüzde "ESP / MQTT" rozeti çizilmez (durum `devre_disi`, arıza değil).
 > * `1` — aşağıda anlatılan her şey **aynen** geri gelir.
