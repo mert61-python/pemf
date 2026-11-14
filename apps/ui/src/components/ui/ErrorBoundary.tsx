@@ -38,7 +38,14 @@ function installGlobalErrorHandler() {
   if (g?.ErrorUtils?.getGlobalHandler && g?.ErrorUtils?.setGlobalHandler) {
     const prev = g.ErrorUtils.getGlobalHandler();
     g.ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
-      reportGlobalError(`[${isFatal ? "FATAL" : "non-fatal"}] ${String(error?.message ?? error ?? "")}`, String(error?.stack || ""));
+      // AP-18 (13-11 istemci günlüğü: her açılışta bir sahte "[FATAL] Requiring unknown module N"): Metro web'de `React.lazy` ekran parçası
+      // ilk denemede eşzamanlı aranır; parça henüz yüklü değilse korumalı yükleyici hatayı buraya "fatal" verir, aşağıdaki önceki işleyici
+      // yeniden fırlatınca Metro parçayı eşzamansız yükler ve ekran açılır. Gerçekten yüklenemeyen parça ErrorBoundary'de AYRICA kaydedilir
+      // → bu tek ileti "non-fatal · chunk-load" sınıflanır (günlük KODU — FATAL / non-fatal gibi; arayüz metni değil, K2); önceki işleyiciye AYNEN (ölümcül) iletilir — davranış değişmez.
+      const ileti = String(error?.message ?? error ?? "");
+      const parcaYukleme = /^Requiring unknown module "\d+"/.test(ileti);
+      const sinif = parcaYukleme ? "non-fatal · chunk-load" : isFatal ? "FATAL" : "non-fatal";
+      reportGlobalError(`[${sinif}] ${ileti}`, String(error?.stack || ""));
       if (typeof prev === "function") prev(error, isFatal); // orijinal RN handler (red-box/crash raporu) korunur
     });
   }

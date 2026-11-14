@@ -560,6 +560,13 @@
      "turler": [
       "sablon-parcasi"
      ]
+    },
+    {
+     "metin": "non-fatal · chunk-load",
+     "gerekce": "çökme raporu önem etiketi (AP-18: Metro parça yükleme denemesi, sahte FATAL değil) — tanılama kaydı, ekranda görünmez",
+     "turler": [
+      "sabit"
+     ]
     }
    ],
    "birlesikIstisna": [],
