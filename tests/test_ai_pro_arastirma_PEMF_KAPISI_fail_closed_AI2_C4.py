@@ -174,7 +174,20 @@ def test_KRITIK_saglayici_GECERSIZ_sonucu_LOKALIZE_saymaz(sag, monkeypatch, bayr
     assert ozne is True, "özne kadrajda — sorun açı / konum / kalite; 'özne yok' ipucu yanlış yönlendirir"
     meta = s.son_lokalizasyon_meta()
     assert meta["pemf_kapisi"]["surulebilir"] is False and neden in meta["pemf_kapisi"]["nedenler"]
-    assert s.ipucu(True, "Hedef") == meta["pemf_kapisi"]["eylem"]
+    # AP-13 (istem 48 · S-AP.6): kalite / yerleşim nedeninde ipucu dile çevrilmiş NEDEN + EYLEM (`kapi_uyari_metni`, kabin dili) — hocanın
+    # `_EYLEM` metni yalnız Türkçe ve telefon dilindeydi ("tepeden çekip yeniden deneyin"); karşılığı olmayan nedende eylem metni AYNEN.
+    beklenen = hedef.kapi_uyari_metni(meta["pemf_kapisi"]) or meta["pemf_kapisi"]["eylem"]
+    assert beklenen and s.ipucu(True, "Hedef") == beklenen
+    if neden in (
+        "guvenilir_degil",
+        "layout_mismatch",
+        "control_cancer_missed",
+        "control_healthy_flagged",
+        "oblique_view",
+    ):
+        assert s.ipucu(True, "Hedef") != meta["pemf_kapisi"]["eylem"], (
+            "AP-13: kalite nedeninde telefon dilindeki eylem metni"
+        )
     assert ong.cagri == [], "kapı geçmeyen karede doz modeli çağrıldı"
 
 

@@ -1047,7 +1047,7 @@
       "analizOneri": "🔎 Analysis and Recommendation (driving off)",
       "analizOneriEtiket": "AI Pro analysis and recommendation — cat driving is off",
       "analizOneriIpucu": "Locates the organ and prepares a dose recommendation; no coil is driven",
-      "baslat": "🚀 Start AI Pro (100 Hz DDS)",
+      "baslat": "🚀 Start AI Pro ({{f}} Hz)",
       "baslatEtiket": "Start the AI Pro autonomous session",
       "baslatIpucu": "Drives the coils automatically with the camera closed loop",
       "durdur": "⏹ Stop AI Pro",
@@ -1086,7 +1086,8 @@
       "durumSecili": ", selected",
       "etiket": "Target {{sira}} / {{toplam}}: {{ad}}, confidence {{guven}} percent{{durum}}",
       "numara": "Target {{sira}}",
-      "otomatik": "selected automatically"
+      "otomatik": "selected automatically",
+      "seansKilit": "The session runs on the approved target — to change the target, stop the session and get a new recommendation."
     },
     "hedefOrgan": "🧠 Target Organ",
     "hedefOrganEtiket": "Target organ: {{name}}",

@@ -1047,7 +1047,7 @@
       "analizOneri": "🔎 Analiz ve Öneri (sürüş kapalı)",
       "analizOneriEtiket": "AI Pro analiz ve öneri — kedi sürüşü kapalı",
       "analizOneriIpucu": "Organı konumlar ve doz önerisi hazırlar; bobin sürmez",
-      "baslat": "🚀 AI Pro Başlat (100 Hz DDS)",
+      "baslat": "🚀 AI Pro Başlat ({{f}} Hz)",
       "baslatEtiket": "AI Pro otonom seansı başlat",
       "baslatIpucu": "Kamera kapalı-döngüsüyle bobinleri otomatik sürer",
       "durdur": "⏹ AI Pro'yu Durdur",
@@ -1086,7 +1086,8 @@
       "durumSecili": ", seçili",
       "etiket": "Hedef {{sira}} / {{toplam}}: {{ad}}, güven yüzde {{guven}}{{durum}}",
       "numara": "Hedef {{sira}}",
-      "otomatik": "otomatik seçildi"
+      "otomatik": "otomatik seçildi",
+      "seansKilit": "Seans onaylanan hedefle sürüyor — hedefi değiştirmek için seansı durdurup yeni öneri alın."
     },
     "hedefOrgan": "🧠 Hedef Organ",
     "hedefOrganEtiket": "Hedef organ: {{name}}",

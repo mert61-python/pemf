@@ -96,8 +96,21 @@ export function EFieldBar() {
         <Text testID="efield-yaklasik" style={styles.foot}>{t("kontrol.efield.yaklasik")}</Text>
       )}
 
-      <Row label={t("kontrol.efield.tumor")} value={cancer} pct={pct(cancer)} tint={colors.danger} fmt={fmt} />
-      <Row label={t("kontrol.efield.saglikli")} value={healthy} pct={pct(healthy)} tint={colors.success} fmt={fmt} />
+      {/* AP-15: petri ODAK (ortam "kuyu") E'si HEDEF kuyu ve ÇEVRE kuyulardır — "Tümör / Sağlıklı" yanıltıcıydı. */}
+      <Row
+        label={e.ortam === "kuyu" ? t("kontrol.efield.hedefKuyu") : t("kontrol.efield.tumor")}
+        value={cancer}
+        pct={pct(cancer)}
+        tint={colors.danger}
+        fmt={fmt}
+      />
+      <Row
+        label={e.ortam === "kuyu" ? t("kontrol.efield.cevreKuyular") : t("kontrol.efield.saglikli")}
+        value={healthy}
+        pct={pct(healthy)}
+        tint={colors.success}
+        fmt={fmt}
+      />
 
       <Text style={styles.foot}>
         {t("kontrol.efield.ozet", { count: e.activeCoils, b: bMetni, duty: dutyMetni })}

@@ -146,7 +146,7 @@ describe("AiProPanel — kedi hattı", () => {
       "Organ",
       "Güven",
       "X (mm)",
-      "🚀 AI Pro Başlat (100 Hz DDS)",
+      "🚀 AI Pro Başlat (100 Hz)", // AP-12 (S-AP.7): seçili frekans (varsayılan 100) — TR DEĞİŞTİ
       "AI Pro durdu.",
       "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin.",
     ]) {
@@ -177,7 +177,7 @@ describe("AiProPanel — kedi hattı", () => {
       "Organ",
       "Confidence",
       "X (mm)",
-      "🚀 Start AI Pro (100 Hz DDS)",
+      "🚀 Start AI Pro (100 Hz)",
       "AI Pro stopped.",
       "📷 Live autonomous session from the server camera: feline organ localization → em_kedi → 7 coils.",
     ]) {

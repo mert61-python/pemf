@@ -934,7 +934,8 @@ class _EmCvSaglayici:
         # AI-2: hocanın tüketim kapısı kareyi kestiyse NEDENİ ve EYLEMİ (pemf geçersiz / güvenilmez / yerleşim uyuşmuyor /
         # kontrol kuyucuğu / yeniden çekim) — "hedef seçilemedi" demek operatörü yanlış yere yönlendirirdi.
         if kapi and not kapi.get("surulebilir", True) and kapi.get("eylem"):
-            return str(kapi["eylem"])
+            # AP-13: fiziksel neden zaten dile çevrili (`kapi_cevir`); kalite / yerleşim nedeni canlı metinle (`kapi_uyari_metni`).
+            return kapi_uyari_metni(kapi) or str(kapi["eylem"])
         return ceviri.t("ai.pro.ipucu.hedefSecilemedi", hedef_adi=hedef_adi)
 
     def son_lokalizasyon_meta(self) -> dict:

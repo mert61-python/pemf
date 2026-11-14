@@ -1465,7 +1465,8 @@ export function AiProPanel({
             seciliId={organId}
             onSec={changeOrgan}
             kutu={kutu}
-            kilitli={false}
+            // AP-10 (13-11 15:01:55 "onaylı 2, istenen 10" 409): seans MÜHÜRLÜ hedefle sürer — sürerken seçim kilitli, neden altta yazar.
+            kilitli={running}
           />
         ) : null}
       </View>
@@ -1515,16 +1516,24 @@ export function AiProPanel({
             seciliId={organId}
             onSec={changeOrgan}
             otomatikMi
+            kilitli={running}
           />
+          {running && hedefAdaylari.length > 0 ? (
+            <Text style={styles.note} testID="ai-pro-hedef-kilit">{t("ai.pro.hedef.seansKilit")}</Text>
+          ) : null}
         </>
       ) : null}
 
       {/* HAZIRLIK ŞERİDİ — aşamayı ve çıkış yolunu gösterir (2026-08-24). */}
       {hazirlik ? (
         <View style={[styles.hazirlikKutu, dusukGuven && styles.hazirlikKutuUyari]}>
-          <GenisletilebilirMetin style={styles.hazirlikMetin} satir={3} testID="aipro-hazirlik-metni">
-            {oneriHatasi || seritMetni}
-          </GenisletilebilirMetin>
+          {/* AP-21: `GenisletilebilirMetin` stili içteki METNE gider; satırda esneyen onun KABI olmalı — yoksa uzun kapı nedeni
+              "Vazgeç"i şeridin dışına iter (D ekran görüntüsü 14-11). */}
+          <View style={styles.hazirlikMetinKap} testID="aipro-hazirlik-metin-kap">
+            <GenisletilebilirMetin style={styles.hazirlikMetin} satir={3} testID="aipro-hazirlik-metni">
+              {oneriHatasi || seritMetni}
+            </GenisletilebilirMetin>
+          </View>
           <TouchableOpacity
             style={styles.hazirlikIptal}
             onPress={vazgec}
@@ -1628,7 +1637,7 @@ export function AiProPanel({
                 : t("ai.pro.dugme.baslatIpucu")
         }
       >
-        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? t("ai.pro.dugme.durdur") : hazirlik ? t("ai.pro.dugme.hazirlaniyor") : arastirmaKipi ? t("ai.pro.dugme.hazirligiBaslat") : kediSurusKapali ? t("ai.pro.dugme.analizOneri") : t("ai.pro.dugme.baslat")}</Text>
+        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? t("ai.pro.dugme.durdur") : hazirlik ? t("ai.pro.dugme.hazirlaniyor") : arastirmaKipi ? t("ai.pro.dugme.hazirligiBaslat") : kediSurusKapali ? t("ai.pro.dugme.analizOneri") : t("ai.pro.dugme.baslat", { f: frek })}</Text>
       </TouchableOpacity>
       {/* Y142: neden + eylem GÖRÜNÜR (yalnız erişilebilirlik ipucuna yazmak "düğme bozuk" izlenimi verirdi). */}
       {kediSurusKapali && !running ? (
@@ -1730,8 +1739,9 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: spacing.sm,
   },
   hazirlikKutuUyari: { backgroundColor: "#78350f" },   // sınırda güven → görsel uyarı
-  hazirlikMetin: { color: "#dbeafe", fontWeight: "700", fontSize: typography.small, flex: 1 },
-  hazirlikIptal: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 6, backgroundColor: "#334155" },
+  hazirlikMetinKap: { flex: 1, minWidth: 0 },
+  hazirlikMetin: { color: "#dbeafe", fontWeight: "700", fontSize: typography.small },
+  hazirlikIptal: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 6, backgroundColor: "#334155", flexShrink: 0 },
   hazirlikIptalMetin: { color: "#e2e8f0", fontWeight: "700", fontSize: typography.small },
   calBtn: { backgroundColor: "#334155", borderRadius: 8, padding: spacing.sm, alignItems: "center" },
   calBtnDone: { backgroundColor: "#15803d" },
