@@ -28,6 +28,7 @@ const tepkiEtiketi = (t: TFunction, r: string): string => {
     case "Endişeli": return t("hasta.gozlem.tepki.endiseli");
     case "Tepki yok": return t("hasta.gozlem.tepki.tepkiYok");
     case "Rahatsızlık": return t("hasta.gozlem.tepki.rahatsizlik");
+    /* istanbul ignore next -- ULASILAMAZ: yalnız sabit REACTIONS listesiyle çağrılır, her değer bir case ile karşılanır */
     default: return r;
   }
 };

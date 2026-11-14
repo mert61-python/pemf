@@ -225,6 +225,7 @@ export function useSessionControl(): SessionControlResult {
     reconcileRef.current = setInterval(reconcile, 2000);  // 5s→2s: acil-durdur/backend-stop UI senkronu daha hızlı
     return () => {
       cancelled = true;
+      /* istanbul ignore if -- ULASILAMAZ: stopTimer aralığı sökümden ÖNCE temizler; bu dal girilmez */
       if (reconcileRef.current) {
         clearInterval(reconcileRef.current);
         reconcileRef.current = null;

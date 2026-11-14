@@ -278,7 +278,8 @@ async function probeHost(ip: string, timeoutMs: number): Promise<ProbeHit | null
   }
 }
 
-async function discoverSubnet(requireDeviceId?: string | null, gecersiz: () => boolean = () => false): Promise<string | null> {
+// KP-5 C9 (Y242 ölü kod): `gecersiz`in varsayılan değeri hiç kullanılmıyordu (tek çağıran her zaman verir) → zorunlu parametre; davranış AYNI.
+async function discoverSubnet(requireDeviceId: string | null | undefined, gecersiz: () => boolean): Promise<string | null> {
   // Web'de tarayıcı keyfi IP'lere health bağlantısı yapamaz (CORS) → atla; web'de origin zaten doğru.
   if (Platform.OS === "web") return null;
   // NOT: WiFi denetimiyle (NetInfo `type`) ATLANMAZ — KP-3 (Y242): kullanılmayan `_isOnWifi` yardımcısı silindi; açılışta NetInfo henüz hazır değilken false dönüp aynı-WiFi yerel

@@ -128,6 +128,7 @@ export function SurusKipiSecici({
           setDurum(t("kontrol.surus.gonderilemedi"));
         }
       } catch {
+        /* istanbul ignore next -- SAVUNMA: apiPost fırlatmaz (fallback döner), sonuç eşlemesi saf */
         setDurum(t("kontrol.surus.gonderilemedi"));
       } finally {
         setGonderiliyor(false);

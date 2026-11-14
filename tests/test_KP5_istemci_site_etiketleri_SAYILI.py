@@ -31,7 +31,30 @@ ETIKETLI = re.compile(
 )
 #: KP-5 C9 / D10 — dosya → [(tür, ETİKET)] SABİT (mutant kaynaktan okunmaz). Gerekçeler etiketin kendisinde (satır içi).
 BEKLENEN: dict[str, list[tuple[str, str]]] = {
+    # C9 istemci (KP-4 B1 ölçümü + KP-5 yeniden ölçüm; satır içi gerekçe etiketin kendisinde)
+    "apps/ui/src/components/domain/AiProPanel.tsx": [("if", "ULASILAMAZ"), ("if", "ULASILAMAZ"), ("if", "SAVUNMA")],
+    "apps/ui/src/components/domain/ObservationNotesModal.tsx": [("next", "ULASILAMAZ")],
+    "apps/ui/src/components/domain/SessionDetailModal.tsx": [("next", "SAVUNMA"), ("if", "ULASILAMAZ")],
+    "apps/ui/src/components/domain/SurusKipiSecici.tsx": [("next", "SAVUNMA")],
+    "apps/ui/src/components/ui/JetonRozeti.tsx": [("next", "SAVUNMA")],
+    "apps/ui/src/components/ui/NotificationCenter.tsx": [("next", "SAVUNMA")],
+    "apps/ui/src/hooks/useSessionControl.ts": [("if", "ULASILAMAZ")],
+    "apps/ui/src/screens/AiHubScreen.tsx": [
+        ("next", "ULASILAMAZ"),
+        ("next", "SAVUNMA"),
+        ("if", "ULASILAMAZ"),
+        ("if", "ULASILAMAZ"),
+        ("if", "ULASILAMAZ"),
+        ("next", "SAVUNMA"),
+    ],
+    "apps/ui/src/screens/ControlScreen.tsx": [("if", "ULASILAMAZ")],
+    "apps/ui/src/screens/SettingsScreen.tsx": [("next", "SAVUNMA")],
+    "apps/ui/src/services/apiClient.ts": [("next", "ULASILAMAZ")],
+    "apps/ui/src/services/desktopSession.ts": [("next", "SAVUNMA")],
+    "apps/ui/src/services/updates.ts": [("next", "SAVUNMA")],
     "apps/ui/src/tembelEkranlar.ts": [("file", "PLATFORM")],
+    "apps/ui/src/theme/fonts.ts": [("next", "SAVUNMA")],
+    # D10 site
     "apps/web/src/components/AppScreenshots.tsx": [("if", "ULASILAMAZ")],
     "apps/web/src/components/DownloadStats.tsx": [("next", "SAVUNMA")],
     "apps/web/src/lib/usageStats.ts": [("if", "SAVUNMA")],
@@ -99,7 +122,8 @@ def test_KRITIK_istemci_site_etiketleri_GEREKCELI_ve_SAYILI():
 
 def test_etiket_toplami_ve_sinif_dagilimi_SABIT():
     toplam = Counter(e for v in BEKLENEN.values() for _, e in v)
-    assert sum(toplam.values()) == sum(len(v) for v in BEKLENEN.values())
+    # KP-5 kapanış: 27 = ULASILAMAZ 13 + SAVUNMA 13 + PLATFORM 1 (sayı yalnız BİLİNÇLİ değişir)
+    assert toplam == Counter({"ULASILAMAZ": 13, "SAVUNMA": 13, "PLATFORM": 1}), toplam
     assert set(toplam) <= set(ETIKETLER)
 
 

@@ -51,6 +51,7 @@ export function JetonRozeti({ kompakt = false }: { kompakt?: boolean }) {
       setBakiye(await jetonBakiyesiGetir());
     } catch {
       // jetonBakiyesiGetir zaten `silent`; buraya düşmesi beklenmez.
+      /* istanbul ignore next -- SAVUNMA: jetonBakiyesiGetir reddetmez (silent, her yolda değer döner) */
       setBakiye(JETON_KAPALI);
     }
   }, []);

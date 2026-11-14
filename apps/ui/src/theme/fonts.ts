@@ -106,6 +106,7 @@ export function applyGlobalInter(): void {
       try {
         return { ...el, props: injectFont(el.type, el.props) };
       } catch {
+        /* istanbul ignore next -- SAVUNMA: saf nesne kopyası + StyleSheet.flatten geçerli stilde fırlatmaz */
         return el;
       }
     };

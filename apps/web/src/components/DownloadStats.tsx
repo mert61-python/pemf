@@ -27,8 +27,7 @@ export function DownloadStats() {
     const ac = new AbortController()
     fetchUsageStats(ac.signal)
       .then(setS)
-      /* istanbul ignore next -- SAVUNMA: fetchUsageStats REDDETMEZ (her hatayı içeride yakalayıp null döner) */
-      .catch(() => setS(null))
+      .catch(/* istanbul ignore next -- SAVUNMA: fetchUsageStats REDDETMEZ (her hatayı içeride yakalayıp null döner) */ () => setS(null))
     return () => ac.abort()
   }, [])
 

@@ -664,12 +664,14 @@ export function AiProPanel({
   const start = useCallback(async () => {
     // ARAŞTIRMA KAPISI 1: model seçilmeden hazırlık başlatılamaz. Backend boş `model`i "kedi"
     // sayar (eski istemci uyumu) → seçim yapılmadan başlatmak SESSİZCE kedi hattını açardı.
+    /* istanbul ignore if -- ULASILAMAZ: Başlat düğmesi model seçilmeden pasif (baslatKapali aynı koşul) */
     if (arastirmaKipi && !hedefModeliRef.current) {
       platformAlert(i18n.t("ai.pro.uyari.modelSecilmedi"), i18n.t("ai.pro.uyari.modelSecilmediGovde"));
       return;
     }
     // ARAŞTIRMA KAPISI 2 (sahip kararı #15): fantom/petri konumu KABİN çerçevesinde ölçülür;
     // telefon kamerası o çerçevenin dışındadır → konum ölçülemez, öneri hiç üretilmez.
+    /* istanbul ignore if -- ULASILAMAZ: mobilde araştırma kipinde Başlat düğmesi aynı koşulla pasif */
     if (arastirmaMobilKapali) {
       platformAlert(i18n.t("ai.pro.uyari.kabinKamerasi"), i18n.t("ai.pro.uyari.kabinKamerasiGovde"));
       return;
@@ -936,6 +938,7 @@ export function AiProPanel({
     if (!proposal?.proposalId) return;
     // Y142: sürüş kapalıyken onay seans BAŞLATMAZ — /approve ve /start GÖNDERİLMEZ (düğme zaten pasif; klavye/otomasyon yolu).
     const kapali = oneriSurusuKapali(proposal, kediSurusAcik);
+    /* istanbul ignore if -- SAVUNMA: Y142 onay düğmesi sürüş kapalıyken pasif; klavye / otomasyon yolu için kalır */
     if (kapali) {
       platformAlert(i18n.t("ai.pro.uyari.surusKapali"), kapali);
       return;

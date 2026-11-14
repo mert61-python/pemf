@@ -356,6 +356,7 @@ export function ControlScreen() {
    */
   const handleParametreGuncelle = async () => {
     const calisanlar = (snapshot.coils ?? []).filter((c) => c?.running).map((c) => c.id);
+    /* istanbul ignore if -- ULASILAMAZ: Parametreleri güncelle düğmesi yalnız çalışan bobin varken çizilir */
     if (calisanlar.length === 0) {
       platformAlert(t("kontrol.ekran.calisanYok"), t("kontrol.ekran.calisanYokGovde"));
       return;

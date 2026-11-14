@@ -484,6 +484,7 @@ export function SettingsScreen() {
         try {
           dogrulandi = await checkHealth(addr, null);
         } catch {
+          /* istanbul ignore next -- SAVUNMA: checkHealth gövdesi try / catch, fırlatmaz */
           dogrulandi = false;
         }
         if (!dogrulandi) {

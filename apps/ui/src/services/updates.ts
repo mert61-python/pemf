@@ -29,6 +29,7 @@ function vtuple(v: string): number[] {
   try {
     return String(v).replace(/^v/i, "").split(".").slice(0, 3).map((n) => parseInt(n, 10) || 0);
   } catch {
+    /* istanbul ignore next -- SAVUNMA: String(v) dizge / sayı girdisinde fırlatmaz */
     return [0, 0, 0];
   }
 }

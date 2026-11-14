@@ -142,6 +142,7 @@ function fmtClock(epoch?: number): string {
       second: "2-digit",
     });
   } catch {
+    /* istanbul ignore next -- SAVUNMA: toLocaleTimeString geçerli seçeneklerle fırlatmaz (geçersiz tarih Invalid Date döner) */
     return "—";
   }
 }
@@ -515,6 +516,7 @@ function TempChart({
       if (relMin > xMaxMin) xMaxMin = relMin;
     }
   }
+  /* istanbul ignore if -- ULASILAMAZ: grafik yalnız en az bir sonlu sıcaklık örneği varken çizilir (hasData) */
   if (!Number.isFinite(tMin) || !Number.isFinite(tMax)) {
     tMin = 0;
     tMax = 1;

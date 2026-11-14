@@ -91,3 +91,16 @@ it("KRİTİK ZG-1: grafikte sürükleyerek seçim → onAralikSec(bas, son) sani
   expect(son).toBeLessThan(T0 + 119);
   expect(son - bas).toBeGreaterThan(30);
 });
+
+it("KARŞIT (KP-5 C9): zaman damgası YOKKEN (eski backend) saat ekseni çizilmez ve sürükleme ARALIK BİLDİRMEZ (eşleme yok)", async () => {
+  const sec = jest.fn();
+  const ESKI: any = { 1: Array.from({ length: 40 }, (_, i) => ({ magneticMt: i % 5, objectTemp: 30 })) };
+  const { u, yazilar } = ciz({ history: ESKI, onAralikSec: sec });
+  await act(async () => {});
+  expect(yazilar.filter((y) => /^\d\d:\d\d:\d\d$/.test(y.metin))).toHaveLength(0);
+  const tuvalEl = u.UNSAFE_getByType("canvas" as any);
+  fireEvent(tuvalEl, "mouseDown", { nativeEvent: { offsetX: 120 } });
+  fireEvent(tuvalEl, "mouseMove", { nativeEvent: { offsetX: 360 } });
+  fireEvent(tuvalEl, "mouseUp", {});
+  expect(sec).not.toHaveBeenCalled();
+});

@@ -9,9 +9,10 @@ let mockSnap: { coils: Array<{ id: number; connected?: boolean; running?: boolea
 jest.mock("@/context/LiveDataContext", () => ({
   useLiveData: () => ({ snapshot: mockSnap, sensorHistory: {}, connectionQuality: "live", telemetryStale: false }),
 }));
-const mockGrafik: Array<{ visibleCoils: Set<number>; showMagnetic?: boolean; showTemp?: boolean }> = [];
+type Pencere = { tip: string; sn?: number; bas?: number; son?: number };
+const mockGrafik: Array<{ visibleCoils: Set<number>; showMagnetic?: boolean; showTemp?: boolean; pencere?: Pencere; onAralikSec?: (bas: number, son: number) => void }> = [];
 jest.mock("@/components/visual/RealtimeChart", () => ({
-  RealtimeChart: (p: { visibleCoils: Set<number>; showMagnetic?: boolean; showTemp?: boolean }) => { mockGrafik.push(p); return null; },
+  RealtimeChart: (p: { visibleCoils: Set<number>; showMagnetic?: boolean; showTemp?: boolean; pencere?: Pencere; onAralikSec?: (bas: number, son: number) => void }) => { mockGrafik.push(p); return null; },
 }));
 
 import React from "react";
@@ -53,4 +54,24 @@ it("bobin çipi grafikten çıkarır / geri ekler; eksen çipleri grafiğe ileti
   expect(son().showMagnetic).toBe(false);
   await act(async () => { fireEvent.press(u.getByText(T("sensor.sicaklik"))); });
   expect(son().showTemp).toBe(false);
+});
+
+it("KP-5 C9 · ZG-1: zaman penceresi çipleri grafiğe pencereyi iletir; grafikte seçilen aralık 'seçili' olur, 'canlıya dön' tümüne", async () => {
+  mockSnap = { coils: [] };
+  const u = render(<SensorMonitorScreen />);
+  await olc(u);
+  expect(son().pencere).toEqual({ tip: "tumu" });
+  for (const [kimlik, sn] of [["zaman-600", 600], ["zaman-120", 120], ["zaman-30", 30]] as const) {
+    await act(async () => { fireEvent.press(u.getByTestId(kimlik)); });
+    expect(son().pencere).toEqual({ tip: "son", sn });
+  }
+  await act(async () => { fireEvent.press(u.getByTestId("zaman-tumu")); });
+  expect(son().pencere).toEqual({ tip: "tumu" });
+  expect(u.queryByTestId("zaman-secili")).toBeNull();
+  await act(async () => { son().onAralikSec!(1000, 1060); });
+  expect(son().pencere).toEqual({ tip: "sabit", bas: 1000, son: 1060 });
+  expect(u.getByTestId("zaman-secili")).toBeTruthy();
+  await act(async () => { fireEvent.press(u.getByTestId("zaman-canli")); });
+  expect(son().pencere).toEqual({ tip: "tumu" });
+  expect(u.queryByTestId("zaman-secili")).toBeNull();
 });

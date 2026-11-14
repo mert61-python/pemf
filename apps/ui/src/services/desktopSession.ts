@@ -112,6 +112,7 @@ export async function hydrateFromDesktopSessionDetayli(): Promise<DevirSonucu> {
     });
     return await Promise.race([_hydrate(okunan), butce]);
   } catch {
+    /* istanbul ignore next -- SAVUNMA: _hydrate her hatayı içeride yakalar */
     return { durum: "yok" };
   } finally {
     if (timer) clearTimeout(timer);

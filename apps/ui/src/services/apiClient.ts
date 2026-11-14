@@ -362,6 +362,7 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
       clearTimeout(timer);
     }
   }
+  /* istanbul ignore next -- ULASILAMAZ: döngünün her yolu döner; satır TypeScript dönüş tipi için */
   return fallback;
 }
 
