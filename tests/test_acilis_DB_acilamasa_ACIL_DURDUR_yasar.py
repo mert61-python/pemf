@@ -213,6 +213,11 @@ class _Casus:
         t0 = time.perf_counter()
         r = TestClient(api.app, client=("127.0.0.1", 50078), raise_server_exceptions=False).get("/api/patients")
         sonuc["hastalar"] = {{"kod": r.status_code, "sure": time.perf_counter() - t0}}
+        # KP-5 · 17: listenin 503 gerekçesi (ikinci hesapta "bağlantı" değil ERİŞİM iletisi beklenir)
+        try:
+            sonuc["hastalar"]["detail"] = (r.json() or {{}}).get("detail", "")
+        except ValueError:
+            sonuc["hastalar"]["detail"] = r.text[:200]
         t0 = time.perf_counter()
         r = c.post("/api/hardware/emergency_stop")
         sonuc["estop"] = {{"kod": r.status_code, "sure": time.perf_counter() - t0}}
@@ -850,8 +855,24 @@ def test_KRITIK_A14_IKINCI_HESAP_veri_koku_KILITLI_backend_DBSIZ_acilir_gunluk_T
         geri = subprocess.run(["icacls", str(app), "/reset", "/T", "/C"], capture_output=True)
     assert geri.returncode == 0 and os.listdir(app), "veri kökünün ACL'si geri ALINAMADI"
     _ortak_iddialar(s)
+    # KP-5 · 18: #22 (`a4b18def`) ikinci hesapta nedeni "açılamadı"dan EYLEM söyleyen erişim iletisine çevirdi (`sistem.db.erisimYok`:
+    # "… erişimi yok — başlatıcıdaki paylaşım kartıyla erişim verin."). KRİTİK amaç aynı: DB'siz kip + operatöre NEDEN + EYLEM.
+    # (İH kapısı bu dosyayı kaçırdı: test değişen koda yalnız alt süreçteki gerçek `main()` ile ulaşır ve eski metni regex'le
+    # bekler — değişen ad / katalog anahtarıyla kurulan grep kapı listesi onu SEÇMEZ; bkz. KAPSAM.md KP-5 · 18.)
     for h in s["saglik"]:
-        assert h["dbReady"] is False and re.search(r"a[çc][ıi]lamad[ıi]", h["dbSebep"] or ""), s["saglik"]
+        assert h["dbReady"] is False, s["saglik"]
+        assert re.search(r"eri[şs]imi yok", h["dbSebep"] or "") and re.search(r"payla[şs][ıi]m", h["dbSebep"] or ""), (
+            f"ikinci hesapta neden ERİŞİM + EYLEM (paylaşım kartı) söylemiyor: {h['dbSebep']!r}"
+        )
+        assert not re.search(r"a[çc][ıi]lamad[ıi]", h["dbSebep"] or ""), (
+            "erişim sorunu 'açılamadı' (bozukluk) gibi söyleniyor"
+        )
+    # KP-5 · 17 (İH #22 kalıntısı): hasta listesi de AYNI erişim nedenini söyler (sağlık nedeniyle tek kaynak) — "bağlantı / veritabanı
+    # açılamıyor" değil; arayüz 503 gerekçesini gösterir (PatientScreen).
+    hl = s["hastalar"]
+    assert hl["kod"] == 503 and hl["detail"] == s["saglik"][0]["dbSebep"], (
+        f"ikinci hesapta hasta listesi erişim nedenini söylemiyor: {hl} · sağlık: {s['saglik'][0]['dbSebep']!r}"
+    )
     assert s["seans"]["kod"] == 503 and "kayıt" in s["seans"]["detail"].lower(), f"DB'siz seans: {s['seans']}"
     assert s["sayac"]["update"] == 0, f"DB'siz kipte STM bobini sürülmeye çalışıldı ({s['sayac']['update']})"
     once = json.loads((tmp_path / "ikinci_once.json").read_text(encoding="utf-8"))

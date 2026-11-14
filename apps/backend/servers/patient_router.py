@@ -55,6 +55,19 @@ class BulkDeletePayload(BaseModel):
     confirm: str = ""
 
 
+def _db_siz_liste_iletisi() -> str:
+    """KP-5 · 17 (İH #22 kalıntısı): DB'siz kipte hasta DB'sinin açılış nedeni ERİŞİM YOK ise (ikinci Windows hesabı, Y182 paylaşımı
+    kurulmamış) sağlık ucunun `dbSebep`iyle AYNI erişim iletisi (eylem: başlatıcının paylaşım kartı); değilse liste okuma iletisi.
+    Kaynak `HeadlessCore.db_acilis_ayrintilari` (sağlıkla tek kaynak); çekirdek yok / sahte → liste okuma iletisi."""
+    from servers.api_server import state
+
+    ayrintilar = getattr(state.core, "db_acilis_ayrintilari", None)
+    hasta = ayrintilar.get("hasta") if isinstance(ayrintilar, dict) else None
+    if isinstance(hasta, tuple) and hasta[:1] == ("erisimYok",):
+        return ceviri.t("sistem.db.erisimYok")
+    return ceviri.t("hasta.hata.listeOkunamadi")
+
+
 @router.get("/api/patients")
 def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
     """Hastaları döndürür. Pagination (audit B-8.2): limit>0 ile sayfalanır (offset kaydırır);
@@ -70,7 +83,7 @@ def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
             "Hasta listesi: hasta DB'si acilista ACILAMADI (DB'siz kip) — 503; bu 'hasta yok' DEMEK DEGIL.",
             exc_info=True,
         )
-        raise HTTPException(status_code=503, detail=ceviri.t("hasta.hata.listeOkunamadi"))
+        raise HTTPException(status_code=503, detail=_db_siz_liste_iletisi())
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
     # DENETIM P2: eskiden TUM hastalar cekilip (hepsinin alan-basi Fernet desifresi yapilarak,
