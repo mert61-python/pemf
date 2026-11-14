@@ -502,6 +502,9 @@ export function AiProPanel({
   /** AP-B4: önerinin dayandığı konum ölçümünün (hazırlıkta alınan öneri) panele geliş anı — yeniden hesap aynı ölçümü kullanır; sunucu
    *  2 dk'dan eski ölçümü reddeder (önizleme durmuş olduğundan kendiliğinden tazelenmez). */
   const oneriOlcumAniRef = useRef(0);
+  /** AP-B3 · AP-20: hazırlıktaki öneri isteğinin HEDEFİ (0 = otomatik). Yeniden hesap AYNI hedefle ister — sunucu tazeliği önizlemenin
+   *  lokalize ettiği hedefle denetler; mühürdeki (otomatik seçilmiş) kimlikle istemek her seferinde "konumlandırılmadı" 409'u veriyordu. */
+  const oneriIstekHedefRef = useRef(0);
   // Onay/red denetim izinde HANGİ HEKİM karar verdi — oturumdaki e-posta taşınır.
   const { session } = useAuth();
   // ⭐ Aktif operatör (tek makine, çoklu veteriner) — oturum e-postası DEĞİL.
@@ -752,6 +755,8 @@ export function AiProPanel({
     setArdisik(ardisikRef.current);
     if (ardisikRef.current < ARDISIK_ONAY) return;
     if (Date.now() < oneriBeklemeRef.current) return;   // bekleme sürüyor → sessizce geç
+    // AP-20: hedef, bayraktan ÖNCE (test_ai_pro_asamali_akis metin penceresi bekleme atamasını bayraktan sonra 1800 karakterde arar).
+    oneriIstekHedefRef.current = organId;
     oneriIstendiRef.current = true;
     (async () => {
       // ⚠️ SESSİZ: hata metnini biz hazırlık şeridinde gösteriyoruz. Sessiz olmasaydı her
@@ -812,6 +817,8 @@ export function AiProPanel({
     // her karede yeni nesne olduğu için oradaki sayaç çalışır). Sunucu önizlemesi organı güvenilir
     // lokalize eder ve propose ucu tazeliği (localized + ≤120sn) AYRICA doğrular → ilk `localized`
     // gözleminde öneri istenir (web'in ESKİ davranışı da buydu; fark: artık ÖNCE kamera ısıtılıyor).
+    // AP-20: hedef, bayraktan ÖNCE (test_ai_pro_asamali_akis metin penceresi bekleme atamasını bayraktan sonra 1800 karakterde arar).
+    oneriIstekHedefRef.current = organId;
     oneriIstendiRef.current = true;
     (async () => {
       const prop = await apiPost<AiProposeResponse | null>(
@@ -943,7 +950,7 @@ export function AiProPanel({
 
   /** ODAK (istem 45 · Y273): hekim dozu / petri kipini değiştirdi → AYNI lokalizasyonla yeni öneri (yeni mühür). Başarısızsa (ör. doz
    *  tavanın üstünde, lokalizasyon bayat) sunucunun eylem söyleyen 409 metni bildirim olarak gösterilir, eski öneri açık kalır. */
-  const yenidenHesapla = useCallback(async (doz: number, kip: string) => {
+  const yenidenHesapla = useCallback(async (doz: number, kip: string, kuyu?: string) => {
     if (!proposal?.proposalId || onayAkisiRef.current) return;
     setApprovalBusy(true);
     setPencereHatasi("");
@@ -953,7 +960,8 @@ export function AiProPanel({
       const prop = await apiPost<AiProposeResponse | null>(
         "/ai/pro/propose",
         {
-          organ_id: proposal.specs?.organ_id ?? organId,
+          // AP-20: önizlemenin lokalize ettiği hedef (otomatik öneride 0) — mühürdeki kimlik DEĞİL (tazelik o hedefle denetlenir).
+          organ_id: oneriIstekHedefRef.current,
           duration_minutes: proposal.specs?.duration_minutes ?? (parseInt(duration) || 20),
           model: proposal.specs?.model ?? hedefModeliRef.current,
           client_mode: kullaniciKipiRef.current,
@@ -964,12 +972,17 @@ export function AiProPanel({
           odak_kip: kip,
           // ODK8: yeniden hesap AYNI frekansla (mühürdeki)
           frek_hz: proposal.specs?.odak?.frek_hz ?? frekRef.current,
+          // AP-B3: onay haritasından seçilen kuyu (yalnız petri; seçilmediyse alan GÖNDERİLMEZ).
+          ...(kuyu ? { kuyu } : {}),
         },
         null,
         { silent: true, onHttpError: (durum, detay) => { red = { durum, detay }; } }
       );
-      if (prop?.proposalId) setProposal(prop);
-      else {
+      if (prop?.proposalId) {
+        setProposal(prop);
+        // AP-B3: haritadan seçilen kuyu artık hedef — liste / halkalar onu seçili gösterir (mühürdeki kalıcı kimlik).
+        if (kuyu && typeof prop.specs?.organ_id === "number") setOrganId(prop.specs.organ_id);
+      } else {
         const eski = oneriOlcumAniRef.current > 0 && Date.now() - oneriOlcumAniRef.current > KONUM_ESKI_MS;
         setPencereHatasi(pencereHataMetni(red) + (eski ? " " + i18n.t("ai.pro.onay.konumEskidi") : ""));
       }

@@ -79,7 +79,17 @@ export function kuyuKonumlari(kuyular: OdakKuyu[]): { x: number; y: number }[] {
   });
 }
 
-export function KuyuHaritasi({ kuyular }: { kuyular: OdakKuyu[] }) {
+export function KuyuHaritasi({
+  kuyular,
+  secilen,
+  onSec,
+}: {
+  kuyular: OdakKuyu[];
+  /** AP-B3: kullanıcının haritada seçtiği kuyu (yoksa mühürdeki `secili`). */
+  secilen?: string;
+  /** AP-B3: verilirse DOLU kuyular dokunulabilir (boş kuyu hedef OLAMAZ — ODK11); seçim "Yeniden hesapla" ile yeni öneri ister. */
+  onSec?: (etiket: string) => void;
+}) {
   const { t } = useTranslation();
   const degerler = kuyular.map((k) => k.mT).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   const min = degerler.length ? Math.min(...degerler) : 0;
@@ -90,32 +100,49 @@ export function KuyuHaritasi({ kuyular }: { kuyular: OdakKuyu[] }) {
     <View testID="odak-kuyu-haritasi" accessibilityLabel={t("ai.pro.onay.odak.haritaBaslik")}>
       <Text style={s.haritaBaslik}>{t("ai.pro.onay.odak.haritaBaslik")}</Text>
       <View style={[s.kutu, { width: rs(KUTU_G), height: rs(KUTU_Y) }]}>
-        {kuyular.map((k, i) => (
-          <View
-            key={k.etiket}
-            testID={k.secili ? "odak-kuyu-secili" : `odak-kuyu-${k.etiket}`}
-            accessibilityLabel={
-              k.secili
-                ? t("ai.pro.onay.odak.kuyuEtiketSecili", { etiket: k.etiket, deger: sayi(k.mT), secili: t("ai.pro.onay.odak.secili") })
-                : k.bos
-                  ? t("ai.pro.onay.odak.kuyuEtiketBos", { etiket: k.etiket, deger: sayi(k.mT) })
-                  : t("ai.pro.onay.odak.kuyuEtiket", { etiket: k.etiket, deger: sayi(k.mT) })
-            }
-            style={[
-              s.hucre,
-              {
-                left: yer[i].x * rs(KUTU_G - HUCRE - 4),
-                top: yer[i].y * rs(KUTU_Y - HUCRE - 4),
-                backgroundColor: kuyuRengi(k.mT, min, maks),
-              },
-              k.secili && s.hucreSecili,
-              k.bos && s.hucreBos,
-            ]}
-          >
-            <Text style={s.hucreEtiket}>{k.etiket}</Text>
-            <Text style={s.hucreDeger}>{sayi(k.mT)}</Text>
-          </View>
-        ))}
+        {kuyular.map((k, i) => {
+          const isaretli = secilen ? k.etiket === secilen : !!k.secili;
+          const etiket = isaretli
+            ? t("ai.pro.onay.odak.kuyuEtiketSecili", { etiket: k.etiket, deger: sayi(k.mT), secili: t("ai.pro.onay.odak.secili") })
+            : k.bos
+              ? t("ai.pro.onay.odak.kuyuEtiketBos", { etiket: k.etiket, deger: sayi(k.mT) })
+              : t("ai.pro.onay.odak.kuyuEtiket", { etiket: k.etiket, deger: sayi(k.mT) });
+          const stil = [
+            s.hucre,
+            {
+              left: yer[i].x * rs(KUTU_G - HUCRE - 4),
+              top: yer[i].y * rs(KUTU_Y - HUCRE - 4),
+              backgroundColor: kuyuRengi(k.mT, min, maks),
+            },
+            isaretli && s.hucreSecili,
+            k.bos && s.hucreBos,
+          ];
+          const icerik = (
+            <>
+              <Text style={s.hucreEtiket}>{k.etiket}</Text>
+              <Text style={s.hucreDeger}>{sayi(k.mT)}</Text>
+            </>
+          );
+          // AP-B3: dolu kuyu dokunulabilir; boş kuyu (ODK11) ve harita salt gösterimken (onSec yok) eskisi gibi düz kutu.
+          return onSec && !k.bos ? (
+            <TouchableOpacity
+              key={k.etiket}
+              testID={k.secili ? "odak-kuyu-secili" : `odak-kuyu-${k.etiket}`}
+              accessibilityLabel={etiket}
+              accessibilityRole="button"
+              accessibilityHint={t("ai.pro.onay.odak.kuyuSecIpucu")}
+              accessibilityState={{ selected: isaretli }}
+              onPress={() => onSec(k.etiket)}
+              style={[...stil, { minHeight: touch.min, minWidth: touch.min }]}
+            >
+              {icerik}
+            </TouchableOpacity>
+          ) : (
+            <View key={k.etiket} testID={k.secili ? "odak-kuyu-secili" : `odak-kuyu-${k.etiket}`} accessibilityLabel={etiket} style={stil}>
+              {icerik}
+            </View>
+          );
+        })}
       </View>
       <Text style={s.olcek}>{t("ai.pro.onay.odak.olcek", { min: sayi(min), maks: sayi(maks) })}</Text>
       <Text style={s.uyari}>{t("ai.pro.onay.odak.komsuUyari")}</Text>
@@ -131,12 +158,16 @@ export function OdakOzeti({
 }: {
   odak: OdakOzet;
   busy?: boolean;
-  /** Doz / petri kipi değişince yeni öneri iste (yeni mühür). Verilmezse seçici gösterilmez. */
-  onYenidenHesapla?: (doz: number, kip: string) => void;
+  /** Doz / petri kipi / (AP-B3) haritadan seçilen kuyu değişince yeni öneri iste (yeni mühür). Verilmezse seçici gösterilmez. */
+  onYenidenHesapla?: (doz: number, kip: string, kuyu?: string) => void;
 }) {
   const { t } = useTranslation();
   const [dozMetni, setDozMetni] = useState(sayi(odak.doz_mT));
   const [kip, setKip] = useState(odak.kip);
+  /** AP-B3: mühürdeki kuyu (öneri) ve kullanıcının haritada seçtiği kuyu. */
+  const muhurKuyusu = (odak.kuyular || []).find((k) => k.secili)?.etiket || "";
+  const [secilenKuyu, setSecilenKuyu] = useState(muhurKuyusu);
+  const kuyuDegisti = !!secilenKuyu && secilenKuyu !== muhurKuyusu;
   const tavan = typeof odak.tavan_mT === "number" ? odak.tavan_mT : NaN;
   const doz = dozCoz(dozMetni);
   const dozGecerli = Number.isFinite(doz) && doz > 0 && (!Number.isFinite(tavan) || doz <= tavan);
@@ -161,7 +192,25 @@ export function OdakOzeti({
       )}
       <Text style={s.kaynak}>{t("ai.pro.onay.odak.kaynak")}</Text>
 
-      {Array.isArray(odak.kuyular) && odak.kuyular.length ? <KuyuHaritasi kuyular={odak.kuyular} /> : null}
+      {Array.isArray(odak.kuyular) && odak.kuyular.length ? (
+        <KuyuHaritasi
+          kuyular={odak.kuyular}
+          secilen={secilenKuyu || undefined}
+          onSec={
+            onYenidenHesapla
+              ? (e) => {
+                  setSecilenKuyu(e);
+                  if (kip !== "KUYUCUK") setKip("KUYUCUK"); // tek kuyu hedefi KUYUCUK kipindedir
+                }
+              : undefined
+          }
+        />
+      ) : null}
+      {onYenidenHesapla && Array.isArray(odak.kuyular) && odak.kuyular.length ? (
+        <Text testID="odak-kuyu-sec-ipucu" style={kuyuDegisti ? s.uyari : s.olcek}>
+          {kuyuDegisti ? t("ai.pro.onay.odak.secilenKuyu", { etiket: secilenKuyu }) : t("ai.pro.onay.odak.haritaSecIpucu")}
+        </Text>
+      ) : null}
 
       {onYenidenHesapla ? (
         <View style={s.secici}>
@@ -195,7 +244,7 @@ export function OdakOzeti({
               testID="odak-yeniden-hesapla"
               style={[s.dugme, (!dozGecerli || busy) && s.dugmePasif, { minHeight: touch.min }]}
               disabled={!dozGecerli || !!busy}
-              onPress={() => onYenidenHesapla(doz, kip)}
+              onPress={() => onYenidenHesapla(doz, kip, kuyuDegisti ? secilenKuyu : undefined)}
               accessibilityRole="button"
               accessibilityState={{ disabled: !dozGecerli || !!busy }}
             >

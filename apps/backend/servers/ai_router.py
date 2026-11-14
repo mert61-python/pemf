@@ -2513,6 +2513,10 @@ class AiProProposePayload(BaseModel):
     odak_kip: str = ""
     #: ODK8: AI Pro frekansı (Hz) — `AI_PRO_FREKANSLARI`; None → 100. Mühüre yazılır, `/start` sürüşü bu frekansla yapar.
     frek_hz: float | None = None
+    #: AP-B3 (istem 48, tezgâh 13-11): onay penceresinin kuyu HARİTASINDAN seçilen kuyu ("C6"). AYNI lokalizasyonun adaylarından plan;
+    #: mühür o kuyunun KALICI kimliğiyle (görülen = sürülen). Kamerada sıvı görülmeyen (boş) kuyu aday değildir → `kuyuYok` (ODK11).
+    #: Yalnız petri; diğer modellerde yok sayılır (`odak_kip` gibi). Boş = istenen hedef (`organ_id`).
+    kuyu: str = ""
 
 
 def _uzaktan_kimliksiz_mi(request) -> bool:
@@ -2620,7 +2624,33 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
         raise HTTPException(status_code=409, detail=ceviri.t("ai.pro.hata.kosulsuzUyusmuyor"))
     _muhur_hedefi = oid
     _otomatik_secim = False
-    if oid == 0 and not _kedi_modeli_mi(_saglayici):
+    _kuyu = str(payload.kuyu or "").strip().upper()
+    if _kuyu and _saglayici.ad == ai_pro_hedef.PetriSaglayici.ad:
+        # AP-B3: tazelik yukarıda İSTEĞİN hedefiyle (önizlemenin lokalize ettiği) denetlendi; seçilen kuyu AYNI lokalizasyonun adayıdır.
+        _aday = next(
+            (
+                t
+                for t in (c.get("targets") or [])
+                if isinstance(t, dict) and ai_pro_hedef._etiket_eki(_saglayici, t.get("label")).strip().upper() == _kuyu
+            ),
+            None,
+        )
+        if _aday is None or isinstance(_aday.get("id"), bool) or not isinstance(_aday.get("id"), int):
+            raise HTTPException(
+                status_code=409,
+                detail=ai_pro_hedef.odak_engel_metni({"engel": "kuyuYok", "engel_ek": {"hedef": _kuyu}}),
+            )
+        c = {
+            **c,
+            "target_label": _aday.get("label") or "",
+            "x_mm": float(_aday.get("x", c["x_mm"])),
+            "y_mm": float(_aday.get("y", c["y_mm"])),
+            "z_mm": float(_aday.get("z", c["z_mm"])),
+            "e_cancer": None,
+            "e_healthy": None,
+        }
+        _muhur_hedefi = int(_aday["id"])
+    elif oid == 0 and not _kedi_modeli_mi(_saglayici):
         _secili = c.get("secili_id")
         if isinstance(_secili, bool) or not isinstance(_secili, int) or _secili <= 0:
             raise HTTPException(status_code=409, detail=otomatik_hedef_secilemedi_mesaji())

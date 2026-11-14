@@ -1170,6 +1170,7 @@
         "duzgunluk": "Düzgünlük (en zayıf / en güçlü): {{oran}}",
         "frekans": "Frekans: {{f}} Hz (öneri bu frekansın modeli ve kalibrasyonuyla)",
         "haritaBaslik": "24 kuyu — beklenen tepe alan (mT), plaka kameradaki yönüyle",
+        "haritaSecIpucu": "Hedefi değiştirmek için dolu bir kuyuya dokunun, sonra Yeniden hesapla'ya basın.",
         "kaynak": "Faz / duty: ODAK modeli (en yakın komşu + yerel alan), fizikle denetlendi",
         "kip": {
           "KUYUCUK": "Kuyucuk",
@@ -1180,7 +1181,9 @@
         "kuyuEtiket": "{{etiket}}: {{deger}} mT",
         "kuyuEtiketBos": "{{etiket}}: boş kuyu, {{deger}} mT",
         "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
+        "kuyuSecIpucu": "Bu kuyuyu hedef seçer; öneri Yeniden hesapla ile alınır",
         "olcek": "Renk: {{min}} – {{maks}} mT (mavi düşük, kırmızı yüksek)",
+        "secilenKuyu": "Seçilen kuyu: {{etiket}} — öneriyi bu kuyu için almak üzere Yeniden hesapla'ya basın.",
         "secili": "seçili kuyu",
         "yenidenHesapla": "Yeniden hesapla"
       },

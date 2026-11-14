@@ -1170,6 +1170,7 @@
         "duzgunluk": "Uniformity (weakest / strongest): {{oran}}",
         "frekans": "Frequency: {{f}} Hz (proposal from this frequency's model and calibration)",
         "haritaBaslik": "24 wells — expected peak field (mT), plate as seen by the camera",
+        "haritaSecIpucu": "To change the target, tap a filled well, then press Recalculate.",
         "kaynak": "Phase / duty: ODAK model (nearest neighbour + local field), checked by physics",
         "kip": {
           "KUYUCUK": "Single well",
@@ -1180,7 +1181,9 @@
         "kuyuEtiket": "{{etiket}}: {{deger}} mT",
         "kuyuEtiketBos": "{{etiket}}: empty well, {{deger}} mT",
         "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
+        "kuyuSecIpucu": "Selects this well as the target; the recommendation is obtained with Recalculate",
         "olcek": "Colour: {{min}} – {{maks}} mT (blue low, red high)",
+        "secilenKuyu": "Selected well: {{etiket}} — press Recalculate to get the recommendation for this well.",
         "secili": "selected well",
         "yenidenHesapla": "Recalculate"
       },

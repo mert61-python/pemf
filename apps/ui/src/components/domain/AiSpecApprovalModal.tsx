@@ -127,7 +127,7 @@ export function AiSpecApprovalModal({
    *  Öneri yine incelenir ve reddedilebilir; onay düğmesi pasiftir ve bunu SÖYLER (düğme etiketi gerçeği söyler). */
   surusKapali?: string;
   /** ODAK: doz / petri kipi değişince yeni öneri iste (yeni mühür). Verilmezse doz seçici gösterilmez. */
-  onYenidenHesapla?: (doz: number, kip: string) => void;
+  onYenidenHesapla?: (doz: number, kip: string, kuyu?: string) => void;
   /** AP-B4: bu penceredeki isteğin (yeniden hesapla / onay / başlat) hatası — HER ZAMAN görünen alt şeritte, düğmelerin üstünde. */
   hata?: string;
 }) {
