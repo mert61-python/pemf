@@ -35,6 +35,7 @@ import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
 import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
 import { kayitYogunlugu } from "@/utils/yogunlukGosterimi";
+import { CSV_MAX, PDF_MAX } from "@/screens/treatmentHistorySinirlari";
 import { useTranslation } from "react-i18next";
 
 // Backend ham seans durumlarını (İngilizce) görüntüleme için Türkçeye çevirir.
@@ -168,7 +169,6 @@ export function TreatmentHistoryScreen() {
 
   // "Tümünü PDF İndir" EKRANDA GÖRÜNEN (aktif filtre) kayıtları verir — eskiden filtreyi yok
   // sayıp tüm seansları alıyordu. Ayrıca çok kayıtta uzun URL 414 vermesin diye üst sınır.
-  const PDF_MAX = 200;
   const downloadAllPdf = async () => {
     const list = filteredSessions;
     if (list.length === 0) return;
@@ -194,7 +194,7 @@ export function TreatmentHistoryScreen() {
   // KVKK (#49): CSV artık aktif KAPSAM+ARAMA'yı onurlandırır (eskiden filtreyi yok sayıp TÜM
   // kliniğin PII'sini döküyordu). "Benim Seanslarım" veya arama aktifse yalnız GÖRÜNEN kayıtları
   // gönder; "Tüm Klinik" + aramasız ise operatör bilinçli tam-export istemiştir (parametresiz).
-  const CSV_MAX = 1000; // URL 414 olmasın; aşımda uyar + kırp (PDF deseniyle tutarlı).
+  // CSV_MAX: URL 414 olmasın; aşımda uyar + kırp (PDF deseniyle tutarlı) — sınırlar `treatmentHistorySinirlari` (KP-5 · 8).
 
   /**
    * ⚠️ DÜĞME ETİKETİ GERÇEĞİ SÖYLEMELİ (denetim 2026-09-12).
