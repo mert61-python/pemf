@@ -49,8 +49,16 @@ TANI_ALANLARI = (
 )
 
 
+def _depo_koku(bas: Path) -> Path:
+    """Depo kökü İŞARET DOSYASIYLA (pyproject.toml + apps/backend) bulunur — `parents[1]` betik taşınınca kırılır."""
+    for aday in (bas, *bas.parents):
+        if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
+            return aday
+    raise RuntimeError("depo kökü bulunamadı (işaret: pyproject.toml + apps/backend). Betik depo dışına mı taşındı?")
+
+
 def _kok() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return _depo_koku(Path(__file__).resolve())
 
 
 def _yollari_kur() -> None:
@@ -58,6 +66,14 @@ def _yollari_kur() -> None:
     for p in (_kok(), _kok() / "apps" / "backend"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
+
+
+# KP-5 (test_betikler_ACILIYOR · F4 dersi): yol ÖNSÖZDE kurulur — fonksiyon içi `ai_hub` / `utils` importları ilk çağrıda çözülür
+# (örnek: scripts/stm_firmware_kimligi.py). `_yollari_kur()` aynı işi yapar, çağıranlar için kalır (tekrar eklemez).
+_KOK = _depo_koku(Path(__file__).resolve())
+for _yol in (_KOK, _KOK / "apps" / "backend"):
+    if str(_yol) not in sys.path:
+        sys.path.insert(0, str(_yol))
 
 
 def veri_koku_altinda_mi(yol: Path, veri_koku: Path) -> bool:

@@ -13,7 +13,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-nativ
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
 
-import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch, typography } from "@/theme/tokens";
 
 /** ODK11: `bos` = kamerada sıvı görülmeyen kuyu (yeri plakanın görülen kuyularından hesaplandı) — soluk çizilir, hedef olamaz. */
 export type OdakKuyu = { etiket: string; px?: number[] | null; mT: number | null; secili?: boolean; bos?: boolean };
@@ -278,8 +278,9 @@ const s = StyleSheet.create({
   },
   hucreSecili: { borderWidth: 3, borderColor: colors.text },
   hucreBos: { opacity: 0.35, borderWidth: 1, borderStyle: "dashed", borderColor: colors.textMuted },
-  hucreEtiket: { color: "#FFFFFF", fontSize: rf(9), fontWeight: "800" },
-  hucreDeger: { color: "#FFFFFF", fontSize: rf(9), fontWeight: "700" },
+  // KP-5: punto kapısı (test_arayuz_yazi_olcegi_kapisi) — en küçük okunur punto typography.small (11); 40 px dairede iki satır sığar.
+  hucreEtiket: { color: "#FFFFFF", fontSize: typography.small, fontWeight: "800" },
+  hucreDeger: { color: "#FFFFFF", fontSize: typography.small, fontWeight: "700" },
   olcek: { color: colors.textMuted, fontSize: rf(11) },
   secici: { gap: spacing.xs, marginTop: spacing.sm },
   kipSatiri: { flexDirection: "row", gap: spacing.xs },

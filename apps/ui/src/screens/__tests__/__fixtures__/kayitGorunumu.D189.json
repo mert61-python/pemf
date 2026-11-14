@@ -67,7 +67,7 @@
   "durationSec": 300,
   "dutyTemsilYuzde": 30.0,
   "elapsedSec": 0,
-  "frequencyHz": 1.0,
+  "frequencyHz": 100.0,
   "intensityMt": 0.0,
   "isActive": true,
   "measuredIntensityCoil": null,
