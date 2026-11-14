@@ -1143,10 +1143,10 @@
     "not": {
       "arastirmaGiris": "🔬 Bu ekran deney hedefini kabin kamerasıyla bulur, 7 bobin için doz önerir ve SİZ onaylamadan hiçbir bobini çalıştırmaz.",
       "arastirmaMobil": "🔬 Bu modeller masaüstü KABİN kamerası ister: konum kabin işaretine göre ölçülür, telefon bunu yapamaz. Bilgisayardaki Kontrol → AI Pro ekranını kullanın; burada yalnız izleyebilirsiniz.",
-      "kediMobilOneri": "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu ve em_kedi doz ÖNERİSİ; sürüş kapalı, bobin sürülmez.",
-      "kediMobilSeans": "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür.",
-      "kediWebOneri": "📷 Sunucu kamerasından kedi organ lokalizasyonu → em_kedi doz ÖNERİSİ — sürüş kapalı, bobin sürülmez.",
-      "kediWebSeans": "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."
+      "kediMobilOneri": "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu ve alan hesabından (CST simülasyonu) doz ÖNERİSİ; sürüş kapalı, bobin sürülmez.",
+      "kediMobilSeans": "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu ve alan hesabıyla (CST simülasyonu) 7 bobin per-coil sürülür.",
+      "kediWebOneri": "📷 Sunucu kamerasından kedi organ lokalizasyonu → alan hesabından (CST simülasyonu) doz ÖNERİSİ — sürüş kapalı, bobin sürülmez.",
+      "kediWebSeans": "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → alan hesabı (CST simülasyonu) → 7 bobin."
     },
     "onay": {
       "alan": "Tahmini alan (göreli, birimsiz): hedefte {{hedef}}",

@@ -1143,10 +1143,10 @@
     "not": {
       "arastirmaGiris": "🔬 This screen finds the experiment target with the cabin camera, recommends a dose for the 7 coils, and does NOT run any coil until YOU approve.",
       "arastirmaMobil": "🔬 These models need the desktop CABIN camera: the position is measured relative to the cabin marker, and a phone cannot do this. Use the Control → AI Pro screen on the computer; here you can only watch.",
-      "kediMobilOneri": "📷 Point your phone camera at the CAT — organ localization and em_kedi dose RECOMMENDATION; driving is off, no coil is driven.",
-      "kediMobilSeans": "📷 Point your phone camera at the CAT — the 7 coils are driven per coil using organ localization (em_kedi).",
-      "kediWebOneri": "📷 Feline organ localization from the server camera → em_kedi dose RECOMMENDATION — driving is off, no coil is driven.",
-      "kediWebSeans": "📷 Live autonomous session from the server camera: feline organ localization → em_kedi → 7 coils."
+      "kediMobilOneri": "📷 Point your phone camera at the CAT — organ localization and a dose RECOMMENDATION from the field calculation (CST simulation); driving is off, no coil is driven.",
+      "kediMobilSeans": "📷 Point your phone camera at the CAT — the 7 coils are driven per coil using organ localization and the field calculation (CST simulation).",
+      "kediWebOneri": "📷 Feline organ localization from the server camera → dose RECOMMENDATION from the field calculation (CST simulation) — driving is off, no coil is driven.",
+      "kediWebSeans": "📷 Live autonomous session from the server camera: feline organ localization → field calculation (CST simulation) → 7 coils."
     },
     "onay": {
       "alan": "Estimated field (relative, unitless): at the target {{hedef}}",

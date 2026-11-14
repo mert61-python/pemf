@@ -148,7 +148,7 @@ describe("AiProPanel — kedi hattı", () => {
       "X (mm)",
       "🚀 AI Pro Başlat (100 Hz)", // AP-12 (S-AP.7): seçili frekans (varsayılan 100) — TR DEĞİŞTİ
       "AI Pro durdu.",
-      "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin.",
+      "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → alan hesabı (CST simülasyonu) → 7 bobin.", // AP-24 — TR DEĞİŞTİ
     ]) {
       expect(u.getAllByText(s).length).toBeGreaterThan(0);
     }
@@ -179,7 +179,7 @@ describe("AiProPanel — kedi hattı", () => {
       "X (mm)",
       "🚀 Start AI Pro (100 Hz)",
       "AI Pro stopped.",
-      "📷 Live autonomous session from the server camera: feline organ localization → em_kedi → 7 coils.",
+      "📷 Live autonomous session from the server camera: feline organ localization → field calculation (CST simulation) → 7 coils.", // AP-24
     ]) {
       expect(u.getAllByText(s).length).toBeGreaterThan(0);
     }
