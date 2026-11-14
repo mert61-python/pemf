@@ -467,7 +467,10 @@ AI_VAKALARI = [
     ("04a_Retikulosit.jpg", "reticulocytes", {}, None),
     ("09_KediOrgan.jpg", "cat_organ", {}, None),
     ("05_FantomTumor.jpeg", "em_fantom", {"phantom_length_cm": "10"}, None),
-    ("06_PetriKuyu.jpg", "em_petri", {"petri_diameter_cm": "8.5"}, None),
+    # Y193 (sahip 24 Ekim): petri YALNIZ 24 kuyucuklu plaka; bu girdi 8 ayri kap -> urun TUTARLI bicimde 422 ile reddeder
+    # (KP-5 14-11 olctu: 87d91346 / e39a3842 / db8e33d6 / bugun hep 422 — gerileme DEGIL). Gercek 24'luk plaka fotografi
+    # girdilere eklenince buraya OLUMLU vaka eklenir.
+    ("06_PetriKuyu.jpg", "em_petri", {"petri_diameter_cm": "8.5"}, "Y193_RET"),
     ("12a_YaraKapanma_0H.tif", "scratch", {"scratch_yonu": "dikey", "pixel_mm": "0.0025"}, None),
 ]
 
@@ -603,6 +606,13 @@ def m_ai_uclari_gercek_girdiyle():
         s, b = _multipart(f"/api/ai/vision/{modul}", alanlar)
         modul_hazir = hazir.get(modul, True)
 
+        if beklenen == "Y193_RET":
+            check(
+                f"M: {modul} 24'luk plaka OLMAYAN goruntuyu REDDEDER (Y193, 422) <- {dosya}",
+                s == 422,
+                f"HTTP {s} {str(b)[:90]}",
+            )
+            continue
         if modul_hazir:
             if not check(f"M: {modul} <- {dosya}", s == 200, f"HTTP {s} {str(b)[:90]}"):
                 continue
