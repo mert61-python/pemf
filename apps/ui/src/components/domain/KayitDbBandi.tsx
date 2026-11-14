@@ -31,6 +31,9 @@ export interface KayitDbSagligi {
 /** Yoklama aralığı: backend açılamayan DB'yi arka planda 5 sn → 30 sn → 2 dk aralıkla yeniden dener (Y43);
  *  açılınca bant en geç bu aralıkta kalkar. */
 export const KAYIT_DB_YOKLAMA_MS = 30_000;
+/** KP-5 · 16 (İH #22): sağlık OKUNAMAZSA (ilk açılışta istemci arka uçtan önce açılır) sonraki okuma bu aralıkta — bant nedeni
+ *  30 sn geç değil, arka uç ayağa kalkar kalkmaz söyler. Okuma başarılıyken aralık yine `KAYIT_DB_YOKLAMA_MS`. */
+export const KAYIT_DB_HIZLI_YOKLAMA_MS = 3_000;
 
 const varsayilanSebep = (): string => i18n.t("bant.kayitDb.varsayilanSebep");
 
@@ -50,16 +53,19 @@ export function KayitDbBandi() {
 
   useEffect(() => {
     let iptal = false;
+    let zamanlayici: ReturnType<typeof setTimeout> | null = null;
     const yokla = async () => {
       // `silent`: cihaz kapalıyken hata balonu çıkmasın (bağlantı bandı durumu zaten söyler).
       const r = await apiGet<KayitDbSagligi | null>("/health", null, { silent: true });
-      if (!iptal) setSaglik(r);
+      if (iptal) return;
+      setSaglik(r);
+      // KP-5 · 16: okunamadıysa (null) kısa aralıkla yeniden; okunduysa olağan 30 sn.
+      zamanlayici = setTimeout(() => void yokla(), r === null ? KAYIT_DB_HIZLI_YOKLAMA_MS : KAYIT_DB_YOKLAMA_MS);
     };
     void yokla();
-    const zamanlayici = setInterval(() => void yokla(), KAYIT_DB_YOKLAMA_MS);
     return () => {
       iptal = true;
-      clearInterval(zamanlayici);
+      if (zamanlayici) clearTimeout(zamanlayici);
     };
   }, []);
 

@@ -61,6 +61,40 @@ it("KRİTİK: durum düzelince (sonraki yoklama dbReady=true) bant KALKAR", asyn
   expect(queryByText(/yeni seans BAŞLATILAMAZ/)).toBeNull();
 });
 
+it("KRİTİK (KP-5 · 16): İLK AÇILIŞTA sağlık okunamazsa (arka uç henüz ayakta değil) bant 30 sn KÖR kalmaz — ≤ 5 sn'de yeniden okur", async () => {
+  // İH #22 (Şükrü, erişimsiz hesap): "ilk açılışta DB bandı görünmedi"; kum havuzunda aynı kod bandı gösteriyordu. Ölçülebilen fark:
+  // ilk açılışta istemci arka uçtan ÖNCE açılır → ilk `/health` düşer (null) → sonraki yoklama 30 sn sonra. Operatör o arada
+  // "Hastalar yüklenemedi"yi görür, nedeni (erişim yok) göremez.
+  jest.useFakeTimers();
+  const ERISIM = "Bu Windows hesabının PEMF verisine erişimi yok — başlatıcıdaki paylaşım kartıyla erişim verin.";
+  mockGet.mockResolvedValueOnce(null).mockResolvedValue({ dbReady: false, dbSebep: ERISIM });
+  const { queryByText } = render(<KayitDbBandi />);
+  await act(async () => {});
+  expect(queryByText(/yeni seans BAŞLATILAMAZ/)).toBeNull();
+  await act(async () => {
+    jest.advanceTimersByTime(5000);
+  });
+  await act(async () => {});
+  expect(queryByText(new RegExp(ERISIM.slice(0, 40)))).toBeTruthy();
+});
+
+it("KARŞIT (KP-5 · 16): okuma BAŞARILIYKEN yoklama 30 sn'de bir (hızlı yeniden okuma yalnız düşüşte; sağlık ucu dövülmez)", async () => {
+  jest.useFakeTimers();
+  mockGet.mockResolvedValue({ dbReady: true });
+  render(<KayitDbBandi />);
+  await act(async () => {});
+  expect(mockGet).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    jest.advanceTimersByTime(KAYIT_DB_YOKLAMA_MS - 1);
+  });
+  expect(mockGet).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    jest.advanceTimersByTime(1);
+  });
+  await act(async () => {});
+  expect(mockGet).toHaveBeenCalledTimes(2);
+});
+
 it("dbSebep boşsa genel metin; sebep yine de 'seans başlatılamaz' der", () => {
   const m = kayitDbBandiMetni({ dbReady: false, dbSebep: "  " });
   expect(m?.aciklama).toMatch(/yeni seans başlatılamaz/i);

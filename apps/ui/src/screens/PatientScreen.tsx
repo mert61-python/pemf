@@ -63,6 +63,9 @@ export function PatientScreen() {
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  /** KP-5 · 17: sunucunun 503 gerekçesi (DB'siz kip: erişimsiz Windows hesabı / veritabanı açılamıyor — sunucu istek dilinde yazar).
+   *  Boşsa genel "yüklenemedi / bağlantıyı kontrol edin" iletisi (sunucuya ulaşılamadı ya da gerekçesiz hata). */
+  const [loadErrorDetail, setLoadErrorDetail] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -77,11 +80,15 @@ export function PatientScreen() {
   const loadPatients = async () => {
     setLoading(true);
     setLoadError(false);
-    const res = await apiGet<{ status: string, data: Patient[] }>("/patients", { status: "error", data: [] });
+    let sunucuGerekcesi = "";
+    const res = await apiGet<{ status: string, data: Patient[] }>("/patients", { status: "error", data: [] }, {
+      onHttpError: (durum, detay) => { if (durum === 503 && detay) sunucuGerekcesi = detay; },
+    });
     // ŞEKİL DOĞRULAMASI: `data` dizi gelmezse aşağıdaki `.filter`/`.map` çöker.
     if (res.status === "success" && Array.isArray(res.data)) {
       setPatients(res.data);
     } else {
+      setLoadErrorDetail(sunucuGerekcesi);
       setLoadError(true);
     }
     setLoading(false);
@@ -436,7 +443,7 @@ export function PatientScreen() {
           </View>
         ) : loadError ? (
           <View style={styles.stateBox}>
-            <Text style={styles.emptyText}>{t("hasta.liste.yuklenemedi")}</Text>
+            <Text style={styles.emptyText}>{loadErrorDetail || t("hasta.liste.yuklenemedi")}</Text>
             <Button label={t("ortak.tekrarDene")} variant="secondary" onPress={loadPatients} />
           </View>
         ) : filteredPatients.length === 0 ? (

@@ -207,6 +207,30 @@ describe("silme + seans", () => {
 });
 
 describe("liste", () => {
+  it("KRİTİK (KP-5 · 17): sunucu 503 GEREKÇESİ verirse (erişimsiz Windows hesabı) liste onu gösterir — 'Bağlantıyı kontrol edin' DEĞİL", async () => {
+    const ERISIM = "Bu Windows hesabının PEMF verisine erişimi yok — başlatıcıdaki paylaşım kartıyla erişim verin.";
+    ozel = (yol, _g, y) => (y === "GET" && yol === "/patients" ? [503, { detail: ERISIM }] : undefined);
+    await kur();
+    expect(s.metin()).toContain(ERISIM);
+    expect(s.metin()).not.toContain(T("hasta.liste.yuklenemedi"));
+    expect(s.metin()).toContain(T("ortak.tekrarDene")); // eylem düğmesi yerinde
+  });
+
+  it("KARŞIT (KP-5 · 17): gerekçesiz / 503 olmayan hatada genel ileti AYNEN; yeniden okuma başarılıysa ileti kalkar", async () => {
+    let ilk = true;
+    ozel = (yol, _g, y) => {
+      if (y === "GET" && yol === "/patients" && ilk) { ilk = false; return [500, { detail: "db" }]; }
+      return undefined;
+    };
+    await kur();
+    expect(s.metin()).toContain(T("hasta.liste.yuklenemedi"));
+    await s.metneTikla(T("ortak.tekrarDene"));
+    await s.ilerlet(50);
+    await s.bosalt(10);
+    expect(s.metin()).not.toContain(T("hasta.liste.yuklenemedi"));
+    expect(s.metin()).toContain("Boncuk");
+  });
+
   it("okunamazsa hata + 'Tekrar dene' yeniden okur; 60'tan fazla kayıtta 'daha fazla' sonraki sayfayı açar", async () => {
     let ilk = true;
     ozel = (yol, _g, y) => {
