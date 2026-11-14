@@ -200,9 +200,12 @@ it("KRİTİK: kalibrasyon sürerken kart kilitlenirse 'Yeniden kare' kamera iste
   expect(postlar("/ai/pro/kalibrasyon/kare")).toHaveLength(1);
   e.rerender(<KabinKalibrasyonuKarti model="petri" kilitli />); // hazırlık başladı
   expect(e.getByText(T("ai.kalibrasyon.kilitli"))).toBeTruthy();
+  // KP-5 · 7 (gözlem → düzeltme): kilitliyken düğme PASİF GÖRÜNÜR (öteki kart düğmeleriyle aynı) — basınca sessizce hiçbir şey olmaması yerine.
+  expect(e.getByTestId("kabin-kalibrasyonu-yeniden-kare").props.accessibilityState?.disabled).toBe(true);
   await act(async () => { fireEvent.press(e.getByTestId("kabin-kalibrasyonu-yeniden-kare")); });
   expect(postlar("/ai/pro/kalibrasyon/kare")).toHaveLength(1);
   e.rerender(<KabinKalibrasyonuKarti model="petri" />); // kilit kalktı → yine çalışır
+  expect(e.getByTestId("kabin-kalibrasyonu-yeniden-kare").props.accessibilityState?.disabled).toBe(false);
   await act(async () => { fireEvent.press(e.getByTestId("kabin-kalibrasyonu-yeniden-kare")); });
   await waitFor(() => expect(postlar("/ai/pro/kalibrasyon/kare")).toHaveLength(2));
 });

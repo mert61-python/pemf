@@ -440,9 +440,9 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.dugme, styles.ikincil, aliniyor && styles.kilitli]}
+              style={[styles.dugme, styles.ikincil, (kilitli || aliniyor) && styles.kilitli]}
               onPress={() => void kareAl()}
-              disabled={aliniyor}
+              disabled={kilitli || aliniyor}
               accessibilityRole="button"
               testID="kabin-kalibrasyonu-yeniden-kare"
             >
