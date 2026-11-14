@@ -10,8 +10,8 @@ alınır ki döngü, kilitler, cache, onay mührü ve teardown DEĞİŞMESİN.
 Plan: docs/arastirma-ai-pro-fantom-petri-plani.md
 
 ⚠️ KEDİ KODU TAŞINMADI. `KediSaglayici` yalnız `ai_router`daki mevcut fonksiyonlara GEÇ BAĞLI
-delegasyon yapar (`_get_or_load_kedi`, `_get_or_load_catorgan`, `_localize_organ_cpu/_gpu`,
-`_predict_and_drive_cpu/_gpu`). Böylece 13+ testin monkeypatch çıpaları ETKİLİ kalır ve
+delegasyon yapar (`_get_or_load_kedi`, `_get_or_load_catorgan`, `_localize_organ_cpu/_gpu`; AP-17'den beri kedi SÜRÜŞÜ
+yalnız ODAK'tan — `_predict_and_drive_cpu/_gpu` sürüş kaynağı değil). Böylece 13+ testin monkeypatch çıpaları ETKİLİ kalır ve
 veteriner davranışı bit-bit aynıdır. Fantom/petri sağlayıcıları Faz 2'de bu dosyaya eklenecek.
 
 ⚠️ ai_hub İMPORT'U MODÜL SEVİYESİNDE YASAK: `scripts/build_backend_exe.ps1` PYZ arşivinde
@@ -87,7 +87,7 @@ class HedefSaglayici(Protocol):
 
 
 class KediSaglayici:
-    """Mevcut kedi yolu (`cat_organ` lokalizasyon + `em_kedi` doz modeli) — DAVRANIŞ DEĞİŞMEZ.
+    """Mevcut kedi yolu (`cat_organ` lokalizasyon) — sürüş ODAK'tan; ODAK ayarı yoksa SÜRMEZ (AP-17, `em_kedi` sürüş kaynağı değil).
 
     Her çağrı `ai_router`daki üretim fonksiyonlarına gider; bu dosyada kedi mantığının KOPYASI
     YOKTUR. `ai_router` importu fonksiyon içindedir (döngüsel import: ai_router bu modülü modül
@@ -113,7 +113,8 @@ class KediSaglayici:
         air._get_or_load_kedi()
         air._get_or_load_catorgan()
 
-    #: ODK (istem 45): mühürdeki ODAK ayarı (`odak_ayarla`) — varsa sürüş faz / duty'si ODAK'tan (Y142 kapalıyken kedi zaten SÜRÜLMEZ).
+    #: ODK (istem 45): mühürdeki ODAK ayarı (`odak_ayarla`) — varsa sürüş faz / duty'si ODAK'tan, YOKSA sürülmez (AP-17; Y142 kapalıyken
+    #: kedi zaten SÜRÜLMEZ).
     odak_ayari: dict | None = None
 
     def localize(self, frame_bgr, hedef_id: int) -> tuple:
@@ -164,19 +165,12 @@ class KediSaglayici:
         self._meta = {"ood": ood}
 
     def predict(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int) -> tuple:
-        """em_kedi ile D/P/E üret (GPU → CPU fallback). Duty kırpması ZARFTA yapılır.
-        ODK: mühürde ODAK ayarı varsa (`odak_ayarla`) faz / duty ODAK'tan — hoca modeli SÜRÜŞ KAYNAĞI OLMAZ. Bugün Y142 kapalıyken kedi
-        hiç sürülmez; bayrak açılırsa ODAK mühürlü seans ODAK ile sürer."""
-        from servers import ai_router as air
-
-        if self.odak_ayari:
-            return _odak_predict(self, x_mm, y_mm, z_mm, hedef_id)
-        if air.ai_service_enabled():
-            try:
-                return air._predict_and_drive_gpu(x_mm, y_mm, z_mm, hedef_id)
-            except Exception as e:
-                air.logger.warning("AI Pro em_kedi GPU delegasyonu başarısız → CPU-yerel: %s", e)
-        return air._predict_and_drive_cpu(x_mm, y_mm, z_mm, hedef_id)
+        """ODK: mühürdeki ODAK ayarıyla (`odak_ayarla`) faz / duty ODAK'tan (CST alan tablosu). Duty kırpması ZARFTA yapılır.
+        AP-17 (sahip 14 Kasım): ODAK ayarı YOKSA SIFIR (bobin sürülmez) — hocanın em_kedi doz modeli SÜRÜŞ KAYNAĞI OLMAZ (araştırma
+        sağlayıcılarıyla aynı kural). Bugün Y142 kapalıyken kedi hiç sürülmez; bayrak açılırsa yalnız ODAK mühürlü seans sürer."""
+        if not self.odak_ayari:
+            return [0.0] * 7, [0.0] * 7, 0.0
+        return _odak_predict(self, x_mm, y_mm, z_mm, hedef_id)
 
     def hedef_adi(self, hedef_id: int) -> str:
         from servers import ai_router as air

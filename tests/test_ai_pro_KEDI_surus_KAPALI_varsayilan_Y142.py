@@ -361,13 +361,51 @@ def test_KARSIT_Y142_bayrak_ACIKKEN_kedi_seansi_BASLAR_ve_kare_yolu_SURER(o, mon
     assert j.get("driven") is True and sorted(ap.calisan(o)) == list(range(1, 8)), (j.get("driven"), ap.calisan(o))
 
 
-def test_KARSIT_Y142_bayrak_ACIKKEN_GPU_kolu_SURER(o, monkeypatch):
+def test_KARSIT_Y142_bayrak_ACIKKEN_GPU_acik_ODAK_muhurlu_kedi_GERCEK_saglayicidan_SURER_em_kedi_CAGRILMAZ(
+    o, monkeypatch
+):
+    """Karşıt kanıt (GPU servisi AÇIK, doz yolu GERÇEK sağlayıcıdan): bayrak açıkken ODAK mühürlü kedi seansı 7 bobini ODAK planıyla
+    sürer → `..._GPU_kolu_dahil_baslatma_REDDEDILIR` boşuna yeşil değil. AP-17 (sahip 14 Kasım, BİLİNÇLİ sözleşme değişikliği): sürüş
+    kaynağı yalnız ODAK — hocanın em_kedi modeli (GPU servisi) ÇAĞRILMAZ (eski hâli "GPU kolu em_kedi ile SÜRER" idi)."""
+    from servers import ai_pro_hedef
+
+    _bayrak(monkeypatch, "1")
+    gpu = _gpu_kolu(o, monkeypatch)
+    odak = []
+    plan = {"engel": None, "duty": list(D7), "faz": list(P7)}
+    monkeypatch.setattr(ai_pro_hedef, "odak_plani", lambda *a, **k: odak.append(a[2]) or dict(plan))
+    from servers import ai_approval
+
+    rec = ai_approval.create(
+        "ai_pro",
+        {
+            "organ_id": 2,
+            "duration_minutes": 5,
+            "model": "kedi",
+            "target_label": "Böbrek",
+            "odak": {"doz_mT": 0.4, "kip": "KEDI_ORGAN", "frek_hz": 100.0},
+        },
+    )
+    ai_approval.approve(rec["id"], "hekim@test.local")
+    assert o.c.post("/api/ai/pro/start", json={"proposal_id": rec["id"]}).status_code == 200
+    j = ap.kare(o).json()
+    assert j.get("driven") is True and odak and gpu["em_kedi"] == 0 and sorted(ap.calisan(o)) == list(range(1, 8)), (
+        j.get("driven"),
+        odak,
+        gpu,
+        ap.calisan(o),
+    )
+
+
+def test_KRITIK_AP17_bayrak_ACIKKEN_ODAKsiz_muhurlu_kedi_SURMEZ_em_kedi_GPU_CAGRILMAZ(o, monkeypatch):
+    """AP-17: bayrak açık + GPU servisi açık ama mühürde ODAK ayarı YOK (eski istemci / eski kayıt) → bobin SÜRÜLMEZ, hocanın em_kedi
+    modeline düşülmez. MUTASYON: `KediSaglayici.predict`in ODAK'sız kolunu `_predict_and_drive_gpu`ya çevirin → KIRMIZI."""
     _bayrak(monkeypatch, "1")
     gpu = _gpu_kolu(o, monkeypatch)
     pid = _onayli_kayit()
     assert o.c.post("/api/ai/pro/start", json={"proposal_id": pid}).status_code == 200
     j = ap.kare(o).json()
-    assert j.get("driven") is True and gpu["em_kedi"] >= 1 and sorted(ap.calisan(o)) == list(range(1, 8)), (
+    assert j.get("driven") is not True and gpu["em_kedi"] == 0 and not ap.calisan(o), (
         j.get("driven"),
         gpu,
         ap.calisan(o),

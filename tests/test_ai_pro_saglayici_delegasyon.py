@@ -149,8 +149,9 @@ def test_KRITIK_bilinmeyen_model_ValueError_ve_dongu_VARSAYILANA_duser(air, monk
 def test_KRITIK_KEDI_yolu_davranis_GOLDEN(air, monkeypatch):
     """Kedi sağlayıcısı mevcut fonksiyonlara delege eder; kod TAŞINMADI.
 
-    Golden: aynı sahte cat_organ çıktısı + sahte KediPredictor için lokalizasyon tuple'ı ve
-    D/P/E, refaktör öncesiyle AYNI olmalı (cm→mm ×10, güven geçidi, 0.50 kırpma, faz aynen)."""
+    Golden: aynı sahte cat_organ çıktısı için lokalizasyon tuple'ı refaktör öncesiyle AYNI olmalı (cm→mm ×10, güven geçidi).
+    AP-17 (sahip 14 Kasım, BİLİNÇLİ sözleşme değişikliği): sürüş kaynağı yalnız ODAK — mühürde ODAK ayarı YOKSA D/P/E SIFIR ve
+    hocanın em_kedi modeli ÇAĞRILMAZ (eski golden "em_kedi D=0,9 → 0,50 kırpma" idi; kırpma zarfta `..._ZARFTA_tek_yerde` ile ölçülür)."""
     import servers.ai_pro_hedef as hedef
 
     monkeypatch.setattr(air, "_ai_hedef_modeli", "kedi")
@@ -163,8 +164,11 @@ def test_KRITIK_KEDI_yolu_davranis_GOLDEN(air, monkeypatch):
                 "_overlay_bgr": None,
             }
 
+    em_kedi = []
+
     class _SahteKedi:
         def predict(self, x, y, z, organ_id, achieved_B, duty_sum):
+            em_kedi.append(organ_id)
             out = {f"D{i}": 0.9 for i in range(1, 8)}  # kırpma sınırının üstünde HAM
             out.update({f"P{i}": 30.0 for i in range(1, 8)})
             out["result_E"] = 0.5
@@ -178,9 +182,10 @@ def test_KRITIK_KEDI_yolu_davranis_GOLDEN(air, monkeypatch):
     assert (lz, lx, ly, lzz) == (True, 10.0, -20.0, 35.0), "kedi lokalizasyon golden'ı değişti (cm→mm ×10)"
     assert lrel == pytest.approx(0.9) and ozne is True
 
+    hedef.odak_ayarla(hedef.saglayici_al("kedi"), None)
     D, P, e = air._predict_and_drive(lx, ly, lzz, 2)
-    assert D == [0.5] * 7, f"kedi duty golden'ı değişti: {D[:2]}"
-    assert P == [30.0] * 7 and e == pytest.approx(0.5)
+    assert em_kedi == [], "AP-17: ODAK'sız kedi sürüşü hocanın em_kedi modeline düştü"
+    assert (D, P, e) == ([0.0] * 7, [0.0] * 7, 0.0), f"ODAK'sız kedi SÜRÜLDÜ: {D[:2]}"
     assert hedef.saglayici_al("kedi").achieved_B == 0.001, "kedi ekstra girdileri (B) değişti"
     assert hedef.saglayici_al("kedi").duty_sum == 1.5, "kedi ekstra girdileri (duty_sum) değişti"
 

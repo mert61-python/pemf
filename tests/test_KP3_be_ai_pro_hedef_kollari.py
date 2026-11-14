@@ -29,18 +29,19 @@ def test_kedi_gpu_devri_patlarsa_cpu_yerel_yol(monkeypatch, caplog):
     def _patla(*a):
         raise ConnectionError("GPU servisi yanıt vermiyor")
 
+    em_kedi = []
     monkeypatch.setattr(air, "_localize_organ_gpu", _patla)
     monkeypatch.setattr(air, "_localize_organ_cpu", lambda kare, hid: (True, 1.0, 2.0, 3.0, 0.9))
-    monkeypatch.setattr(air, "_predict_and_drive_gpu", _patla)
-    monkeypatch.setattr(air, "_predict_and_drive_cpu", lambda x, y, z, hid: ("D", "P", "E"))
+    monkeypatch.setattr(air, "_predict_and_drive_gpu", lambda *a: em_kedi.append("gpu") or _patla())
+    monkeypatch.setattr(air, "_predict_and_drive_cpu", lambda x, y, z, hid: em_kedi.append("cpu") or ("D", "P", "E"))
     monkeypatch.setattr(aph, "_kedi_egitim_araligi", lambda: ((0.0, 10.0),) * 3)
     k = aph.KediSaglayici()
     with caplog.at_level(logging.WARNING, logger=air.logger.name):
         assert k.localize("kare", 2) == (True, 1.0, 2.0, 3.0, 0.9)
-        assert k.predict(1.0, 2.0, 3.0, 2) == ("D", "P", "E")
+        # AP-17: ODAK ayarı yoksa sürüş SIFIR — em_kedi (GPU ya da CPU) sürüş kaynağı değil
+        assert k.predict(1.0, 2.0, 3.0, 2) == ([0.0] * 7, [0.0] * 7, 0.0) and em_kedi == []
     mesajlar = [r.getMessage() for r in caplog.records]
     assert any("cat_organ GPU delegasyonu başarısız → CPU-yerel" in m for m in mesajlar)
-    assert any("em_kedi GPU delegasyonu başarısız → CPU-yerel" in m for m in mesajlar)
     assert k._meta == {"ood": False}
 
 

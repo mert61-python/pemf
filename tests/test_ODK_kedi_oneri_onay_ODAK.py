@@ -169,7 +169,8 @@ def test_KRITIK_govde_YOKSA_SURMEZ_engel_kediGovdeYok_EYLEM_iki_dilde(monkeypatc
     assert "yeniden hesaplayın" in tr and "recalculate" in en and "ai.pro" not in tr + en
 
 
-def test_KRITIK_kedi_predict_MUHURDE_ODAK_varsa_ODAK_yoksa_eski_yol(monkeypatch):
+def test_KRITIK_kedi_predict_MUHURDE_ODAK_varsa_ODAK_yoksa_SURMEZ_AP17(monkeypatch):
+    """AP-17 (sahip 14 Kasım): ODAK'sız mühürde SIFIR — hocanın em_kedi modeline düşmez (eski sözleşme "yoksa eski yol" idi)."""
     from servers import ai_pro_hedef as hedef
     from servers import ai_router as air
 
@@ -184,7 +185,7 @@ def test_KRITIK_kedi_predict_MUHURDE_ODAK_varsa_ODAK_yoksa_eski_yol(monkeypatch)
     assert D == plan["duty"] and P == plan["faz"] and cagri == ["odak"], "mühürlü kedi seansı hoca modeliyle sürdü"
     hedef.odak_ayarla(sag, None)
     D, P, _ = sag.predict(0.0, 0.0, 0.0, 0)
-    assert cagri == ["odak", "hoca"] and D == [0.4] * 7
+    assert cagri == ["odak"] and D == [0.0] * 7 and P == [0.0] * 7, "ODAK'sız kedi seansı hoca modeliyle sürdü (AP-17)"
 
 
 @pytest.fixture
