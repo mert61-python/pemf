@@ -102,6 +102,26 @@ def req(method, path, body=None, headers=None, timeout=30):
             return e.code, {"_raw": raw}, dict(e.headers)
 
 
+def mandali_sifirla(neden: str) -> int:
+    """ACİL DURDUR mandalını operatörün "Sıfırla"sıyla kaldırır (Y4 · 1-C i3-F-6: JSON + `{"onay": true}`).
+
+    ⚠️ 2026-11-14: e2e ACİL DURDUR'dan sonra mandalı SIFIRLAMIYORDU → sonraki bütün başlatmalar 409 "ACİL DURDURMA MANDALLI"
+    ile zincirleme düşüyordu (T2Y-EV 11-11: 29 / 31 kırmızının çoğu). Mandal ürün davranışıdır (start'ı kilitler, STOP'u
+    ASLA); e2e senaryolar arası temiz sayfa için sahibin yaptığı gibi Sıfırla'ya basar ve bunun 200 döndüğünü de doğrular."""
+    s, b, _ = req("POST", "/api/hardware/estop_mandali/sifirla", {"onay": True})
+    check(f"ACİL DURDUR mandalı Sıfırla ile kaldırıldı ({neden})", s == 200, f"HTTP {s} {str(b)[:80]}")
+    return s
+
+
+def durdurma_kabul(s: int, govde) -> bool:
+    """`/api/session/stop` yanıtı kabul edilebilir mi? 200 ya da — kartın STOP'u TEYİT EDEMEDİĞİ SIM ortamında — 409 +
+    `hardware_stop_unconfirmed` listesi (DENETIM 2. TUR [1.1]: teyitsiz STOP 2xx DÖNMEZ, istemci 409'u ayırt edip uyarır).
+    Bobinlerin GERÇEKTEN durduğunu ardından gelen kontrol ayrıca doğrular."""
+    if s == 200:
+        return True
+    return s == 409 and isinstance(govde, dict) and bool(govde.get("hardware_stop_unconfirmed"))
+
+
 def raw_get(path, timeout=30):
     """Metin/CSV donduren uclar icin ham govde."""
     try:
@@ -297,6 +317,7 @@ def l_kapsam_bosluklari_2026_09_20():
     hasta-verisi SILME, destek paketi sir sizdirmasi, kurtarma yuzeyi.
     """
     section("L. Kapsam bosluklari (operator/denetim/silme/destek)")
+    operator_jetonu = None
 
     eposta = "e2e.operator@example.invalid"
 
@@ -315,6 +336,10 @@ def l_kapsam_bosluklari_2026_09_20():
 
         s, b, _ = req("POST", "/api/operators/verify", {"email": eposta, "pin": "483102"})
         check("L1: DOGRU PIN dogrulaniyor", s == 200 and bool(b.get("ok", True)), f"HTTP {s} {str(b)[:70]}")
+        operator_jetonu = (b or {}).get("operator_token") if isinstance(b, dict) else None
+        check(
+            "L1: dogrulama kisa omurlu operator JETONU verdi", bool(operator_jetonu), str(sorted((b or {}).keys()))[:80]
+        )
 
         # ⚠️ KARSIT-KANIT: yanlis PIN GECMEMELI. Gecerse kimlik zinciri kagit uzerinde kalir.
         s, b, _ = req("POST", "/api/operators/verify", {"email": eposta, "pin": "000000"})
@@ -357,10 +382,16 @@ def l_kapsam_bosluklari_2026_09_20():
     s, b, _ = req("POST", "/api/ai/log/delete_all", {"confirm": "DELETE_ALL"})
     check(
         "L4: onay dogru ama KAPSAM belirsizse REDDEDILIYOR (karsit-kanit)",
-        s == 400,
+        # 2026-11-14: kayıtlı operatör VARKEN kimliksiz silme 428 "Operatör seçin" (silme_yetkisi, Y92) — 400 de red.
+        s in (400, 428),
         f"HTTP {s} {str(b)[:80]}",
     )
-    s, b, _ = req("POST", "/api/ai/log/delete_all", {"confirm": "DELETE_ALL", "operator_email": eposta})
+    s, b, _ = req(
+        "POST",
+        "/api/ai/log/delete_all",
+        {"confirm": "DELETE_ALL", "operator_email": eposta},
+        headers={"X-PEMF-Operator": operator_jetonu} if operator_jetonu else None,
+    )
     check("L4: onay + KAPSAM verilince toplu silme kabul ediliyor", s == 200, f"HTTP {s} {str(b)[:70]}")
 
     # ── L5: DESTEK PAKETI SIR DEGERI SIZDIRMIYOR ─────────────────────────────
@@ -400,7 +431,21 @@ def l_kapsam_bosluklari_2026_09_20():
 
 #: Masaustundeki GERCEK test girdileri (sahibin hazirladigi set).
 #: ⚠️ Zorunlu DEGIL: yoksa bolum GORUNUR sekilde atlanir (sessiz gecmez).
-AI_GIRDI_DIZINI = Path(os.path.expanduser("~")) / "Desktop" / "PEMF_AI_Test_Girdileri"
+def _ai_girdi_dizini() -> Path:
+    """2026-11-14: girdiler depoda `ai_hub/PEMF_AI_Test_Girdileri/` (git-ignored ağır dosyalar) — eskiden yalnız masaüstü aranıyordu,
+    bölüm her makinede atlanıyordu. Sıra: `PEMF_AI_TEST_GIRDILERI` → depo içi → masaüstü."""
+    adaylar = [os.environ.get("PEMF_AI_TEST_GIRDILERI", "").strip()]
+    adaylar += [
+        str(GUII / "ai_hub" / "PEMF_AI_Test_Girdileri"),
+        str(Path(os.path.expanduser("~")) / "Desktop" / "PEMF_AI_Test_Girdileri"),
+    ]
+    for a in adaylar:
+        if a and Path(a).is_dir():
+            return Path(a)
+    return GUII / "ai_hub" / "PEMF_AI_Test_Girdileri"
+
+
+AI_GIRDI_DIZINI = _ai_girdi_dizini()
 
 #: (dosya, uc, ek_alanlar, beklenen_anahtar_kelime)
 #: `beklenen` = README'nin yazdigi SONUC. None ise yalniz sekil dogrulanir.
@@ -422,7 +467,7 @@ AI_VAKALARI = [
     ("04a_Retikulosit.jpg", "reticulocytes", {}, None),
     ("09_KediOrgan.jpg", "cat_organ", {}, None),
     ("05_FantomTumor.jpeg", "em_fantom", {"phantom_length_cm": "10"}, None),
-    ("petri.jpeg", "em_petri", {"petri_diameter_cm": "8.5"}, None),
+    ("06_PetriKuyu.jpg", "em_petri", {"petri_diameter_cm": "8.5"}, None),
     ("12a_YaraKapanma_0H.tif", "scratch", {"scratch_yonu": "dikey", "pixel_mm": "0.0025"}, None),
 ]
 
@@ -551,7 +596,7 @@ def m_ai_uclari_gercek_girdiyle():
     for dosya, modul, ek, beklenen in AI_VAKALARI:
         p = AI_GIRDI_DIZINI / dosya
         if not p.exists():
-            check(f"M: {dosya} mevcut", False, "girdi dosyasi yok -> {modul} OLCULMEDI")
+            check(f"M: {dosya} mevcut", False, f"girdi dosyasi yok -> {modul} OLCULMEDI")
             continue
         alanlar = {"image_base64": base64.b64encode(p.read_bytes()).decode(), "explain": "false"}
         alanlar.update(ek)
@@ -1035,7 +1080,16 @@ def c_session_stm():
         f"{(_olcen or {}).get('objectTemp')} °C",
     )
     check("manyetik alan telemetrisi akiyor (mT)", float(c1.get("magneticMt") or 0) > 0.5, f"{c1.get('magneticMt')} mT")
-    check("akim telemetrisi akiyor (A)", float(c1.get("currentA") or 0) > 0, f"{c1.get('currentA')} A")
+    # ⚠️ 2026-11-14: CH4 · Y154 — akım ölçümü VARSAYILAN KAPALI (`PEMF_AKIM_OLCUMU`); kapalıyken sim de akım UYDURMAZ
+    # (0.0 = "ölçülmedi"). Eski kontrol "> 0" bekliyordu ve bayattı. Açıksa akmalı, kapalıysa 0 kalmalı.
+    if os.environ.get("PEMF_AKIM_OLCUMU", "").strip() == "1":
+        check("akim telemetrisi akiyor (A)", float(c1.get("currentA") or 0) > 0, f"{c1.get('currentA')} A")
+    else:
+        check(
+            "akim olcumu KAPALI (Y154 varsayilan): sim akim UYDURMAZ (0.0)",
+            float(c1.get("currentA") or 0) == 0.0,
+            f"{c1.get('currentA')} A",
+        )
     check("ESP slotu (8) bu seansta CALISMIYOR", not coil_of(sn, 8).get("running"))
     at = sn.get("activeTreatment") or {}
     check(
@@ -1047,7 +1101,7 @@ def c_session_stm():
 
     time.sleep(3)
     s, stp, _ = req("POST", "/api/session/stop")
-    check("seans durduruldu 200", s == 200, f"HTTP {s}")
+    check("seans durduruldu (200 ya da SIM'de teyitsiz 409)", durdurma_kabul(s, stp), f"HTTP {s} {str(stp)[:90]}")
     sn2 = wait_until(lambda: snap() if not running_ids(snap()) else None, timeout=12) or snap()
     check("durdurmadan sonra HICBIR bobin calismiyor", running_ids(sn2) == [], str(running_ids(sn2)))
     s, act2, _ = req("GET", "/api/session/active")
@@ -1136,7 +1190,7 @@ def e_session_guards():
     check("ikinci seans REDDEDILDI (409 — cift tedavi yok)", s == 409, f"HTTP {s}")
 
     s, _b, _ = req("POST", "/api/session/stop")
-    check("seans durduruldu", s == 200, f"HTTP {s}")
+    check("seans durduruldu (200 ya da SIM'de teyitsiz 409)", durdurma_kabul(s, _b), f"HTTP {s} {str(_b)[:90]}")
     s, again, _ = req("POST", "/api/session/stop")
     check("aktif seans yokken stop guvenli (idempotent)", s == 200, f"HTTP {s} {again.get('message', '')}")
 
@@ -1158,6 +1212,7 @@ def e_session_guards():
     check("ACIL DURDURMA 200", s == 200, f"HTTP {s}")
     sn3 = wait_until(lambda: snap() if not running_ids(snap()) else None, timeout=12) or snap()
     check("acil durdurma sonrasi bobinler kapali", running_ids(sn3) == [], str(running_ids(sn3)))
+    mandali_sifirla("E bölümü sonu")
 
 
 # ── F) Bobin kontrolu (tekil + toplu) ──────────────────────────────────────
@@ -1220,6 +1275,7 @@ def f_coil_control():
     req("POST", "/api/hardware/emergency_stop")
     sn = wait_until(lambda: snap() if not running_ids(snap()) else None, timeout=12) or snap()
     check("bolum sonu: tum bobinler kapali", running_ids(sn) == [], str(running_ids(sn)))
+    mandali_sifirla("F bölümü sonu")
 
 
 # ── F2) DONANIM-UYUM TURU (2026-08-19) — HTTP sinirinda test edilebilir davranislar ──
@@ -1265,6 +1321,7 @@ def f2_donanim_uyum():
         all(("mqtt" in r) for r in mr if isinstance(r, dict)),
         str(mr)[:120],
     )
+    mandali_sifirla("F2 E-stop kapsamı sonrası")
 
     # HG-3 ucuncu katman: STM seansi yuksek frekansta calisirken ESP bobine cok dusuk frekans
     # istenirse yanit 'sync_warning' tasimali (reddetmez). Sim dongusu coil1'i seans freq'iyle
@@ -1324,6 +1381,7 @@ def f2_donanim_uyum():
     req("POST", "/api/coil/7/control", {"start": False})
     req("POST", "/api/session/stop")
     req("POST", "/api/hardware/emergency_stop")
+    mandali_sifirla("HG-3 sonu")
 
     # D-1: selftest/reset artik olu topige degil dogru kapiya caliyor — HTTP'de hizli 200 +
     # arka-plan semantigi (istek ~aninda donmeli; 8x connect-publish beklenmez).

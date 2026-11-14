@@ -113,11 +113,24 @@ def req(method, path, body=None, headers=None, timeout=30):
             return e.code, {"_raw": raw}, dict(e.headers)
 
 
+def mandali_sifirla(neden: str) -> int:
+    """ACİL DURDUR mandalını operatörün "Sıfırla"sıyla kaldırır (Y4 · 1-C i3-F-6: JSON + `{"onay": true}`).
+
+    ⚠️ 2026-11-14: e2e ACİL DURDUR'dan sonra mandalı SIFIRLAMIYORDU → sonraki bütün başlatmalar 409 "ACİL DURDURMA MANDALLI"
+    ile zincirleme düşüyordu (T2Y-EV 11-11: 29 / 31 kırmızının çoğu). Mandal ürün davranışıdır (start'ı kilitler, STOP'u
+    ASLA); e2e senaryolar arası temiz sayfa için sahibin yaptığı gibi Sıfırla'ya basar ve bunun 200 döndüğünü de doğrular."""
+    s, b, _ = req("POST", "/api/hardware/estop_mandali/sifirla", {"onay": True})
+    check(f"ACİL DURDUR mandalı Sıfırla ile kaldırıldı ({neden})", s == 200, f"HTTP {s} {str(b)[:80]}")
+    return s
+
+
 def main():
     data_dir = Path(tempfile.mkdtemp(prefix="pemf_e2e_"))
     # ⚠️ Alt süreç ortamı (sahte ev, APPDATA/ProgramData/cihaz kimliği, STM portu, bulut) TEK YERDE:
     # tools/e2e_ortam.py (D0Ö.08) — iki araç ayrışmış, burada PEMF_STM_PORT düşmüştü (varsayılan COM10).
-    env = alt_surec_ortami(data_dir, PORT, GUII)
+    # 2026-11-14: AI Pro start, ONAY KAPISINDAN ÖNCE kabin kamerası seçimini ister (T2D-2; seçim yoksa 409, onay TÜKETİLMEZ).
+    # Onay kapısına varmak için var OLMAYAN bir indeks (63 = azami) seçili sayılır — kamera AÇILMAZ (onaysız istek 428'de düşer).
+    env = alt_surec_ortami(data_dir, PORT, GUII, ek={"PEMF_KABIN_KAMERASI": "63"})
 
     log = open(data_dir / "backend.out", "wb")
     print(f"Backend baslatiliyor (port {PORT}, veri {data_dir}) ...")
@@ -342,6 +355,8 @@ def run_scenarios():
     n2 = {x.get("name") for x in p2.get("data", [])}
     check("patients: sayfalar ortusmuyor", n1.isdisjoint(n2), f"{n1} vs {n2}")
 
+    # 2026-11-14: önceki ACİL DURDUR mandalı start'ı 409'la kesiyordu → onay kapısına hiç varılmıyordu.
+    mandali_sifirla("AI Pro kapısından önce")
     # ── 10) AI Pro: ONAYSIZ OTONOM TEDAVI BASLAMAZ (sahip karari 2026-08-06) ──
     # ⚠️ BU TEST 2026-08-14'te DUZELTILDI. Eskiden `start`in "cokmeden yanit vermesini"
     # bekliyordu ve 428'i BASARISIZLIK sayiyordu — oysa 428 KAPININ CALISTIGININ kanitidir:
