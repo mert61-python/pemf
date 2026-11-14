@@ -4070,4 +4070,135 @@ Connection: close
         install::backup_dir_yaz(&kok, &dosya.to_string_lossy()).unwrap();
         assert_eq!(yedek_hedefi_durumu_ile(&kok)["erisilebilir"], serde_json::json!(false), "yazılamayan hedef erişilebilir sayıldı");
     }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-5 B1 (sahip kararı 1, 11-11): güvenlik yolu metin çapaları (F5 / L3 / L6 / KI G1) ÖNCE aynı sıra iddiasını taşıyan DAVRANIŞ
+    // testine çevrilir — eski çapa + bu test birlikte yeşil; enjeksiyon SONRA. GERÇEK `stop_backend_for_teardown`: sahte HTTP backend
+    // (rastgele port; sözleşme yanıtları) + sahte SÜREÇ (bu test ikilisinin uyuyan kopyası). `kill_stray_backends` çekirdeğin
+    // `test-kancasi` özelliğinde gerçek `taskkill` ÇALIŞTIRMAZ (çağrı + an kaydedilir) → sahibin kurulu backend'ine dokunulmaz.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// Sahte süreç: ortam işareti varsa uzun uyur (yoksa anında döner — normal koşuda iz bırakmaz). `#[ignore]`: yalnız çocuk koşar.
+    #[test]
+    #[ignore]
+    fn kp5_b1_sahte_surec_uyur() {
+        if std::env::var_os("PEMF_KP5_SAHTE_SUREC").is_some() {
+            std::thread::sleep(std::time::Duration::from_secs(120));
+        }
+    }
+
+    /// KP-5 B1 davranış testlerini sıraya sokar (gözlemci çekirdekte süreç geneli).
+    static KP5_B1_KILIT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[cfg(windows)]
+    fn kp5_cocuk_canli_mi(ad: &str, pid: u32) -> bool {
+        backend::surec_yollari(ad).iter().any(|(p, _)| *p == pid)
+    }
+
+    type Kp5Kayit = Arc<Mutex<Vec<(String, String, std::time::Instant, bool)>>>;
+
+    /// Sahte backend: çocuk süreç CANLIYKEN istekleri yanıtlar ve (yöntem, yol, an, çocuk canlı mı) kaydeder; çocuk ölünce dinleyiciyi
+    /// KAPATIR (gerçek ölü backend gibi: bağlantı reddi → port dosyası temizlenebilir).
+    #[cfg(windows)]
+    fn kp5_sahte_backend(ln: std::net::TcpListener, ad: String, pid: u32, kayit: Kp5Kayit) -> std::thread::JoinHandle<()> {
+        use std::io::{Read, Write};
+        ln.set_nonblocking(true).unwrap();
+        std::thread::spawn(move || {
+            let bitis = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            while std::time::Instant::now() < bitis && kp5_cocuk_canli_mi(&ad, pid) {
+                let Ok((mut c, _)) = ln.accept() else {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    continue;
+                };
+                let _ = c.set_nonblocking(false);
+                let _ = c.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+                let mut buf = vec![0u8; 8192];
+                let n = c.read(&mut buf).unwrap_or(0);
+                let istek = String::from_utf8_lossy(&buf[..n]).to_string();
+                let mut ilk = istek.lines().next().unwrap_or("").split_whitespace();
+                let (yontem, yol) = (ilk.next().unwrap_or("").to_string(), ilk.next().unwrap_or("").to_string());
+                let canli = kp5_cocuk_canli_mi(&ad, pid);
+                kayit.lock().unwrap().push((yontem, yol.clone(), std::time::Instant::now(), canli));
+                let (kod, govde) = match yol.as_str() {
+                    "/api/hardware/kapanis_durdur" => {
+                        ("200 OK", r#"{"status":"success","confirmed":true,"stmStopped":true,"mqttResults":[]}"#)
+                    }
+                    "/api/health" => ("200 OK", r#"{"service":"PEMF-Vet","status":"ok"}"#),
+                    "/api/auth/desktop-session" => ("200 OK", "{}"),
+                    _ => ("404 Not Found", "{}"),
+                };
+                let yanit = format!(
+                    "HTTP/1.1 {kod}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{govde}",
+                    govde.len()
+                );
+                let _ = c.write_all(yanit.as_bytes());
+                let _ = c.flush();
+            }
+            drop(ln); // çocuk öldü → "ölü backend" (bağlantı reddi)
+        })
+    }
+
+    /// KRİTİK (F5 + L3 + KI G1 davranışla): izlenen backend'in sökümünde sıra STOP (kapanış ucu) → yakma yoklaması → son oturum
+    /// çekimi — üçü de süreç CANLIYKEN — → süreç öldürülür → artakalan temizliği SÜREÇ ÖLDÜKTEN SONRA → ölü backend'in port dosyası
+    /// silinir. Eski metin çapaları DEĞİŞMEDEN yeşil (`f5_kapanis_sirasi_…`, `KRITIK_L3_…`, `KRITIK_KI_G1_…`).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B1_teardown_SIRASI_DAVRANIS_stop_yakma_yakala_SUREC_CANLIYKEN_sonra_kill_sonra_artakalan() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let exe = std::env::current_exe().unwrap();
+        let ad = exe.file_name().unwrap().to_string_lossy().to_string();
+        let mut komut = std::process::Command::new(&exe);
+        komut
+            .args(["tests::kp5_b1_sahte_surec_uyur", "--exact", "--ignored", "--test-threads=1", "-q"])
+            .env("PEMF_KP5_SAHTE_SUREC", "1")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        {
+            use std::os::windows::process::CommandExt;
+            komut.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let cocuk = komut.spawn().expect("sahte süreç başlamadı");
+        let pid = cocuk.id();
+        assert!(kp5_cocuk_canli_mi(&ad, pid), "sahte süreç görünmüyor");
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+        let sunucu = kp5_sahte_backend(ln, ad.clone(), pid, kayit.clone());
+        let kok = std::env::temp_dir().join(format!("pemf_kp5_b1_{}_{port}", std::process::id()));
+        std::fs::create_dir_all(&kok).unwrap();
+        std::fs::write(kok.join("backend.port"), port.to_string()).unwrap();
+        let artakalan_aninda_canli = Arc::new(Mutex::new(None::<bool>));
+        let (ad_g, a_g, kok_g) = (ad.clone(), artakalan_aninda_canli.clone(), kok.clone());
+        backend::test_kancasi::gozlemci_kur(Some(Box::new(move |k: &std::path::Path| {
+            if k == kok_g {
+                *a_g.lock().unwrap() = Some(kp5_cocuk_canli_mi(&ad_g, pid));
+            }
+        })));
+        let t0 = std::time::Instant::now();
+        stop_backend_for_teardown(Some((cocuk, port)), &kok, Arc::new(Mutex::new(None)));
+        let sure = t0.elapsed();
+        backend::test_kancasi::gozlemci_kur(None);
+        // Sahte süreç 120 sn uyur: söküm onu ÖLDÜRMEK yerine kendiliğinden çıkmasını beklerse (kill yok) bu sınır aşılır.
+        assert!(sure < std::time::Duration::from_secs(30), "süreç öldürülmedi — söküm {sure:?} bekledi");
+        let _ = sunucu.join();
+        let k = kayit.lock().unwrap().clone();
+        let yollar: Vec<(&str, &str)> = k.iter().map(|(y, p, _, _)| (y.as_str(), p.as_str())).collect();
+        // 1) STOP ÖNCE (kapanış ucu, onaylı), sonra yakma yoklaması, sonra son oturum çekimi — başka istek YOK.
+        assert_eq!(
+            yollar,
+            vec![("POST", "/api/hardware/kapanis_durdur"), ("GET", "/api/health"), ("GET", "/api/auth/desktop-session")],
+            "söküm istek sırası STOP → yakma yoklaması → son oturum çekimi değil"
+        );
+        // 2) Üçü de süreç CANLIYKEN (kill bunlardan SONRA).
+        assert!(k.iter().all(|(_, _, _, canli)| *canli), "bir istek süreç ÖLDÜKTEN sonra geldi (kill erken): {k:?}");
+        // 3) Süreç öldürüldü; artakalan temizliği TAM BİR kez, bu kökle, süreç ÖLDÜKTEN sonra ve son istekten SONRA.
+        assert!(!kp5_cocuk_canli_mi(&ad, pid), "izlenen backend öldürülmedi");
+        let ak = backend::test_kancasi::cagrilar(&kok);
+        assert_eq!(ak.len(), 1, "artakalan temizliği çağrı sayısı");
+        assert_eq!(*artakalan_aninda_canli.lock().unwrap(), Some(false), "artakalan temizliği süreç CANLIYKEN (kill'den önce) çağrıldı");
+        assert!(ak[0] > k.last().unwrap().2 && ak[0] > t0, "artakalan temizliği son istekten ÖNCE");
+        // 4) Ölü backend'in E-stop adresi (port dosyası) temizlendi.
+        assert!(!kok.join("backend.port").exists(), "ölü backend'in port dosyası kaldı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
 }

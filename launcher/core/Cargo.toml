@@ -32,3 +32,8 @@ libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
+
+# KP-5 B1 (sahip kararı 1, 11-11): YALNIZ test yapısında açılır (uygulamanın dev-dependency'si) — `backend::kill_stray_backends`
+# sistem genelinde `taskkill` çalıştırmak yerine çağrıyı kaydeder (testte sahibin kurulu backend'i ÖLDÜRÜLMEZ). Üretim ikilisinde YOK.
+[features]
+test-kancasi = []

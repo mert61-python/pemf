@@ -1122,6 +1122,11 @@ pub const YAKMA_BEKLEME_AZAMI: Duration = Duration::from_secs(600);
 /// ⚠️ LN L5 · Y71 (sahip): `mosquitto.exe` ADLA değil yalnız `kok` (kurulum kökü) altındaki ikiliyse öldürülür
 /// (`YALNIZ_KOKTEN_OLDURULEN`) — sahadaki eski mosquitto SERVİSİNE ve yabancı broker'lara dokunulmaz.
 pub fn kill_stray_backends(kok: &Path) {
+    // KP-5 B1: test yapısında (özellik `test-kancasi`) GERÇEK `taskkill` YOK — çağrı kaydedilir, dönülür (bkz. `test_kancasi`).
+    #[cfg(feature = "test-kancasi")]
+    if test_kancasi::kaydet(kok) {
+        return;
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -1162,6 +1167,40 @@ pub fn kill_stray_backends(kok: &Path) {
                 .stderr(Stdio::null())
                 .status();
         }
+    }
+}
+
+/// KP-5 B1 (sahip kararı 1, 11-11 — güvenlik yolu metin çapaları ÖNCE davranış testine): `kill_stray_backends` sistem genelinde
+/// `taskkill /IM PEMF_Backend.exe` çalıştırır; kapanış sırasını GERÇEK işlevle ölçen test sahibin kurulu backend'ini öldürürdü. Bu
+/// modül YALNIZ `test-kancasi` özelliğiyle derlenir (uygulamanın dev-dependency'si açar; üretim ikilisinde YOK): çağrı öldürmez,
+/// (kök, an) kaydedilir ve varsa test gözlemcisi o AN çağrılır (ör. "çocuk süreç bu anda ölmüş mü").
+#[cfg(feature = "test-kancasi")]
+pub mod test_kancasi {
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::Instant;
+
+    type Gozlemci = Box<dyn Fn(&Path) + Send>;
+    static CAGRILAR: Mutex<Vec<(PathBuf, Instant)>> = Mutex::new(Vec::new());
+    static GOZLEMCI: Mutex<Option<Gozlemci>> = Mutex::new(None);
+
+    /// Çağrıyı kaydeder; her zaman `true` (= çağıran öldürmeden döner).
+    pub(super) fn kaydet(kok: &Path) -> bool {
+        if let Some(g) = GOZLEMCI.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            g(kok);
+        }
+        CAGRILAR.lock().unwrap_or_else(|e| e.into_inner()).push((kok.to_path_buf(), Instant::now()));
+        true
+    }
+
+    /// `kok` için kaydedilen `kill_stray_backends` çağrılarının anları (sırayla).
+    pub fn cagrilar(kok: &Path) -> Vec<Instant> {
+        CAGRILAR.lock().unwrap_or_else(|e| e.into_inner()).iter().filter(|(k, _)| k == kok).map(|(_, t)| *t).collect()
+    }
+
+    /// Çağrı ANINDA koşacak gözlemci (None = kaldır).
+    pub fn gozlemci_kur(g: Option<Gozlemci>) {
+        *GOZLEMCI.lock().unwrap_or_else(|e| e.into_inner()) = g;
     }
 }
 

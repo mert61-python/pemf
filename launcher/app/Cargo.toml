@@ -19,3 +19,7 @@ tauri = { version = "2", features = [] }
 serde.workspace = true
 serde_json.workspace = true
 ureq.workspace = true
+
+# KP-5 B1: testte çekirdeğin `test-kancasi` özelliği (kapanış davranış testi gerçek `taskkill` çalıştırmaz) — yeni crate DEĞİL.
+[dev-dependencies]
+pemf-launcher-core = { path = "../core", features = ["test-kancasi"] }
