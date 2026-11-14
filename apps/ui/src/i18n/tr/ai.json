@@ -1156,6 +1156,7 @@
       "guvenDusuk": " — DÜŞÜK, konumu doğrulayın",
       "hastaSecilmedi": "— seçilmedi (sahipsiz kaydedilir)",
       "konum": "Konum (mm): x {{x}} · y {{y}} · z {{z}}",
+      "konumEskidi": "Konum ölçümü iki dakikadan eski — pencereyi kapatıp hazırlığı yeniden başlatın, sonra yeniden hesaplayın.",
       "kosulsuz": "⚠ KOŞULSUZ öneri: plaka, kalite ve güven engelleri atlandı; konum doğrulanmamış olabilir. Onaylarsanız seans bu kipte sürer.",
       "leadDeney": "Deney seansı <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",
       "leadOtonom": "Otonom seans <kalin>onaylanmadan başlamaz</kalin>. Aşağıdaki parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.",

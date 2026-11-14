@@ -93,6 +93,14 @@ const HAZIRLIK_UYARI_MS = 45000;
 const HAZIRLIK_TAVAN_MS = 120000;
 /** Bu değerin altındaki güven "sınırda" sayılır ve operatöre ayrıca işaretlenir. */
 const DUSUK_GUVEN = 0.5;
+/** AP-B4: sunucu öneri için 120 sn'den eski konumu reddeder (`/propose` tazelik); pencere bundan biraz önce "konum eskidi" der. */
+const KONUM_ESKI_MS = 110000;
+
+/** AP-B4: onay penceresindeki isteğin hata metni — sunucunun eylem söyleyen gerekçesi; yoksa durum kodu; yanıt hiç gelmediyse bağlantı. */
+function pencereHataMetni(red: { durum: number; detay?: string } | null): string {
+  if (red) return red.detay || i18n.t("ai.pro.uyari.sunucuReddetti", { durum: red.durum });
+  return i18n.t("ai.pro.uyari.komutUlasmadi");
+}
 
 // D1.84 (B-5.2 · Y25): `suruldu` — bobin telde GERÇEKTEN sürüldü mü (backend `update_coil` kabulü). Opsiyonel: eski backend
 // göndermez → eski gösterim (sürüm kayması). `false` → "sürülmedi" (plan değeri parantezde).
@@ -488,6 +496,12 @@ export function AiProPanel({
   // SERT ONAY KAPISI (2026-08-06): bekleyen AI önerisi + onay/red işlemi sürüyor mu.
   const [proposal, setProposal] = useState<AiProposeResponse | null>(null);
   const [approvalBusy, setApprovalBusy] = useState(false);
+  /** AP-B4 (tezgâh 13-11): onay penceresindeki istek hatası (yeniden hesapla / onay / başlat) — pencerenin İÇİNDE gösterilir. Genel hata
+   *  balonu uygulama kökünde çizilir ve RN Modal'ın ARKASINDA kalıyordu (`dozSapmasi` görünmedi). */
+  const [pencereHatasi, setPencereHatasi] = useState("");
+  /** AP-B4: önerinin dayandığı konum ölçümünün (hazırlıkta alınan öneri) panele geliş anı — yeniden hesap aynı ölçümü kullanır; sunucu
+   *  2 dk'dan eski ölçümü reddeder (önizleme durmuş olduğundan kendiliğinden tazelenmez). */
+  const oneriOlcumAniRef = useRef(0);
   // Onay/red denetim izinde HANGİ HEKİM karar verdi — oturumdaki e-posta taşınır.
   const { session } = useAuth();
   // ⭐ Aktif operatör (tek makine, çoklu veteriner) — oturum e-postası DEĞİL.
@@ -765,6 +779,8 @@ export function AiProPanel({
       );
       if (prop?.proposalId) {
         setOneriHatasi("");
+        oneriOlcumAniRef.current = Date.now();
+        setPencereHatasi("");
         setProposal(prop);
         setHazirlik(false);   // öneri hazır → hazırlık biter; kareler seans başlayınca sürer
       } else {
@@ -822,6 +838,8 @@ export function AiProPanel({
       if (prop?.proposalId) {
         setOneriHatasi("");
         await apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null); // önizlemeyi bırak
+        oneriOlcumAniRef.current = Date.now();
+        setPencereHatasi("");
         setProposal(prop);
         setHazirlik(false);
       } else {
@@ -882,18 +900,26 @@ export function AiProPanel({
     onayAkisiRef.current = true;
     try {
       setApprovalBusy(true);
+      setPencereHatasi("");
+      // AP-B4: hata pencerenin İÇİNDE (sessiz istek + sunucunun eylem söyleyen gerekçesi) — genel balon pencerenin arkasında kalıyordu.
+      let red: { durum: number; detay?: string } | null = null;
+      const hataYakala = { silent: true, onHttpError: (durum: number, detay?: string) => { red = { durum, detay }; } };
       const ok = await apiPost<{ status?: string } | null>(
         "/ai/pro/approve",
         { proposal_id: proposal.proposalId, operator_email: operatorEmail || "" },
-        null
+        null,
+        hataYakala
       );
-      if (!ok) { setApprovalBusy(false); return; }   // onay geçmediyse BAŞLATMA
+      if (!ok) { setApprovalBusy(false); setPencereHatasi(pencereHataMetni(red)); return; }   // onay geçmediyse BAŞLATMA
+      red = null;
       const res = await apiPost<AiProAction | null>(
         "/ai/pro/start",
         { proposal_id: proposal.proposalId, patient_name: patientName || "", client_id: clientIdRef.current },
-        null
+        null,
+        hataYakala
       );
       setApprovalBusy(false);
+      if (res?.status !== "success") setPencereHatasi(pencereHataMetni(red));
       if (res?.status === "success") {
         // [B1]: ownedRef'i YALNIZ backend BİZİ sahip gösteriyorsa true yap. "Already running" yanıtı
         // MEVCUT sahibi (A) döndürür → B ownedRef=false kalır ve panelini kapatınca A'nın onaylı
@@ -920,6 +946,9 @@ export function AiProPanel({
   const yenidenHesapla = useCallback(async (doz: number, kip: string) => {
     if (!proposal?.proposalId || onayAkisiRef.current) return;
     setApprovalBusy(true);
+    setPencereHatasi("");
+    // AP-B4: hata (ör. `dozSapmasi`) pencerenin İÇİNDE, sunucunun eylem söyleyen metniyle; ölçüm 2 dk'dan eskiyse ne yapılacağı da.
+    let red: { durum: number; detay?: string } | null = null;
     try {
       const prop = await apiPost<AiProposeResponse | null>(
         "/ai/pro/propose",
@@ -936,9 +965,14 @@ export function AiProPanel({
           // ODK8: yeniden hesap AYNI frekansla (mühürdeki)
           frek_hz: proposal.specs?.odak?.frek_hz ?? frekRef.current,
         },
-        null
+        null,
+        { silent: true, onHttpError: (durum, detay) => { red = { durum, detay }; } }
       );
       if (prop?.proposalId) setProposal(prop);
+      else {
+        const eski = oneriOlcumAniRef.current > 0 && Date.now() - oneriOlcumAniRef.current > KONUM_ESKI_MS;
+        setPencereHatasi(pencereHataMetni(red) + (eski ? " " + i18n.t("ai.pro.onay.konumEskidi") : ""));
+      }
     } finally {
       setApprovalBusy(false);
     }
@@ -1273,8 +1307,9 @@ export function AiProPanel({
         surusKapali={oneriSurusuKapali(proposal, kediSurusAcik)}
         onApprove={approveAndStart}
         onReject={rejectProposal}
-        onDismiss={() => setProposal(null)}
+        onDismiss={() => { setProposal(null); setPencereHatasi(""); }}
         onYenidenHesapla={yenidenHesapla}
+        hata={pencereHatasi}
       />
       {/* SİHİRBAZ (yalnız araştırma): neredeyim + geri nasıl dönerim. Veterinerde RENDER EDİLMEZ →
           bugünkü ekran birebir korunur. */}

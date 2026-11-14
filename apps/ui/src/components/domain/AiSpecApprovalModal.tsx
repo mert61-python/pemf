@@ -113,7 +113,7 @@ function tr(n: number, basamak = 2): string {
 }
 
 export function AiSpecApprovalModal({
-  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali, onYenidenHesapla,
+  visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali, onYenidenHesapla, hata,
 }: {
   visible: boolean;
   specs: AiProposalSpecs | null;
@@ -128,6 +128,8 @@ export function AiSpecApprovalModal({
   surusKapali?: string;
   /** ODAK: doz / petri kipi değişince yeni öneri iste (yeni mühür). Verilmezse doz seçici gösterilmez. */
   onYenidenHesapla?: (doz: number, kip: string) => void;
+  /** AP-B4: bu penceredeki isteğin (yeniden hesapla / onay / başlat) hatası — HER ZAMAN görünen alt şeritte, düğmelerin üstünde. */
+  hata?: string;
 }) {
   const { t } = useTranslation();
   const [rejecting, setRejecting] = useState(false);
@@ -189,7 +191,13 @@ export function AiSpecApprovalModal({
         </View>
       }
       footer={
-        rejecting ? (
+        <View>
+        {hata ? (
+          <Text testID="ai-onay-hata" style={s.hata} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            {`⚠️ ${hata}`}
+          </Text>
+        ) : null}
+        {rejecting ? (
           <View style={s.rejectBox}>
             <Text style={s.rejectLabel}>{t("ai.pro.onay.redGerekcesiKayit")}</Text>
             <TextInput
@@ -253,7 +261,8 @@ export function AiSpecApprovalModal({
             </TouchableOpacity>
             )}
           </View>
-        )
+        )}
+        </View>
       }
     >
           {surusKapali ? (
@@ -403,6 +412,7 @@ const s = StyleSheet.create({
   uyari: { color: colors.warning, fontSize: rf(11), fontWeight: "700" },
   // Y142: sürüş kapalı bildirimi — onay satırından ÖNCE, gövdenin başında (hekim ilk bunu okur).
   surusKapali: { color: colors.warning, fontSize: rf(12), fontWeight: "800" },
+  hata: { color: colors.danger, fontSize: rf(12), fontWeight: "700", marginBottom: spacing.xs },
   lead: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
   bold: { color: colors.text, fontWeight: "800" },
   summary: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xs },
