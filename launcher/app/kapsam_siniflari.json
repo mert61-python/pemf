@@ -1,23 +1,23 @@
 {
- "aciklama": "KP-3 B1 / B4 (istem 38 + 41 C) + KP-4 A1 (istem 42 · Y257 c): başlatıcı uygulamasının (launcher/app/src/main.rs + kabuk.rs) üst düzey işlevlerinin kapsam sınıfı — T test edilebilir · Y yeniden düzenleme gerekir · S sınırda (pencere / Tauri çalışma zamanı / gerçek platform API'si — test edilemez) · K kapsanıyor. `eksik` = KP-3 AŞAMA 0 (d45d9cf2) cargo-llvm-cov eksik satırı. Kapı: tests/test_KP3_main_rs_kapsam_siniflari.py — HER üst düzey işlev TAM BİR sınıfta, S / Y gerekçeli, S listesi SAYILIR (`s_sayisi`). Y242: test yazılabilen satıra S YASAK. #[coverage(off)] bu derleyicide (rustc 1.98.1) kararlı DEĞİL (E0658) → KP-4 A1: S işlevleri main.rs'ten DEĞİŞTİRİLMEDEN launcher/app/src/kabuk.rs'e taşındı (main.rs `include!` ile AYNI modüle katar) ve CI kapsam adımı YALNIZ o dosyayı dışlar; kapı S'nin yalnız kabuk.rs'te, kabuk.rs'in yalnız S'den oluştuğunu da sayar.",
+ "aciklama": "KP-3 B1 / B4 (istem 38 + 41 C) + KP-4 A1 (istem 42 · Y257 c): başlatıcı uygulamasının (launcher/app/src/main.rs + kabuk.rs) üst düzey işlevlerinin kapsam sınıfı — T test edilebilir · Y yeniden düzenleme gerekir · S sınırda (pencere / Tauri çalışma zamanı / gerçek platform API'si — test edilemez) · K kapsanıyor. `eksik` = KP-3 AŞAMA 0 (d45d9cf2) cargo-llvm-cov eksik satırı. Kapı: tests/test_KP3_main_rs_kapsam_siniflari.py — HER üst düzey işlev TAM BİR sınıfta, S / Y gerekçeli, S listesi SAYILIR (`s_sayisi`). Y242: test yazılabilen satıra S YASAK. #[coverage(off)] bu derleyicide (rustc 1.98.1) kararlı DEĞİL (E0658) → KP-4 A1: S işlevleri main.rs'ten DEĞİŞTİRİLMEDEN launcher/app/src/kabuk.rs'e taşındı (main.rs `include!` ile AYNI modüle katar) ve CI kapsam adımı YALNIZ o dosyayı dışlar; kapı S'nin yalnız kabuk.rs'te, kabuk.rs'in yalnız S'den oluştuğunu da sayar. KP-5 B2 / B3 (sahip kararı 2, 11-11): A2c'nin 8 ince kök / Tauri kabuğu S'e taşındı (44 → 52; gövdeleri `_ile` K); kısmen test edilen 3 S işlevinin karar mantığı saf yardımcıya ayrıldı (`indirme_olayi_karari`, `indirme_adresi_denetle`, `yardimci_batch_yolu` + `yardimci_hemen_sonlandi_iletisi`).",
  "olcum": "d45d9cf2 · main.rs 2840 satır · 1411 eksik",
- "s_sayisi": 44,
+ "s_sayisi": 52,
  "ozet": {
   "K": {
-   "islev": 33,
+   "islev": 37,
    "eksik_satir": 0
   },
   "S": {
-   "islev": 44,
-   "eksik_satir": 429
+   "islev": 52,
+   "eksik_satir": 537
   },
   "T": {
    "islev": 4,
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 26,
-   "eksik_satir": 703
+   "islev": 18,
+   "eksik_satir": 595
   }
  },
  "islevler": {
@@ -117,8 +117,8 @@
   "indirme_olayi": {
    "sinif": "S",
    "eksik": 3,
-   "neden": "`tauri::webview::DownloadEvent` (yapılamaz test nesnesi).",
-   "neden_T_Y_degil": "Karar `indirme_karari` testli."
+   "neden": "`tauri::webview::DownloadEvent` (non_exhaustive) özeti + GERÇEK tarayıcı açma bağlaması.",
+   "neden_T_Y_degil": "KP-5 B3 (sahip kararı 2b): karar `indirme_olayi_karari`nda (K, açma ENJEKTE, testli); kabukta yalnız olay özeti + `open_browser`."
   },
   "home_var_order": {
    "sinif": "K",
@@ -137,9 +137,10 @@
    "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
   },
   "detect_environment_blocking": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 7,
-   "neden": "KP-4 A2c: gövde `ortam_algila`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); gövde `ortam_ozeti`(kök) ayrı → T."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `ortam_algila` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `ortam_algila` gövdesinde (K, sahte kökle testli)."
   },
   "ortam_algila": {
    "sinif": "K",
@@ -158,9 +159,10 @@
    "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
   },
   "fetch_profiles_blocking": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 37,
-   "neden": "KP-4 A2c: gövde `profilleri_getir`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. Ağdan manifest; saf JSON kurma kısmı ayrılabilir."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `profilleri_getir` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `profilleri_getir` gövdesinde (K, sahte kökle testli)."
   },
   "profilleri_getir": {
    "sinif": "K",
@@ -183,7 +185,7 @@
    "sinif": "S",
    "eksik": 2,
    "neden": "Varsayılan tarayıcıyı açar (görünür pencere).",
-   "neden_T_Y_degil": "URL denetimi testli; kalan 2 satır tarayıcı çağrısı."
+   "neden_T_Y_degil": "KP-5 B3 (sahip kararı 2b): adres denetimi `indirme_adresi_denetle`de (K, testli); kabukta yalnız denetim çağrısı + `open_browser`."
   },
   "install_and_launch": {
    "sinif": "Y",
@@ -227,9 +229,10 @@
    "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
   },
   "check_runtime_update_blocking": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 6,
-   "neden": "KP-4 A2c: gövde `check_runtime_update_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir()."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `check_runtime_update_ile` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `check_runtime_update_ile` gövdesinde (K, sahte kökle testli)."
   },
   "check_runtime_update_ile": {
    "sinif": "K",
@@ -248,9 +251,10 @@
    "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
   },
   "guncelleme_ozeti_blocking": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 24,
-   "neden": "KP-4 A2c: gövde `guncelleme_ozeti_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); karar çekirdekte %100."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `guncelleme_ozeti_ile` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `guncelleme_ozeti_ile` gövdesinde (K, sahte kökle testli)."
   },
   "guncelleme_ozeti_ile": {
    "sinif": "K",
@@ -258,9 +262,10 @@
    "neden": "KP-4 A2c: `guncelleme_ozeti_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "guncelleme_onayini_kaydet": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 11,
-   "neden": "KP-4 A2c: gövde `onay_kaydet_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. home_dir(); kayıt çekirdekte %100."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — Tauri komutu (`spawn_blocking` + hata eşlemesi) + gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `onay_kaydet_ile` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `onay_kaydet_ile` gövdesinde (K, sahte kökle testli)."
   },
   "onay_kaydet_ile": {
    "sinif": "K",
@@ -380,9 +385,10 @@
    "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
   },
   "discard_pending_blocking": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 8,
-   "neden": "KP-4 A2c: gövde `discard_pending_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); `clear_pending` / `clear_partials` çekirdekte testli; kök enjeksiyonu KP-4."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `discard_pending_ile` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `discard_pending_ile` gövdesinde (K, sahte kökle testli)."
   },
   "discard_pending_ile": {
    "sinif": "K",
@@ -413,8 +419,8 @@
   "yardimci_batch_baslat": {
    "sinif": "S",
    "eksik": 5,
-   "neden": "Gerçek ayrık süreç (bayraklar `YARDIMCI_BATCH_BAYRAKLARI` testli).",
-   "neden_T_Y_degil": "Bayrak seçimi sabit + testli; kalan `Command::spawn`."
+   "neden": "Gerçek ayrık süreç (`cmd.exe` + bayraklar `YARDIMCI_BATCH_BAYRAKLARI` testli) + 300 ms erken-ölüm yoklaması.",
+   "neden_T_Y_degil": "KP-5 B3 (sahip kararı 2b): yol denetimi `yardimci_batch_yolu` + ileti `yardimci_hemen_sonlandi_iletisi` saf (K, testli); kalan `Command::spawn` / `try_wait`."
   },
   "build_relaunch_script": {
    "sinif": "K",
@@ -512,9 +518,10 @@
    "neden_T_Y_degil": "Komut gövdesi yalnız `spawn_blocking` / `State` kilidi / atomik bayrak; mantık ayrı işlevde."
   },
   "kaldirma_veri_konumu_blocking": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 7,
-   "neden": "KP-4 A2c: gövde `kaldirma_veri_konumu_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); `kaldirma_veri_konumu_with` çekirdekte testli; kök enjeksiyonu KP-4."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `kaldirma_veri_konumu_ile` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `kaldirma_veri_konumu_ile` gövdesinde (K, sahte kökle testli)."
   },
   "kaldirma_veri_konumu_ile": {
    "sinif": "K",
@@ -522,9 +529,10 @@
    "neden": "KP-4 A2c: `kaldirma_veri_konumu_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "yedek_hedefi_durumu_blocking": {
-   "sinif": "Y",
+   "sinif": "S",
    "eksik": 8,
-   "neden": "KP-4 A2c: gövde `yedek_hedefi_durumu_ile`'e ayrıldı (K, testli); kalan İNCE KABUK yalnız `home_dir()` / Tauri — test edilemez. S'e taşınıp ölçümden dışlanması sahip kararı (istem 42: S sayısı SABİT 44) → KP-5. Önceki: home_dir(); kök enjeksiyonu KP-4."
+   "neden": "KP-5 B2 (sahip kararı 2a, 11-11): İNCE KABUK — gerçek kök (`home_dir()` / `default_install_root`) / gerçek saat / ortam bağlaması + `yedek_hedefi_durumu_ile` çağrısı; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kurulum kökü / ortam okunurdu; tüm karar `yedek_hedefi_durumu_ile` gövdesinde (K, sahte kökle testli)."
   },
   "yedek_hedefi_durumu_ile": {
    "sinif": "K",
@@ -572,6 +580,22 @@
    "eksik": 0
   },
   "pencere_kapanis_isi": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "indirme_olayi_karari": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "indirme_adresi_denetle": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "yardimci_batch_yolu": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "yardimci_hemen_sonlandi_iletisi": {
    "sinif": "K",
    "eksik": 0
   }

@@ -485,6 +485,76 @@ fn indirme_karari(url: &str, port: u16) -> IndirmeKarari {
     }
 }
 
+/// KP-5 B3: `on_download` olayının kabuktan bağımsız özeti (Tauri `DownloadEvent` `non_exhaustive` — bilinmeyen tür kabukta `true`).
+enum IndirmeOlayi<'a> {
+    Istek(&'a tauri::Url),
+    Bitti(bool),
+}
+
+/// `on_download` kararı (`true` = WebView2 indirsin) — KP-5 B3 (sahip kararı 2b): `indirme_olayi`ndan ayrıldı, davranış AYNI; dış
+/// adresi açan `ac` ENJEKTE (kabuk: gerçek tarayıcı). `Bitti` yalnız başarıyı günlüğe yazar — dosya ADI / yolu yazılmaz (rapor /
+/// yedek adları hasta adı taşıyabilir).
+fn indirme_olayi_karari(olay: IndirmeOlayi<'_>, port: u16, ac: impl FnOnce(&str)) -> bool {
+    match olay {
+        IndirmeOlayi::Istek(url) => match indirme_karari(url.as_str(), port) {
+            IndirmeKarari::Izin => true,
+            IndirmeKarari::TarayicidaAc => {
+                ac(url.as_str());
+                false
+            }
+            IndirmeKarari::Reddet => {
+                eprintln!("[indirme] reddedildi (sema {})", url.scheme());
+                false
+            }
+        },
+        IndirmeOlayi::Bitti(success) => {
+            eprintln!("[indirme] bitti: basari={success}");
+            true
+        }
+    }
+}
+
+/// Güncelleme indirme sayfası adresinin denetimi (`open_url` tarayıcıda açmadan ÖNCE) — KP-5 B3 (sahip kararı 2b): kabuktan ayrıldı,
+/// davranış AYNI. Manifest host-pinli kaynaktan gelir; yine de savunma: yalnız https + bilinen indirme host'ları (poisoned-manifest
+/// keyfi/zararlı URL açamasın). Sondaki "/" şart → "github.com.evil" ve userinfo (github.com@evil) hileleri geçmez.
+fn indirme_adresi_denetle(url: &str) -> Result<(), String> {
+    // #138: ham "https://github.com/" YERİNE ürün-repo önekine daralt → zehirli manifest keyfi bir
+    // GitHub repo'suna (SHA'sız indirme) yönlendiremez.
+    const ALLOWED: [&str; 2] = [
+        "https://pemf-vet-web.vercel.app/",
+        "https://github.com/mert61-python/pemf-update/",
+    ];
+    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
+        return Err(pemf_launcher_core::dil::t_ile("rust.hata.indirmeAdresiIzinsiz", &[("url", &url.to_string())]));
+    }
+    // Derinlik-savunması: open_browser artık rundll32 kullansa da (kabuk yok), manifest-türevi
+    // URL'yi asla riske atma — kabuk-metakarakteri, kontrol-karakteri veya boşluk içeren URL'yi
+    // reddet. Meşru GitHub/Vercel indirme URL'lerinde bunlar bulunmaz.
+    if url.len() > 2048 || url.chars().any(|c| c.is_control() || "&|^<>\"'`{} \t\r\n".contains(c)) {
+        return Err(pemf_launcher_core::dil::t("rust.hata.indirmeAdresiGecersizKarakter"));
+    }
+    Ok(())
+}
+
+/// KP-5 B3 (sahip kararı 2b): yardımcı batch YOLUNUN denetimi — `yardimci_batch_baslat`tan ayrıldı, davranış AYNI. Yol UTF-8
+/// olmalı; `"` / CR / LF `cmd /S /C ""<yol>""` alıntısını bozar → reddedilir.
+#[cfg(windows)]
+fn yardimci_batch_yolu(bat: &std::path::Path) -> Result<&str, String> {
+    let yol = bat.to_str().ok_or_else(|| pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluUtf8"))?;
+    if yol.contains('"') || yol.contains('\r') || yol.contains('\n') {
+        return Err(pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluGuvensiz"));
+    }
+    Ok(yol)
+}
+
+/// KP-5 B3: erken ölen (300 ms içinde rc≠0) yardımcı batch'in iletisi — çıkış kodu yoksa "yok" — `yardimci_batch_baslat`tan ayrıldı.
+#[cfg(windows)]
+fn yardimci_hemen_sonlandi_iletisi(kod: Option<i32>, bat: &std::path::Path) -> String {
+    let kod = kod.map(|k| k.to_string()).unwrap_or_else(|| pemf_launcher_core::dil::t("rust.hata.yok"));
+    let yol = bat.display().to_string();
+    pemf_launcher_core::dil::t_ile("rust.hata.yardimciHemenSonlandi", &[("kod", &kod), ("yol", &yol)])
+}
+
 /// Ev dizini için ortam-değişkeni ÖNCELİK sırası (saf → test edilebilir; env yarışı yok).
 fn home_var_order(windows: bool) -> (&'static str, &'static str) {
     if windows {
@@ -492,10 +562,6 @@ fn home_var_order(windows: bool) -> (&'static str, &'static str) {
     } else {
         ("HOME", "USERPROFILE")
     }
-}
-
-fn detect_environment_blocking() -> Environment {
-    ortam_algila(&install::default_install_root(&home_dir()))
 }
 
 /// KP-4 A2c (Y257 a): `detect_environment_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
@@ -523,14 +589,6 @@ fn ortam_ozeti(root: &std::path::Path) -> Environment {
         pending_profiles: install::read_pending(&root),
         install_root: root.to_string_lossy().into_owned(),
     }
-}
-
-fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
-    // Host pinlemesi manifest'in KENDİSİ için de geçerli: zehirli bir manifest zaten her şeyin
-    // girdisidir. fetch_string_pinned_budgeted: https-only + KISA connect/read timeout + KÜRESEL
-    // deadline + duvar saati tavanı (DNS'e deadline uygulanamıyor) + redirect-sonrası host
-    // yeniden-doğrulama + into_string ~10MB metin-DoS sınırı.
-    profilleri_getir(|| net::fetch_string_pinned_budgeted(MANIFEST_URL), &install::default_install_root(&home_dir()))
 }
 
 /// KP-4 A2c (Y257 a): `fetch_profiles_blocking`'in gövdesi — manifest ÇEKİCİSİ ve kök (`su_root`) ENJEKTE (ağ / gerçek kök YOK).
@@ -960,10 +1018,6 @@ fn plan_to_json(plan: &flow::UpdatePlan) -> serde_json::Value {
     })
 }
 
-fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
-    check_runtime_update_ile(&install::default_install_root(&home_dir()), manifest_raw)
-}
-
 /// KP-4 A2c (Y257 a): `check_runtime_update_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
 fn check_runtime_update_ile(root: &std::path::Path, manifest_raw: String) -> Result<serde_json::Value, String> {
     // Kaydı olmayan ESKİ kurulumlarda profil sha'larını önce benimse — yoksa üç profil birden
@@ -975,10 +1029,6 @@ fn check_runtime_update_ile(root: &std::path::Path, manifest_raw: String) -> Res
 
 fn unix_simdi_s() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
-}
-
-fn guncelleme_ozeti_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
-    guncelleme_ozeti_ile(&install::default_install_root(&home_dir()), manifest_raw, unix_simdi_s())
 }
 
 /// KP-4 A2c (Y257 a): `guncelleme_ozeti_blocking`'in gövdesi — kök ve ŞİMDİ (unix sn) ENJEKTE (onay yaşı sahte saatle sınanır).
@@ -1006,17 +1056,6 @@ fn guncelleme_ozeti_ile(root: &std::path::Path, manifest_raw: String, simdi: u64
         simdi,
     );
     serde_json::to_value(oz).map_err(|e| e.to_string())
-}
-
-/// GÜNCELLEME ONAYI: kullanıcı "Güncelle"ye bastı (ya da zorunlu güncelleme başladı) → onay kaydı. Başlatıcı kendini kurup YENİDEN
-/// başladığında katman kurulumu bu kayıtla SORULMADAN sürer (tek akış, tek yeniden başlatma) ve akış sonunda uygulama açılır.
-#[tauri::command]
-async fn guncelleme_onayini_kaydet(manifest_raw: String, launcher_hedefi: Option<String>) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        onay_kaydet_ile(&install::default_install_root(&home_dir()), &manifest_raw, launcher_hedefi.as_deref(), unix_simdi_s())
-    })
-    .await
-    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))?
 }
 
 /// KP-4 A2c (Y257 a): `guncelleme_onayini_kaydet`in gövdesi — kök ve ŞİMDİ ENJEKTE.
@@ -1659,10 +1698,6 @@ async fn calisan_backend_portu(state: &tauri::State<'_, AppState>) -> Option<u16
         .flatten()
 }
 
-fn discard_pending_blocking(manifest_raw: Option<String>) -> Result<(), String> {
-    discard_pending_ile(&install::default_install_root(&home_dir()), manifest_raw)
-}
-
 /// KP-4 A2c (Y257 a): `discard_pending_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
 fn discard_pending_ile(root: &std::path::Path, manifest_raw: Option<String>) -> Result<(), String> {
     install::clear_pending(&root);
@@ -2012,10 +2047,6 @@ fn izin_ver_sonucu(kod: Result<i32, String>) -> Result<serde_json::Value, String
     }
 }
 
-fn kaldirma_veri_konumu_blocking() -> serde_json::Value {
-    kaldirma_veri_konumu_ile(&home_dir(), |k| std::env::var(k).ok())
-}
-
 /// KP-4 A2c (Y257 a): `kaldirma_veri_konumu_blocking`'in gövdesi — ev dizini ve ortam okuyucusu ENJEKTE (gerçek ortam okunmaz).
 fn kaldirma_veri_konumu_ile(ev: &std::path::Path, getenv: impl Fn(&str) -> Option<String>) -> serde_json::Value {
     let (konum, diger) = install::kaldirma_veri_konumu_with(&install::default_install_root(ev), getenv, ev);
@@ -2023,10 +2054,6 @@ fn kaldirma_veri_konumu_ile(ev: &std::path::Path, getenv: impl Fn(&str) -> Optio
         "konum": konum.to_string_lossy(),
         "diger": diger.iter().map(|d| d.to_string_lossy().into_owned()).collect::<Vec<_>>(),
     })
-}
-
-fn yedek_hedefi_durumu_blocking() -> serde_json::Value {
-    yedek_hedefi_durumu_ile(&install::default_install_root(&home_dir()))
 }
 
 /// KP-4 A2c (Y257 a): `yedek_hedefi_durumu_blocking`'in gövdesi — kök ENJEKTE (testte sahte kök; gerçek kurulum / gerçek ortam okunmaz).
@@ -2117,7 +2144,8 @@ mod tests {
         // `manifest.launcher` ALANINA doğrudan erişim de yasak (yalnız `manifest.launcher_guncellemesi(` yöntemi serbest).
         let src = f5_yorumlari_soy(include_str!("main.rs"));
         // KP-4 A2c: kararın gövdesi `profilleri_getir`de (kök / çekici enjekte); kabuk `fetch_profiles_blocking` yalnız bağlar.
-        let kabuk = &src[src.find(concat!("fn fetch_profiles_", "blocking(")).expect("fetch_profiles_blocking yok")..];
+        let ks = kabuk_soy(); // KP-5 B2: ince kabuk kabuk.rs'te (S); karar main.rs `profilleri_getir`de
+        let kabuk = &ks[ks.find(concat!("fn fetch_profiles_", "blocking(")).expect("fetch_profiles_blocking yok")..];
         let kabuk = &kabuk[..kabuk.find("\n\u{7d}").expect("kabuk sonu yok")];
         assert!(kabuk.contains("profilleri_getir(") && !kabuk.contains("launcher_guncellemesi"), "kabuk karar içeriyor / gövdeye bağlanmıyor");
         let g = &src[src.find(concat!("fn profilleri_", "getir(")).expect("profilleri_getir yok")..];
@@ -2698,9 +2726,30 @@ mod tests {
         let ow = &soy[soy.find("fn open_app_window(").expect("open_app_window yok")..];
         let ow = &ow[..ow.find("\nfn ").expect("sonraki fn yok")];
         assert!(ow.contains(".on_download(move |_webview, olay| indirme_olayi(olay, port))"), "pencere indirme işleyicisini kaydetmiyor");
+        // KP-5 B3: kabuk kararı `indirme_olayi_karari`na bırakır ve dış adres için GERÇEK tarayıcıyı bağlar; karar aşağıda DAVRANIŞLA.
         let io = &soy[soy.find("fn indirme_olayi(").expect("indirme_olayi yok")..];
-        let tc = &io[io.find("IndirmeKarari::TarayicidaAc =>").expect("dış kol yok")..];
-        assert!(tc[..160].contains("backend::open_browser(url.as_str());") && tc[..160].contains("false"), "dış adres tarayıcıda açılmıyor");
+        let io = &io[..io.find("\n}").expect("indirme_olayi sonu yok")];
+        assert!(
+            io.contains("indirme_olayi_karari(ozet, port, |u| {") && io.contains("backend::open_browser(u);"),
+            "dış adres tarayıcıda açılmıyor (kabuk kararı / tarayıcıyı bağlamıyor)"
+        );
+    }
+
+    /// KP-5 B3 (sahip kararı 2b): `on_download` KARARI davranışla — dış http(s) adresi `ac` ile TARAYICIDA açılır ve WebView2 İNDİRMEZ;
+    /// kendi kökeni indirilir, reddedilen ve izinli adres tarayıcıya GİTMEZ; bitiş `true`.
+    #[test]
+    fn KRITIK_KP5_B3_indirme_olayi_karari_DIS_adres_TARAYICIDA_acilir_digerleri_acilmaz() {
+        let acilan = std::cell::RefCell::new(Vec::<String>::new());
+        let kaydet = |u: &str| acilan.borrow_mut().push(u.to_string());
+        let dis: tauri::Url = "https://pemf-vet-web.vercel.app/belge.pdf".parse().unwrap();
+        assert!(!indirme_olayi_karari(IndirmeOlayi::Istek(&dis), 8123, kaydet), "dış adres WebView2'de indirildi");
+        assert_eq!(*acilan.borrow(), vec!["https://pemf-vet-web.vercel.app/belge.pdf".to_string()], "dış adres tarayıcıda açılmadı");
+        let kendi: tauri::Url = "blob:http://127.0.0.1:8123/u".parse().unwrap();
+        let red: tauri::Url = "file:///C:/x".parse().unwrap();
+        assert!(indirme_olayi_karari(IndirmeOlayi::Istek(&kendi), 8123, |u: &str| acilan.borrow_mut().push(u.to_string())));
+        assert!(!indirme_olayi_karari(IndirmeOlayi::Istek(&red), 8123, |u: &str| acilan.borrow_mut().push(u.to_string())));
+        assert!(indirme_olayi_karari(IndirmeOlayi::Bitti(false), 8123, |u: &str| acilan.borrow_mut().push(u.to_string())));
+        assert_eq!(acilan.borrow().len(), 1, "izinli / reddedilen / bitiş tarayıcı açtı");
     }
 
     /// LN L6 · İG-8.27: orphan söküm dalı STOP hedeflerini `orphan_durdurma_hedefleri`'nden (port dosyası + varsayılan porttaki
@@ -3002,21 +3051,31 @@ mod tests {
     /// (manifest-türevi zehirli) URL'leri open_browser'a ULAŞTIRMADAN reddetmeli.
     #[test]
     fn open_url_kotucul_url_reddeder() {
+        // KP-5 B3: karar `indirme_adresi_denetle`de (kabuk yalnız tarayıcıyı açar) — izinli iki önek GEÇER (tarayıcı açılmadan ölçülür).
+        assert!(indirme_adresi_denetle("https://pemf-vet-web.vercel.app/indir").is_ok());
+        assert!(indirme_adresi_denetle("https://github.com/mert61-python/pemf-update/releases/download/x/PEMFVetClient-Setup.exe").is_ok());
+        assert!(indirme_adresi_denetle(&format!("https://pemf-vet-web.vercel.app/{}", "a".repeat(2100))).is_err(), "2048 sınırı yok");
+        assert!(indirme_adresi_denetle("https://pemf-vet-web.vercel.app/a\tb").is_err(), "sekme geçti");
+        let k = kabuk_soy();
+        let ou = &k[k.find("fn open_url(").expect("open_url yok")..];
+        let ou = &ou[..ou.find("\n}").expect("open_url sonu yok")];
+        let (d, a) = (ou.find("indirme_adresi_denetle(&url)?;").expect("open_url denetlemeden açıyor"), ou.find("backend::open_browser(&url)").expect("tarayıcı yok"));
+        assert!(d < a, "open_url tarayıcıyı denetimden ÖNCE açıyor");
         // İZİNLİ öneki (daraltılmış repo) GEÇİP metakarakter dalına takılan URL'ler → reddet.
         // (Böylece main.rs:100 prefix'i DEĞİL, metakarakter/kontrol reddi de test edilir.)
-        assert!(open_url("https://github.com/mert61-python/pemf-update/x&\\\\evil\\evil.exe".into()).is_err());
-        assert!(open_url("https://github.com/mert61-python/pemf-update/a|calc".into()).is_err());
-        assert!(open_url("https://github.com/mert61-python/pemf-update/a b".into()).is_err());
+        assert!(indirme_adresi_denetle("https://github.com/mert61-python/pemf-update/x&\\\\evil\\evil.exe").is_err());
+        assert!(indirme_adresi_denetle("https://github.com/mert61-python/pemf-update/a|calc").is_err());
+        assert!(indirme_adresi_denetle("https://github.com/mert61-python/pemf-update/a b").is_err());
         // izin verilmeyen repo (daraltılmış önek dışı) → prefix'te reddet
-        assert!(open_url("https://github.com/x&\\\\evil\\share\\evil.exe".into()).is_err());
-        assert!(open_url("https://github.com/a|calc".into()).is_err());
-        assert!(open_url("https://github.com/a^b".into()).is_err());
+        assert!(indirme_adresi_denetle("https://github.com/x&\\\\evil\\share\\evil.exe").is_err());
+        assert!(indirme_adresi_denetle("https://github.com/a|calc").is_err());
+        assert!(indirme_adresi_denetle("https://github.com/a^b").is_err());
         // izinsiz şema/host
-        assert!(open_url("http://evil.com/".into()).is_err());
-        assert!(open_url("https://github.com.evil/x".into()).is_err());
+        assert!(indirme_adresi_denetle("http://evil.com/").is_err());
+        assert!(indirme_adresi_denetle("https://github.com.evil/x").is_err());
         // boşluk / kontrol karakteri
-        assert!(open_url("https://github.com/a b".into()).is_err());
-        assert!(open_url("https://github.com/a\nb".into()).is_err());
+        assert!(indirme_adresi_denetle("https://github.com/a b").is_err());
+        assert!(indirme_adresi_denetle("https://github.com/a\nb").is_err());
     }
 
     /// OTO-GÜNCELLEME: yeniden-başlatma batch'i yolları DOĞRU gömer + enjeksiyon (tırnak/newline) REDDEDER.
@@ -3234,12 +3293,37 @@ mod tests {
         assert!(m.contains("hemen sonlandı") && m.contains("çıkış kodu"), "hata mesajı sebebi söylemiyor: {m}");
     }
 
+    /// KP-5 B3 (sahip kararı 2b): yardımcı batch yolu denetimi ve erken-ölüm iletisi saf — `"` / CR / LF / UTF-8 olmayan yol reddedilir,
+    /// düz yol AYNEN döner; ileti kodu (yoksa "yok") ve yolu söyler. Kabuk ikisini de kullanır (yapısal).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B3_yardimci_batch_yolu_ve_erken_olum_iletisi() {
+        use std::os::windows::ffi::OsStringExt;
+        let duz = std::path::Path::new(r"C:\Users\x\Temp\Vet & Co\t.bat");
+        assert_eq!(yardimci_batch_yolu(duz).unwrap(), r"C:\Users\x\Temp\Vet & Co\t.bat");
+        let guvensiz = pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluGuvensiz");
+        for kotu in ["C:\\a\"b.bat", "C:\\a\rb.bat", "C:\\a\nb.bat"] {
+            assert_eq!(yardimci_batch_yolu(std::path::Path::new(kotu)).unwrap_err(), guvensiz, "{kotu:?} kabul edildi");
+        }
+        let utf8_degil = std::path::PathBuf::from(std::ffi::OsString::from_wide(&[0x43, 0x3a, 0x5c, 0xD800]));
+        assert_eq!(yardimci_batch_yolu(&utf8_degil).unwrap_err(), pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluUtf8"));
+        let i1 = yardimci_hemen_sonlandi_iletisi(Some(1), duz);
+        assert!(i1.contains("hemen sonlandı") && i1.contains("çıkış kodu") && i1.contains('1') && i1.contains("t.bat"), "{i1}");
+        let i2 = yardimci_hemen_sonlandi_iletisi(None, duz);
+        assert!(i2.contains(&pemf_launcher_core::dil::t("rust.hata.yok")), "{i2}");
+        let k = kabuk_soy();
+        let yb = &k[k.find("fn yardimci_batch_baslat(").expect("yardimci_batch_baslat yok")..];
+        let yb = &yb[..yb.find("\n}").expect("sonu yok")];
+        assert!(yb.contains("yardimci_batch_yolu(bat)?") && yb.contains("yardimci_hemen_sonlandi_iletisi(durum.code(), bat)"), "kabuk saf yardımcıları kullanmıyor");
+    }
+
     /// Bulgu #2 — kaynak-parite: iki spawn noktası da ORTAK yardımcıyı kullanmalı; `.arg("/c")`
     /// geri gelirse tırnak-soyma tuzağı geri gelir.
     #[cfg(windows)]
     #[test]
     fn spawn_yollari_ortak_yardimciyi_kullanir() {
-        let kaynak = f5_yorumlari_soy(include_str!("main.rs"));
+        // KP-5 B3 (kör çapa): iki işlev KP-4 A1'de kabuk.rs'e taşındı; main.rs'te aramak bu testin KENDİ dizgesini buluyordu (boşuna yeşil).
+        let kaynak = kabuk_soy();
         for fn_adi in ["fn spawn_update_relauncher(", "fn spawn_uninstaller_detached("] {
             let i = kaynak.find(fn_adi).unwrap_or_else(|| panic!("{fn_adi} yok"));
             let govde = &kaynak[i..i + 1400];

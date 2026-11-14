@@ -435,15 +435,20 @@ def test_KRITIK_rust_komutlari_kayitli_async_ve_kapi_TEK_yerde():
     main = _MAIN_RS.read_text(encoding="utf-8").replace("\r\n", "\n")
     rs = _KABUK_RS.read_text(encoding="utf-8").replace("\r\n", "\n")  # generate_handler (`main`) + S komut kabukları
     blok = re.search(r"generate_handler!\[(.*?)\]", rs, re.S).group(1)
-    # Komutun bulunduğu dosya: S kabukları kabuk.rs'te, Y (`guncelleme_onayini_kaydet`) main.rs'te — her biri KENDİ dosyasında aranır.
+    # Komutun bulunduğu dosya: S kabukları kabuk.rs'te (KP-5 B2: `guncelleme_onayini_kaydet` ince kabuğu da — karar `onay_kaydet_ile`
+    # main.rs'te) — her biri KENDİ dosyasında aranır.
     for ad, kaynak in (
         ("guncelleme_ozeti", rs),
-        ("guncelleme_onayini_kaydet", main),
+        ("guncelleme_onayini_kaydet", rs),
         ("guncelleme_onayini_temizle", rs),
         ("guncelleme_engeli", rs),
     ):
         assert re.search(rf"\b{ad}\b", blok), f"{ad} kayıtlı değil"
         assert re.search(rf"async fn {ad}\(", kaynak), f"{ad} async değil (pencere iş parçacığında koşar)"
+    # KP-5 B2: onay kaydının KARARI (sürüm / kök / zaman) main.rs gövdesinde kalır; kabuk yalnız gerçek kök + saat bağlar.
+    assert "fn onay_kaydet_ile(" in main and "onay_kaydet_ile(" in rs, (
+        "onay kaydı gövdesi main.rs'te değil ya da kabuk ona bağlanmıyor"
+    )
     g = rs[rs.index("async fn guncelleme_engeli(") :]
     g = g[: g.index("\n}\n")]
     assert "aktif_seans_kapisi(" in g, "seans engeli TEK kapıyı (aktif_seans_kapisi) kullanmıyor"

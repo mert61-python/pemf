@@ -170,7 +170,8 @@ jobs:
       # modülleri paydada; ürün satırları %81,48 — KP-3 A2: burada %81,43 yazıyordu, kesin ölçüm %81,48) → 81. KP-3 AŞAMA 0
       # (2026-11-07, d45d9cf2): %82,04 (bu adımın ölçüsü — llvm toplam).
       # KP-3 AŞAMA D (2026-11-08, uç 6c7d4f10): %83,75 (aynı ölçü) → 82.
-      # KP-4 A1 (Y257 c, sahip 08.11): `launcher/app/src/kabuk.rs` (S sınıfı Tauri kabuğu — pencere / WebView / gerçek platform; 44 işlev,
+      # KP-4 A1 (Y257 c, sahip 08.11): `launcher/app/src/kabuk.rs` (S sınıfı Tauri kabuğu — pencere / WebView / gerçek platform; 44 işlev
+      # → KP-5 B2 52: A2c'nin 8 ince kök kabuğu, gövdeleri `_ile` ölçülür),
       # `launcher/app/kapsam_siniflari.json`) ölçümden GEREKÇELİ dışlanır → bu adım "ürün ölçüsü"dür (S hariç). Dışlamanın dürüstlüğü:
       # `tests/test_KP3_main_rs_kapsam_siniflari.py` (S yalnız kabuk.rs'te, orada S dışı işlev / test yok, desen başka dosya yakalamaz).
       # KP-4 C (2026-11-11, uç da182963 — launcher o günden beri değişmedi): İKİ ölçü — llvm toplam (KP-3 ile karşılaştırılabilir)

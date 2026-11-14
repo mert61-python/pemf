@@ -124,27 +124,17 @@ fn open_app_window(app: &tauri::AppHandle, port: u16) {
     }
 }
 
-/// `on_download` işleyicisi (`true` = WebView2 indirsin). `Finished` yalnız başarıyı günlüğe yazar — dosya ADI / yolu yazılmaz
-/// (rapor / yedek adları hasta adı taşıyabilir).
+/// `on_download` işleyicisi (`true` = WebView2 indirsin). KP-5 B3: karar `indirme_olayi_karari`nda (main.rs, testli); burada yalnız
+/// Tauri olayının özeti (bilinmeyen — `non_exhaustive` — tür: `true`, eskisi gibi) ve gerçek tarayıcı açma bağlanır.
 fn indirme_olayi(olay: tauri::webview::DownloadEvent<'_>, port: u16) -> bool {
-    match olay {
-        tauri::webview::DownloadEvent::Requested { url, destination: _ } => match indirme_karari(url.as_str(), port) {
-            IndirmeKarari::Izin => true,
-            IndirmeKarari::TarayicidaAc => {
-                let _ = backend::open_browser(url.as_str());
-                false
-            }
-            IndirmeKarari::Reddet => {
-                eprintln!("[indirme] reddedildi (sema {})", url.scheme());
-                false
-            }
-        },
-        tauri::webview::DownloadEvent::Finished { success, .. } => {
-            eprintln!("[indirme] bitti: basari={success}");
-            true
-        }
-        _ => true,
-    }
+    let ozet = match &olay {
+        tauri::webview::DownloadEvent::Requested { url, .. } => IndirmeOlayi::Istek(url),
+        tauri::webview::DownloadEvent::Finished { success, .. } => IndirmeOlayi::Bitti(*success),
+        _ => return true,
+    };
+    indirme_olayi_karari(ozet, port, |u| {
+        let _ = backend::open_browser(u);
+    })
 }
 
 fn home_dir() -> std::path::PathBuf {
@@ -214,26 +204,11 @@ fn dil_ayarla(kod: String) -> String {
     }
 }
 
-/// Güncelleme indirme sayfasını varsayılan tarayıcıda aç. Manifest host-pinli kaynaktan gelir;
-/// yine de savunma: yalnız https + bilinen indirme host'ları (poisoned-manifest keyfi/zararlı
-/// URL açamasın). Sondaki "/" şart → "github.com.evil" ve userinfo (github.com@evil) hileleri geçmez.
+/// Güncelleme indirme sayfasını varsayılan tarayıcıda aç. KP-5 B3: adres denetimi `indirme_adresi_denetle`de (main.rs, testli);
+/// burada yalnız gerçek tarayıcı açma.
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    // #138: ham "https://github.com/" YERİNE ürün-repo önekine daralt → zehirli manifest keyfi bir
-    // GitHub repo'suna (SHA'sız indirme) yönlendiremez.
-    const ALLOWED: [&str; 2] = [
-        "https://pemf-vet-web.vercel.app/",
-        "https://github.com/mert61-python/pemf-update/",
-    ];
-    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
-        return Err(pemf_launcher_core::dil::t_ile("rust.hata.indirmeAdresiIzinsiz", &[("url", &url.to_string())]));
-    }
-    // Derinlik-savunması: open_browser artık rundll32 kullansa da (kabuk yok), manifest-türevi
-    // URL'yi asla riske atma — kabuk-metakarakteri, kontrol-karakteri veya boşluk içeren URL'yi
-    // reddet. Meşru GitHub/Vercel indirme URL'lerinde bunlar bulunmaz.
-    if url.len() > 2048 || url.chars().any(|c| c.is_control() || "&|^<>\"'`{} \t\r\n".contains(c)) {
-        return Err(pemf_launcher_core::dil::t("rust.hata.indirmeAdresiGecersizKarakter"));
-    }
+    indirme_adresi_denetle(&url)?;
     backend::open_browser(&url).map_err(|e| e.to_string())
 }
 
@@ -434,10 +409,7 @@ fn guncelleme_penceresini_ac(sfx: &str) -> Result<std::path::PathBuf, String> {
 #[cfg(windows)]
 fn yardimci_batch_baslat(bat: &std::path::Path) -> Result<std::process::Child, String> {
     use std::os::windows::process::CommandExt;
-    let yol = bat.to_str().ok_or_else(|| pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluUtf8"))?;
-    if yol.contains('"') || yol.contains('\r') || yol.contains('\n') {
-        return Err(pemf_launcher_core::dil::t("rust.hata.yardimciBatchYoluGuvensiz"));
-    }
+    let yol = yardimci_batch_yolu(bat)?; // KP-5 B3: yol denetimi main.rs'te (testli)
     // ⚠️ stdio NULL (2026-09-06): ayrık yardımcı ebeveynin tutamaçlarını DEVRALMAMALI. Launcher
     // GUI olduğundan üretimde zaten konsol yok; ama `cargo test`/CI altında test ikilisinin stdout'u
     // BORUDUR ve devralınan boru, batch zincirinden sağ kalan bir süreçte (ör. `start x.bat` → `cmd /K`)
@@ -455,9 +427,7 @@ fn yardimci_batch_baslat(bat: &std::path::Path) -> Result<std::process::Child, S
     if let Ok(Some(durum)) = cocuk.try_wait() {
         if !durum.success() {
             let _ = std::fs::remove_file(bat);
-            let kod = durum.code().map(|k| k.to_string()).unwrap_or_else(|| pemf_launcher_core::dil::t("rust.hata.yok"));
-            let yol = bat.display().to_string();
-            return Err(pemf_launcher_core::dil::t_ile("rust.hata.yardimciHemenSonlandi", &[("kod", &kod), ("yol", &yol)]));
+            return Err(yardimci_hemen_sonlandi_iletisi(durum.code(), bat)); // KP-5 B3: ileti main.rs'te (testli)
         }
     }
     Ok(cocuk)
@@ -946,4 +916,51 @@ fn guncelleme_ekranini_calistir(ctx: tauri::Context<tauri::Wry>) {
     if let Err(e) = sonuc {
         eprintln!("güncelleme penceresi açılamadı: {e}");
     }
+}
+
+// ── KP-5 B2 (sahip kararı 2a, 11-11): A2c'de gövdesi `_ile`'ye devreden 8 ince kök / Tauri kabuğu main.rs'ten DEĞİŞTİRMEDEN
+// buraya taşındı (S 44 → 52). Karar mantığı main.rs'teki `_ile` gövdelerinde (testli, ölçülür); burada yalnız gerçek kök
+// (`home_dir()` / `default_install_root`), gerçek saat / ortam ve `spawn_blocking` bağlaması kaldı.
+
+fn detect_environment_blocking() -> Environment {
+    ortam_algila(&install::default_install_root(&home_dir()))
+}
+
+fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
+    // Host pinlemesi manifest'in KENDİSİ için de geçerli: zehirli bir manifest zaten her şeyin
+    // girdisidir. fetch_string_pinned_budgeted: https-only + KISA connect/read timeout + KÜRESEL
+    // deadline + duvar saati tavanı (DNS'e deadline uygulanamıyor) + redirect-sonrası host
+    // yeniden-doğrulama + into_string ~10MB metin-DoS sınırı.
+    profilleri_getir(|| net::fetch_string_pinned_budgeted(MANIFEST_URL), &install::default_install_root(&home_dir()))
+}
+
+fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
+    check_runtime_update_ile(&install::default_install_root(&home_dir()), manifest_raw)
+}
+
+fn guncelleme_ozeti_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
+    guncelleme_ozeti_ile(&install::default_install_root(&home_dir()), manifest_raw, unix_simdi_s())
+}
+
+/// GÜNCELLEME ONAYI: kullanıcı "Güncelle"ye bastı (ya da zorunlu güncelleme başladı) → onay kaydı. Başlatıcı kendini kurup YENİDEN
+/// başladığında katman kurulumu bu kayıtla SORULMADAN sürer (tek akış, tek yeniden başlatma) ve akış sonunda uygulama açılır.
+#[tauri::command]
+async fn guncelleme_onayini_kaydet(manifest_raw: String, launcher_hedefi: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        onay_kaydet_ile(&install::default_install_root(&home_dir()), &manifest_raw, launcher_hedefi.as_deref(), unix_simdi_s())
+    })
+    .await
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))?
+}
+
+fn discard_pending_blocking(manifest_raw: Option<String>) -> Result<(), String> {
+    discard_pending_ile(&install::default_install_root(&home_dir()), manifest_raw)
+}
+
+fn kaldirma_veri_konumu_blocking() -> serde_json::Value {
+    kaldirma_veri_konumu_ile(&home_dir(), |k| std::env::var(k).ok())
+}
+
+fn yedek_hedefi_durumu_blocking() -> serde_json::Value {
+    yedek_hedefi_durumu_ile(&install::default_install_root(&home_dir()))
 }

@@ -23,7 +23,8 @@ _KABUK = _KOK / "launcher" / "app" / "src" / "kabuk.rs"
 _SINIF = _KOK / "launcher" / "app" / "kapsam_siniflari.json"
 _CI = _KOK / ".github" / "workflows" / "tests.yml"
 # KP-3 B4 ölçümü (d45d9cf2): 44 S işlevi. Değişiklik BİLİNÇLİ olmalı — sayı burada ve JSON'da birlikte değişir.
-BEKLENEN_S = 44
+# KP-5 B2 (sahip kararı 2a, 11-11): A2c'nin 8 ince kök / Tauri kabuğu (`*_blocking` ×7 + `guncelleme_onayini_kaydet`) S → 52.
+BEKLENEN_S = 52
 _FN = re.compile(r"^(?:pub(?:\([^)]*\))? )?(?:async )?fn (\w+)")
 
 
@@ -90,9 +91,10 @@ def test_S_listesi_GUVENLIK_yollarini_ICERMEZ():
         "apply_runtime_update",
         "apply_self_update",
         "prefetch_runtime_update",
-        "guncelleme_ozeti_blocking",
-        "guncelleme_onayini_kaydet",
-        "check_runtime_update_blocking",
+        # KP-5 B2: güncelleme kararının GÖVDELERİ (ince kabukları S — yalnız gerçek kök / saat bağlar, karar içermez)
+        "guncelleme_ozeti_ile",
+        "onay_kaydet_ile",
+        "check_runtime_update_ile",
         "aktif_seans_kapisi_portla",
     ):
         assert sinif[ad]["sinif"] != "S", f"{ad} güvenlik / güncelleme yolu — S olamaz"
