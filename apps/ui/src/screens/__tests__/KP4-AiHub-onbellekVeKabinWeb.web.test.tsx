@@ -68,6 +68,7 @@ jest.mock("expo-linear-gradient", () => {
 });
 
 import i18n from "i18next";
+import { __bayrakTestiAyarla } from "@/i18n/dil";
 import {
   alanlar, blobMetni, ekraniCiz, etiketeBas, ileti, metneBas, postlar, saatiIlerlet, Sahne, web, webKur, webSok,
 } from "./KP3_aiHubWebAparati";
@@ -158,7 +159,26 @@ it("KRİTİK: FGS önbellekteki dosya GÖRSEL DEĞİLSE analiz isteği gitmez, h
   await etiketeBas(s, T("ai.modul.yuzAgrisi.ad"));
   await metneBas(s, T("ai.fgs.analiziBaslat"));
   expect(postlar("/ai/vision/landmark")).toHaveLength(0);
-  expect(ileti()).toBeTruthy();
+  // KP-5 · 6 (ürün hatası): ileti GENEL "ağ / sunucu hatası" DEĞİL — dosyanın görsel olmadığını + eylemi söyler (katalogdan).
+  expect(ileti()).toBe(T("ai.hata.goruntuOkunamadi"));
+  expect(ileti()).not.toBe(T("ortak.hata.agSunucu"));
+});
+
+it("KRİTİK (KP-5 · 6): İngilizce arayüzde görsel olmayan önbellek dosyası iletisi İNGİLİZCE (Türkçe sızmaz)", async () => {
+  __bayrakTestiAyarla(true); // jest.setup kuralı: İngilizceyi deneyen test bayrağı açıkça açar, sonunda geri alır
+  try {
+    await i18n.changeLanguage("en");
+    await moduluAc("ai.modul.yuzAgrisi.ad", "veterinarian");
+    await galeridenSec(new File(["DUZ METIN"], "not.txt", { type: "text/plain" }));
+    await etiketeBas(s, T("ai.modul.yuzAgrisi.ad"));
+    await etiketeBas(s, T("ai.modul.yuzAgrisi.ad"));
+    await metneBas(s, T("ai.fgs.analiziBaslat"));
+    expect(postlar("/ai/vision/landmark")).toHaveLength(0);
+    expect(ileti()).toBe("The image could not be read. Please choose a valid file (.png, .jpg or .tif).");
+  } finally {
+    await i18n.changeLanguage("tr");
+    __bayrakTestiAyarla(null);
+  }
 });
 
 describe.each([

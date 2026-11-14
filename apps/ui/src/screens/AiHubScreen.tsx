@@ -1758,7 +1758,10 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           const res = await korunanFetch(uriToAnalyze);
           blob = await res.blob();
           if (blob.type && !blob.type.startsWith("image/")) {
-            throw new Error("Seçilen dosya görsel olarak okunamadı.");
+            // KP-5 · 6: istek GİTMEZ; ileti genel "ağ / sunucu hatası" değil, dosyanın okunamadığını + eylemi söyler (TR + EN katalog).
+            // (Eskiden adsız `Error` → `aiHataMesaji` varsayılanı; metni de katalog dışıydı.)
+            if (mountedRef.current && !isLive) showToast(t("ai.hata.goruntuOkunamadi"), "error");
+            return;
           }
         }
         if (!blob) {
