@@ -862,31 +862,13 @@ fn main() {
                             let _ = appwin.hide();
                         }
                     }
-                    if let Some((mut child, port)) = state.proc.lock().unwrap().take() {
+                    if let Some((child, port)) = state.proc.lock().unwrap().take() {
                         let root = install::default_install_root(&home_dir());
                         let bellek = state.session.clone(); // [S4] job'a taşınır (F5 belleği de tazeler)
                         let sinir = kapanis_yakma_siniri(&state, is_main); // KI G1: ana pencerede bekleyicinin bütçesi
-                        // `mut`: closure `child`'ı taşır ve üzerinde kill/wait çağırır (FnMut değil,
-                        // FnOnce; ama gövde &mut child istediği için binding mutable olmalı).
-                        let mut job = move || {
-                            backend::safe_stop_coils(port);
-                            yakma_bitene_kadar_bekle(port, &sinir); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ
-                            son_oturumu_yakala(port, &root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ
-                            let _ = child.kill();
-                            let _ = child.wait();
-                            // child.kill() ÇOCUK-AĞACINI öldürmez → BİZİM spawn ettiğimiz
-                            // mosquitto/cloudflared YETİM kalır ve runtime/ dosyalarını kilitler
-                            // (sonraki kurulum "os error 32"). Yalnız SAHİBİYSEK ağacı temizle.
-                            backend::kill_stray_backends(&root); // LN L5: mosquitto yalnız bu kökten (Y71)
-                            // Temiz kapanış: bobinler durduruldu + backend öldürüldü → port dosyasını
-                            // sil ki sonraki bir uninstall ölü bir porta E-stop POST'lamasın. (Çökme
-                            // yolunda bu handler ÇALIŞMAZ → dosya kalır ve uninstaller E-stop'lar.)
-                            clear_port_if_stopped(&root, Some(port));
-                            // Sahip 2026-11-04: backend kapandı → PEMF-Gateway hotspot'u da kapanır (eskiden açık kalıyor, görev
-                            // her 3 dk geri açıyordu). Yalnız BİZİM backend'imizi durdurduysak; bobin STOP'u ve kill'den SONRA,
-                            // beklemeden (ayrı süreç). Benimsenen / başkasının backend'inde bu blok koşmaz → hotspot'a dokunulmaz.
-                            flow::hotspot_kapat(&root);
-                        };
+                        // KP-5 B1: işin gövdesi (STOP → yakma beklemesi → son oturum → kill → artakalan → port dosyası → hotspot) BAYT
+                        // AYNI `pencere_kapanis_isi`te (main.rs — davranış testli); kabukta yalnız Tauri olayı / iş parçacığı kalır.
+                        let job = move || pencere_kapanis_isi(child, port, root, bellek, sinir);
                         if is_main {
                             job(); // süreç çıkıyor → bobin durdurma BİTMEDEN dönme
                         } else {

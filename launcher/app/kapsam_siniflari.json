@@ -4,7 +4,7 @@
  "s_sayisi": 44,
  "ozet": {
   "K": {
-   "islev": 30,
+   "islev": 33,
    "eksik_satir": 0
   },
   "S": {
@@ -16,8 +16,8 @@
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 27,
-   "eksik_satir": 727
+   "islev": 26,
+   "eksik_satir": 703
   }
  },
  "islevler": {
@@ -27,9 +27,8 @@
    "neden": "GÜVENLİK YOLU — State + stop_backend_for_teardown; KP-4."
   },
   "stop_backend_for_teardown": {
-   "sinif": "Y",
-   "eksik": 24,
-   "neden": "GÜVENLİK YOLU (bobin STOP → kill, kapanis_durdur); gerçek süreç + HTTP. Sıra kaynak-testleriyle kilitli; davranış koruyan ayrım KP-4 (sahip onayıyla)."
+   "sinif": "K",
+   "eksik": 0
   },
   "yakma_bitene_kadar_bekle": {
    "sinif": "Y",
@@ -567,6 +566,14 @@
    "eksik": 37,
    "neden": "Ayrı güncelleme bilgi penceresi kipi (ikinci Tauri Builder).",
    "neden_T_Y_degil": "Saf parça (`pencere_gunluk_satiri`, işaret dosyası çekirdekte) testli; kalan pencere yaşam döngüsü."
+  },
+  "stop_backend_for_teardown_portla": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "pencere_kapanis_isi": {
+   "sinif": "K",
+   "eksik": 0
   }
  }
 }

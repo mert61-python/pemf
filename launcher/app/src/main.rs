@@ -118,10 +118,14 @@ fn stop_tracked_backend(state: &tauri::State<'_, AppState>, root: &std::path::Pa
 /// DENETİM 2026-08-06: `uninstall` bu işi `spawn_blocking`'e taşıyabilsin diye ayrıldı —
 /// `tauri::State` thread'e taşınamaz, ama `(Child, port)` çifti taşınabilir. Sıra (E-stop →
 /// kill → stray temizliği → port dosyası) DEĞİŞMEDİ.
-fn stop_backend_for_teardown(
+///
+/// KP-5 B1: orphan dalının varsayılan portu ENJEKTE (`varsayilan_port`; testte 8000'e istek YOK) — üretim girişi aşağıdaki
+/// `stop_backend_for_teardown` (`install::DEFAULT_PORT`). Gövde başka hiçbir yerde DEĞİŞMEDİ.
+fn stop_backend_for_teardown_portla(
     tracked: Option<(std::process::Child, u16)>,
     root: &std::path::Path,
     bellek: Arc<Mutex<Option<auth::Session>>>, // [S4] F5 yakalama belleği de tazeler (thread'e taşınabilir Arc)
+    varsayilan_port: u16,
 ) {
     // KI G1: tracked + orphan yakma beklemeleri TEK bütçe (toplam ≤ YAKMA_BEKLEME_AZAMI).
     let sinir = backend::YakmaBeklemeSiniri::default();
@@ -142,7 +146,7 @@ fn stop_backend_for_teardown(
     //    LN L6 · İG-8.27: port dosyası YOK / bayatken varsayılan portta çalışan (kimliği doğrulanmış) backend de STOP alır —
     //    `kill_stray_backends` onu ADLA öldürür; eskiden STOP'suzdu.
     if !had_tracked {
-        for port in backend::orphan_durdurma_hedefleri(root, install::DEFAULT_PORT) {
+        for port in backend::orphan_durdurma_hedefleri(root, varsayilan_port) {
             backend::safe_stop_coils(port);
             yakma_bitene_kadar_bekle(port, &sinir); // LN L3 · Y82
         }
@@ -151,6 +155,45 @@ fn stop_backend_for_teardown(
     // taskkill sonrası OS'un dosya kilitlerini bırakması için kısa bekle (extract'tan ÖNCE).
     std::thread::sleep(std::time::Duration::from_millis(800));
     clear_port_if_stopped(root, None);
+}
+
+/// Üretim girişi (çağıranlar AYNI): `stop_backend_for_teardown_portla` + gerçek varsayılan port.
+fn stop_backend_for_teardown(
+    tracked: Option<(std::process::Child, u16)>,
+    root: &std::path::Path,
+    bellek: Arc<Mutex<Option<auth::Session>>>,
+) {
+    stop_backend_for_teardown_portla(tracked, root, bellek, install::DEFAULT_PORT)
+}
+
+/// KP-5 B1 (sahip kararı 1): pencere kapanışının (`WindowEvent::Destroyed`) söküm işi — gövde `kabuk.rs`'teki kapanıştan BAYT AYNI
+/// taşındı (değişken adları aynı: sahip olunan `root` / `bellek` / `sinir`); kabukta yalnız iş parçacığı / Tauri olayı kalır. Sıra
+/// DAVRANIŞLA sınanır (`KRITIK_KP5_B1_pencere_kapanis_isi_…`): STOP → yakma beklemesi → son oturum → kill → artakalan → port dosyası
+/// → hotspot. YALNIZ bu başlatıcının başlattığı (izlenen) backend için çağrılır (sahiplik kuralı kabukta AYNEN).
+fn pencere_kapanis_isi(
+    mut child: std::process::Child,
+    port: u16,
+    root: std::path::PathBuf,
+    bellek: Arc<Mutex<Option<auth::Session>>>,
+    sinir: backend::YakmaBeklemeSiniri,
+) {
+    backend::safe_stop_coils(port);
+    yakma_bitene_kadar_bekle(port, &sinir); // LN L3 · Y82: STOP SONRASI / kill ÖNCESİ
+    son_oturumu_yakala(port, &root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ
+    let _ = child.kill();
+    let _ = child.wait();
+    // child.kill() ÇOCUK-AĞACINI öldürmez → BİZİM spawn ettiğimiz
+    // mosquitto/cloudflared YETİM kalır ve runtime/ dosyalarını kilitler
+    // (sonraki kurulum "os error 32"). Yalnız SAHİBİYSEK ağacı temizle.
+    backend::kill_stray_backends(&root); // LN L5: mosquitto yalnız bu kökten (Y71)
+    // Temiz kapanış: bobinler durduruldu + backend öldürüldü → port dosyasını
+    // sil ki sonraki bir uninstall ölü bir porta E-stop POST'lamasın. (Çökme
+    // yolunda bu handler ÇALIŞMAZ → dosya kalır ve uninstaller E-stop'lar.)
+    clear_port_if_stopped(&root, Some(port));
+    // Sahip 2026-11-04: backend kapandı → PEMF-Gateway hotspot'u da kapanır (eskiden açık kalıyor, görev
+    // her 3 dk geri açıyordu). Yalnız BİZİM backend'imizi durdurduysak; bobin STOP'u ve kill'den SONRA,
+    // beklemeden (ayrı süreç). Benimsenen / başkasının backend'inde bu blok koşmaz → hotspot'a dokunulmaz.
+    flow::hotspot_kapat(&root);
 }
 
 /// LN L3 · Y82 (sahip): STOP gönderildikten SONRA, süreç öldürülmeden ÖNCE — backend STM32 firmware'i YAKIYORSA bitmesini bekle
@@ -2506,10 +2549,11 @@ mod tests {
         let main_uretim = &main_soy[..main_soy.find("#[cfg(test)]").expect("test modülü yok")];
         let uretim = &soy[..];
         let cagri = "flow::hotspot_kapat(&root);";
-        assert_eq!(uretim.matches(cagri).count(), 1, "hotspot kapatma üretimde tam bir kez olmalı");
-        assert_eq!(main_uretim.matches(cagri).count(), 0, "hotspot kapatma main.rs üretiminde de var (iki kez)");
-        let is = &uretim[uretim.find("let mut job = move || {").expect("kapanış işi yok")..];
-        let is = &is[..is.find("};").expect("kapanış işi sonu yok")];
+        // KP-5 B1: kapanış işinin gövdesi main.rs `pencere_kapanis_isi`te (kabuk yalnız çağırır).
+        assert_eq!(main_uretim.matches(cagri).count(), 1, "hotspot kapatma üretimde tam bir kez olmalı");
+        assert_eq!(uretim.matches(cagri).count(), 0, "hotspot kapatma kabukta da var (iki kez)");
+        let is = &main_uretim[main_uretim.find("fn pencere_kapanis_isi(").expect("kapanış işi yok")..];
+        let is = &is[..is.find("\n}").expect("kapanış işi sonu yok")];
         let sira: Vec<usize> = ["backend::safe_stop_coils(port);", "let _ = child.kill();", "clear_port_if_stopped(&root, Some(port));", cagri]
             .iter()
             .map(|p| is.find(p).unwrap_or_else(|| panic!("kapanış işinde {p} yok")))
@@ -2588,7 +2632,7 @@ mod tests {
         let soy = f5_yorumlari_soy(include_str!("main.rs"));
 
         // stop_backend_for_teardown gövdesi: imza → sonraki üst-seviye `\nfn `.
-        let i = soy.find("fn stop_backend_for_teardown").expect("teardown fn yok");
+        let i = soy.find("fn stop_backend_for_teardown_portla(").expect("teardown fn yok"); // KP-5 B1: gövde `_portla`da
         let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
         let govde = &soy[i..son];
         let estop = govde.find("safe_stop_coils(").expect("teardown E-stop yok");
@@ -2607,9 +2651,10 @@ mod tests {
         );
 
         // Destroyed job closure: E-stop → son-yakalama → kill sırası.
-        let kabuk = kabuk_soy(); // KP-4 A1: Destroyed işi `main` içinde (kabuk.rs)
-        let d = kabuk.find("let mut job = move ||").expect("Destroyed job closure yok");
-        let jg = &kabuk[d..(d + 600).min(kabuk.len())];
+        // KP-5 B1: Destroyed işinin gövdesi main.rs `pencere_kapanis_isi` (kabuk yalnız çağırır — davranış testi KRITIK_KP5_B1_pencere_…).
+        assert!(kabuk_soy().contains("let job = move || pencere_kapanis_isi(child, port, root, bellek, sinir);"), "Destroyed işi gövdeye bağlı değil");
+        let d = soy.find("fn pencere_kapanis_isi(").expect("Destroyed job gövdesi yok");
+        let jg = &soy[d..(d + 900).min(soy.len())];
         let de = jg.find("safe_stop_coils(").expect("job E-stop yok");
         let dy = jg.find("son_oturumu_yakala(").expect("job son-yakalama YOK (F5)");
         let dk = jg.find(".kill()").expect("job kill yok");
@@ -2663,15 +2708,17 @@ mod tests {
     #[test]
     fn KRITIK_L6_IG827_orphan_dali_varsayilan_porttaki_backendi_de_DURDURUR() {
         let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
-        let i = soy.find("fn stop_backend_for_teardown").expect("teardown fn yok");
+        let i = soy.find("fn stop_backend_for_teardown_portla(").expect("teardown fn yok"); // KP-5 B1: gövde `_portla`da
         let g = &soy[i..];
         let o = g.find("if !had_tracked").expect("orphan dalı yok");
         let ob = &g[o..g.find("backend::kill_stray_backends(root)").expect("kill_stray yok")];
         let dongu = ob
-            .find("for port in backend::orphan_durdurma_hedefleri(root, install::DEFAULT_PORT) {")
+            .find("for port in backend::orphan_durdurma_hedefleri(root, varsayilan_port) {")
             .expect("orphan dalı varsayılan porttaki backend'i hedeflemiyor (İG-8.27)");
         assert!(ob[dongu..].find("backend::safe_stop_coils(port);").is_some(), "hedeflere STOP yok");
         assert!(!ob.contains("read_to_string(root.join(\"backend.port\"))"), "eski tek-dosya okuması duruyor");
+        // KP-5 B1: üretim girişi gerçek varsayılan portu verir (davranış: KRITIK_KP5_B1_orphan_…).
+        assert!(soy.contains("    stop_backend_for_teardown_portla(tracked, root, bellek, install::DEFAULT_PORT)\n}"), "üretim girişi DEFAULT_PORT vermiyor");
     }
 
     /// LN L3 · Y82 (sahip): kapanışta sıra STOP → yakmanın bitmesini BEKLE → son oturum yakalama → kill (tracked teardown, orphan dalı
@@ -2679,7 +2726,7 @@ mod tests {
     #[test]
     fn KRITIK_L3_kapanis_STOP_sonra_YAKMA_BEKLENIR_sonra_kill() {
         let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
-        let i = soy.find("fn stop_backend_for_teardown").expect("teardown fn yok");
+        let i = soy.find("fn stop_backend_for_teardown_portla(").expect("teardown fn yok"); // KP-5 B1: gövde `_portla`da
         let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
         let g = &soy[i..son];
         let estop = g.find("safe_stop_coils(").expect("teardown E-stop yok");
@@ -2691,9 +2738,9 @@ mod tests {
         let ob = &g[o..g.find("backend::kill_stray_backends(root)").expect("kill_stray yok")];
         let (oe, obk) = (ob.find("safe_stop_coils(").expect("orphan STOP yok"), ob.find("yakma_bitene_kadar_bekle(").expect("orphan bekleme yok"));
         assert!(oe < obk, "orphan dalında bekleme STOP'tan ÖNCE");
-        let kabuk = kabuk_soy(); // KP-4 A1: Destroyed işi `main` içinde (kabuk.rs)
-        let d = kabuk.find("let mut job = move ||").expect("Destroyed job yok");
-        let jg = &kabuk[d..(d + 700).min(kabuk.len())];
+        // KP-5 B1: Destroyed işinin gövdesi main.rs `pencere_kapanis_isi` (kabuk yalnız çağırır).
+        let d = soy.find("fn pencere_kapanis_isi(").expect("Destroyed job gövdesi yok");
+        let jg = &soy[d..(d + 1000).min(soy.len())];
         let (je, jb, jy, jk) = (
             jg.find("safe_stop_coils(").expect("job STOP yok"),
             jg.find("yakma_bitene_kadar_bekle(").expect("job yakma beklemesi YOK (Y82)"),
@@ -2761,12 +2808,13 @@ mod tests {
         assert!(!kr.contains("backend::yakmanin_bitmesini_bekle("), "bekleyicide kendi azamisiyle (bütçesiz) bekleme kaldı");
         // (b) Destroyed işi: ana pencerede AYNI bütçe, bekleme STOP'tan sonra
         let ds = &kabuk[dst..];
-        let job = ds.find("let mut job = move ||").expect("Destroyed job yok");
+        let job = ds.find("let job = move || pencere_kapanis_isi(").expect("Destroyed job yok"); // KP-5 B1
         assert!(
             ds[..job].contains("let sinir = kapanis_yakma_siniri(&state, is_main);"),
             "Destroyed işi bekleyicinin bütçesini almıyor (ikinci azami bekleme)"
         );
-        let jg = &ds[job..];
+        let pk = soy.find("fn pencere_kapanis_isi(").expect("Destroyed job gövdesi yok"); // KP-5 B1: gövde main.rs'te
+        let jg = &soy[pk..];
         let (st, bk) = (
             jg.find("backend::safe_stop_coils(port);").expect("job STOP yok"),
             jg.find("yakma_bitene_kadar_bekle(port, &sinir);").expect("job paylaşılan bütçeyle beklemiyor"),
@@ -2775,7 +2823,7 @@ mod tests {
         // (c) bekleme yardımcısı bütçeyi kullanır; (d) teardown TEK bütçe
         let yb = govde("fn yakma_bitene_kadar_bekle(port: u16, sinir: &backend::YakmaBeklemeSiniri)");
         assert!(yb.contains("backend::yakmanin_bitmesini_bekle_sinirla(port, sinir,") && !yb.contains("backend::yakmanin_bitmesini_bekle("));
-        let td = govde("fn stop_backend_for_teardown(");
+        let td = govde("fn stop_backend_for_teardown_portla("); // KP-5 B1
         assert_eq!(td.matches("backend::YakmaBeklemeSiniri::default()").count(), 1, "teardown'da tek bütçe değil");
         assert!(td.find("backend::YakmaBeklemeSiniri::default()") < td.find("let had_tracked"));
         assert_eq!(td.matches("yakma_bitene_kadar_bekle(").count(), td.matches("yakma_bitene_kadar_bekle(port, &sinir)").count());
@@ -4101,11 +4149,20 @@ Connection: close
     /// KAPATIR (gerçek ölü backend gibi: bağlantı reddi → port dosyası temizlenebilir).
     #[cfg(windows)]
     fn kp5_sahte_backend(ln: std::net::TcpListener, ad: String, pid: u32, kayit: Kp5Kayit) -> std::thread::JoinHandle<()> {
+        kp5_sahte_backend_ile(ln, move || kp5_cocuk_canli_mi(&ad, pid), kayit)
+    }
+
+    /// `kp5_sahte_backend`in gövdesi — "backend canlı mı" yüklemi ENJEKTE (izlenen: çocuk süreç · orphan: test bayrağı).
+    fn kp5_sahte_backend_ile(
+        ln: std::net::TcpListener,
+        canli_mi: impl Fn() -> bool + Send + 'static,
+        kayit: Kp5Kayit,
+    ) -> std::thread::JoinHandle<()> {
         use std::io::{Read, Write};
         ln.set_nonblocking(true).unwrap();
         std::thread::spawn(move || {
             let bitis = std::time::Instant::now() + std::time::Duration::from_secs(60);
-            while std::time::Instant::now() < bitis && kp5_cocuk_canli_mi(&ad, pid) {
+            while std::time::Instant::now() < bitis && canli_mi() {
                 let Ok((mut c, _)) = ln.accept() else {
                     std::thread::sleep(std::time::Duration::from_millis(5));
                     continue;
@@ -4114,10 +4171,13 @@ Connection: close
                 let _ = c.set_read_timeout(Some(std::time::Duration::from_secs(2)));
                 let mut buf = vec![0u8; 8192];
                 let n = c.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    continue; // yalnız TCP yoklaması (`backend_is_definitely_gone`) — istek değil, kaydedilmez
+                }
                 let istek = String::from_utf8_lossy(&buf[..n]).to_string();
                 let mut ilk = istek.lines().next().unwrap_or("").split_whitespace();
                 let (yontem, yol) = (ilk.next().unwrap_or("").to_string(), ilk.next().unwrap_or("").to_string());
-                let canli = kp5_cocuk_canli_mi(&ad, pid);
+                let canli = canli_mi();
                 kayit.lock().unwrap().push((yontem, yol.clone(), std::time::Instant::now(), canli));
                 let (kod, govde) = match yol.as_str() {
                     "/api/hardware/kapanis_durdur" => {
@@ -4199,6 +4259,160 @@ Connection: close
         assert!(ak[0] > k.last().unwrap().2 && ak[0] > t0, "artakalan temizliği son istekten ÖNCE");
         // 4) Ölü backend'in E-stop adresi (port dosyası) temizlendi.
         assert!(!kok.join("backend.port").exists(), "ölü backend'in port dosyası kaldı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KP-5 B1b ortak düzenek: bu test ikilisinin uyuyan kopyasını (sahte süreç) başlatır → (çocuk, pid, ikili adı).
+    #[cfg(windows)]
+    fn kp5_sahte_surec() -> (std::process::Child, u32, String) {
+        use std::os::windows::process::CommandExt;
+        let exe = std::env::current_exe().unwrap();
+        let ad = exe.file_name().unwrap().to_string_lossy().to_string();
+        let cocuk = std::process::Command::new(&exe)
+            .args(["tests::kp5_b1_sahte_surec_uyur", "--exact", "--ignored", "--test-threads=1", "-q"])
+            .env("PEMF_KP5_SAHTE_SUREC", "1")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .spawn()
+            .expect("sahte süreç başlamadı");
+        let pid = cocuk.id();
+        assert!(kp5_cocuk_canli_mi(&ad, pid), "sahte süreç görünmüyor");
+        (cocuk, pid, ad)
+    }
+
+    fn kp5_yollar(k: &Kp5Kayit) -> Vec<(String, String)> {
+        k.lock().unwrap().iter().map(|(y, p, _, _)| (y.clone(), p.clone())).collect()
+    }
+
+    fn kp5_cift(y: &str, p: &str) -> (String, String) {
+        (y.to_string(), p.to_string())
+    }
+
+    /// KRİTİK (KP-5 B1b · F5 + L3 + KI G1 + hotspot sırası DAVRANIŞLA): pencere kapanışının (Destroyed) işi — kabuktan BAYT AYNI taşınan
+    /// `pencere_kapanis_isi` — STOP → yakma yoklaması → son oturum çekimi (süreç CANLIYKEN) → kill → artakalan (süreç ÖLDÜKTEN sonra) →
+    /// ölü backend'in port dosyası silinir. Hotspot kapatma kurulu betik yokken (geçici kök) hiçbir şey yapmaz (sahibin ağına dokunulmaz).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B1_pencere_kapanis_isi_SIRASI_DAVRANIS_stop_yakma_yakala_SUREC_CANLIYKEN_sonra_kill_sonra_artakalan() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let (cocuk, pid, ad) = kp5_sahte_surec();
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+        // Süreç ölünce soketi AYNI ANDA kapanır: dinleyici `kapat` ile de kapanır ve artakalan gözlemcisi (kill'den SONRA, port
+        // yoklamasından ÖNCE) onu kapatıp bekler — "çocuk öldü mü" yoklamasıyla yarış YOK (beklemesiz port yoklaması belirlenimci).
+        let kapat = Arc::new(AtomicBool::new(false));
+        let (ad_s, kapat_s) = (ad.clone(), kapat.clone());
+        let sunucu = Arc::new(Mutex::new(Some(kp5_sahte_backend_ile(
+            ln,
+            move || !kapat_s.load(Ordering::SeqCst) && kp5_cocuk_canli_mi(&ad_s, pid),
+            kayit.clone(),
+        ))));
+        let kok = std::env::temp_dir().join(format!("pemf_kp5_b1p_{}_{port}", std::process::id()));
+        std::fs::create_dir_all(&kok).unwrap();
+        std::fs::write(kok.join("backend.port"), port.to_string()).unwrap();
+        let aninda = Arc::new(Mutex::new(None::<bool>));
+        let (ad_g, a_g, kok_g, kapat_g, sunucu_g) = (ad.clone(), aninda.clone(), kok.clone(), kapat.clone(), sunucu.clone());
+        backend::test_kancasi::gozlemci_kur(Some(Box::new(move |k: &std::path::Path| {
+            if k == kok_g {
+                *a_g.lock().unwrap() = Some(kp5_cocuk_canli_mi(&ad_g, pid));
+                kapat_g.store(true, Ordering::SeqCst);
+                if let Some(h) = sunucu_g.lock().unwrap().take() {
+                    let _ = h.join();
+                }
+            }
+        })));
+        let t0 = std::time::Instant::now();
+        pencere_kapanis_isi(cocuk, port, kok.clone(), Arc::new(Mutex::new(None)), backend::YakmaBeklemeSiniri::default());
+        let sure = t0.elapsed();
+        backend::test_kancasi::gozlemci_kur(None);
+        kapat.store(true, Ordering::SeqCst);
+        if let Some(h) = sunucu.lock().unwrap().take() {
+            let _ = h.join();
+        }
+        assert!(sure < std::time::Duration::from_secs(30), "süreç öldürülmedi — iş {sure:?} bekledi");
+        assert_eq!(
+            kp5_yollar(&kayit),
+            vec![
+                kp5_cift("POST", "/api/hardware/kapanis_durdur"),
+                kp5_cift("GET", "/api/health"),
+                kp5_cift("GET", "/api/auth/desktop-session")
+            ],
+            "kapanış işi istek sırası STOP → yakma yoklaması → son oturum çekimi değil"
+        );
+        let k = kayit.lock().unwrap().clone();
+        assert!(k.iter().all(|(_, _, _, c)| *c), "bir istek süreç ÖLDÜKTEN sonra geldi (kill erken): {k:?}");
+        assert!(!kp5_cocuk_canli_mi(&ad, pid), "izlenen backend öldürülmedi");
+        let ak = backend::test_kancasi::cagrilar(&kok);
+        assert_eq!(ak.len(), 1, "artakalan temizliği çağrı sayısı");
+        assert_eq!(*aninda.lock().unwrap(), Some(false), "artakalan temizliği süreç CANLIYKEN çağrıldı");
+        assert!(ak[0] > k.last().unwrap().2, "artakalan temizliği son istekten ÖNCE");
+        assert!(!kok.join("backend.port").exists(), "ölü backend'in port dosyası kaldı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-5 B1b · L6 / İG-8.27 + F5 "orphan HARİÇ" DAVRANIŞLA): izlenen backend YOKKEN `backend.port`taki (başka sürecin)
+    /// backend STOP alır ve yakması beklenir — son oturum ÇEKİLMEZ (başka sürecin jetonu: zehirlenme); artakalan temizliği STOP'tan
+    /// SONRA; backend hâlâ CANLI → E-stop adresi (port dosyası) KORUNUR. Varsayılan port dinleyicisiz (kesin ölü → hedef değil).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B1_orphan_STOP_alir_son_oturum_CEKILMEZ_canli_backendin_port_dosyasi_KORUNUR() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let canli = Arc::new(AtomicBool::new(true));
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+        let c = canli.clone();
+        let sunucu = kp5_sahte_backend_ile(ln, move || c.load(Ordering::SeqCst), kayit.clone());
+        let bos = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let olu_port = bos.local_addr().unwrap().port();
+        drop(bos); // dinleyicisiz → kesin ölü
+        let kok = std::env::temp_dir().join(format!("pemf_kp5_b1o_{}_{port}", std::process::id()));
+        std::fs::create_dir_all(&kok).unwrap();
+        std::fs::write(kok.join("backend.port"), port.to_string()).unwrap();
+        stop_backend_for_teardown_portla(None, &kok, Arc::new(Mutex::new(None)), olu_port);
+        let son_istek = kayit.lock().unwrap().last().map(|x| x.2);
+        canli.store(false, Ordering::SeqCst);
+        let _ = sunucu.join();
+        assert_eq!(
+            kp5_yollar(&kayit),
+            vec![kp5_cift("POST", "/api/hardware/kapanis_durdur"), kp5_cift("GET", "/api/health")],
+            "orphan söküm sırası STOP → yakma yoklaması değil (ya da son oturum ÇEKİLDİ — başka sürecin jetonu)"
+        );
+        let ak = backend::test_kancasi::cagrilar(&kok);
+        assert_eq!(ak.len(), 1, "artakalan temizliği çağrı sayısı");
+        assert!(Some(ak[0]) > son_istek, "artakalan temizliği STOP'tan ÖNCE");
+        assert!(kok.join("backend.port").exists(), "CANLI backend'in E-stop adresi silindi");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-5 B1b · L6 / İG-8.27 DAVRANIŞLA): port dosyası YOKKEN varsayılan portta kimliği PEMF olan backend de STOP alır (eskiden
+    /// STOP'suz ADLA öldürülüyordu) — kimlik yoklaması → STOP → yakma yoklaması; son oturum ÇEKİLMEZ; artakalan temizliği SONRA.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B1_orphan_VARSAYILAN_porttaki_PEMF_backendi_de_STOP_alir() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let canli = Arc::new(AtomicBool::new(true));
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let varsayilan = ln.local_addr().unwrap().port();
+        let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+        let c = canli.clone();
+        let sunucu = kp5_sahte_backend_ile(ln, move || c.load(Ordering::SeqCst), kayit.clone());
+        let kok = std::env::temp_dir().join(format!("pemf_kp5_b1v_{}_{varsayilan}", std::process::id()));
+        std::fs::create_dir_all(&kok).unwrap();
+        stop_backend_for_teardown_portla(None, &kok, Arc::new(Mutex::new(None)), varsayilan);
+        let son_istek = kayit.lock().unwrap().last().map(|x| x.2);
+        canli.store(false, Ordering::SeqCst);
+        let _ = sunucu.join();
+        assert_eq!(
+            kp5_yollar(&kayit),
+            vec![kp5_cift("GET", "/api/health"), kp5_cift("POST", "/api/hardware/kapanis_durdur"), kp5_cift("GET", "/api/health")],
+            "varsayılan porttaki PEMF backend'i: kimlik → STOP → yakma yoklaması değil"
+        );
+        let ak = backend::test_kancasi::cagrilar(&kok);
+        assert_eq!(ak.len(), 1, "artakalan temizliği çağrı sayısı");
+        assert!(Some(ak[0]) > son_istek, "artakalan temizliği STOP'tan ÖNCE");
         let _ = std::fs::remove_dir_all(&kok);
     }
 }
