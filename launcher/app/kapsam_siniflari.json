@@ -4,7 +4,7 @@
  "s_sayisi": 52,
  "ozet": {
   "K": {
-   "islev": 37,
+   "islev": 41,
    "eksik_satir": 0
   },
   "S": {
@@ -317,7 +317,7 @@
   "auth_status": {
    "sinif": "Y",
    "eksik": 50,
-   "neden": "State + DPAPI + ağ yenileme; karar `oturum_karari` testli; ayrım KP-4."
+   "neden": "KP-5 B4 (A2 deseni): gövde `oturum_ilk_durum` + `oturum_yenileme_sonucu`'e ayrıldı (K, geçici kök + sahte ağ adımlarıyla testli); kalan Tauri komutu yalnız `State` + gerçek kök + `spawn_blocking` + gerçek ağ (giriş / devir) bağlar. S'e taşınması S sayısını değiştirir (sahip kararı 2a yalnız 8 kabuk) → KP-6."
   },
   "oturum_gunlugu_olayi": {
    "sinif": "K",
@@ -330,12 +330,12 @@
   "auth_login": {
    "sinif": "Y",
    "eksik": 32,
-   "neden": "State + ağ; hata kodu yolu testli; ayrım KP-4."
+   "neden": "KP-5 B4 (A2 deseni): gövde `giris_kaydini_isle`'e ayrıldı (K, geçici kök + sahte ağ adımlarıyla testli); kalan Tauri komutu yalnız `State` + gerçek kök + `spawn_blocking` + gerçek ağ (giriş / devir) bağlar. S'e taşınması S sayısını değiştirir (sahip kararı 2a yalnız 8 kabuk) → KP-6."
   },
   "auth_logout": {
    "sinif": "Y",
    "eksik": 17,
-   "neden": "State + DPAPI silme; ayrım KP-4."
+   "neden": "KP-5 B4 (A2 deseni): gövde `cikis_isle`'e ayrıldı (K, geçici kök + sahte ağ adımlarıyla testli); kalan Tauri komutu yalnız `State` + gerçek kök + `spawn_blocking` + gerçek ağ (giriş / devir) bağlar. S'e taşınması S sayısını değiştirir (sahip kararı 2a yalnız 8 kabuk) → KP-6."
   },
   "calisan_backend_portu": {
    "sinif": "Y",
@@ -596,6 +596,22 @@
    "eksik": 0
   },
   "yardimci_hemen_sonlandi_iletisi": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "oturum_ilk_durum": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "oturum_yenileme_sonucu": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "giris_kaydini_isle": {
+   "sinif": "K",
+   "eksik": 0
+  },
+  "cikis_isle": {
    "sinif": "K",
    "eksik": 0
   }

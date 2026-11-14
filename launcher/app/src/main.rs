@@ -1491,71 +1491,117 @@ impl AuthStatus {
 /// bulut senkronizasyonu için önemlidir, cihazın çalışması için değil.
 #[tauri::command]
 async fn auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, String> {
-    // 1) Bu süreçte zaten giriş yapılmışsa (bellek) — ağa hiç çıkma.
-    let bellek = state.session.lock().unwrap().clone();
-    if let Some(s) = bellek {
-        return Ok(AuthStatus::giris_yapildi(&s.email, "fresh", false));
-    }
-
-    // 2) "Beni hatırla" blob'u (işletim sistemi korumalı). Ağ YOK — yerel okuma.
+    // KP-5 B4: kararlar `oturum_ilk_durum` / `oturum_yenileme_sonucu`nda (kök, bellek, saat ve yenileyici ENJEKTE — testli); burada yalnız
+    // gerçek kök + iki `spawn_blocking` evresi (okuma · yenileme; iletileri AYNEN).
     let root = install::default_install_root(&home_dir());
-    let root2 = root.clone();
-    let kayitli = tauri::async_runtime::spawn_blocking(move || secret_store::load(&root2))
+    let (bellek, root2) = (state.session.clone(), root.clone());
+    let ilk = tauri::async_runtime::spawn_blocking(move || oturum_ilk_durum(&bellek, &root2, auth::now_unix()))
         .await
         .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.oturumOkumaGorevCoktu", &[("e", &e.to_string())]))?;
-    let Some(kayitli) = kayitli else {
-        return Ok(AuthStatus::cikis_yapildi(false));
+    let kayitli = match ilk {
+        OturumIlkDurum::Sonuc(durum) => return Ok(durum),
+        OturumIlkDurum::Yenile(kayitli) => kayitli,
     };
-
-    // 3) Jeton hâlâ tazeyse ağa çıkmaya gerek yok (açılış hızlı kalsın).
-    if !kayitli.needs_refresh(auth::now_unix()) {
-        *state.session.lock().unwrap() = Some(kayitli.clone());
-        return Ok(AuthStatus::giris_yapildi(&kayitli.email, "cached", false));
-    }
-
-    // 4) Sessiz yenileme (duvar saati bütçeli → açılışı bloklamaz).
-    let eposta = kayitli.email.clone();
-    let rt = kayitli.refresh_token.clone();
-    let (sonuc, red) = tauri::async_runtime::spawn_blocking(move || {
-        let r = auth::refresh_budgeted(&rt, &eposta);
-        (r, auth::son_yenileme_reddi())
+    let bellek = state.session.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        oturum_yenileme_sonucu(&bellek, &root, kayitli, |rt, eposta| (auth::refresh_budgeted(rt, eposta), auth::son_yenileme_reddi()))
     })
     .await
-    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.oturumYenilemeGorevCoktu", &[("e", &e.to_string())]))?;
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.oturumYenilemeGorevCoktu", &[("e", &e.to_string())]))
+}
 
+/// `auth_status`un ilk evresinin sonucu: ya karar verildi (bellek / kayıt yok / taze kayıt) ya da kayıtlı oturum sessiz yenilenmeli.
+enum OturumIlkDurum {
+    Sonuc(AuthStatus),
+    Yenile(auth::Session),
+}
+
+/// KP-5 B4 (A2 deseni): `auth_status` 1)–3) — bellek, "Beni hatırla" kaydı (işletim sistemi korumalı, yerel okuma — ağ YOK), tazelik.
+/// Kök / bellek / ŞİMDİ ENJEKTE (testte geçici kök). Sıra AYNEN: bellekte oturum → "fresh" · kayıt yok → çıkış · kayıt taze → belleğe
+/// al, "cached" · bayat → yenilemeye.
+fn oturum_ilk_durum(bellek: &Mutex<Option<auth::Session>>, root: &std::path::Path, simdi: i64) -> OturumIlkDurum {
+    // 1) Bu süreçte zaten giriş yapılmışsa (bellek) — ağa hiç çıkma.
+    if let Some(s) = bellek.lock().unwrap().clone() {
+        return OturumIlkDurum::Sonuc(AuthStatus::giris_yapildi(&s.email, "fresh", false));
+    }
+    // 2) "Beni hatırla" blob'u (işletim sistemi korumalı). Ağ YOK — yerel okuma.
+    let Some(kayitli) = secret_store::load(root) else {
+        return OturumIlkDurum::Sonuc(AuthStatus::cikis_yapildi(false));
+    };
+    // 3) Jeton hâlâ tazeyse ağa çıkmaya gerek yok (açılış hızlı kalsın).
+    if !kayitli.needs_refresh(simdi) {
+        *bellek.lock().unwrap() = Some(kayitli.clone());
+        return OturumIlkDurum::Sonuc(AuthStatus::giris_yapildi(&kayitli.email, "cached", false));
+    }
+    OturumIlkDurum::Yenile(kayitli)
+}
+
+/// KP-5 B4 (A2 deseni): `auth_status` 4) — sessiz yenileme (duvar saati bütçeli; `yenile` ENJEKTE → testte sahte) ve `oturum_karari`
+/// (Yenilendi → yeni refresh_token SAKLA + belleğe · Sil → nedeni günlüğe + kaydı sil · çevrimdışı / geçici → nedeni günlüğe, kayıtlı
+/// oturumla devam — yukarıdaki OFFLINE KARARI). Yan etkiler AYNEN.
+fn oturum_yenileme_sonucu(
+    bellek: &Mutex<Option<auth::Session>>,
+    root: &std::path::Path,
+    kayitli: auth::Session,
+    yenile: impl FnOnce(&str, &str) -> (Result<auth::Session, auth::AuthError>, Option<String>),
+) -> AuthStatus {
+    let (sonuc, red) = yenile(&kayitli.refresh_token, &kayitli.email);
     match (oturum_karari(&sonuc), sonuc) {
         (OturumKarari::Yenilendi, Ok(yeni)) => {
-            let root3 = root.clone();
-            let y2 = yeni.clone();
             // Yenilenen refresh_token'ı SAKLA (Supabase rotasyon yapar; eskisi geçersizleşir).
-            let _ = tauri::async_runtime::spawn_blocking(move || secret_store::save(&root3, &y2)).await;
+            let _ = secret_store::save(root, &yeni);
             let email = yeni.email.clone();
-            *state.session.lock().unwrap() = Some(yeni);
-            Ok(AuthStatus::giris_yapildi(&email, "fresh", false))
+            *bellek.lock().unwrap() = Some(yeni);
+            AuthStatus::giris_yapildi(&email, "fresh", false)
         }
         (OturumKarari::Sil, _) => {
-            let root4 = root.clone();
             // 🔴 SAHA (2026-10-17): silme NEDENİ günlüğe (yalnız HTTP durumu + GoTrue kodu; jeton / e-posta YOK).
-            let olay = oturum_gunlugu_olayi(&OturumKarari::Sil, red.as_deref());
-            let _ = tauri::async_runtime::spawn_blocking(move || {
-                if let Some(o) = olay {
-                    secret_store::oturum_gunlugune_yaz(&root4, &o);
-                }
-                secret_store::clear(&root4);
-            })
-            .await;
-            Ok(AuthStatus::cikis_yapildi(false))
+            if let Some(o) = oturum_gunlugu_olayi(&OturumKarari::Sil, red.as_deref()) {
+                secret_store::oturum_gunlugune_yaz(root, &o);
+            }
+            secret_store::clear(root);
+            AuthStatus::cikis_yapildi(false)
         }
         // ÇEVRİMDIŞI / geçici sunucu hatası → kayıtlı oturumla devam (yukarıdaki OFFLINE KARARI).
         _ => {
             if let Some(o) = oturum_gunlugu_olayi(&OturumKarari::CevrimdisiDevam, red.as_deref()) {
-                let root5 = root.clone();
-                let _ = tauri::async_runtime::spawn_blocking(move || secret_store::oturum_gunlugune_yaz(&root5, &o)).await;
+                secret_store::oturum_gunlugune_yaz(root, &o);
             }
             let email = kayitli.email.clone();
-            *state.session.lock().unwrap() = Some(kayitli);
-            Ok(AuthStatus::giris_yapildi(&email, "cached", true))
+            *bellek.lock().unwrap() = Some(kayitli);
+            AuthStatus::giris_yapildi(&email, "cached", true)
         }
+    }
+}
+
+/// KP-5 B4 (A2 deseni): `auth_login` sonrası "Beni hatırla" kaydı — kök ENJEKTE (testte geçici kök). 2026-10-18: kutunun kararı AYRICA
+/// tercih işaretine yazılır — pencerede çıkış kaydı siler ama bu kararı silmez, pencerede yapılan sonraki giriş yeniden hatırlanır
+/// (secret_store::rotasyonu_isle rıza kapısı). "Beni hatırla" İŞARETSİZ → oturum SÜREÇ-ÖMÜRLÜ; önceki bir kayıt da temizlenir (yoksa
+/// kullanıcı kutucuğu kaldırdığında eski jeton diskte kalırdı).
+fn giris_kaydini_isle(root: &std::path::Path, oturum: &auth::Session, hatirla: bool) {
+    secret_store::hatirla_tercihini_yaz(root, hatirla);
+    if hatirla {
+        secret_store::save(root, oturum);
+    } else {
+        secret_store::clear(root);
+    }
+}
+
+/// KP-5 B4 (A2 deseni): `auth_logout` gövdesi — sıra AYNEN: ÖNCE yerel / backend temizliği (kesin çalışır: backend devir oturumu →
+/// "Beni hatırla" kaydı), SONRA ağ bildirimi (best-effort; çevrimdışıysa sessizce geçer). Backend temizleyici ve ağ bildirimi ENJEKTE.
+fn cikis_isle(
+    root: &std::path::Path,
+    port: Option<u16>,
+    oturum: Option<auth::Session>,
+    backend_temizle: impl FnOnce(u16),
+    aga_bildir: impl FnOnce(&str),
+) {
+    if let Some(p) = port {
+        backend_temizle(p);
+    }
+    secret_store::clear(root);
+    if let Some(s) = oturum {
+        aga_bildir(&s.access_token);
     }
 }
 
@@ -1628,19 +1674,7 @@ async fn auth_login(
     let root = install::default_install_root(&home_dir());
     let s2 = session.clone();
     let hatirla = remember && secret_store::available();
-    let _ = tauri::async_runtime::spawn_blocking(move || {
-        // 2026-10-18: kutunun kararı AYRICA tercih işaretine yazılır — pencerede çıkış kaydı siler ama bu kararı silmez,
-        // pencerede yapılan sonraki giriş yeniden hatırlanır (secret_store::rotasyonu_isle rıza kapısı).
-        secret_store::hatirla_tercihini_yaz(&root, hatirla);
-        if hatirla {
-            secret_store::save(&root, &s2);
-        } else {
-            // "Beni hatırla" İŞARETSİZ → oturum SÜREÇ-ÖMÜRLÜ. Önceki bir kaydı da temizle,
-            // yoksa kullanıcı kutucuğu kaldırdığında eski jeton diskte kalırdı.
-            secret_store::clear(&root);
-        }
-    })
-    .await;
+    let _ = tauri::async_runtime::spawn_blocking(move || giris_kaydini_isle(&root, &s2, hatirla)).await; // KP-5 B4: gövde testli
 
     let email_out = session.email.clone();
     *state.session.lock().unwrap() = Some(session);
@@ -1664,13 +1698,10 @@ async fn auth_logout(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
     let root = install::default_install_root(&home_dir());
 
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        if let Some(p) = port {
-            backend::clear_desktop_session(p);
-        }
-        secret_store::clear(&root);
-        if let Some(s) = session {
-            let _ = auth::logout(&s.access_token); // best-effort, çevrimdışıysa sessizce geçer
-        }
+        // KP-5 B4: sıra `cikis_isle`de (testli); ağ çıkışı best-effort, çevrimdışıysa sessizce geçer.
+        cikis_isle(&root, port, session, backend::clear_desktop_session, |jeton| {
+            let _ = auth::logout(jeton);
+        })
     })
     .await
     .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.cikisGorevCoktu", &[("e", &e.to_string())]))?;
@@ -2995,7 +3026,10 @@ mod tests {
         let soy = f5_yorumlari_soy(include_str!("main.rs"));
         let i = soy.find("async fn auth_login(").expect("auth_login yok");
         let son = soy[i + 1..].find("\nasync fn ").map(|j| i + 1 + j).unwrap_or(soy.len());
-        assert!(soy[i..son].contains("secret_store::hatirla_tercihini_yaz(&root, hatirla)"), "giris tercihi isarete yazilmiyor");
+        // KP-5 B4: yazım `giris_kaydini_isle`de (davranış testi: KRITIK_KP5_B4_giris_kaydi_…); auth_login ona bağlanır.
+        assert!(soy[i..son].contains("giris_kaydini_isle(&root, &s2, hatirla)"), "giris tercihi isarete yazilmiyor (auth_login baglanmiyor)");
+        let g = &soy[soy.find("fn giris_kaydini_isle(").expect("giris_kaydini_isle yok")..];
+        assert!(g[..g.find("\n}").unwrap()].contains("secret_store::hatirla_tercihini_yaz(root, hatirla)"), "giris tercihi isarete yazilmiyor");
     }
 
     /// Y211 · S-D67.15: `auth_login` hatası arayüze `{kod, mesaj}` gider ve kod `AuthError::kod`dan gelir — `doLogin`'in kimlik hatasında
@@ -4497,6 +4531,142 @@ Connection: close
         let ak = backend::test_kancasi::cagrilar(&kok);
         assert_eq!(ak.len(), 1, "artakalan temizliği çağrı sayısı");
         assert!(Some(ak[0]) > son_istek, "artakalan temizliği STOP'tan ÖNCE");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-5 B4 (A2 deseni): auth komutlarının gövdeleri — geçici kök (gerçek DPAPI kaydı, gerçek kurulum kökü DEĞİL) + sahte
+    // yenileyici / backend temizleyici / ağ bildirimi. Gerçek ağ YOK, gerçek kimlik kasası YOK.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    fn kp5_b4_kok(ad: &str) -> std::path::PathBuf {
+        let k = std::env::temp_dir().join(format!("pemf_kp5_b4_{ad}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&k);
+        std::fs::create_dir_all(&k).unwrap();
+        k
+    }
+
+    fn kp5_b4_oturum(rt: &str, exp: i64) -> auth::Session {
+        auth::Session { access_token: format!("a-{rt}"), refresh_token: rt.into(), email: "vet@klinik.tr".into(), expires_at: exp }
+    }
+
+    fn kp5_b4_durum(d: &AuthStatus) -> (bool, String, &'static str, bool) {
+        (d.logged_in, d.email.clone(), d.source, d.offline)
+    }
+
+    /// KRİTİK (KP-5 B4): açılış oturum durumu 1)–3) — bellekte oturum → "fresh" (kayda bakılmaz) · kayıt yok → çıkış · taze kayıt →
+    /// belleğe alınır, "cached" · bayat kayıt → sessiz yenilemeye (kayıt AYNEN döner).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B4_oturum_ilk_durum_bellek_KAYITSIZ_TAZE_BAYAT() {
+        let kok = kp5_b4_kok("ilk");
+        let bellek = Mutex::new(Some(kp5_b4_oturum("bellek", 0)));
+        match oturum_ilk_durum(&bellek, &kok, 1_000) {
+            OturumIlkDurum::Sonuc(d) => assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "fresh", false)),
+            OturumIlkDurum::Yenile(_) => panic!("bellekte oturum varken yenilemeye gidildi"),
+        }
+        let bellek = Mutex::new(None);
+        match oturum_ilk_durum(&bellek, &kok, 1_000) {
+            OturumIlkDurum::Sonuc(d) => assert_eq!(kp5_b4_durum(&d), (false, String::new(), "none", false), "kayıt yokken giriş sayıldı"),
+            OturumIlkDurum::Yenile(_) => panic!("kayıt yokken yenilemeye gidildi"),
+        }
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("taze", 0)), "geçici köke kayıt yazılamadı");
+        match oturum_ilk_durum(&bellek, &kok, 1_000) {
+            OturumIlkDurum::Sonuc(d) => assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "cached", false)),
+            OturumIlkDurum::Yenile(_) => panic!("taze kayıt yenilemeye gitti"),
+        }
+        assert_eq!(bellek.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("taze".into()), "taze kayıt belleğe alınmadı");
+        let bellek = Mutex::new(None);
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("bayat", 500)));
+        match oturum_ilk_durum(&bellek, &kok, 1_000) {
+            OturumIlkDurum::Yenile(k) => assert_eq!(k.refresh_token, "bayat"),
+            OturumIlkDurum::Sonuc(_) => panic!("bayat kayıt yenilenmeden kullanıldı"),
+        }
+        assert!(bellek.lock().unwrap().is_none(), "bayat kayıt yenilenmeden belleğe alındı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-5 B4 · OFFLINE KARARI): sessiz yenileme sonucu — yenilendi → yeni refresh_token SAKLANIR + belleğe ("fresh") ·
+    /// REDDEDİLDİ (oturum iptal) → nedeni günlüğe, kayıt SİLİNİR, çıkış · ulaşılamadı → nedeni günlüğe, kayıt KORUNUR, kayıtlı oturumla
+    /// çevrimdışı devam ("cached", offline). Yenileyiciye kayıtlı refresh_token + e-posta gider.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B4_oturum_yenileme_YENILENDI_SIL_CEVRIMDISI() {
+        let kok = kp5_b4_kok("yenile");
+        // (a) yenilendi
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("eski", 500)));
+        let bellek = Mutex::new(None);
+        let mut gelen = None;
+        let d = oturum_yenileme_sonucu(&bellek, &kok, kp5_b4_oturum("eski", 500), |rt, e| {
+            gelen = Some((rt.to_string(), e.to_string()));
+            (Ok(kp5_b4_oturum("yeni", 9_999_999)), None)
+        });
+        assert_eq!(gelen, Some(("eski".into(), "vet@klinik.tr".into())));
+        assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "fresh", false));
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("yeni".into()), "yenilenen jeton SAKLANMADI");
+        assert_eq!(bellek.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("yeni".into()));
+        // (b) reddedildi → sil
+        let bellek = Mutex::new(None);
+        let d = oturum_yenileme_sonucu(&bellek, &kok, kp5_b4_oturum("yeni", 500), |_, _| {
+            (Err(auth::AuthError::SessionRevoked), Some("HTTP 400 refresh_token_not_found".into()))
+        });
+        assert_eq!(kp5_b4_durum(&d), (false, String::new(), "none", false));
+        assert!(secret_store::load(&kok).is_none(), "iptal edilen oturumun kaydı SİLİNMEDİ (güvenlik)");
+        assert!(bellek.lock().unwrap().is_none());
+        let g = std::fs::read_to_string(secret_store::oturum_gunlugu_path(&kok)).unwrap_or_default();
+        assert!(g.contains("REDDEDILDI (HTTP 400 refresh_token_not_found)") && g.contains("SILINDI"), "silme nedeni günlükte yok: {g}");
+        // (c) ulaşılamadı → çevrimdışı devam, kayıt korunur
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("kayitli", 500)));
+        let bellek = Mutex::new(None);
+        let d = oturum_yenileme_sonucu(&bellek, &kok, kp5_b4_oturum("kayitli", 500), |_, _| {
+            (Err(auth::AuthError::Offline), Some("HTTP 503".into()))
+        });
+        assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "cached", true), "ulaşılamayınca cihaz kilitlendi (OFFLINE KARARI)");
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("kayitli".into()), "çevrimdışıyken kayıt silindi");
+        assert_eq!(bellek.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("kayitli".into()));
+        let g = std::fs::read_to_string(secret_store::oturum_gunlugu_path(&kok)).unwrap_or_default();
+        assert!(g.contains("basarisiz (HTTP 503) -> kayit KORUNDU"), "çevrimdışı nedeni günlükte yok: {g}");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-5 B4): giriş sonrası kayıt — "Beni hatırla" İŞARETLİ → tercih + DPAPI kaydı; İŞARETSİZ → tercih "hayır" ve ÖNCEKİ kayıt
+    /// SİLİNİR (kutucuk kaldırılınca eski jeton diskte kalmaz).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B4_giris_kaydi_HATIRLA_kaydeder_HATIRLAMA_onceki_kaydi_SILER() {
+        let kok = kp5_b4_kok("giris");
+        giris_kaydini_isle(&kok, &kp5_b4_oturum("g1", 0), true);
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("g1".into()), "hatırla işaretliyken kaydedilmedi");
+        assert!(secret_store::hatirla_isareti_path(&kok).exists(), "tercih işareti yazılmadı");
+        let isaret_evet = std::fs::read(secret_store::hatirla_isareti_path(&kok)).unwrap();
+        giris_kaydini_isle(&kok, &kp5_b4_oturum("g2", 0), false);
+        assert!(secret_store::load(&kok).is_none(), "hatırla işaretsizken ÖNCEKİ kayıt silinmedi");
+        let isaret_hayir = std::fs::read(secret_store::hatirla_isareti_path(&kok)).unwrap_or_default();
+        assert_ne!(isaret_evet, isaret_hayir, "işaretsiz giriş tercihi değiştirmedi");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-5 B4): çıkış sırası — ÖNCE backend devir oturumu + "Beni hatırla" kaydı (kesin), SONRA ağ bildirimi (best-effort);
+    /// backend yoksa backend temizliği çağrılmaz, bellekte oturum yoksa ağa çıkılmaz. Ağ bildirimi geldiğinde kayıt ZATEN silinmiş.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP5_B4_cikis_ONCE_yerel_temizlik_SONRA_ag() {
+        let kok = kp5_b4_kok("cikis");
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("c1", 0)));
+        let sira = std::cell::RefCell::new(Vec::<String>::new());
+        let kok_g = kok.clone();
+        cikis_isle(
+            &kok,
+            Some(8123),
+            Some(kp5_b4_oturum("c1", 0)),
+            |p| sira.borrow_mut().push(format!("backend {p} kayit={}", secret_store::load(&kok_g).is_some())),
+            |j| sira.borrow_mut().push(format!("ag {j} kayit={}", secret_store::load(&kok_g).is_some())),
+        );
+        assert_eq!(*sira.borrow(), vec!["backend 8123 kayit=true".to_string(), "ag a-c1 kayit=false".to_string()]);
+        assert!(secret_store::load(&kok).is_none());
+        sira.borrow_mut().clear();
+        cikis_isle(&kok, None, None, |p| sira.borrow_mut().push(format!("backend {p}")), |j| sira.borrow_mut().push(format!("ag {j}")));
+        assert!(sira.borrow().is_empty(), "backend / oturum yokken çağrı yapıldı: {:?}", sira.borrow());
         let _ = std::fs::remove_dir_all(&kok);
     }
 }
