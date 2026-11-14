@@ -34,6 +34,7 @@ export interface UsageStats {
 /** RPC henüz deploy edilmemişse / ağ yoksa `null` döner — çağıran bölümü HİÇ göstermez.
  *  Eski ya da uydurma bir sayı göstermek, hiç göstermemekten kötüdür. */
 export async function fetchUsageStats(signal?: AbortSignal): Promise<UsageStats | null> {
+  /* istanbul ignore if -- SAVUNMA: supabase istemcisi gömülü public anahtarlarla HER ZAMAN kurulur (lib/supabase.ts) */
   if (!supabase) return null
   try {
     const { data, error } = await supabase.rpc('usage_counts')

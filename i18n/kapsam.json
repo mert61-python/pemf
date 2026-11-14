@@ -150,7 +150,7 @@
    "aciklama": "ortak bileşenler + kabuk (AppShell, bildirim, toast, hata sınırı, sayfa başlıkları, tema)",
    "durum": "tamam",
    "metin": 140,
-   "dosyaSayisi": 40
+   "dosyaSayisi": 41
   },
   {
    "ad": "arayuz-02-giris-hesap",
@@ -465,6 +465,17 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "apps/ui/src/tembelEkranlar.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-01-ortak-kabuk",
+   "sira": 1,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "KP-5 (Y279): tembel ekran fabrikaları (import(); metin yok)"
   },
   "apps/ui/src/components/UpgradeModal.tsx": {
    "yuzey": "arayuz",

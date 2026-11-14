@@ -27,6 +27,7 @@ export default function AppScreenshots() {
 
   const scroll = (dir: -1 | 1) => {
     const el = trackRef.current
+    /* istanbul ignore if -- ULASILAMAZ: kaydırma düğmeleri şeritle AYNI çizimde; düğme varken ref hep dolu */
     if (!el) return
     el.scrollBy({ left: dir * Math.min(el.clientWidth * 0.8, 720), behavior: 'smooth' })
   }

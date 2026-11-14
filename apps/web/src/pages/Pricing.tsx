@@ -79,6 +79,7 @@ export default function Pricing() {
   // Ödeme sayfasına yönlendir (fatura bilgisi + iyzico formu orada). Giriş /odeme'de istenir.
   // TEST AŞAMASI (FREE_MODE): satış kapalı → "Seç" ücretsiz indirmeye götürür.
   function buy(p: Plan) {
+    /* istanbul ignore if -- ULASILAMAZ: buy yalnız ücretli planın düğmesinden çağrılır (`p.paid ?` ile çizilir) */
     if (!p.paid) return
     if (FREE_MODE) return navigate('/download')
     navigate(`/odeme?tier=${p.tier}&yearly=${yearly ? 1 : 0}&research=${research ? 1 : 0}`)

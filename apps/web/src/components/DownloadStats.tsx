@@ -25,7 +25,10 @@ export function DownloadStats() {
 
   useEffect(() => {
     const ac = new AbortController()
-    fetchUsageStats(ac.signal).then(setS).catch(() => setS(null))
+    fetchUsageStats(ac.signal)
+      .then(setS)
+      /* istanbul ignore next -- SAVUNMA: fetchUsageStats REDDETMEZ (her hatayı içeride yakalayıp null döner) */
+      .catch(() => setS(null))
     return () => ac.abort()
   }, [])
 

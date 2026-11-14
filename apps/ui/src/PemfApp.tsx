@@ -18,18 +18,19 @@ import { OperatorProvider } from "@/context/OperatorContext";
 import { EntitlementProvider } from "@/context/EntitlementContext";
 import { AuthScreen } from "@/screens/AuthScreen";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
+import { tembelEkranlar } from "@/tembelEkranlar";
 
-// audit B-6.1: code-splitting — ilk-boyama (Welcome/Dashboard) EAGER; ağır/nadir ekranlar LAZY →
-// açılış bundle'ı küçülür (özellikle web tek-bundle). Named export → default'a sar. Suspense fallback altta.
-const ControlScreen = lazy(() => import("@/screens/ControlScreen").then((m) => ({ default: m.ControlScreen })));
-const DemaSimulatorScreen = lazy(() => import("@/screens/DemaSimulatorScreen").then((m) => ({ default: m.DemaSimulatorScreen })));
-const KpiDashboardScreen = lazy(() => import("@/screens/KpiDashboardScreen").then((m) => ({ default: m.KpiDashboardScreen })));
-const SensorMonitorScreen = lazy(() => import("@/screens/SensorMonitorScreen").then((m) => ({ default: m.SensorMonitorScreen })));
-const TreatmentHistoryScreen = lazy(() => import("@/screens/TreatmentHistoryScreen").then((m) => ({ default: m.TreatmentHistoryScreen })));
-const PatientScreen = lazy(() => import("@/screens/PatientScreen").then((m) => ({ default: m.PatientScreen })));
-const AiHubScreen = lazy(() => import("@/screens/AiHubScreen").then((m) => ({ default: m.AiHubScreen })));
-const SettingsScreen = lazy(() => import("@/screens/SettingsScreen").then((m) => ({ default: m.SettingsScreen })));
-const AiHistoryScreen = lazy(() => import("@/screens/AiHistoryScreen").then((m) => ({ default: m.AiHistoryScreen })));
+// audit B-6.1: code-splitting — ilk-boyama (Welcome/Dashboard) EAGER; ağır/nadir ekranlar LAZY. KP-5 (Y279): `import()` fabrikaları
+// `tembelEkranlar` küçük modülünde (jest `import()` çalıştıramaz — gerekçeli etiket orada); burada yalnız `lazy` bağlanır.
+const ControlScreen = lazy(tembelEkranlar.ControlScreen);
+const DemaSimulatorScreen = lazy(tembelEkranlar.DemaSimulatorScreen);
+const KpiDashboardScreen = lazy(tembelEkranlar.KpiDashboardScreen);
+const SensorMonitorScreen = lazy(tembelEkranlar.SensorMonitorScreen);
+const TreatmentHistoryScreen = lazy(tembelEkranlar.TreatmentHistoryScreen);
+const PatientScreen = lazy(tembelEkranlar.PatientScreen);
+const AiHubScreen = lazy(tembelEkranlar.AiHubScreen);
+const SettingsScreen = lazy(tembelEkranlar.SettingsScreen);
+const AiHistoryScreen = lazy(tembelEkranlar.AiHistoryScreen);
 
 function MainRouter() {
   useTranslation(); // sayfa başlıkları (`sayfaBasligi`) çağrı anında çevrilir → dil değişince yeniden çiz
