@@ -101,6 +101,39 @@ it("KRİTİK: web öneri alınamazsa şerit 'yeniden deneniyor', konum sıfırla
   expect(hazirlikMetni(u)).toBe(T("ai.pro.hata.oneriDeneniyor"));
 });
 
+it("KRİTİK (KP-5 · 5 ürün hatası): bekleme (5 sn) DOLUNCA öneri YENİDEN istenir — konum sabit kalsa da; fırtına yok", async () => {
+  // Kök neden (KP-4 B1 ölçümü): başarısızlıktan sonra 3 sn'lik yoklama `localized`ı bekleme sürerken true yapıyordu; sonraki
+  // yoklamalar değeri DEĞİŞTİRMEDİĞİ için efekt bir daha koşmuyor, şerit 120 sn tavanına kadar "yeniden deneniyor" diyordu.
+  const u = await panel();
+  await act(async () => { fireEvent.press(u.getByLabelText(T("ai.pro.dugme.baslatEtiket"))); });
+  await bosalt();
+  durum = { active: false, localized: true };
+  await ilerle(3000); // t=3: öneri #1 (başarısız) → bekleme t=8'e dek
+  expect(postlar("/ai/pro/propose")).toHaveLength(1);
+  await ilerle(3000); // t=6: yoklama konumu yeniden true yapar, bekleme sürüyor → istek YOK
+  expect(postlar("/ai/pro/propose")).toHaveLength(1);
+  await ilerle(3000); // t=9: bekleme t=8'de doldu → öneri #2
+  expect(postlar("/ai/pro/propose")).toHaveLength(2);
+  oneriYaniti = [200, { proposalId: "p-3", specs: {}, meta: {} }];
+  for (let i = 0; i < 3; i++) await ilerle(3000); // t=18: #2'nin (t=8) beklemesi t=13'te doldu → öneri #3 başarılı → önizleme bırakılır
+  expect(postlar("/ai/pro/propose")).toHaveLength(3);
+  expect(postlar("/ai/pro/hazirlik/durdur")).toHaveLength(1);
+  expect(u.queryByTestId("aipro-hazirlik-metni")).toBeNull();
+});
+
+it("KARŞIT (KP-5 · 5): bekleme dolduğunda konum YOKSA (localized false) öneri İSTENMEZ", async () => {
+  const u = await panel();
+  await act(async () => { fireEvent.press(u.getByLabelText(T("ai.pro.dugme.baslatEtiket"))); });
+  await bosalt();
+  durum = { active: false, localized: true };
+  await ilerle(3000);
+  expect(postlar("/ai/pro/propose")).toHaveLength(1);
+  durum = { active: false, localized: false };
+  for (let i = 0; i < 4; i++) await ilerle(3000); // t=15: bekleme doldu ama konum kayıp
+  expect(postlar("/ai/pro/propose")).toHaveLength(1);
+  expect(hazirlikMetni(u)).toBe(T("ai.pro.hata.oneriDeneniyor"));
+});
+
 it("KRİTİK: web hazırlık TAVANI (120 sn) — hazırlık biter, operatör uyarılır, sunucu önizlemesi BIRAKILIR", async () => {
   const u = await panel();
   await act(async () => { fireEvent.press(u.getByLabelText(T("ai.pro.dugme.baslatEtiket"))); });

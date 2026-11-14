@@ -498,6 +498,13 @@ export function AiProPanel({
    * hazırlık şeridinde.
    */
   const oneriBeklemeRef = useRef(0);
+  /**
+   * KP-5 (ürün hatası 5): WEB öneri beklemesi DOLUNCA efekti yeniden koşturan sayaç. `localized` kararlı boolean —
+   * bekleme sürerken gelen yoklama onu true yapınca sonraki yoklamalar değeri değiştirmez ve efekt bir daha KOŞMAZDI
+   * (öneri bir kez düşerse 120 sn tavanına dek yeniden denenmiyordu). Zamanlayıcı bekleme bitiminde sayacı artırır.
+   */
+  const [oneriTekrar, setOneriTekrar] = useState(0);
+  const oneriTekrarZamanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [oneriHatasi, setOneriHatasi] = useState("");
   /** Ardışık doğrulanmış ölçüm sayacı (bkz. ARDISIK_ONAY). */
   const ardisikRef = useRef(0);
@@ -874,9 +881,12 @@ export function AiProPanel({
         oneriBeklemeRef.current = Date.now() + ONERI_BEKLEME_MS;
         oneriIstendiRef.current = false;
         setLocalized(false);
+        // KP-5: bekleme bitince efekt yeniden koşar (konum o ana dek yeniden görüldüyse öneri istenir; görülmediyse yoklama tetikler).
+        if (oneriTekrarZamanRef.current) clearTimeout(oneriTekrarZamanRef.current);
+        oneriTekrarZamanRef.current = setTimeout(() => setOneriTekrar((n) => n + 1), ONERI_BEKLEME_MS);
       }
     })();
-  }, [hazirlik, localized, organId, duration]);
+  }, [hazirlik, localized, organId, duration, oneriTekrar]);
 
   /**
    * HAZIRLIK SAATİ — gecikmede somut yönlendirme, üst sınırda otomatik durma.
@@ -1202,6 +1212,7 @@ export function AiProPanel({
   // saymaz → bobinler son dozla seans sonuna dek sürerdi. Kendi (sahibi olduğumuz) seansımız durdurulur; başkasınınki kesilmez.
   useEffect(() => () => {
     if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
+    if (oneriTekrarZamanRef.current) clearTimeout(oneriTekrarZamanRef.current);
     if (!IS_WEB && runningRef.current && ownedRef.current) {
       apiPost<AiProAction | null>("/ai/pro/stop", {}, null, { durdurma: true }).catch(() => {});
     }
