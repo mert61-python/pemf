@@ -240,6 +240,8 @@ interface AiProStatus {
   model?: string;
   /** Kare üstünde seçilebilir hedef adayları (kalıcı kimlikli). */
   targets?: HedefAdayi[];
+  /** AP-B5: adayların ait olduğu model (son lokalizasyon). `model` ETKİN sağlayıcıdır — durdurma onu kediye döndürür. Alan yoksa eski davranış. */
+  targetsModel?: string;
   /** 3B konum yöntemi — "aruco_pnp" = kabin işaretiyle ölçüldü. */
   method?: string;
   /** KD-3a (yalnız-ek): kapı FİZİKSEL nedenle kestiyse sunucunun eylem metni (kesmediyse ""; eski backend göndermez). */
@@ -359,6 +361,9 @@ export function AiProPanel({
     : { id: "", name: patientName || "" };
   /** Araştırma kipi: listede kedi YOK → model kartları gösterilir, kedi organ çipleri gizlenir. */
   const arastirmaKipi = !secilebilirModeller.includes("kedi");
+  /** AP-B5: boş bağımlılıklı `changeOrgan` kapanışı için güncel değer. */
+  const arastirmaKipiRef = useRef(arastirmaKipi);
+  arastirmaKipiRef.current = arastirmaKipi;
   /**
    * ⚠️ ARAŞTIRMA HATTI YALNIZ KABİN KAMERASIYLA (sahip kararı #15): fantom/petri 3B konumu kabin
    * işaretine (arka duvardaki ArUco) ve ölçülmüş kabin geometrisine dayanır. Telefon kamerası o
@@ -543,7 +548,10 @@ export function AiProPanel({
       setWebCatDetected(Boolean(st.catDetected)); // B3: hazırlık metni için ikinci kaynak
       // Araştırma hattı yalnız-ek alanları. ⚠️ Alan YOKSA eski davranış: boş liste / boş yöntem →
       // halkalar ve rozet çizilmez, kedi ekranı BİREBİR aynı kalır.
-      setHedefler(Array.isArray(st.targets) ? st.targets : []);
+      // AP-B5: adaylar YALNIZ panelin modeline aitse (başka modelin bayat adayı seçilirse sunucu onu o modelin kurallarıyla reddederdi).
+      const adayModeli = typeof st.targetsModel === "string" ? st.targetsModel : "";
+      const adaylarBizim = !adayModeli || adayModeli === hedefModeliRef.current;
+      setHedefler(Array.isArray(st.targets) && adaylarBizim ? st.targets : []);
       setYontem(typeof st.method === "string" ? st.method : "");
       setKapiEylem(typeof st.kapiEylem === "string" ? st.kapiEylem : "");
       setHedefEtiket(typeof st.targetLabel === "string" ? st.targetLabel : "");
@@ -954,7 +962,8 @@ export function AiProPanel({
       setOrganId(onceki);
       // Araştırmada "Organ" kelimesi yanıltıcıdır (hedef bir tümör odağı / kuyudur). Ref'ten
       // okunur ki bu callback'in boş bağımlılık dizisi korunsun.
-      const hedefMi = hedefModeliRef.current && hedefModeliRef.current !== "kedi";
+      // AP-B5: araştırma ekranında başlık HER ZAMAN "Hedef" (model henüz okunmamış olsa da) — "Organ" yanıltıcı.
+      const hedefMi = arastirmaKipiRef.current || (hedefModeliRef.current && hedefModeliRef.current !== "kedi");
       const r = red as { durum: number; detay?: string } | null;
       platformAlert(
         hedefMi ? i18n.t("ai.pro.uyari.hedefDegistirilemedi") : i18n.t("ai.pro.uyari.organDegistirilemedi"),

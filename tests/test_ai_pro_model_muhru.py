@@ -238,8 +238,14 @@ def test_KRITIK_organ_ucu_AKTIF_modelle_uyusmayan_istegi_reddeder(muhur_env):
     air, apis, client, taze_cache, izler = muhur_env
     air._ai_hedef_modeli = "sahte"
 
-    r = client.post("/api/ai/pro/organ", json={"organ_id": 1, "model": "kedi", "client_id": ""})
-    assert r.status_code == 422, f"aktif modelle uyuşmayan hedef değişimi kabul edildi ({r.status_code})"
+    # AP-B5 (istem 48, tezgâh 13-11): kural önizleme / seans SÜRERKEN geçerlidir — BOŞTA seçim istenen modelin kümesiyle doğrulanır, etkin
+    # model ve küresel hedef değişmez (`test_AP_B5_B2_organ_BOSTA_istenen_modelle_dogrulanir.py`).
+    air._ai_hazirlik_active = True
+    try:
+        r = client.post("/api/ai/pro/organ", json={"organ_id": 1, "model": "kedi", "client_id": ""})
+        assert r.status_code == 422, f"aktif modelle uyuşmayan hedef değişimi kabul edildi ({r.status_code})"
+    finally:
+        air._ai_hazirlik_active = False
 
     r2 = client.post("/api/ai/pro/organ", json={"organ_id": 1, "model": "sahte", "client_id": ""})
     assert r2.status_code == 200, r2.text[:200]

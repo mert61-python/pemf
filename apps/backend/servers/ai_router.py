@@ -3186,11 +3186,22 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
     # Hedef kümesi AKTİF sağlayıcıdan (Faz 1) — kedi için 0-6 (Audit P2: em_kedi yalnız 0-6
     # TEDAVİ eder; 7-10 lokalize olur ama _build_input ValueError → sessiz sıfır-tedavi).
     _saglayici = _aktif_saglayici()
+    _bekleyen = False  # AP-B5: boşta İSTENEN modelin seçimi — etkin model ve küresel hedef DEĞİŞMEZ
     if payload.model and payload.model.strip().lower() != _saglayici.ad:
-        raise HTTPException(
-            status_code=422,
-            detail=ceviri.t("ai.pro.hata.aktifModel", ad=_saglayici.ad, model=payload.model),
-        )
+        # AP-B5 · B2 (istem 48, tezgâh 13-11): `/ai/pro/stop` etkin modeli KEDİ'ye döndürür; seans bitince panel petride kalır ve kuyu
+        # seçimi kedi kümesiyle 422 alıyordu ("Hedef 11 'Kedi Organ' için desteklenmiyor") — panel seçimi geri alıp hazırlığı OTOMATİK
+        # hedefle başlatıyordu (C6 → C2). BOŞTA (döngü / hazırlık / mühürlü seans yok) seçim İSTENEN modelin kümesiyle doğrulanır; etkin
+        # model ve `_ai_organ_id` DEĞİŞMEZ (başka istemcinin kareleri etkilenmez) — hazırlık seçimi kendi gövdesindeki model + hedefle kurar.
+        if _ai_loop_active or _ai_hazirlik_active or _ai_pro_surus_muhru() is not None:
+            raise HTTPException(
+                status_code=422,
+                detail=ceviri.t("ai.pro.hata.aktifModel", ad=_saglayici.ad, model=payload.model),
+            )
+        try:
+            _saglayici = ai_pro_hedef.saglayici_al(payload.model)
+        except ValueError as _me:
+            raise HTTPException(status_code=422, detail=str(_me)) from None
+        _bekleyen = True
     if _organ_req not in _saglayici.hedef_idleri():
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
         _ek = {"oid": _organ_req, "model": ai_pro_hedef.model_adi(_saglayici), "gecerli": _gecerli}
@@ -3212,12 +3223,13 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
             status_code=409,
             detail=(ceviri.t("ai.pro.hata.onaysizHedef", ad=_onayli_ad)),
         )
-    _ai_organ_id = _organ_req
-    _ai_relocalize = True  # yeni hedef için lokalizasyonu hemen yeniden çalıştır
+    if not _bekleyen:
+        _ai_organ_id = _organ_req
+        _ai_relocalize = True  # yeni hedef için lokalizasyonu hemen yeniden çalıştır
     return {
         "status": "success",
-        "organId": _ai_organ_id,
-        "organName": ai_pro_hedef.hedef_gosterim_adi(_saglayici, _ai_organ_id),
+        "organId": _organ_req,
+        "organName": ai_pro_hedef.hedef_gosterim_adi(_saglayici, _organ_req),
         "model": _saglayici.ad,
     }
 
@@ -3370,6 +3382,9 @@ def ai_pro_status():
         # Faz 2 yalnız-ek: kare üstünde hedef seçimi (targets), kalibrasyon rozeti (method/mmPerPx)
         # ve onay ekranı uyarıları (ood) BU alanlardan beslenir. Kedi hattında boş/varsayılan.
         "targets": _ai_organ_cache.get("targets") or [],
+        # YALNIZ-EK (AP-B5): hedef adaylarının ait olduğu model = SON LOKALİZASYONUN modeli. `model` ETKİN sağlayıcıdır (durdurma kediye
+        # döndürür) — panel başka modelin bayat adaylarını göstermesin, kendi modelininkini (seans bitse de) seçtirebilsin.
+        "targetsModel": str(_ai_organ_cache.get("model") or ""),
         "method": _ai_organ_cache.get("method") or "",
         # YALNIZ-EK (KD-3a · B-KD3a.1): kapının FİZİKSEL eylem metni (kesmediyse ""). Panel rozeti / şeridi ArUco metni yerine bunu yazar.
         "kapiEylem": _ai_organ_cache.get("kapi_eylem") or "",
