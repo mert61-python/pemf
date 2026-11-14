@@ -34,6 +34,8 @@ module.exports = {
   // KP-3 AŞAMA D (2026-11-08, uç 6c7d4f10) ölçülen: satır %98,27 (8 049 / 8 190) · deyim %96,40 · dal %88,78 · fonksiyon %93,52.
   // KP-4 C (2026-11-11, B1 + B3 sonrası arayüz içeriği, 449 süit) ölçülen: satır %99,40 (8 293 / 8 343) · deyim %97,45 · dal %89,54 ·
   // fonksiyon %95,81 → 98 / 96 / 88 / 94. Kalan satırlar ULAŞILAMAZ savunmalar + 1 ZAMAN (KAPSAM.md KP-4 · B1).
+  // KP-5 F (2026-11-15, uç 97b8d61e, 471 süit) ölçülen: satır %100 (8 547 / 8 547) · deyim %98,21 · dal %90,08 · fonksiyon %97,04
+  // → 99 / 97 / 89 / 96. Erişilemez satırlar gerekçeli `istanbul ignore` + sayan kapı (Y279, test_KP5_istemci_site_etiketleri_SAYILI).
   collectCoverageFrom: [
     "src/**/*.{ts,tsx,js,jsx}",
     "app/**/*.{ts,tsx,js,jsx}",
@@ -45,6 +47,6 @@ module.exports = {
     "!**/node_modules/**",
   ],
   coverageThreshold: {
-    global: { lines: 98, statements: 96, branches: 88, functions: 94 },
+    global: { lines: 99, statements: 97, branches: 89, functions: 96 },
   },
 };
