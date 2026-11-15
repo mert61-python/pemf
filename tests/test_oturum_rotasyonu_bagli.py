@@ -127,9 +127,16 @@ def test_KRITIK_4_SAHIPLENILEN_backend_de_senkronlar():
     s = _oku(_MAIN)
     # start_installed sahiplenme dalinin GOVDESINI yakala (`Some(port) = detect_running_backend`
     # blogu, kapanan `}`e kadar). repair'daki dal `Some(p)` oldugundan bu regex onu secmez.
-    m = re.search(r"if let Some\(port\) = backend::detect_running_backend\(&root\) \{(.*?)\n    \}", s, re.S)
+    # KP-6 D4: gövde `start_installed_ile`de; çalışan backend algılama ve rotasyon başlatma `KomutOrtami` bağında (üretim impl'i
+    # kabuk.rs: `calisan_backend` → `backend::detect_running_backend`, `rotasyonu_baslat` → `oturum_rotasyon_senkronu_baslat`).
+    m = re.search(r"if let Some\(port\) = ortam\.calisan_backend\(&root\) \{(.*?)\n    \}", s, re.S)
     assert m, "start_installed sahiplenme dali bulunamadi — main.rs bicimi degismis"
-    assert "oturum_rotasyon_senkronu_baslat" in m.group(1), (
+    impl = _oku(_KABUK)
+    r = impl.find("fn rotasyonu_baslat(")
+    assert r != -1 and "oturum_rotasyon_senkronu_baslat" in impl[r : r + 300], "rotasyon bağı senkronu başlatmıyor"
+    c = impl.find("fn calisan_backend(")
+    assert c != -1 and "backend::detect_running_backend(root)" in impl[c : c + 200], "çalışan backend bağı algılamıyor"
+    assert "rotasyonu_baslat" in m.group(1), (
         "sahiplenilen backend'in rotasyon senkronu BASLATILMIYOR — o oturumun jeton donmeleri diske "
         "islenmez ve sonraki acilista 'Beni hatirla' silinir (C3)"
     )

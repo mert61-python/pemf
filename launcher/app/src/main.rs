@@ -108,7 +108,7 @@ struct Environment {
 /// bobin riskini keser). state.proc bu oturumda başlatılan backend'i tutar.
 use pemf_launcher_core::guncelleme_onayi;
 
-fn stop_tracked_backend(state: &tauri::State<'_, AppState>, root: &std::path::Path) {
+fn stop_tracked_backend(state: &AppState, root: &std::path::Path) {
     let tracked = state.proc.lock().unwrap().take();
     stop_backend_for_teardown(tracked, root, state.session.clone());
 }
@@ -338,6 +338,64 @@ fn clear_port_if_stopped(root: &std::path::Path, port: Option<u16>) {
 ///   • SON PARÇA istisnası yoksa: son olay throttle'a takılır ve bar %99'da ASILI kalır.
 /// (Mutasyon turu 2026-08-16: kaynak-regex testleri bu iki kuralı ayırt EDEMİYORDU; artık
 /// `reporter_testleri` davranışsal olarak kilitliyor.)
+/// KP-6 D4 (madde 6): Tauri komut GÖVDELERİNİN dış bağı — pencere / olay yayını / oturum devri / backend hazır (`on_backend_ready`) /
+/// izlenen backend'i durdurma (`stop_tracked_backend`) / çalışan backend algılama (varsayılan port 8000'i yoklar) / rotasyon senkronu /
+/// gerçek kurulum akışları (ağ + disk + gerçek backend süreci). Üretim: `tauri::AppHandle` (impl kabuk.rs'te — İNCE S bağ, karar YOK);
+/// test: kayıtçı sahte (sıra iddiası). Karar (kilit, seans kapısı, sonuç eşlemesi, temizlik, sıra) gövdelerde (`*_ile`, K) kalır.
+trait KomutOrtami: Clone + Send + Sync + 'static {
+    /// Kurulum yolunun ilerleme yazıcısı (üretim: `progress_reporter` — ortak `snapshot_yazici` + olay).
+    fn ilerleme_yazici(&self, store: Arc<Mutex<Option<serde_json::Value>>>) -> Box<dyn FnMut(flow::Progress) + Send>;
+    /// Oturumu backend'e devret (üretim: `hand_off_session`) — pencere AÇILMADAN önce.
+    fn oturumu_devret<'a>(
+        &'a self,
+        state: &'a AppState,
+        port: u16,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>>;
+    /// Yeni başlatılan backend'i devral + pencereyi aç (üretim: `on_backend_ready`).
+    fn backend_hazir(&self, state: &AppState, child: std::process::Child, url: &str, port: u16);
+    /// Uygulama penceresini aç / öne getir (üretim: `open_app_window`).
+    fn uygulama_penceresini_ac(&self, port: u16);
+    /// Açık "app" penceresini kapat (üretim: `get_webview_window("app")` → `close()`).
+    fn uygulama_penceresini_kapat(&self);
+    /// İzlenen backend'i E-stop → kill ile durdur (üretim: `stop_tracked_backend`).
+    fn izlenen_backendi_durdur(&self, state: &AppState, root: &std::path::Path);
+    /// Kurulu backend zaten çalışıyor mu (üretim: `backend::detect_running_backend` — port dosyası / varsayılan port).
+    fn calisan_backend(&self, root: &std::path::Path) -> Option<u16>;
+    /// Sahiplenilen backend'in rotasyon senkronu (üretim: `oturum_rotasyon_senkronu_baslat`).
+    fn rotasyonu_baslat(&self, state: &AppState, port: u16);
+    /// Profil kurulumu (üretim: `flow::install_profiles`).
+    fn profilleri_kur(
+        &self,
+        manifest_raw: &str,
+        profiles: &[String],
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<(), flow::FlowError>;
+    /// Onarım (üretim: `flow::repair`).
+    fn onar(
+        &self,
+        manifest_raw: &str,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<(), flow::FlowError>;
+    /// Kurulu backend'i başlat (üretim: `flow::start_backend`).
+    fn backend_baslat(
+        &self,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+    ) -> Result<(std::process::Child, String, u16), flow::FlowError>;
+    /// Profil kaldırma (üretim: `flow::remove_profiles`).
+    fn profilleri_kaldir(
+        &self,
+        root: &std::path::Path,
+        manifest: &pemf_launcher_core::Manifest,
+        profiles: &[String],
+        on: &mut dyn FnMut(flow::Progress),
+    ) -> Result<flow::RemoveReport, flow::FlowError>;
+}
+
 fn snapshot_yazici(
     store: std::sync::Arc<Mutex<Option<serde_json::Value>>>,
     throttle_ms: u64,
@@ -669,21 +727,23 @@ fn profilleri_getir(
 
 /// SEÇİLEN PROFİLLERİ kur ve başlat. İlerleme `install://progress` olayıyla akar.
 /// `profiles`: bir veya birden çok profil ("home"/"vet"/"research") — çoklu seçim desteklenir.
-#[tauri::command]
-async fn install_and_launch(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
+///
+/// KP-6 D4 (madde 6): `install_and_launch` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kök ve dış bağ (`KomutOrtami`: pencere / olay /
+/// devir / gerçek akış) ENJEKTE. Kilit, sıra, sonuç eşlemesi ve temizlik AYNEN.
+async fn install_and_launch_ile<O: KomutOrtami>(
+    ortam: &O,
+    state: &AppState,
+    root: std::path::PathBuf,
     manifest_raw: String,
     profiles: Vec<String>,
 ) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
     // ⚠️ EŞZAMANLI CLIENT KAPISI — `stop_tracked_backend`ten ÖNCE. İkinci bir client penceresi
     // açıksa ve kurulum yapıyorsa, buradan devam etmek onun `runtime.new`ini ezer VE aşağıdaki
     // durdurma onun backend'ini (muhtemelen SÜREN SEANSI) öldürür. Kilit alınamıyorsa hiçbir
     // şeye dokunmadan dönülür. (bkz. install::kurulum_kilidi_al)
     let _kilit = install::kurulum_kilidi_al(&root)?;
     // Yeniden-kurulum: çalışan backend varsa ÖNCE güvenle durdur (exe kilidi + port çakışması).
-    stop_tracked_backend(&state, &root);
+    ortam.izlenen_backendi_durdur(state, &root);
     // ⚠️ SIRA ÖNEMLİ (denetim 2026-08-04): migrasyon `write_pending`'DEN ÖNCE olmalı.
     // `migrate_legacy_install_root` ilk satırında `if install_root.exists() { return; }` der;
     // `write_pending` ise `create_dir_all(install_root)` yapar. Migrasyon şimdiye kadar yalnız
@@ -698,20 +758,20 @@ async fn install_and_launch(
     state.control.store(CTL_RUN, Ordering::Relaxed);
 
     // Ağır iş: bloklayan çağrılar UI thread'ini dondurmasın.
-    let app2 = app.clone();
+    let ortam2 = ortam.clone();
     let root2 = root.clone();
     let store = state.progress.clone();
     let ctrl = state.control.clone();
     // [5.10] İptal dalı, arka plan ön-indirmesinin .part'ını koruyabilsin diye (aşağıda).
     let manifest_raw_iptal = manifest_raw.clone();
     let result: Result<InstallOutcome, String> = tauri::async_runtime::spawn_blocking(move || {
-        let mut on = progress_reporter(app2, store);
+        let mut on = ortam2.ilerleme_yazici(store);
         let control = || match ctrl.load(Ordering::Relaxed) {
             CTL_PAUSE => net::Control::Pause,
             CTL_CANCEL => net::Control::Cancel,
             _ => net::Control::Continue,
         };
-        match flow::install_profiles(&manifest_raw, &profiles, &root2, &mut on, &control) {
+        match ortam2.profilleri_kur(&manifest_raw, &profiles, &root2, &mut on, &control) {
             Ok(()) => {}
             Err(flow::FlowError::Net(net::NetError::Paused)) => return Ok(InstallOutcome::Paused),
             Err(flow::FlowError::Net(net::NetError::Cancelled)) => return Ok(InstallOutcome::Cancelled),
@@ -722,7 +782,7 @@ async fn install_and_launch(
             }
             Err(e) => return Err(e.to_string()),
         }
-        flow::start_backend(&root2, &mut on)
+        ortam2.backend_baslat(&root2, &mut on)
             .map(|(c, u, p)| InstallOutcome::Ready(c, u, p))
             .map_err(|e| e.to_string())
     })
@@ -732,8 +792,8 @@ async fn install_and_launch(
     match result {
         Ok(InstallOutcome::Ready(child, url, port)) => {
             // Oturumu pencere AÇILMADAN ÖNCE devret (bkz. hand_off_session).
-            hand_off_session(&state, port).await;
-            on_backend_ready(&app, &state, child, &url, port);
+            ortam.oturumu_devret(state, port).await;
+            ortam.backend_hazir(state, child, &url, port);
             install::clear_pending(&root); // kurulum bitti → yarım-kalma kaydını temizle
             Ok(serde_json::json!({ "status": "ready", "url": url }))
         }
@@ -759,12 +819,10 @@ async fn install_and_launch(
 
 /// Başlat: KURULU uygulamanın backend'ini başlat (indirme YOK). Zaten çalışıyorsa tarayıcıyı
 /// yeniden açar. "Hazır!" ekranındaki büyük Başlat düğmesi bunu çağırır.
-#[tauri::command]
-async fn start_installed(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
-    let root = install::default_install_root(&home_dir());
+///
+/// KP-6 D4 (madde 6): `start_installed` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kök ve dış bağ (`KomutOrtami`) ENJEKTE; zaten-çalışıyor
+/// / sahiplenme (önce çek → sonra devret → rotasyon) / yeni başlatma dalları AYNEN.
+async fn start_installed_ile<O: KomutOrtami>(ortam: &O, state: &AppState, root: std::path::PathBuf) -> Result<String, String> {
     if !install::backend_path(&root).exists() {
         return Err(pemf_launcher_core::dil::t("rust.hata.uygulamaKuruluDegil"));
     }
@@ -772,8 +830,8 @@ async fn start_installed(
     let running_port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
     if let Some(port) = running_port {
         // İDEMPOTENT: kullanıcı arada "Çıkış yap"/"Giriş yap" yapmış olabilir → oturumu tazele.
-        hand_off_session(&state, port).await;
-        open_app_window(&app, port);
+        ortam.oturumu_devret(state, port).await;
+        ortam.uygulama_penceresini_ac(port);
         return Ok(backend::app_url(port));
     }
 
@@ -782,7 +840,7 @@ async fn start_installed(
     // başlatılıyor, seri portu alamadığı için donanımı süremiyor ama UI'da "boşta" görünüyordu.
     // Çalışan varsa yenisini BAŞLATMA, mevcut olanı SAHİPLEN (state.proc'a KOYMA: onu biz
     // başlatmadık, dolayısıyla pencere kapanışında ÖLDÜRME hakkımız da yok).
-    if let Some(port) = backend::detect_running_backend(&root) {
+    if let Some(port) = ortam.calisan_backend(&root) {
         // SAHİPLENİLEN backend'e de oturumu devret (idempotent) — o süreci biz başlatmadık ama
         // kullanıcı BU client'tan giriş yaptı; uygulama yine kendi login'ini atlamalı.
         // [S4] Sahiplenilen backend BİZDEN TAZE bir oturum tutuyor olabilir (pencere döndürmüş, biz
@@ -807,33 +865,33 @@ async fn start_installed(
             })
             .await;
         }
-        hand_off_session(&state, port).await;
+        ortam.oturumu_devret(state, port).await;
         // 🔴 C3 (denetim 2026-08-24): sahiplenilen backend'in ROTASYON SENKRONU da başlamalı.
         // `on_backend_ready` burada ÇAĞRILAMAZ (child yok — süreci biz başlatmadık, `state.proc`a
         // koymuyoruz, öldürme hakkımız yok) ve senkron thread yalnız orada başlatılıyordu → pencere
         // jetonu döndürüp backend'e push eder, launcher pull ETMEZ, diskteki kopya bayatlar ve
         // sonraki açılışta SessionRevoked → "Beni hatırla" SİLİNİR (saha arızasının açık kalan kolu).
         // Guard (senkron_baslamali) çift-Başlat'ta thread biriktirmeyi önler.
-        oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port, state.session.clone());
-        open_app_window(&app, port);
+        ortam.rotasyonu_baslat(state, port);
+        ortam.uygulama_penceresini_ac(port);
         return Ok(backend::app_url(port));
     }
 
     *state.progress.lock().unwrap() = None;
-    let app2 = app.clone();
+    let ortam2 = ortam.clone();
     let root2 = root.clone();
     let store = state.progress.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let mut on = progress_reporter(app2, store);
-        flow::start_backend(&root2, &mut on).map_err(|e| e.to_string())
+        let mut on = ortam2.ilerleme_yazici(store);
+        ortam2.backend_baslat(&root2, &mut on).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.baslatmaGorevCoktu", &[("e", &e.to_string())]))?;
 
     match result {
         Ok((child, url, port)) => {
-            hand_off_session(&state, port).await;
-            on_backend_ready(&app, &state, child, &url, port);
+            ortam.oturumu_devret(state, port).await;
+            ortam.backend_hazir(state, child, &url, port);
             Ok(url)
         }
         Err(e) => Err(e),
@@ -842,13 +900,15 @@ async fn start_installed(
 
 /// Onar: kurulu profilleri (+base) yeniden doğrula/çıkar (bozuk/eksik dosyaları onarır), sonra
 /// backend'i başlat. İlerleme `install://progress` ile akar.
-#[tauri::command]
-async fn repair(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
+///
+/// KP-6 D4 (madde 6): `repair` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kök ve dış bağ (`KomutOrtami`) ENJEKTE; kilit, KESİN-seans
+/// kapısı (`Some(true)`), E-stop + kill, sonuç eşlemesi AYNEN.
+async fn repair_ile<O: KomutOrtami>(
+    ortam: &O,
+    state: &AppState,
+    root: std::path::PathBuf,
     manifest_raw: String,
 ) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
     // ⚠️ EŞZAMANLI CLIENT KAPISI (bkz. install_and_launch'taki not): onarım da backend'i öldürüp
     // dosyaları değiştirir; ikinci bir pencere kurulum yaparken buna girmek ikisini de bozar.
     let _kilit = install::kurulum_kilidi_al(&root)?;
@@ -863,27 +923,27 @@ async fn repair(
     // tam da onarıma ihtiyaç duyulan anda (backend asılı) kullanıcıyı kalıcı olarak kilitlerdi.
     // Bu yüzden burada YALNIZ KESİN bilgiyle (`Some(true)`) durulur. Hasta güvenliği yine korunur:
     // `stop_tracked_backend` her iki yolda da kill'den ÖNCE `safe_stop_coils` gönderir.
-    if let Some(p) = backend::detect_running_backend(&root) {
+    if let Some(p) = ortam.calisan_backend(&root) {
         if backend::session_active(p) == Some(true) {
             return Err(pemf_launcher_core::dil::t("rust.hata.onarimSeansSuruyor"));
         }
     }
-    stop_tracked_backend(&state, &root);
+    ortam.izlenen_backendi_durdur(state, &root);
     *state.progress.lock().unwrap() = None;
     state.control.store(CTL_RUN, Ordering::Relaxed);
 
-    let app2 = app.clone();
+    let ortam2 = ortam.clone();
     let root2 = root.clone();
     let store = state.progress.clone();
     let ctrl = state.control.clone();
     let result: Result<InstallOutcome, String> = tauri::async_runtime::spawn_blocking(move || {
-        let mut on = progress_reporter(app2, store);
+        let mut on = ortam2.ilerleme_yazici(store);
         let control = || match ctrl.load(Ordering::Relaxed) {
             CTL_PAUSE => net::Control::Pause,
             CTL_CANCEL => net::Control::Cancel,
             _ => net::Control::Continue,
         };
-        match flow::repair(&manifest_raw, &root2, &mut on, &control) {
+        match ortam2.onar(&manifest_raw, &root2, &mut on, &control) {
             Ok(()) => {}
             Err(flow::FlowError::Net(net::NetError::Paused)) => return Ok(InstallOutcome::Paused),
             Err(flow::FlowError::Net(net::NetError::Cancelled)) => return Ok(InstallOutcome::Cancelled),
@@ -894,7 +954,7 @@ async fn repair(
             }
             Err(e) => return Err(e.to_string()),
         }
-        flow::start_backend(&root2, &mut on)
+        ortam2.backend_baslat(&root2, &mut on)
             .map(|(c, u, p)| InstallOutcome::Ready(c, u, p))
             .map_err(|e| e.to_string())
     })
@@ -903,8 +963,8 @@ async fn repair(
 
     match result {
         Ok(InstallOutcome::Ready(child, url, port)) => {
-            hand_off_session(&state, port).await;
-            on_backend_ready(&app, &state, child, &url, port);
+            ortam.oturumu_devret(state, port).await;
+            ortam.backend_hazir(state, child, &url, port);
             Ok(serde_json::json!({ "status": "ready", "url": url }))
         }
         Ok(InstallOutcome::Paused) => Ok(serde_json::json!({ "status": "paused" })),
@@ -933,32 +993,33 @@ async fn repair(
 /// SONRASINDA: `state.proc` orada atomik alinip E-stop → yakala → kill TAMAMLANIR; Destroyed
 /// kancasi `proc`u None bulur ve hicbir sey yapmaz (iki yolun ayni backend'i yarista E-stop'suz
 /// oldurmesi imkansiz).
-#[tauri::command]
-async fn remove_profiles(
-    state: tauri::State<'_, AppState>,
-    app: tauri::AppHandle,
+///
+/// KP-6 D4 (madde 6): `remove_profiles` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kök ve dış bağ (`KomutOrtami`) ENJEKTE; sıra (kilit →
+/// seans kapısı → E-stop + kill → "app" penceresini kapat → kaldır) ve ilerleme YAYINLAMAMA AYNEN.
+async fn remove_profiles_ile<O: KomutOrtami>(
+    ortam: &O,
+    state: &AppState,
+    root: std::path::PathBuf,
     manifest_raw: String,
     profiles: Vec<String>,
 ) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
     let _kilit = install::kurulum_kilidi_al(&root)?;
-    if let Some(p) = backend::detect_running_backend(&root) {
+    if let Some(p) = ortam.calisan_backend(&root) {
         if backend::session_active(p) == Some(true) {
             return Err(
                 pemf_launcher_core::dil::t("rust.hata.profilKaldirmaSeansSuruyor"),
             );
         }
     }
-    stop_tracked_backend(&state, &root);
+    ortam.izlenen_backendi_durdur(state, &root);
     *state.progress.lock().unwrap() = None;
-    if let Some(w) = app.get_webview_window("app") {
-        let _ = w.close();
-    }
+    ortam.uygulama_penceresini_kapat();
 
+    let ortam2 = ortam.clone();
     let root2 = root.clone();
     let rapor = tauri::async_runtime::spawn_blocking(move || -> Result<flow::RemoveReport, String> {
         let manifest = pemf_launcher_core::Manifest::parse(&manifest_raw).map_err(|e| e.to_string())?;
-        flow::remove_profiles(&root2, &manifest, &profiles, &mut |_| {}).map_err(|e| e.to_string())
+        ortam2.profilleri_kaldir(&root2, &manifest, &profiles, &mut |_| {}).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.profilKaldirmaGorevCoktu", &[("e", &e.to_string())]))??;
@@ -3019,7 +3080,7 @@ mod tests {
         for (bas, ad) in [
             ("fn oturum_rotasyon_senkronu_baslat", "60 sn döngüsü"),
             ("fn son_oturumu_yakala", "kapanış son-yakalaması"),
-            ("if let Some(port) = backend::detect_running_backend(&root) {", "sahiplenme"),
+            ("if let Some(port) = ortam.calisan_backend(&root) {", "sahiplenme"), // KP-6 D4: gövde `start_installed_ile`
         ] {
             let i = soy.find(bas).unwrap_or_else(|| panic!("{ad} yok"));
             let son = soy[i + 1..].find("\nfn ").map(|j| i + 1 + j).unwrap_or(soy.len());
@@ -3069,12 +3130,13 @@ mod tests {
         let y = soy.find("fn son_oturumu_yakala").expect("F5 fn yok");
         let yson = soy[y..].find("\nfn ").map(|j| y + j).unwrap_or(soy.len());
         assert!(soy[y..yson].contains("bellek_rotasyonu_uygula("), "F5 yakalama belleği tazelemiyor (S4)");
-        let o = soy.find("if let Some(port) = backend::detect_running_backend(&root) {").expect("orphan sahiplenme yok");
-        let oson = soy[o..].find("open_app_window(").map(|j| o + j).unwrap_or(soy.len());
+        // KP-6 D4: sahiplenme gövdesi `start_installed_ile`de; devir / pencere `KomutOrtami` bağında (davranış: KRITIK_KP6_D4_*).
+        let o = soy.find("if let Some(port) = ortam.calisan_backend(&root) {").expect("orphan sahiplenme yok");
+        let oson = soy[o..].find("uygulama_penceresini_ac(").map(|j| o + j).unwrap_or(soy.len());
         let blok = &soy[o..oson];
         // 2026-10-18: çekme `devir_cek_kisa` (üç durumlu: oturum / ÇIKIŞ / yok); sözleşme aynı — devirden ÖNCE çek.
         let cek = blok.find("devir_cek_kisa(").expect("sahiplenmede ÖNCE çekme yok (S4)");
-        let devir = blok.find("hand_off_session(").expect("sahiplenmede devir yok");
+        let devir = blok.find("oturumu_devret(").expect("sahiplenmede devir yok");
         assert!(cek < devir, "sahiplenme devirden SONRA çekiyor — bayat itme (S4)");
     }
 
@@ -3947,20 +4009,29 @@ Connection: close
     #[test]
     fn profil_kaldirma_komutu_pencereyi_stop_SONRASI_kapatir_ilerleme_yayinlamaz() {
         let soy = f5_yorumlari_soy(include_str!("main.rs"));
-        let i = soy.find("async fn remove_profiles(").expect("remove_profiles komutu yok");
+        // KP-6 D4: gövde `remove_profiles_ile`de; durdurma / pencere kapatma `KomutOrtami` bağında (üretim impl'i kabuk.rs) — sıra
+        // davranışla da ölçülür (KRITIK_KP6_D4_remove_profiles_*).
+        // concat!: aranan metin bu testin KENDİ dizgesinde geçmesin (KP-5 B1 kör çapa dersi).
+        let i = soy.find(concat!("async fn remove_", "profiles_ile<O: KomutOrtami>(")).expect("remove_profiles komutu yok");
         let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
         let govde = &soy[i..son];
-        let stop = govde.find("stop_tracked_backend(").expect("remove_profiles E-stop+kill (stop_tracked_backend) çağırmıyor");
+        let stop = govde.find("izlenen_backendi_durdur(").expect("remove_profiles E-stop+kill (stop_tracked_backend) çağırmıyor");
         let pencere = govde
-            .find("get_webview_window(\"app\")")
+            .find("uygulama_penceresini_kapat()")
             .expect("remove_profiles açık \"app\" penceresini kapatmıyor — kaldırılan profil arayüzde seçilebilir kalır");
-        let kapat = govde[pencere..].find(".close()").expect("\"app\" penceresi bulunuyor ama close() yok");
+        let kab = kabuk_soy();
+        let ks = kab.find("fn uygulama_penceresini_kapat(").expect("pencere kapatma bağı yok");
+        let kb = &kab[ks..ks + 200];
+        let kw = kb.find("get_webview_window(\"app\")").expect("bağ \"app\" penceresini bulmuyor");
+        let kapat = kb[kw..].find(".close()").expect("\"app\" penceresi bulunuyor ama close() yok");
         assert!(kapat < 200, "get_webview_window(\"app\") ile close() arası kopuk");
+        let d = kab.find("fn izlenen_backendi_durdur(").expect("durdurma bağı yok");
+        assert!(kab[d..d + 200].contains("stop_tracked_backend(state, root)"), "durdurma bağı E-stop + kill (stop_tracked_backend) çağırmıyor");
         let spawn = govde.find("spawn_blocking(").expect("remove_profiles spawn_blocking yok");
         assert!(stop < pencere, "pencere kapatma stop_tracked_backend'ten ÖNCE — Destroyed kancası ile yarış (E-stop sırası)");
         assert!(pencere < spawn, "pencere kapatma dosya silme başladıktan SONRA — eski profil listesi açık kalır");
         assert!(
-            !govde.contains("progress_reporter("),
+            !govde.contains("progress_reporter(") && !govde.contains("ilerleme_yazici("),
             "remove_profiles ilerleme yayınlıyor — UI bunu 'Kuruluyor…/Installing…' diye gösterir (yanıltıcı)"
         );
     }
@@ -5162,5 +5233,403 @@ Connection: close
         .unwrap();
         assert_eq!(sonuc["status"], "prefetched", "ön-indirme kilidi indirme boyunca TUTUYOR (kurulum / onarım engellenir): {sonuc}");
         let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-6 D4 (madde 6) · `install_and_launch_ile` · `repair_ile` · `remove_profiles_ile` · `start_installed_ile` — komut gövdeleri,
+    // kayıtçı sahte `KomutOrtami` ile (pencere / olay / devir / gerçek akış / 8000 yoklaması YOK). Seans kapısı ve sahiplenme çekimi
+    // rastgele portta sahte backend'e GERÇEK HTTP ile sorar. Geçici kök; gerçek kurulum / gerçek backend süreci YOK.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// Kayıtçı sahte dış bağ: her çağrı `iz`e yazılır (sıra iddiası); akış sonuçları ayarlanır.
+    #[derive(Clone, Default)]
+    struct Kp6Ortam {
+        iz: Arc<Mutex<Vec<String>>>,
+        calisan: Option<u16>,
+        kur_hata: Arc<Mutex<Option<flow::FlowError>>>,
+        onar_hata: Arc<Mutex<Option<flow::FlowError>>>,
+        baslat_hata: bool,
+        kaldir_hata: Arc<Mutex<Option<flow::FlowError>>>,
+    }
+
+    impl Kp6Ortam {
+        fn yaz(&self, s: String) {
+            self.iz.lock().unwrap().push(s);
+        }
+        fn izler(&self) -> Vec<String> {
+            self.iz.lock().unwrap().clone()
+        }
+        /// Akış çağrısı sırasında: kilit TUTULUYOR mu (başka pencere alamıyor mu), yarım-kurulum kaydı, denetim bayrağı.
+        fn akis_ani(&self, ad: &str, root: &std::path::Path, control: Option<&dyn Fn() -> net::Control>) {
+            let kilitli = install::kurulum_kilidi_al(root).is_err();
+            let bekleyen = install::read_pending(root).join(",");
+            let c = control.map(|c| format!("{:?}", c())).unwrap_or_default();
+            self.yaz(format!("{ad} kilitli={kilitli} bekleyen=[{bekleyen}] denetim={c}"));
+        }
+    }
+
+    #[cfg(windows)]
+    fn kp6_kisa_cocuk() -> std::process::Child {
+        use std::os::windows::process::CommandExt;
+        // Sahte süreç işaretsiz → anında çıkar (gerçek backend süreci YOK).
+        std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["tests::kp5_b1_sahte_surec_uyur", "--exact", "--ignored", "--test-threads=1", "-q"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .creation_flags(0x0800_0000)
+            .spawn()
+            .expect("kısa çocuk başlamadı")
+    }
+
+    const KP6_PORT: u16 = 49_871;
+
+    impl KomutOrtami for Kp6Ortam {
+        fn ilerleme_yazici(&self, _store: Arc<Mutex<Option<serde_json::Value>>>) -> Box<dyn FnMut(flow::Progress) + Send> {
+            let o = self.clone();
+            Box::new(move |p: flow::Progress| o.yaz(format!("ilerleme:{}", serde_json::to_value(&p).map(|v| v["step"].to_string()).unwrap_or_default())))
+        }
+        fn oturumu_devret<'a>(
+            &'a self,
+            _state: &'a AppState,
+            port: u16,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+            Box::pin(async move { self.yaz(format!("devret:{port}")) })
+        }
+        fn backend_hazir(&self, state: &AppState, mut child: std::process::Child, url: &str, port: u16) {
+            let _ = child.wait();
+            self.yaz(format!("hazir:{port}:{url}:oturum={}", state.session.lock().unwrap().is_some()));
+        }
+        fn uygulama_penceresini_ac(&self, port: u16) {
+            self.yaz(format!("pencere_ac:{port}"));
+        }
+        fn uygulama_penceresini_kapat(&self) {
+            self.yaz("pencere_kapat".into());
+        }
+        fn izlenen_backendi_durdur(&self, state: &AppState, _root: &std::path::Path) {
+            let p = state.proc.lock().unwrap().take();
+            self.yaz(format!("durdur:izlenen={}", p.is_some()));
+            if let Some((mut c, _)) = p {
+                let _ = c.kill();
+                let _ = c.wait();
+            }
+        }
+        fn calisan_backend(&self, _root: &std::path::Path) -> Option<u16> {
+            self.yaz("calisan?".into());
+            self.calisan
+        }
+        fn rotasyonu_baslat(&self, _state: &AppState, port: u16) {
+            self.yaz(format!("rotasyon:{port}"));
+        }
+        fn profilleri_kur(
+            &self,
+            _m: &str,
+            profiles: &[String],
+            root: &std::path::Path,
+            on: &mut dyn FnMut(flow::Progress),
+            control: &dyn Fn() -> net::Control,
+        ) -> Result<(), flow::FlowError> {
+            self.akis_ani(&format!("kur:{}", profiles.join("+")), root, Some(control));
+            on(flow::Progress::Downloading { what: "base".into(), done: 1, total: 1 });
+            self.kur_hata.lock().unwrap().take().map_or(Ok(()), Err)
+        }
+        fn onar(
+            &self,
+            _m: &str,
+            root: &std::path::Path,
+            on: &mut dyn FnMut(flow::Progress),
+            control: &dyn Fn() -> net::Control,
+        ) -> Result<(), flow::FlowError> {
+            self.akis_ani("onar", root, Some(control));
+            on(flow::Progress::Verifying { what: "base".into() });
+            self.onar_hata.lock().unwrap().take().map_or(Ok(()), Err)
+        }
+        fn backend_baslat(
+            &self,
+            root: &std::path::Path,
+            on: &mut dyn FnMut(flow::Progress),
+        ) -> Result<(std::process::Child, String, u16), flow::FlowError> {
+            self.akis_ani("baslat", root, None);
+            on(flow::Progress::StartingBackend { port: KP6_PORT });
+            if self.baslat_hata {
+                return Err(flow::FlowError::Io(std::io::Error::other("KP6 backend acilmadi")));
+            }
+            Ok((kp6_kisa_cocuk(), backend::app_url(KP6_PORT), KP6_PORT))
+        }
+        fn profilleri_kaldir(
+            &self,
+            root: &std::path::Path,
+            _manifest: &pemf_launcher_core::Manifest,
+            profiles: &[String],
+            _on: &mut dyn FnMut(flow::Progress),
+        ) -> Result<flow::RemoveReport, flow::FlowError> {
+            self.akis_ani(&format!("kaldir:{}", profiles.join("+")), root, None);
+            if let Some(e) = self.kaldir_hata.lock().unwrap().take() {
+                return Err(e);
+            }
+            Ok(flow::RemoveReport { removed: profiles.to_vec(), installed: vec!["home".into()], freed_bytes: 1234, kept_shared: 2 })
+        }
+    }
+
+    fn kp6_bos_manifest() -> String {
+        r#"{"schema":2,"version":"9.9.9","models":{},"model_parts":{}}"#.to_string()
+    }
+
+    fn kp6_kurulu_kok(ad: &str) -> std::path::PathBuf {
+        let k = kp6_kok(ad);
+        let exe = install::backend_path(&k);
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::write(&exe, b"EXE").unwrap();
+        k
+    }
+
+    /// KRİTİK (kurulum · eşzamanlı client kapısı · migrasyon / pending sırası · oturum devri): kurulum akışı kilit TUTULURKEN ve
+    /// yarım-kurulum kaydı YAZILMIŞKEN koşar; önce izlenen backend E-stop + kill; denetim bayrağı tur başında sıfırlanır (önceki
+    /// "duraklat" bu turu durdurmaz); sıra kur → başlat → OTURUM DEVRİ → backend hazır (pencere devirden SONRA); bitince kayıt temizlenir.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D4_install_and_launch_SIRA_kilit_pending_devir_ONCE_hazir_SONRA() {
+        let kok = kp6_kok("d4_kur");
+        let st = AppState::default();
+        st.control.store(CTL_PAUSE, Ordering::Relaxed);
+        *st.progress.lock().unwrap() = Some(serde_json::json!("eski"));
+        let o = Kp6Ortam::default();
+        let r = tauri::async_runtime::block_on(install_and_launch_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["home".into(), "vet".into()]))
+            .expect("kurulum düştü");
+        assert_eq!(r, serde_json::json!({ "status": "ready", "url": backend::app_url(KP6_PORT) }));
+        assert_eq!(
+            o.izler(),
+            vec![
+                "durdur:izlenen=false".to_string(),
+                "kur:home+vet kilitli=true bekleyen=[home,vet] denetim=Continue".to_string(),
+                "ilerleme:\"downloading\"".to_string(),
+                "baslat kilitli=true bekleyen=[home,vet] denetim=".to_string(),
+                "ilerleme:\"starting_backend\"".to_string(),
+                format!("devret:{KP6_PORT}"),
+                format!("hazir:{KP6_PORT}:{}:oturum=false", backend::app_url(KP6_PORT)),
+            ],
+            "kurulum sırası"
+        );
+        assert!(install::read_pending(&kok).is_empty(), "kurulum bitti ama yarım-kurulum kaydı kaldı");
+        assert!(install::kurulum_kilidi_al(&kok).is_ok(), "kurulum bitti ama kilit bırakılmadı");
+        assert!(st.progress.lock().unwrap().is_none(), "ilerleme kanalı tur başında sıfırlanmadı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (#109 + [5.10] + kurulum kapısı): duraklat → `paused`, yarım-kurulum kaydı KORUNUR ("Devam Et"), başlatma YOK · iptal (ağ
+    /// ya da AÇMA iptali) → `cancelled`, kayıt + yarım `.part`lar SİLİNİR (boş plan: hepsi) · başka hata → `Err`, kayıt KORUNUR · başka
+    /// pencere kurulum yaparken (kilit dolu) HİÇBİR ŞEYE dokunulmaz (backend durdurulmaz, akış koşmaz).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D4_install_and_launch_DURAKLAT_korur_IPTAL_temizler_HATA_doner_KILIT_doluysa_dokunmaz() {
+        let st = AppState::default();
+        let kok = kp6_kok("d4_kur_durum");
+        let o = Kp6Ortam::default();
+        *o.kur_hata.lock().unwrap() = Some(flow::FlowError::Net(net::NetError::Paused));
+        let r = tauri::async_runtime::block_on(install_and_launch_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["vet".into()])).unwrap();
+        assert_eq!(r, serde_json::json!({ "status": "paused" }));
+        assert_eq!(install::read_pending(&kok), vec!["vet".to_string()], "duraklatılan kurulumun kaydı silindi (Devam Et kaybolur)");
+        assert!(!o.izler().iter().any(|x| x.starts_with("baslat") || x.starts_with("hazir")), "duraklatılan kurulum backend başlattı");
+        let _ = std::fs::remove_dir_all(&kok);
+        for (ad, hata) in [
+            ("ag", flow::FlowError::Net(net::NetError::Cancelled)),
+            ("acma", flow::FlowError::Extract(extract::ExtractError::Cancelled)),
+        ] {
+            let kok = kp6_kok(&format!("d4_kur_iptal_{ad}"));
+            let cache = install::cache_dir(&kok);
+            std::fs::create_dir_all(&cache).unwrap();
+            std::fs::write(cache.join("deps.zip.part"), b"yarim").unwrap();
+            std::fs::write(cache.join("tamam.zip"), b"zip").unwrap();
+            let o = Kp6Ortam::default();
+            *o.kur_hata.lock().unwrap() = Some(hata);
+            let r = tauri::async_runtime::block_on(install_and_launch_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["vet".into()])).unwrap();
+            assert_eq!(r, serde_json::json!({ "status": "cancelled" }), "{ad}: iptal kullanıcı kararı (hata değil)");
+            assert!(install::read_pending(&kok).is_empty(), "{ad}: iptalde yarım-kurulum kaydı kaldı");
+            assert!(!cache.join("deps.zip.part").exists(), "{ad}: iptalde yarım indirme kaldı");
+            assert!(cache.join("tamam.zip").exists(), "{ad}: iptal tamamlanmış paketi sildi");
+            let _ = std::fs::remove_dir_all(&kok);
+        }
+        let kok = kp6_kok("d4_kur_hata");
+        let o = Kp6Ortam::default();
+        *o.kur_hata.lock().unwrap() = Some(flow::FlowError::Io(std::io::Error::other("KP6 disk dolu")));
+        let e = tauri::async_runtime::block_on(install_and_launch_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["vet".into()])).unwrap_err();
+        assert!(e.contains("KP6 disk dolu"), "{e}");
+        assert_eq!(install::read_pending(&kok), vec!["vet".to_string()], "hatada kayıt silindi (açılışta 'devam et?' sorulamaz)");
+        let kilit = install::kurulum_kilidi_al(&kok).unwrap();
+        let o = Kp6Ortam::default();
+        let e = tauri::async_runtime::block_on(install_and_launch_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["home".into()])).unwrap_err();
+        assert!(!e.is_empty());
+        assert!(o.izler().is_empty(), "kilit doluyken (başka pencere kuruyor) dokunuldu: {:?}", o.izler());
+        assert_eq!(install::read_pending(&kok), vec!["vet".to_string()], "kilit doluyken öteki pencerenin kaydı ezildi");
+        drop(kilit);
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (DENETİM 2026-08-09 · KATILIK FARKI): onarım YALNIZ kesin etkin seansta (`sessionActive: true`) durur — backend yanıtsızken
+    /// (None) kullanıcı kilitlenmez; seanssızda sıra E-stop + kill → onar → başlat → devir → hazır; duraklat / iptal durum, başka hata Err.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D4_repair_YALNIZ_kesin_seansta_DURUR_yanitsizda_SURER_sira_ve_durumlar() {
+        let st = AppState::default();
+        let (port, kapat, _y, h) = kp5_yanitlayan(|yol, _| if yol == "/api/health" { r#"{"sessionActive":true}"#.into() } else { "{}".into() });
+        let kok = kp6_kok("d4_onar_seans");
+        let o = Kp6Ortam { calisan: Some(port), ..Default::default() };
+        let e = tauri::async_runtime::block_on(repair_ile(&o, &st, kok.clone(), kp6_bos_manifest())).unwrap_err();
+        assert_eq!(e, pemf_launcher_core::dil::t("rust.hata.onarimSeansSuruyor"));
+        assert_eq!(o.izler(), vec!["calisan?".to_string()], "etkin seansta backend durduruldu / onarıma girildi");
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        let (port, kapat, _y, h) = kp5_yanitlayan(|yol, _| if yol == "/api/health" { r#"{"sessionActive":false}"#.into() } else { "{}".into() });
+        for (ad, calisan) in [("seanssiz", Some(port)), ("yanitsiz", Some(kapali_port())), ("backend_yok", None)] {
+            let o = Kp6Ortam { calisan, ..Default::default() };
+            let r = tauri::async_runtime::block_on(repair_ile(&o, &st, kok.clone(), kp6_bos_manifest())).unwrap_or_else(|e| panic!("{ad}: {e}"));
+            assert_eq!(r, serde_json::json!({ "status": "ready", "url": backend::app_url(KP6_PORT) }), "{ad}");
+            assert_eq!(
+                o.izler(),
+                vec![
+                    "calisan?".to_string(),
+                    "durdur:izlenen=false".to_string(),
+                    "onar kilitli=true bekleyen=[] denetim=Continue".to_string(),
+                    "ilerleme:\"verifying\"".to_string(),
+                    "baslat kilitli=true bekleyen=[] denetim=".to_string(),
+                    "ilerleme:\"starting_backend\"".to_string(),
+                    format!("devret:{KP6_PORT}"),
+                    format!("hazir:{KP6_PORT}:{}:oturum=false", backend::app_url(KP6_PORT)),
+                ],
+                "{ad}: onarım sırası"
+            );
+        }
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        for (hata, beklenen) in [
+            (flow::FlowError::Net(net::NetError::Paused), "paused"),
+            (flow::FlowError::Net(net::NetError::Cancelled), "cancelled"),
+            (flow::FlowError::Extract(extract::ExtractError::Cancelled), "cancelled"),
+        ] {
+            let o = Kp6Ortam::default();
+            *o.onar_hata.lock().unwrap() = Some(hata);
+            let r = tauri::async_runtime::block_on(repair_ile(&o, &st, kok.clone(), kp6_bos_manifest())).unwrap();
+            assert_eq!(r, serde_json::json!({ "status": beklenen }));
+            assert!(!o.izler().iter().any(|x| x.starts_with("baslat")), "{beklenen}: onarım yarıda kaldı ama backend başlatıldı");
+        }
+        let o = Kp6Ortam { baslat_hata: true, ..Default::default() };
+        let e = tauri::async_runtime::block_on(repair_ile(&o, &st, kok.clone(), kp6_bos_manifest())).unwrap_err();
+        assert!(e.contains("KP6 backend acilmadi"), "{e}");
+        assert!(!o.izler().iter().any(|x| x.starts_with("hazir") || x.starts_with("devret")), "backend açılmadı ama devir / hazır çağrıldı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (inceleme 2026-09-06): profil kaldırma sırası kilit → kesin-seans kapısı → E-stop + kill → "app" penceresini KAPAT → kaldır
+    /// (pencere durdurmadan SONRA, silmeden ÖNCE); ilerleme YAYINLANMAZ ve kanal sıfırlanır; rapor alanları UI'ya taşınır; etkin seansta
+    /// HİÇBİR ŞEYE dokunulmaz; bozuk manifestte kaldırma çağrılmaz.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D4_remove_profiles_SIRA_durdur_PENCERE_kaldir_ilerleme_YOK_seansta_DOKUNMAZ() {
+        let st = AppState::default();
+        *st.progress.lock().unwrap() = Some(serde_json::json!("eski"));
+        let kok = kp6_kok("d4_kaldir");
+        let o = Kp6Ortam::default();
+        let r = tauri::async_runtime::block_on(remove_profiles_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["vet".into()])).unwrap();
+        assert_eq!(
+            r,
+            serde_json::json!({ "status": "ok", "removed": ["vet"], "installed": ["home"], "freed_bytes": 1234, "kept_shared": 2 })
+        );
+        assert_eq!(
+            o.izler(),
+            vec![
+                "calisan?".to_string(),
+                "durdur:izlenen=false".to_string(),
+                "pencere_kapat".to_string(),
+                "kaldir:vet kilitli=true bekleyen=[] denetim=".to_string(),
+            ],
+            "profil kaldırma sırası / ilerleme yayını"
+        );
+        assert!(st.progress.lock().unwrap().is_none(), "kurulum kanalı sıfırlanmadı (eski ilerleme ekranda kalır)");
+        let (port, kapat, _y, h) = kp5_yanitlayan(|yol, _| if yol == "/api/health" { r#"{"sessionActive":true}"#.into() } else { "{}".into() });
+        let o = Kp6Ortam { calisan: Some(port), ..Default::default() };
+        let e = tauri::async_runtime::block_on(remove_profiles_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["vet".into()])).unwrap_err();
+        assert_eq!(e, pemf_launcher_core::dil::t("rust.hata.profilKaldirmaSeansSuruyor"));
+        assert_eq!(o.izler(), vec!["calisan?".to_string()], "etkin seansta durduruldu / pencere kapatıldı / silindi");
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        let o = Kp6Ortam::default();
+        assert!(tauri::async_runtime::block_on(remove_profiles_ile(&o, &st, kok.clone(), "{bozuk".into(), vec!["vet".into()])).is_err());
+        assert!(!o.izler().iter().any(|x| x.starts_with("kaldir")), "bozuk manifestle kaldırma çağrıldı");
+        let o = Kp6Ortam::default();
+        *o.kaldir_hata.lock().unwrap() = Some(flow::FlowError::Io(std::io::Error::other("KP6 silinemedi")));
+        let e = tauri::async_runtime::block_on(remove_profiles_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["vet".into()])).unwrap_err();
+        assert!(e.contains("KP6 silinemedi"), "{e}");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (DENETİM 2026-08-04 + C3 + S4 + 2026-10-18): Başlat — kurulu değilse eylem söyleyen hata, hiçbir şey başlamaz · bu oturumun
+    /// backend'i çalışıyorsa YENİ süreç YOK, devir → pencere · başka süreçte çalışan backend SAHİPLENİLİR: önce son oturum ÇEKİLİR (taze
+    /// jeton belleğe + "Beni hatırla" kaydına), sonra devir, sonra ROTASYON senkronu, sonra pencere — başlatma YOK, `state.proc`a KONMAZ ·
+    /// hiçbiri yoksa başlat → devir → hazır · başlatma düşerse hata, devir / hazır YOK.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D4_start_installed_KURULU_DEGIL_CALISAN_SAHIPLENME_once_cek_sonra_devret_ROTASYON_yeni_BASLAT() {
+        let st = AppState::default();
+        let bos = kp6_kok("d4_baslat_bos");
+        let o = Kp6Ortam::default();
+        let e = tauri::async_runtime::block_on(start_installed_ile(&o, &st, bos.clone())).unwrap_err();
+        assert_eq!(e, pemf_launcher_core::dil::t("rust.hata.uygulamaKuruluDegil"));
+        assert!(o.izler().is_empty(), "kurulu değilken bir şey yapıldı: {:?}", o.izler());
+        let kok = kp6_kurulu_kok("d4_baslat");
+        // 1) bu oturumda çalışıyor → yeni süreç YOK
+        *st.proc.lock().unwrap() = Some((kp6_kisa_cocuk(), 51_234));
+        let o = Kp6Ortam::default();
+        let r = tauri::async_runtime::block_on(start_installed_ile(&o, &st, kok.clone())).unwrap();
+        assert_eq!(r, backend::app_url(51_234));
+        assert_eq!(o.izler(), vec!["devret:51234".to_string(), "pencere_ac:51234".to_string()]);
+        if let Some((mut c, _)) = st.proc.lock().unwrap().take() {
+            let _ = c.wait();
+        }
+        // 2) başka süreçte çalışan backend → sahiplen: çek (taze oturum) → devret → rotasyon → pencere; state.proc'a KONMAZ
+        std::fs::write(secret_store::hatirla_isareti_path(&kok), b"1").unwrap();
+        let (port, kapat, yollar, h) = kp5_yanitlayan(|yol, _| {
+            if yol == "/api/auth/desktop-session" { kp6_oturum("r-sahip") } else { "{}".into() }
+        });
+        let o = Kp6Ortam { calisan: Some(port), ..Default::default() };
+        let r = tauri::async_runtime::block_on(start_installed_ile(&o, &st, kok.clone())).unwrap();
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert_eq!(r, backend::app_url(port));
+        assert_eq!(
+            o.izler(),
+            vec!["calisan?".to_string(), format!("devret:{port}"), format!("rotasyon:{port}"), format!("pencere_ac:{port}")],
+            "sahiplenme sırası"
+        );
+        assert_eq!(*yollar.lock().unwrap(), vec!["/api/auth/desktop-session".to_string()], "sahiplenmede devirden ÖNCE çekilmedi (S4)");
+        assert_eq!(st.session.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("r-sahip".into()), "taze oturum belleğe alınmadı");
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("r-sahip".into()), "taze oturum diske işlenmedi");
+        assert!(st.proc.lock().unwrap().is_none(), "sahiplenilen (bizim başlatmadığımız) backend state.proc'a kondu — kapanışta öldürülür");
+        // 2b) sahiplenilen backend'te pencere çıkışı → bellek + kayıt temizlenir, devir yine yapılır (oturum yoktur)
+        let (port, kapat, _y, h) = kp5_yanitlayan(|yol, _| if yol == "/api/auth/desktop-session" { r#"{"cikis":true}"#.into() } else { "{}".into() });
+        let o = Kp6Ortam { calisan: Some(port), ..Default::default() };
+        tauri::async_runtime::block_on(start_installed_ile(&o, &st, kok.clone())).unwrap();
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert!(st.session.lock().unwrap().is_none() && secret_store::load(&kok).is_none(), "sahiplenmede pencere çıkışı uygulanmadı");
+        // 3) hiçbiri → başlat → devir → hazır
+        let o = Kp6Ortam::default();
+        let r = tauri::async_runtime::block_on(start_installed_ile(&o, &st, kok.clone())).unwrap();
+        assert_eq!(r, backend::app_url(KP6_PORT));
+        assert_eq!(
+            o.izler(),
+            vec![
+                "calisan?".to_string(),
+                "baslat kilitli=false bekleyen=[] denetim=".to_string(),
+                "ilerleme:\"starting_backend\"".to_string(),
+                format!("devret:{KP6_PORT}"),
+                format!("hazir:{KP6_PORT}:{}:oturum=false", backend::app_url(KP6_PORT)),
+            ]
+        );
+        // 4) başlatma düşer → hata; devir / hazır YOK
+        let o = Kp6Ortam { baslat_hata: true, ..Default::default() };
+        let e = tauri::async_runtime::block_on(start_installed_ile(&o, &st, kok.clone())).unwrap_err();
+        assert!(e.contains("KP6 backend acilmadi"), "{e}");
+        assert!(!o.izler().iter().any(|x| x.starts_with("devret") || x.starts_with("hazir")));
+        let _ = std::fs::remove_dir_all(&kok);
+        let _ = std::fs::remove_dir_all(&bos);
     }
 }

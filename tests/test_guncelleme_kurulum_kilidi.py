@@ -39,7 +39,8 @@ def rs() -> str:
 
 
 def _govde(rs: str, ad: str) -> str:
-    m = re.search(rf"(?:async )?fn {ad}\((.*?)\n}}\n", rs, re.S)
+    # KP-6 D4: gövdeler genel tür parametreli olabilir (`fn x_ile<O: KomutOrtami>(`)
+    m = re.search(rf"(?:async )?fn {ad}(?:<[^>(]*>)?\((.*?)\n}}\n", rs, re.S)
     assert m, f"{ad} bulunamadı"
     return m.group(1)
 
@@ -92,7 +93,9 @@ def test_prefetch_atlanmasi_HATA_gibi_gorunmez(rs):
     assert "return Ok(" in dal, "atlama durumu bildirilmiyor"
 
 
-@pytest.mark.parametrize("komut", ["install_and_launch", "repair", "uninstall", "apply_runtime_update"])
+@pytest.mark.parametrize(
+    "komut", ["install_and_launch_ile", "repair_ile", "uninstall", "apply_runtime_update"]
+)  # KP-6 D4: gövdeler `_ile`
 def test_AGACI_DEGISTIREN_tum_yollar_kilitli(rs, komut):
     """Ağaca yazan her yol kilitli olmalı — biri unutulursa yarış geri gelir."""
     g = _govde(rs, komut)

@@ -1,23 +1,23 @@
 {
  "aciklama": "KP-3 B1 / B4 (istem 38 + 41 C) + KP-4 A1 (istem 42 · Y257 c): başlatıcı uygulamasının (launcher/app/src/main.rs + kabuk.rs) üst düzey işlevlerinin kapsam sınıfı — T test edilebilir · Y yeniden düzenleme gerekir · S sınırda (pencere / Tauri çalışma zamanı / gerçek platform API'si — test edilemez) · K kapsanıyor. `eksik` = KP-3 AŞAMA 0 (d45d9cf2) cargo-llvm-cov eksik satırı. Kapı: tests/test_KP3_main_rs_kapsam_siniflari.py — HER üst düzey işlev TAM BİR sınıfta, S / Y gerekçeli, S listesi SAYILIR (`s_sayisi`). Y242: test yazılabilen satıra S YASAK. #[coverage(off)] bu derleyicide (rustc 1.98.1) kararlı DEĞİL (E0658) → KP-4 A1: S işlevleri main.rs'ten DEĞİŞTİRİLMEDEN launcher/app/src/kabuk.rs'e taşındı (main.rs `include!` ile AYNI modüle katar) ve CI kapsam adımı YALNIZ o dosyayı dışlar; kapı S'nin yalnız kabuk.rs'te, kabuk.rs'in yalnız S'den oluştuğunu da sayar. KP-5 B2 / B3 (sahip kararı 2, 11-11): A2c'nin 8 ince kök / Tauri kabuğu S'e taşındı (44 → 52; gövdeleri `_ile` K); kısmen test edilen 3 S işlevinin karar mantığı saf yardımcıya ayrıldı (`indirme_olayi_karari`, `indirme_adresi_denetle`, `yardimci_batch_yolu` + `yardimci_hemen_sonlandi_iletisi`).",
  "olcum": "d45d9cf2 · main.rs 2840 satır · 1411 eksik",
- "s_sayisi": 54,
+ "s_sayisi": 58,
  "ozet": {
   "K": {
-   "islev": 46,
+   "islev": 50,
    "eksik_satir": 0
   },
   "S": {
-   "islev": 54,
-   "eksik_satir": 543
+   "islev": 58,
+   "eksik_satir": 555
   },
   "T": {
    "islev": 4,
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 13,
-   "eksik_satir": 494
+   "islev": 9,
+   "eksik_satir": 312
   }
  },
  "islevler": {
@@ -187,24 +187,28 @@
    "neden_T_Y_degil": "KP-5 B3 (sahip kararı 2b): adres denetimi `indirme_adresi_denetle`de (K, testli); kabukta yalnız denetim çağrısı + `open_browser`."
   },
   "install_and_launch": {
-   "sinif": "Y",
-   "eksik": 49,
-   "neden": "State + ağ + backend başlatma; kurulum mantığı `flow`ta. Kök enjeksiyonuyla ayrılabilir (KP-4)."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-6 D4 (madde 6): İNCE Tauri komut KABUĞU — `tauri::State` + `AppHandle` (KomutOrtami üretim bağı) + gerçek kurulum kökü (`home_dir()`) bağlar ve `install_and_launch_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "`tauri::State` / `AppHandle` yalnız çalışan uygulamada kurulur; gerçek kök sahibin kurulumudur. Kararın tamamı `_ile` gövdesinde kayıtçı sahte `KomutOrtami` + geçici kökle testli."
   },
   "start_installed": {
-   "sinif": "Y",
-   "eksik": 51,
-   "neden": "State + backend başlatma / sahiplenme; ayrım KP-4."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-6 D4 (madde 6): İNCE Tauri komut KABUĞU — `tauri::State` + `AppHandle` (KomutOrtami üretim bağı) + gerçek kurulum kökü (`home_dir()`) bağlar ve `start_installed_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "`tauri::State` / `AppHandle` yalnız çalışan uygulamada kurulur; gerçek kök sahibin kurulumudur. Kararın tamamı `_ile` gövdesinde kayıtçı sahte `KomutOrtami` + geçici kökle testli."
   },
   "repair": {
-   "sinif": "Y",
-   "eksik": 47,
-   "neden": "State + ağ + takas; ayrım KP-4."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-6 D4 (madde 6): İNCE Tauri komut KABUĞU — `tauri::State` + `AppHandle` (KomutOrtami üretim bağı) + gerçek kurulum kökü (`home_dir()`) bağlar ve `repair_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "`tauri::State` / `AppHandle` yalnız çalışan uygulamada kurulur; gerçek kök sahibin kurulumudur. Kararın tamamı `_ile` gövdesinde kayıtçı sahte `KomutOrtami` + geçici kökle testli."
   },
   "remove_profiles": {
-   "sinif": "Y",
-   "eksik": 35,
-   "neden": "State + pencere kapatma + disk; sıra kaynak-testiyle kilitli; ayrım KP-4."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-6 D4 (madde 6): İNCE Tauri komut KABUĞU — `tauri::State` + `AppHandle` (KomutOrtami üretim bağı) + gerçek kurulum kökü (`home_dir()`) bağlar ve `remove_profiles_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "`tauri::State` / `AppHandle` yalnız çalışan uygulamada kurulur; gerçek kök sahibin kurulumudur. Kararın tamamı `_ile` gövdesinde kayıtçı sahte `KomutOrtami` + geçici kökle testli."
   },
   "aktif_seans_kapisi": {
    "sinif": "S",
@@ -624,6 +628,26 @@
    "sinif": "K",
    "eksik": 0,
    "neden": "KP-6 D3: ön-indirmenin gövdesi — kök + indirici enjekte; kilit tutuluyken atlama, ayrı kanal (yazar / bitişte kapanır, kurulum kanalına dokunmaz), duraklat / iptal kablosu ve durum eşlemesi sahte indiriciyle testli."
+  },
+  "install_and_launch_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-6 D4: `install_and_launch` komutunun gövdesi — kök + dış bağ (`KomutOrtami`) enjekte; sıra / kilit / kapı / sonuç eşlemesi kayıtçı sahteyle davranış testli."
+  },
+  "start_installed_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-6 D4: `start_installed` komutunun gövdesi — kök + dış bağ (`KomutOrtami`) enjekte; sıra / kilit / kapı / sonuç eşlemesi kayıtçı sahteyle davranış testli."
+  },
+  "repair_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-6 D4: `repair` komutunun gövdesi — kök + dış bağ (`KomutOrtami`) enjekte; sıra / kilit / kapı / sonuç eşlemesi kayıtçı sahteyle davranış testli."
+  },
+  "remove_profiles_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-6 D4: `remove_profiles` komutunun gövdesi — kök + dış bağ (`KomutOrtami`) enjekte; sıra / kilit / kapı / sonuç eşlemesi kayıtçı sahteyle davranış testli."
   }
  }
 }

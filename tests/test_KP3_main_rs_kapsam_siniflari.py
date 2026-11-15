@@ -26,7 +26,8 @@ _CI = _KOK / ".github" / "workflows" / "tests.yml"
 # KP-5 B2 (sahip kararı 2a, 11-11): A2c'nin 8 ince kök / Tauri kabuğu (`*_blocking` ×7 + `guncelleme_onayini_kaydet`) S → 52.
 # KP-6 D2 (madde 6): `oturum_rotasyon_senkronu_baslat` ince kök / aralık kabuğu S (gövdesi `_ile` K) → 53.
 # KP-6 D3: `prefetch_runtime_update` Tauri komut kabuğu S (gövdesi `prefetch_runtime_update_ile` K; güvenlik listesinde GÖVDE) → 54.
-BEKLENEN_S = 54
+# KP-6 D4: `install_and_launch` / `start_installed` / `repair` / `remove_profiles` Tauri komut kabukları S (gövdeleri `_ile` K) → 58.
+BEKLENEN_S = 58
 _FN = re.compile(r"^(?:pub(?:\([^)]*\))? )?(?:async )?fn (\w+)")
 
 

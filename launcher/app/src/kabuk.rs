@@ -24,7 +24,7 @@ fn progress_reporter(
 /// okuyabilsin), tarayıcıyı aç. install/start/repair'in ortak son adımı.
 fn on_backend_ready(
     app: &tauri::AppHandle,
-    state: &tauri::State<'_, AppState>,
+    state: &AppState,
     child: std::process::Child,
     // UI'ya donen adres; pencere URL'si `open_app_window` icinde kurulu profil listesiyle kurulur.
     _url: &str,
@@ -60,7 +60,7 @@ fn on_backend_ready(
 /// (`apps/backend/servers/auth.py::is_local_request`) → ek jeton gerekmez.
 /// Best-effort: backend ucu yoksa (eski base.zip → 404/405) SESSİZCE geçilir; uygulama o
 /// durumda kendi giriş ekranını gösterir, hiçbir şey kilitlenmez.
-async fn hand_off_session(state: &tauri::State<'_, AppState>, port: u16) {
+async fn hand_off_session(state: &AppState, port: u16) {
     let sess = state.session.lock().unwrap().clone();
     let Some(s) = sess else { return };
     // Bloklayan HTTP → ASLA olay-döngüsü thread'inde değil.
@@ -955,6 +955,113 @@ async fn prefetch_runtime_update(
     manifest_raw: String,
 ) -> Result<serde_json::Value, String> {
     prefetch_runtime_update_ile(state.inner(), install::default_install_root(&home_dir()), manifest_raw, flow::prefetch_updates).await
+}
+
+/// KP-6 D4: `KomutOrtami`nın ÜRETİM bağı — her yöntem tek bir Tauri / pencere / gerçek akış çağrısını sarar; karar YOK (gövdeler `*_ile`).
+impl KomutOrtami for tauri::AppHandle {
+    fn ilerleme_yazici(&self, store: Arc<Mutex<Option<serde_json::Value>>>) -> Box<dyn FnMut(flow::Progress) + Send> {
+        Box::new(progress_reporter(self.clone(), store))
+    }
+    fn oturumu_devret<'a>(
+        &'a self,
+        state: &'a AppState,
+        port: u16,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        Box::pin(hand_off_session(state, port))
+    }
+    fn backend_hazir(&self, state: &AppState, child: std::process::Child, url: &str, port: u16) {
+        on_backend_ready(self, state, child, url, port);
+    }
+    fn uygulama_penceresini_ac(&self, port: u16) {
+        open_app_window(self, port);
+    }
+    fn uygulama_penceresini_kapat(&self) {
+        if let Some(w) = self.get_webview_window("app") {
+            let _ = w.close();
+        }
+    }
+    fn izlenen_backendi_durdur(&self, state: &AppState, root: &std::path::Path) {
+        stop_tracked_backend(state, root);
+    }
+    fn calisan_backend(&self, root: &std::path::Path) -> Option<u16> {
+        backend::detect_running_backend(root)
+    }
+    fn rotasyonu_baslat(&self, state: &AppState, port: u16) {
+        oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port, state.session.clone());
+    }
+    fn profilleri_kur(
+        &self,
+        manifest_raw: &str,
+        profiles: &[String],
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<(), flow::FlowError> {
+        flow::install_profiles(manifest_raw, profiles, root, on, control)
+    }
+    fn onar(
+        &self,
+        manifest_raw: &str,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<(), flow::FlowError> {
+        flow::repair(manifest_raw, root, on, control)
+    }
+    fn backend_baslat(
+        &self,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+    ) -> Result<(std::process::Child, String, u16), flow::FlowError> {
+        flow::start_backend(root, on)
+    }
+    fn profilleri_kaldir(
+        &self,
+        root: &std::path::Path,
+        manifest: &pemf_launcher_core::Manifest,
+        profiles: &[String],
+        on: &mut dyn FnMut(flow::Progress),
+    ) -> Result<flow::RemoveReport, flow::FlowError> {
+        flow::remove_profiles(root, manifest, profiles, on)
+    }
+}
+
+/// SEÇİLEN PROFİLLERİ kur ve başlat (KP-6 D4: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `install_and_launch_ile`, K).
+#[tauri::command]
+async fn install_and_launch(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    manifest_raw: String,
+    profiles: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    install_and_launch_ile(&app, state.inner(), install::default_install_root(&home_dir()), manifest_raw, profiles).await
+}
+
+/// Başlat: KURULU uygulamanın backend'ini başlat (KP-6 D4: İNCE KABUK — gövde `start_installed_ile`, K).
+#[tauri::command]
+async fn start_installed(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<String, String> {
+    start_installed_ile(&app, state.inner(), install::default_install_root(&home_dir())).await
+}
+
+/// Onar (KP-6 D4: İNCE KABUK — gövde `repair_ile`, K).
+#[tauri::command]
+async fn repair(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    manifest_raw: String,
+) -> Result<serde_json::Value, String> {
+    repair_ile(&app, state.inner(), install::default_install_root(&home_dir()), manifest_raw).await
+}
+
+/// Profil kaldır (KP-6 D4: İNCE KABUK — gövde `remove_profiles_ile`, K).
+#[tauri::command]
+async fn remove_profiles(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    manifest_raw: String,
+    profiles: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    remove_profiles_ile(&app, state.inner(), install::default_install_root(&home_dir()), manifest_raw, profiles).await
 }
 
 fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {

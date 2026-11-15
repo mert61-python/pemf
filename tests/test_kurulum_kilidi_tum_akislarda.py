@@ -31,8 +31,8 @@ _MAIN = _KOK / "launcher" / "app" / "src" / "main.rs"
 
 # Kurulum agacini DEGISTIREN (ya da onu degistiren bir sureci baslatan) komutlar.
 _YIKICI_AKISLAR = [
-    "install_and_launch",
-    "repair",
+    "install_and_launch_ile",  # KP-6 D4: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
+    "repair_ile",  # KP-6 D4
     "uninstall",
     "apply_runtime_update",
     "apply_self_update",
@@ -47,7 +47,8 @@ def kaynak() -> str:
 
 def _govde(kaynak: str, ad: str) -> str:
     """Fonksiyon govdesi — bir sonraki ust-seviye `async fn`/`fn` tanimina kadar."""
-    m = re.search(rf"(?:async\s+)?fn\s+{re.escape(ad)}\s*\(", kaynak)
+    # KP-6 D4: gövdeler genel tür parametreli olabilir (`fn x_ile<O: KomutOrtami>(`)
+    m = re.search(rf"(?:async\s+)?fn\s+{re.escape(ad)}\s*(?:<[^>(]*>)?\s*\(", kaynak)
     assert m, f"`{ad}` main.rs'te bulunamadi — ad degismis olabilir, kapi guncellensin"
     sonraki = re.search(r"\n(?:#\[[^\n]*\]\n)*(?:pub\s+)?(?:async\s+)?fn\s+\w+\s*\(", kaynak[m.end() :])
     return kaynak[m.end() : m.end() + (sonraki.start() if sonraki else len(kaynak))]
