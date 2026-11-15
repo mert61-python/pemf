@@ -1,23 +1,23 @@
 {
  "aciklama": "KP-3 B1 / B4 (istem 38 + 41 C) + KP-4 A1 (istem 42 · Y257 c): başlatıcı uygulamasının (launcher/app/src/main.rs + kabuk.rs) üst düzey işlevlerinin kapsam sınıfı — T test edilebilir · Y yeniden düzenleme gerekir · S sınırda (pencere / Tauri çalışma zamanı / gerçek platform API'si — test edilemez) · K kapsanıyor. `eksik` = KP-3 AŞAMA 0 (d45d9cf2) cargo-llvm-cov eksik satırı. Kapı: tests/test_KP3_main_rs_kapsam_siniflari.py — HER üst düzey işlev TAM BİR sınıfta, S / Y gerekçeli, S listesi SAYILIR (`s_sayisi`). Y242: test yazılabilen satıra S YASAK. #[coverage(off)] bu derleyicide (rustc 1.98.1) kararlı DEĞİL (E0658) → KP-4 A1: S işlevleri main.rs'ten DEĞİŞTİRİLMEDEN launcher/app/src/kabuk.rs'e taşındı (main.rs `include!` ile AYNI modüle katar) ve CI kapsam adımı YALNIZ o dosyayı dışlar; kapı S'nin yalnız kabuk.rs'te, kabuk.rs'in yalnız S'den oluştuğunu da sayar. KP-5 B2 / B3 (sahip kararı 2, 11-11): A2c'nin 8 ince kök / Tauri kabuğu S'e taşındı (44 → 52; gövdeleri `_ile` K); kısmen test edilen 3 S işlevinin karar mantığı saf yardımcıya ayrıldı (`indirme_olayi_karari`, `indirme_adresi_denetle`, `yardimci_batch_yolu` + `yardimci_hemen_sonlandi_iletisi`).",
  "olcum": "d45d9cf2 · main.rs 2840 satır · 1411 eksik",
- "s_sayisi": 52,
+ "s_sayisi": 53,
  "ozet": {
   "K": {
-   "islev": 44,
+   "islev": 45,
    "eksik_satir": 0
   },
   "S": {
-   "islev": 52,
-   "eksik_satir": 537
+   "islev": 53,
+   "eksik_satir": 540
   },
   "T": {
    "islev": 4,
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 15,
-   "eksik_satir": 561
+   "islev": 14,
+   "eksik_satir": 534
   }
  },
  "islevler": {
@@ -83,9 +83,10 @@
    "eksik": 0
   },
   "oturum_rotasyon_senkronu_baslat": {
-   "sinif": "Y",
-   "eksik": 27,
-   "neden": "İş parçacığı + HTTP döngüsü; kararlar (`senkron_baslamali`, `rotasyon_ardisik`) testli; KP-4."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-6 D2 (madde 6): İNCE KABUK — gerçek kurulum kökü (`home_dir()` / `default_install_root`) + üretim aralığı (60 sn) bağlar ve `oturum_rotasyon_senkronu_baslat_ile`yi çağırır; karar YOK.",
+   "neden_T_Y_degil": "Testte gerçek kök (sahibin 'Beni hatırla' kaydı) okunup yazılır ve 60 sn uyunur; gövde kök + aralık enjekte `_ile` olarak sahte backend + geçici kökle testli."
   },
   "hand_off_session": {
    "sinif": "S",
@@ -612,6 +613,11 @@
   "cikis_isle": {
    "sinif": "K",
    "eksik": 0
+  },
+  "oturum_rotasyon_senkronu_baslat_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-6 D2: rotasyon senkronunun gövdesi — kök + aralık enjekte; rastgele portta sahte backend (oturum / çıkış / meşgul / ölü) + geçici kök + gerçek DPAPI kaydıyla davranış testli."
   }
  }
 }

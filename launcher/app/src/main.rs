@@ -387,20 +387,26 @@ fn rotasyon_ardisik(kesin_olu: bool, ardisik: u32, esik: u32) -> (u32, bool) {
 
 /// Backend'teki devir oturumunu periyodik okuyup DÖNDÜRÜLEN jetonu diske işler.
 ///
-/// Aralık 60 sn: Supabase erişim jetonu ~1 saat yaşar, yani rotasyon seyrektir; 60 sn hem
-/// "kapatmadan önce yakala" için fazlasıyla sık hem de loopback'te maliyetsizdir.
-fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16, bellek: Arc<Mutex<Option<auth::Session>>>) {
+/// KP-6 D2 (madde 6): `oturum_rotasyon_senkronu_baslat`ın (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kurulum kökü ve yoklama aralığı ENJEKTE
+/// (üretim: gerçek kök + 60 sn; test: geçici kök + kısa aralık, rastgele portta sahte backend). Döngü, guard ve çekme AYNEN. Thread açıldıysa
+/// tutamacı döner (testler bitişini bekler; kabuk yok sayar).
+fn oturum_rotasyon_senkronu_baslat_ile(
+    aktif: Arc<AtomicBool>,
+    port: u16,
+    bellek: Arc<Mutex<Option<auth::Session>>>,
+    root: std::path::PathBuf,
+    aralik: std::time::Duration,
+) -> Option<std::thread::JoinHandle<()>> {
     // ÇİFT-THREAD GUARD (C3/L7, denetim 2026-08-24): sahiplenme dalı (`start_installed` →
     // `detect_running_backend`) her Başlat'ta koşabilir ve `state.proc`a KOYMAZ; guard olmadan her
     // çağrı yeni bir thread biriktirirdi. Bir thread aktifken yenisi açılmaz.
     if !senkron_baslamali(&aktif) {
-        return;
+        return None;
     }
-    std::thread::spawn(move || {
-        let root = install::default_install_root(&home_dir());
+    Some(std::thread::spawn(move || {
         let mut ardisik_hata = 0u32;
         loop {
-            std::thread::sleep(std::time::Duration::from_secs(60));
+            std::thread::sleep(aralik);
             match backend::devir_cek(port) {
                 backend::DevirCekme::Oturum(s) => {
                     ardisik_hata = 0;
@@ -428,7 +434,7 @@ fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16, bellek: Ar
         // Thread bitti → bayrağı serbest bırak: sonraki backend (farklı port) için yeniden
         // başlatılabilsin. Aksi halde guard bir daha hiç açılmaz ve rotasyon kalıcı dururdu.
         aktif.store(false, Ordering::Release);
-    });
+    }))
 }
 
 /// Uygulamayı AYRI bir pencerede aç — client/profil penceresi ("main") AÇIK KALIR (kullanıcı isteği:
@@ -4896,6 +4902,117 @@ Connection: close
             _ => panic!("GeriAlindi dönmedi"),
         }
         assert_eq!(std::fs::read(&exe).unwrap(), b"YENI-SURUM", "yedek yokken canlı ağaca dokunuldu");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-6 D2 (madde 6) · `oturum_rotasyon_senkronu_baslat_ile` — rotasyon senkronunun GÖVDESİ (kök + aralık enjekte). Sahte backend
+    // rastgele portta GERÇEK HTTP ile yanıtlar (`backend::devir_cek(port)` aynen koşar); kök geçici, "Beni hatırla" kaydı gerçek DPAPI.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    fn kp6_oturum(refresh: &str) -> String {
+        format!(r#"{{"access_token":"a-{refresh}","refresh_token":"{refresh}","email":"vet@klinik.test","expires_at":2000000000}}"#)
+    }
+
+    fn kp6_bekle(kosul: impl Fn() -> bool, azami: std::time::Duration) -> bool {
+        let bitis = std::time::Instant::now() + azami;
+        while std::time::Instant::now() < bitis {
+            if kosul() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        kosul()
+    }
+
+    /// KRİTİK (F4 + C3/L7 + S4 + 2026-10-18 çıkış, DAVRANIŞLA): döndürülen oturum diske ("Beni hatırla" işaretliyken) VE belleğe işlenir →
+    /// pencerede çıkış ({"cikis": true}) kaydı + belleği temizler (günlüğe yazar) → oturumsuz ama CANLI backend (meşgul / `{}`) eşikten
+    /// (5) fazla yoklamada thread'i ÖLDÜRMEZ ("meşgul ≠ ölü") → aktifken ikinci başlatma thread AÇMAZ → backend ölünce (TCP reddi) thread
+    /// çıkar ve guard serbest kalır → sonraki backend için yeniden başlar.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D2_rotasyon_OTURUM_isler_CIKIS_temizler_MESGUL_yasar_OLU_cikar_guard_SERBEST() {
+        let kok = std::env::temp_dir().join(format!("pemf_kp6_d2_{}_{}", std::process::id(), line!()));
+        let _ = std::fs::remove_dir_all(&kok);
+        std::fs::create_dir_all(&kok).unwrap();
+        std::fs::write(secret_store::hatirla_isareti_path(&kok), b"1").unwrap();
+        let bellek: Arc<Mutex<Option<auth::Session>>> = Arc::new(Mutex::new(None));
+        // (disk refresh, bellek refresh) — 2. yoklama anında (1. turun işlenmesi bitmiş) okunur.
+        let ara: Arc<Mutex<Option<(Option<String>, Option<String>)>>> = Arc::new(Mutex::new(None));
+        let (kok_y, bellek_y, ara_y) = (kok.clone(), bellek.clone(), ara.clone());
+        let (port, kapat, yollar, h) = kp5_yanitlayan(move |yol, kac| {
+            if yol != "/api/auth/desktop-session" {
+                return "{}".to_string();
+            }
+            if kac == 1 {
+                *ara_y.lock().unwrap() = Some((
+                    secret_store::load(&kok_y).map(|s| s.refresh_token),
+                    bellek_y.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()),
+                ));
+            }
+            match kac {
+                0 => kp6_oturum("r-1"),
+                2 => r#"{"cikis":true}"#.to_string(),
+                _ => "{}".to_string(), // oturum yok ama backend CANLI (meşgul / boş)
+            }
+        });
+        let aktif = Arc::new(AtomicBool::new(false));
+        let aralik = std::time::Duration::from_millis(40);
+        let t = oturum_rotasyon_senkronu_baslat_ile(aktif.clone(), port, bellek.clone(), kok.clone(), aralik).expect("ilk başlatma thread açmadı");
+        assert!(aktif.load(Ordering::Acquire), "guard bayrağı kalkmadı");
+        // Aktifken ikinci başlatma (sahiplenme dalı her Başlat'ta koşar) thread AÇMAZ.
+        assert!(
+            oturum_rotasyon_senkronu_baslat_ile(aktif.clone(), port, bellek.clone(), kok.clone(), aralik).is_none(),
+            "aktifken ikinci rotasyon thread'i açıldı (L7)"
+        );
+        // Eşikten (5) fazla — 9 — "oturumsuz ama canlı" yoklama: thread YAŞAMALI.
+        let say = || yollar.lock().unwrap().iter().filter(|y| y.as_str() == "/api/auth/desktop-session").count();
+        assert!(kp6_bekle(|| say() >= 12, std::time::Duration::from_secs(20)), "rotasyon yoklaması sürmedi ({})", say());
+        assert!(aktif.load(Ordering::Acquire) && !t.is_finished(), "canlı (meşgul) backend'te thread öldü — 'meşgul ≠ ölü' (F4)");
+        assert_eq!(
+            *ara.lock().unwrap(),
+            Some((Some("r-1".to_string()), Some("r-1".to_string()))),
+            "döndürülen oturum diske ve belleğe işlenmedi (S4)"
+        );
+        assert!(secret_store::load(&kok).is_none(), "pencerede çıkıştan sonra 'Beni hatırla' kaydı kaldı");
+        assert!(bellek.lock().unwrap().is_none(), "pencerede çıkıştan sonra bellekte oturum kaldı");
+        let gunluk = std::fs::read_to_string(secret_store::oturum_gunlugu_path(&kok)).unwrap_or_default();
+        assert!(gunluk.contains("pencerede cikis"), "çıkış günlüğe yazılmadı: {gunluk}");
+        // Backend öldü (dinleyici kapandı → TCP reddi): 5 ardışık kesin-ölü yoklamada thread çıkar, guard serbest.
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert!(kp6_bekle(|| t.is_finished(), std::time::Duration::from_secs(20)), "backend ölünce rotasyon thread'i çıkmadı (sızıntı)");
+        let _ = t.join();
+        assert!(!aktif.load(Ordering::Acquire), "thread bitti ama guard serbest bırakılmadı — sonraki backend için rotasyon başlamaz");
+        // Serbest guard → sonraki backend (ölü port) için yeniden başlar ve o da kendiliğinden biter.
+        let t2 = oturum_rotasyon_senkronu_baslat_ile(aktif.clone(), port, bellek.clone(), kok.clone(), aralik).expect("guard serbestken başlamadı");
+        assert!(kp6_bekle(|| t2.is_finished(), std::time::Duration::from_secs(20)), "ölü backend'te ikinci thread çıkmadı");
+        let _ = t2.join();
+        assert!(!aktif.load(Ordering::Acquire));
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KARŞIT (F4 eşiği): backend BAŞTAN ölüyse thread tam 5 kesin-ölü yoklamadan sonra çıkar — daha erken DEĞİL (bir yoklamalık
+    /// kesinti thread'i öldürmez); işlenecek oturum yoktur, kök / bellek değişmez.
+    #[test]
+    fn KP6_D2_rotasyon_OLU_backendte_ESIK_5_yoklama_ve_kok_DEGISMEZ() {
+        let kok = std::env::temp_dir().join(format!("pemf_kp6_d2_olu_{}_{}", std::process::id(), line!()));
+        let _ = std::fs::remove_dir_all(&kok);
+        std::fs::create_dir_all(&kok).unwrap();
+        let port = kapali_port();
+        let aktif = Arc::new(AtomicBool::new(false));
+        let bellek: Arc<Mutex<Option<auth::Session>>> = Arc::new(Mutex::new(None));
+        // Aralık, Windows'ta reddedilen loopback bağlantısının (~2 sn) yanında büyük seçilir: alt sınır 5 × aralık eşiği ölçer.
+        let aralik = std::time::Duration::from_millis(1500);
+        let t0 = std::time::Instant::now();
+        let t = oturum_rotasyon_senkronu_baslat_ile(aktif.clone(), port, bellek.clone(), kok.clone(), aralik).expect("thread açılmadı");
+        assert!(kp6_bekle(|| t.is_finished(), std::time::Duration::from_secs(60)), "ölü backend'te thread çıkmadı");
+        let sure = t0.elapsed();
+        let _ = t.join();
+        assert!(sure >= aralik * 5, "thread eşikten ÖNCE çıktı ({sure:?} < 5 yoklama) — tek kesinti senkronu öldürür");
+        assert!(!aktif.load(Ordering::Acquire));
+        assert!(bellek.lock().unwrap().is_none());
+        assert_eq!(std::fs::read_dir(&kok).unwrap().count(), 0, "ölü backend'te köke yazıldı");
         let _ = std::fs::remove_dir_all(&kok);
     }
 }

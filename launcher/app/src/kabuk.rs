@@ -934,6 +934,19 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
     profilleri_getir(|| net::fetch_string_pinned_budgeted(MANIFEST_URL), &install::default_install_root(&home_dir()))
 }
 
+/// Backend'teki devir oturumunu periyodik okuyup DÖNDÜRÜLEN jetonu diske işler (KP-6 D2: İNCE KABUK — gövde
+/// `oturum_rotasyon_senkronu_baslat_ile`, K). Aralık 60 sn: Supabase erişim jetonu ~1 saat yaşar, yani rotasyon seyrektir; 60 sn hem
+/// "kapatmadan önce yakala" için fazlasıyla sık hem de loopback'te maliyetsizdir. Kök: gerçek kurulum kökü.
+fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16, bellek: Arc<Mutex<Option<auth::Session>>>) {
+    let _ = oturum_rotasyon_senkronu_baslat_ile(
+        aktif,
+        port,
+        bellek,
+        install::default_install_root(&home_dir()),
+        std::time::Duration::from_secs(60),
+    );
+}
+
 fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
     check_runtime_update_ile(&install::default_install_root(&home_dir()), manifest_raw)
 }

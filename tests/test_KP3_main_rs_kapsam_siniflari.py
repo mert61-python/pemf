@@ -24,7 +24,8 @@ _SINIF = _KOK / "launcher" / "app" / "kapsam_siniflari.json"
 _CI = _KOK / ".github" / "workflows" / "tests.yml"
 # KP-3 B4 ölçümü (d45d9cf2): 44 S işlevi. Değişiklik BİLİNÇLİ olmalı — sayı burada ve JSON'da birlikte değişir.
 # KP-5 B2 (sahip kararı 2a, 11-11): A2c'nin 8 ince kök / Tauri kabuğu (`*_blocking` ×7 + `guncelleme_onayini_kaydet`) S → 52.
-BEKLENEN_S = 52
+# KP-6 D2 (madde 6): `oturum_rotasyon_senkronu_baslat` ince kök / aralık kabuğu S (gövdesi `_ile` K) → 53.
+BEKLENEN_S = 53
 _FN = re.compile(r"^(?:pub(?:\([^)]*\))? )?(?:async )?fn (\w+)")
 
 

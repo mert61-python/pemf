@@ -96,7 +96,9 @@ def test_KRITIK_3_launcher_diske_ISLER():
     s = _oku(_MAIN)
     # 3. tur F4: doc-comment'ler adı metinde daha önce anıyor → çıplak ilk geçişe değil 60 sn döngüsünün GERÇEK ÇAĞRISINA pinle.
     # SGI KARARLARI C17: döngü `backend::devir_cek(port)` çağırır (oturum → diske işle; pencere çıkışı → kaydı temizle).
-    d = re.search(r"fn oturum_rotasyon_senkronu_baslat\(.*?\n\}\n", s, re.S)
+    # KP-6 D2: döngü GÖVDESİ `oturum_rotasyon_senkronu_baslat_ile`de (kök + aralık enjekte; davranış testi main.rs
+    # `KRITIK_KP6_D2_*`); `oturum_rotasyon_senkronu_baslat` kabuk.rs'te ince S kabuğu (gerçek kök + 60 sn).
+    d = re.search(r"fn oturum_rotasyon_senkronu_baslat_ile\(.*?\n\}\n", s, re.S)
     assert d, "senkron gorevi bulunamadi"
     i = d.group(0).find("backend::devir_cek(port)")
     assert i > 0, "senkron gorevi backend'ten OKUMUYOR (devir_cek(port) cagrisi yok)"
@@ -138,7 +140,7 @@ def test_KARSIT_KANIT_senkron_CIFT_thread_baslatmaz():
     yeni bir thread biriktirirdi (L7 cift-thread). Senkron baslatma bir kez-guard ile korunmali
     (baslatici guard'i CAGIRMALI + guard'in kendisi atomik compare_exchange olmali)."""
     s = _oku(_MAIN)
-    m = re.search(r"fn oturum_rotasyon_senkronu_baslat\(.*?\n\}\n", s, re.S)
+    m = re.search(r"fn oturum_rotasyon_senkronu_baslat_ile\(.*?\n\}\n", s, re.S)
     assert m, "senkron gorevi bulunamadi"
     assert "senkron_baslamali" in m.group(0), (
         "senkron baslatma guard'i CAGIRMIYOR — sahiplenme dali her Baslat'ta thread biriktirir (L7)"
@@ -193,7 +195,7 @@ def test_KARSIT_KANIT_senkron_backend_olunce_BITER():
     from kaynak_soyucu import rust_soy
 
     s = rust_soy(_oku(_MAIN))
-    m = re.search(r"fn oturum_rotasyon_senkronu_baslat\(.*?\n\}\n", s, re.S)
+    m = re.search(r"fn oturum_rotasyon_senkronu_baslat_ile\(.*?\n\}\n", s, re.S)
     assert m, "senkron gorevi bulunamadi"
     g = m.group(0)
     d = re.search(r"\bloop\s*\{", g)
