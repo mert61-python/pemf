@@ -404,6 +404,25 @@ trait KomutOrtami: Clone + Send + Sync + 'static {
     fn kaldiriciyi_baslat(&self, yol: &std::path::Path) -> Result<(), String>;
     /// Başlatıcıdan çık (üretim: `app.exit(0)`) — kaldırıcı çalışan exe'yi silebilsin.
     fn cik(&self);
+    /// Katman güncellemesinin seans / yakma kapısı (üretim: `aktif_seans_kapisi` — varsayılan port 8000'i yoklar).
+    fn guncelleme_kapisi(&self, root: &std::path::Path) -> Result<(), String>;
+    /// Katman güncellemesi (üretim: `flow::update_installed` — ağ + disk takası).
+    fn guncelle(
+        &self,
+        manifest_raw: &str,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<flow::GeriAlmaBilgisi, flow::FlowError>;
+    /// Sağlık kapısı backend'i, onaylanacak paket kimliğiyle (üretim: `flow::start_backend_kimlikli` — gerçek süreç).
+    fn backend_baslat_kimlikli(
+        &self,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        paket_kimligi: Option<&str>,
+    ) -> Result<(std::process::Child, String, u16), flow::FlowError>;
+    /// Açık uygulama penceresini yeni arayüzle yenile (üretim: `uygulama_penceresini_yenile`).
+    fn uygulama_penceresini_yenile(&self, port: u16) -> bool;
 }
 
 fn snapshot_yazici(
@@ -1248,13 +1267,16 @@ async fn prefetch_runtime_update_ile(
 /// Akış `repair` ile aynı iskelettir; farkı yalnız DEĞİŞENİ indirmesi ve öncesinde aktif-seans
 /// kapısından geçmesidir. Duraklat/İptal aynı `state.control` üzerinden çalışır → 1,3 GB'lık bir
 /// indirme kullanıcıyı açılışta hapsedemez.
-#[tauri::command]
-async fn apply_runtime_update(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
+///
+/// KP-6 D6 (madde 6): `apply_runtime_update` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kök ve dış bağ (`KomutOrtami`: seans kapısı,
+/// güncelleme akışı, kimlikli başlatma, pencere yenileme / devir / hazır) ENJEKTE. dbReady kapısı, firmware kararı, E-stop'lu söküm, deneme
+/// sayacı, geri alma, onay ve sıra GERÇEK çağrılarla AYNEN.
+async fn apply_runtime_update_ile<O: KomutOrtami>(
+    ortam: &O,
+    state: &AppState,
+    root: std::path::PathBuf,
     manifest_raw: String,
 ) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
     // ⚠️ DENETİM 2026-08-16 (Bulgu 3): KURULUM KİLİDİ YOKTU.
     // `install_and_launch`, `repair` ve `uninstall` bu kilidi alıyordu; AYNI runtime ağacını
     // değiştiren OTO-GÜNCELLEME almıyordu. Tek-instance koruması da yok → ikinci bir client
@@ -1263,14 +1285,14 @@ async fn apply_runtime_update(
     // denenir (paketler önbellekte, maliyeti yok).
     let _kilit = install::kurulum_kilidi_al(&root)?;
     // ⚠️ 2026-08-09: `#[cfg(windows)]` kaldırıldı — bu akış mac/Linux'ta da backend'i öldürür.
-    aktif_seans_kapisi(&root)?;
+    ortam.guncelleme_kapisi(&root)?;
 
     // Kapıdan geçtik → backend'i GÜVENLE durdur (E-stop → kill; stop_tracked_backend bunu yapar).
-    stop_tracked_backend(&state, &root);
+    ortam.izlenen_backendi_durdur(state, &root);
     *state.progress.lock().unwrap() = None;
     state.control.store(CTL_RUN, Ordering::Relaxed);
 
-    let app2 = app.clone();
+    let ortam2 = ortam.clone();
     let root2 = root.clone();
     let store = state.progress.clone();
     let ctrl = state.control.clone();
@@ -1279,13 +1301,13 @@ async fn apply_runtime_update(
     // eski sürüme DÖNÜLÜR. Böylece bozuk bir yayın kliniği çalışmaz hâlde bırakamaz.
     let bellek2 = state.session.clone(); // [S4] geri-alma dalındaki teardown için (closure'a taşınır)
     let sonuc: Result<GuncellemeSonucu, String> = tauri::async_runtime::spawn_blocking(move || {
-        let mut on = progress_reporter(app2, store);
+        let mut on = ortam2.ilerleme_yazici(store);
         let control = || match ctrl.load(Ordering::Relaxed) {
             CTL_PAUSE => net::Control::Pause,
             CTL_CANCEL => net::Control::Cancel,
             _ => net::Control::Continue,
         };
-        let geri = match flow::update_installed(&manifest_raw, &root2, &mut on, &control) {
+        let geri = match ortam2.guncelle(&manifest_raw, &root2, &mut on, &control) {
             Ok(g) => g,
             // Duraklat/İptal kullanıcı kararıdır, arıza değil → UI kırmızı hata göstermesin.
             Err(flow::FlowError::Net(net::NetError::Paused)) => return Ok(GuncellemeSonucu::Duraklatildi),
@@ -1311,7 +1333,7 @@ async fn apply_runtime_update(
         }
         // Bu süreç onaydan SONRA da çalışmaya devam eder → kimliği eski kayıttan değil, onaylanacak paketten
         // (YAYIN 2026-11-03: güncellemeden sonraki ilk oturum `/api/health`te eski `buildId`i raporluyordu).
-        match flow::start_backend_kimlikli(&root2, &mut on, geri.paket_kimligi()) {
+        match ortam2.backend_baslat_kimlikli(&root2, &mut on, geri.paket_kimligi()) {
             Ok((child, url, port)) => {
                 // ⚠️ DENETİM 2026-08-23 (C5): "AYAKTA" ≠ "KULLANILABİLİR".
                 // `wait_for_health` HTTP 200 + nonce ölçer; backend AYNI yanıtta `dbReady` alanını
@@ -1379,11 +1401,11 @@ async fn apply_runtime_update(
 
     match sonuc? {
         GuncellemeSonucu::Hazir(child, url, port) => {
-            hand_off_session(&state, port).await;
+            ortam.oturumu_devret(state, port).await;
             // GÜNCELLEME ONAYI (Y253 "oto yeniden başlasın uygulama"): açık uygulama penceresi YENİ arayüzü yükler; açık değilse
             // `on_backend_ready` → `open_app_window` açar. Kurulum "bir sonraki açılışı" beklemez.
-            uygulama_penceresini_yenile(&app, port);
-            on_backend_ready(&app, &state, child, &url, port);
+            ortam.uygulama_penceresini_yenile(port);
+            ortam.backend_hazir(state, child, &url, port);
             Ok(serde_json::json!({ "status": "ready", "url": url }))
         }
         GuncellemeSonucu::DegisiklikYok => Ok(serde_json::json!({ "status": "noop" })),
@@ -2674,13 +2696,18 @@ mod tests {
     #[test]
     fn KRITIK_saglik_kapisi_backendi_ONAYLANACAK_paket_kimligiyle_baslar() {
         let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
-        let kapi = &soy[soy.find("flow::update_installed(&manifest_raw, &root2").expect("güncelleme yolu yok")..];
-        let kapi = &kapi[..kapi.find("flow::guncellemeyi_onayla(&root2, &geri)").expect("onay yok")];
+        // KP-6 D6: güncelleme / kimlikli başlatma `KomutOrtami` bağında; concat!: aranan metin bu testin KENDİ dizgesinde geçmesin (kör çapa
+        // — D6'da yakalandı: eski arama yalnız testin dizgesini buluyordu). Davranış: KRITIK_KP6_D6_guncelleme_BASARI_* (kimlik = app sha).
+        let kapi = &soy[soy.find(concat!("ortam2.guncelle(&manifest_raw, ", "&root2")).expect("güncelleme yolu yok")..];
+        let kapi = &kapi[..kapi.find(concat!("flow::guncellemeyi_", "onayla(&root2, &geri)")).expect("onay yok")];
         assert!(
-            kapi.contains("flow::start_backend_kimlikli(&root2, &mut on, geri.paket_kimligi())"),
+            kapi.contains(concat!("ortam2.backend_baslat_", "kimlikli(&root2, &mut on, geri.paket_kimligi())")),
             "sağlık kapısı backend'i onaylanacak kimlik olmadan başlatıyor"
         );
-        assert!(!kapi.contains("flow::start_backend(&root2"), "sağlık kapısında kimliksiz start_backend kaldı");
+        assert!(!kapi.contains(concat!("backend_", "baslat(&root2")), "sağlık kapısında kimliksiz start_backend kaldı");
+        let kab = kabuk_soy();
+        let b = kab.find("fn backend_baslat_kimlikli(").expect("kimlikli başlatma bağı yok");
+        assert!(kab[b..b + 400].contains("flow::start_backend_kimlikli(root, on, paket_kimligi)"), "üretim bağı paket kimliğini aktarmıyor");
     }
 
     /// Sahip 2026-11-04 ÖNCE-KIRMIZI: PEMF kapatılınca PEMF-Gateway hotspot'u da kapanır. Kapatma YALNIZ bu başlatıcının
@@ -4072,9 +4099,10 @@ Connection: close
         let soy = f5_yorumlari_soy(include_str!("main.rs")).replace("\r\n", "\n");
         let k = &soy[soy.find(concat!("GuncellemeSonucu::Hazir(child, url, port) =", "> {")).expect("hazır kolu yok")..];
         let k = &k[..k.find("\n        }").expect("kol sonu")];
-        let devir = k.find("hand_off_session(").expect("oturum devri yok");
-        let yenile = k.find("uygulama_penceresini_yenile(&app, port)").expect("hazır kolunda pencere yenileme yok");
-        let hazir = k.find("on_backend_ready(").expect("on_backend_ready yok");
+        // KP-6 D6: hazır kolu gövdede (`apply_runtime_update_ile`); devir / yenile / hazır `KomutOrtami` bağında (davranış: KRITIK_KP6_D6_*).
+        let devir = k.find("oturumu_devret(").expect("oturum devri yok");
+        let yenile = k.find("uygulama_penceresini_yenile(port)").expect("hazır kolunda pencere yenileme yok");
+        let hazir = k.find("backend_hazir(").expect("on_backend_ready yok");
         assert!(devir < yenile && yenile < hazir, "sıra: oturum devri → pencere yenile → on_backend_ready olmalı");
         let s = &soy[soy.find(concat!("async fn apply_", "self_update(")).expect("apply_self_update yok")..];
         let kosul = s.find("if verify::verify_file(&dest2, &sha).is_err() {").expect("kurucu önbellek koşulu yok");
@@ -5267,6 +5295,12 @@ Connection: close
         kaldirici: Option<std::path::PathBuf>,
         kaldirici_hata: bool,
         betik: Arc<Mutex<String>>,
+        /// D6: güncelleme kapısı engeli · güncelleme sonucu (None → yapıldı: tam takas) · kimlikli başlatmanın çocuğu + portu (None →
+        /// kısa çocuk + KP6_PORT) · kimlikli başlatma düşer mi.
+        kapi_engeli: Option<String>,
+        guncelle_sonuc: Arc<Mutex<Option<Result<flow::GeriAlmaBilgisi, flow::FlowError>>>>,
+        kimlikli: Arc<Mutex<Option<(std::process::Child, u16)>>>,
+        kimlikli_hata: bool,
     }
 
     impl Kp6Ortam {
@@ -5408,6 +5442,38 @@ Connection: close
         }
         fn cik(&self) {
             self.yaz("cik".into());
+        }
+        fn guncelleme_kapisi(&self, _root: &std::path::Path) -> Result<(), String> {
+            self.yaz("kapi?".into());
+            self.kapi_engeli.clone().map_or(Ok(()), Err)
+        }
+        fn guncelle(
+            &self,
+            _m: &str,
+            root: &std::path::Path,
+            on: &mut dyn FnMut(flow::Progress),
+            control: &dyn Fn() -> net::Control,
+        ) -> Result<flow::GeriAlmaBilgisi, flow::FlowError> {
+            self.akis_ani("guncelle", root, Some(control));
+            on(flow::Progress::Extracting { what: "app".into() });
+            self.guncelle_sonuc.lock().unwrap().take().unwrap_or_else(|| Ok(flow::GeriAlmaBilgisi { tam_takas: true, ..Default::default() }))
+        }
+        fn backend_baslat_kimlikli(
+            &self,
+            root: &std::path::Path,
+            _on: &mut dyn FnMut(flow::Progress),
+            paket_kimligi: Option<&str>,
+        ) -> Result<(std::process::Child, String, u16), flow::FlowError> {
+            self.akis_ani(&format!("baslat_kimlikli:{}", paket_kimligi.unwrap_or("-")), root, None);
+            if self.kimlikli_hata {
+                return Err(flow::FlowError::Io(std::io::Error::other("KP6 saglik kapisi acilmadi")));
+            }
+            let (c, p) = self.kimlikli.lock().unwrap().take().unwrap_or_else(|| (kp6_kisa_cocuk(), KP6_PORT));
+            Ok((c, backend::app_url(p), p))
+        }
+        fn uygulama_penceresini_yenile(&self, port: u16) -> bool {
+            self.yaz(format!("yenile:{port}"));
+            true
         }
     }
 
@@ -5744,6 +5810,214 @@ Connection: close
         if let Some((mut c, _)) = st.proc.lock().unwrap().take() {
             let _ = c.wait();
         }
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-6 D6 (madde 6) · `apply_runtime_update_ile` — katman güncellemesinin gövdesi. Kayıtçı sahte `KomutOrtami` (kapı / güncelleme /
+    // kimlikli başlatma / pencere); dbReady + firmware kararı, E-stop'lu söküm (KP-5 B1 sahte süreç + sahte backend + `test-kancasi`),
+    // deneme sayacı, geri alma ve onay GERÇEK çağrılarla, geçici kökte. Gerçek ağ / gerçek backend / 8000 YOK.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// KP-5 B1 sahte backend'inin sağlık gövdesi ayarlanabilir eşi: çocuk CANLIYKEN yanıtlar, ölünce dinleyiciyi kapatır.
+    #[cfg(windows)]
+    fn kp6_saglikli_backend(ln: std::net::TcpListener, ad: String, pid: u32, saglik: &'static str, kayit: Kp5Kayit) -> std::thread::JoinHandle<()> {
+        use std::io::{Read, Write};
+        ln.set_nonblocking(true).unwrap();
+        std::thread::spawn(move || {
+            let bitis = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            while std::time::Instant::now() < bitis && kp5_cocuk_canli_mi(&ad, pid) {
+                let Ok((mut c, _)) = ln.accept() else {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    continue;
+                };
+                let _ = c.set_nonblocking(false);
+                let _ = c.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+                let mut buf = vec![0u8; 8192];
+                let n = c.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    continue;
+                }
+                let istek = String::from_utf8_lossy(&buf[..n]).to_string();
+                let mut ilk = istek.lines().next().unwrap_or("").split_whitespace();
+                let (yontem, yol) = (ilk.next().unwrap_or("").to_string(), ilk.next().unwrap_or("").to_string());
+                kayit.lock().unwrap().push((yontem, yol.clone(), std::time::Instant::now(), kp5_cocuk_canli_mi(&ad, pid)));
+                let govde = match yol.as_str() {
+                    "/api/hardware/kapanis_durdur" => r#"{"status":"success","confirmed":true,"stmStopped":true,"mqttResults":[]}"#,
+                    "/api/health" => saglik,
+                    _ => "{}",
+                };
+                let _ = c.write_all(
+                    format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{govde}", govde.len())
+                        .as_bytes(),
+                );
+                let _ = c.flush();
+            }
+            drop(ln);
+        })
+    }
+
+    /// Kurulu kök: yeni sürüm `runtime` + eski sürüm `runtime.old` (tam takas bekliyor) + bayat base kaydı; manifest base sha'sı farklı
+    /// (deneme sayacının hedefi "base:<sha>").
+    fn kp6_guncelleme_koku(ad: &str, sha: &str) -> (std::path::PathBuf, String) {
+        let kok = kp6_kok(ad);
+        let exe = |k: &std::path::Path| k.join("PEMF_Backend").join(pemf_launcher_core::platform::backend_exe_name());
+        for (d, icerik) in [(install::runtime_dir(&kok), b"YENI-SURUM".as_slice()), (install::runtime_old_dir(&kok), b"ESKI-SURUM".as_slice())] {
+            std::fs::create_dir_all(exe(&d).parent().unwrap()).unwrap();
+            std::fs::write(exe(&d), icerik).unwrap();
+        }
+        install::record_base_sha(&kok, &"b".repeat(64));
+        let plat = pemf_launcher_core::platform::current();
+        let m = format!(
+            r#"{{"schema":2,"version":"9.9.9","runtimes":{{"{plat}":{{"url":"https://example.invalid/base.zip","sha256":"{sha}","size":5,"kind":"zip"}}}},"models":{{}},"model_parts":{{}}}}"#
+        );
+        (kok, m)
+    }
+
+    fn kp6_exe_icerigi(kok: &std::path::Path) -> Vec<u8> {
+        std::fs::read(install::backend_path(kok)).unwrap()
+    }
+
+    /// KRİTİK (GK · Y253 + C2 + dbReady / firmware kapıları geçti): sıra kapı (kilit TUTULURKEN) → E-stop + kill → güncelleme (denetim
+    /// bayrağı sıfırlanmış) → sağlık kapısı backend'i ONAYLANACAK paket kimliğiyle → dbReady + firmware "devam" → ONAY (runtime.old silinir,
+    /// sha kaydı) + deneme sayacı SIFIRLANIR → hazır kolunda devir → pencere yenile → backend hazır; `ready`.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D6_guncelleme_BASARI_sira_kapi_durdur_guncelle_KIMLIKLE_baslat_ONAY_sayac_sifir_DEVIR_yenile_hazir() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let (kok, m) = kp6_guncelleme_koku("d6_basari", &"f".repeat(64));
+        install::record_runtime_attempt(&kok, "base:eski");
+        let (port, kapat, yollar, h) =
+            kp5_yanitlayan(|yol, _| if yol == "/api/health" { r#"{"dbReady":true,"firmwareGuncelleme":{"kontrol_edildi":true}}"#.into() } else { "{}".into() });
+        let st = AppState::default();
+        st.control.store(CTL_CANCEL, Ordering::Relaxed);
+        let o = Kp6Ortam::default();
+        *o.kimlikli.lock().unwrap() = Some((kp6_kisa_cocuk(), port));
+        let geri = flow::GeriAlmaBilgisi { tam_takas: true, app_sha: "a".repeat(64), base_sha: "c".repeat(64), ..Default::default() };
+        *o.guncelle_sonuc.lock().unwrap() = Some(Ok(geri.clone()));
+        let r = tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m)).unwrap();
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert_eq!(r, serde_json::json!({ "status": "ready", "url": backend::app_url(port) }));
+        assert_eq!(
+            o.izler(),
+            vec![
+                "kapi?".to_string(),
+                "durdur:izlenen=false".to_string(),
+                "guncelle kilitli=true bekleyen=[] denetim=Continue".to_string(),
+                "ilerleme:\"extracting\"".to_string(),
+                format!("baslat_kimlikli:{} kilitli=true bekleyen=[] denetim=", "a".repeat(64)),
+                format!("devret:{port}"),
+                format!("yenile:{port}"),
+                format!("hazir:{port}:{}:oturum=false", backend::app_url(port)),
+            ],
+            "güncelleme sırası"
+        );
+        assert!(yollar.lock().unwrap().iter().all(|y| y == "/api/health"), "sağlık kapısı dışında istek: {:?}", yollar.lock().unwrap());
+        assert!(!install::runtime_old_dir(&kok).exists(), "onaylanan güncellemenin eski sürümü silinmedi");
+        assert_eq!(install::read_runtime_attempt(&kok), None, "başarılı güncellemeden sonra deneme sayacı sıfırlanmadı");
+        assert_eq!(kp6_exe_icerigi(&kok), b"YENI-SURUM");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (D1.37 · B-10.47 + LN L2 · Y16 + Y81 + B-10.46, DAVRANIŞLA — `launcher_onay_karari.py` pinli denetimlerinin karşılığı):
+    /// yeni sürüm açıldı ama (a) dbReady=false → E-stop'lu söküm (STOP + yakma + son oturum, süreç CANLIYKEN → kill) → sayaç → ESKİ sürüm →
+    /// `rolled_back` + DB nedeni, kod YOK · (b) kart yazılımı uyumsuz (`istemciGeriAlinmali`) → aynı sıra, kod `firmware_uyumsuz` ·
+    /// (c) sağlık kapısı backend'i AÇILMADI → sayaç → eski sürüm, neden = açılış hatası. Hiçbirinde ONAY / devir / pencere YOK.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D6_GERI_ALMA_dbReady_FIRMWARE_saglik_kapisi_DUSTU_estoplu_sokum_SAYAC_eski_surum_ONAY_YOK() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        for (ad, saglik, kod) in [
+            ("db", r#"{"service":"PEMF-Vet","dbReady":false,"firmwareGuncelleme":{"kontrol_edildi":true}}"#, None),
+            ("fw", r#"{"service":"PEMF-Vet","dbReady":true,"firmwareGuncelleme":{"istemciGeriAlinmali":true}}"#, Some(KOD_FIRMWARE_UYUMSUZ)),
+        ] {
+            let sha = "d".repeat(64);
+            let (kok, m) = kp6_guncelleme_koku(&format!("d6_geri_{ad}"), &sha);
+            let (cocuk, pid, ikili) = kp5_sahte_surec();
+            let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = ln.local_addr().unwrap().port();
+            let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+            let sunucu = kp6_saglikli_backend(ln, ikili.clone(), pid, saglik, kayit.clone());
+            let st = AppState::default();
+            let o = Kp6Ortam::default();
+            *o.kimlikli.lock().unwrap() = Some((cocuk, port));
+            let r = tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m)).unwrap();
+            let _ = sunucu.join();
+            assert_eq!(r["status"], "rolled_back", "{ad}: {r}");
+            assert_eq!(r["kod"], serde_json::json!(kod), "{ad}: arayüz notu kodu");
+            assert_eq!(r["rollback_error"], serde_json::Value::Null, "{ad}: {r}");
+            if ad == "db" {
+                assert!(r["reason"].as_str().unwrap().contains("veritabanı hazır değil"), "{ad}: {r}");
+            } else {
+                assert_eq!(r["reason"], pemf_launcher_core::dil::t("rust.hata.guncellemeFirmwareUyumsuz"));
+            }
+            let yollar = kp5_yollar(&kayit);
+            let stop = yollar.iter().position(|y| y == &kp5_cift("POST", "/api/hardware/kapanis_durdur")).expect("E-stop yapılmadı");
+            assert!(yollar[..stop].iter().all(|(_, p)| p == "/api/health"), "{ad}: E-stop'tan önce sağlık dışı istek: {yollar:?}");
+            assert_eq!(yollar.last(), Some(&kp5_cift("GET", "/api/auth/desktop-session")), "{ad}: söküm son oturum çekimiyle bitmedi");
+            assert!(kayit.lock().unwrap().iter().all(|(_, _, _, c)| *c), "{ad}: istek süreç ÖLDÜKTEN sonra (kill E-stop'tan önce)");
+            assert!(!kp5_cocuk_canli_mi(&ikili, pid), "{ad}: yeni sürümün backend'i öldürülmedi");
+            assert_eq!(install::read_runtime_attempt(&kok), Some((format!("base:{sha}"), 1)), "{ad}: deneme sayacı");
+            assert_eq!(kp6_exe_icerigi(&kok), b"ESKI-SURUM", "{ad}: eski sürüme dönülmedi");
+            assert!(!o.izler().iter().any(|x| x.starts_with("devret") || x.starts_with("yenile") || x.starts_with("hazir")), "{ad}: geri alınan sürüm devralındı");
+            let _ = std::fs::remove_dir_all(&kok);
+        }
+        let sha = "e".repeat(64);
+        let (kok, m) = kp6_guncelleme_koku("d6_geri_acilmadi", &sha);
+        let st = AppState::default();
+        let o = Kp6Ortam { kimlikli_hata: true, ..Default::default() };
+        let r = tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m)).unwrap();
+        assert_eq!(r["status"], "rolled_back");
+        assert!(r["reason"].as_str().unwrap().contains("KP6 saglik kapisi acilmadi"), "{r}");
+        assert_eq!(install::read_runtime_attempt(&kok), Some((format!("base:{sha}"), 1)), "sağlık kapısı düşünce sayaç yazılmadı (B-10.46)");
+        assert_eq!(kp6_exe_icerigi(&kok), b"ESKI-SURUM");
+        assert!(install::runtime_old_dir(&kok).exists() == false);
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (seans / yakma kapısı + kilit + C2 iç yol): kapı reddederse (etkin seans / yakma / yanıtsız) neden aynen döner, backend'e
+    /// DOKUNULMAZ · kilit doluysa kapı bile sorulmaz · duraklat / iptal (ağ + açma) durum, sayaç YOK · değişiklik yoksa `noop`, başlatma YOK ·
+    /// DETERMİNİSTİK hata Err + sayaç (döngü kırıcı), GEÇİCİ ağ hatası Err, sayaç YOK.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D6_KAPI_kilit_DURUMLAR_noop_DETERMINISTIK_hata_sayar_GECICI_saymaz() {
+        let sha = "9".repeat(64);
+        let (kok, m) = kp6_guncelleme_koku("d6_durum", &sha);
+        let st = AppState::default();
+        let o = Kp6Ortam { kapi_engeli: Some("SEANS-SURUYOR".into()), ..Default::default() };
+        let e = tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m.clone())).unwrap_err();
+        assert_eq!(e, "SEANS-SURUYOR");
+        assert_eq!(o.izler(), vec!["kapi?".to_string()], "kapı reddinde backend'e dokunuldu");
+        let kilit = install::kurulum_kilidi_al(&kok).unwrap();
+        let o = Kp6Ortam::default();
+        assert!(tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m.clone())).is_err());
+        assert!(o.izler().is_empty(), "kilit doluyken dokunuldu: {:?}", o.izler());
+        drop(kilit);
+        for (hata, beklenen) in [
+            (flow::FlowError::Net(net::NetError::Paused), "paused"),
+            (flow::FlowError::Net(net::NetError::Cancelled), "cancelled"),
+            (flow::FlowError::Extract(extract::ExtractError::Cancelled), "cancelled"),
+        ] {
+            let o = Kp6Ortam::default();
+            *o.guncelle_sonuc.lock().unwrap() = Some(Err(hata));
+            let r = tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m.clone())).unwrap();
+            assert_eq!(r, serde_json::json!({ "status": beklenen }));
+            assert_eq!(install::read_runtime_attempt(&kok), None, "{beklenen}: kullanıcı kararı döngü kırıcıya sayıldı");
+        }
+        let o = Kp6Ortam::default();
+        *o.guncelle_sonuc.lock().unwrap() = Some(Ok(flow::GeriAlmaBilgisi::default()));
+        assert_eq!(tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m.clone())).unwrap(), serde_json::json!({ "status": "noop" }));
+        assert!(!o.izler().iter().any(|x| x.starts_with("baslat")), "değişiklik yokken sağlık kapısı backend'i başlatıldı");
+        let o = Kp6Ortam::default();
+        *o.guncelle_sonuc.lock().unwrap() = Some(Err(flow::FlowError::Net(net::NetError::HttpStatus { status: 503, url: "u".into() })));
+        assert!(tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m.clone())).is_err());
+        assert_eq!(install::read_runtime_attempt(&kok), None, "GEÇİCİ ağ hatası döngü kırıcıya sayıldı (güncelleme kalıcı bloklanır)");
+        let o = Kp6Ortam::default();
+        *o.guncelle_sonuc.lock().unwrap() = Some(Err(flow::FlowError::Io(std::io::Error::other("KP6 model kilitli"))));
+        let e = tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), m.clone())).unwrap_err();
+        assert!(e.contains("KP6 model kilitli"), "{e}");
+        assert_eq!(install::read_runtime_attempt(&kok), Some((format!("base:{sha}"), 1)), "DETERMİNİSTİK hata sayılmadı (C2 iç yol)");
         let _ = std::fs::remove_dir_all(&kok);
     }
 }

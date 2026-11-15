@@ -28,7 +28,8 @@ from rs_soyucu import blok_sonu, ifade_deseni, rs_soy, ust_duzey_eslesmeler
 
 MAIN_RS = Path(__file__).resolve().parents[1] / "launcher" / "app" / "src" / "main.rs"
 
-ESLESME = "match flow::start_backend_kimlikli(&root2, &mut on, geri.paket_kimligi()) {"
+# KP-6 D6: gövde `apply_runtime_update_ile`de; kimlikli başlatma `KomutOrtami` bağında (üretim impl'i kabuk.rs: flow::start_backend_kimlikli).
+ESLESME = "match ortam2.backend_baslat_kimlikli(&root2, &mut on, geri.paket_kimligi()) {"
 OK_KOLU = "Ok((child, url, port)) => {"
 ERR_KOLU = "Err(e) => {"
 KAYDET = "flow::geri_almayi_kaydet(&root2, &manifest_raw);"

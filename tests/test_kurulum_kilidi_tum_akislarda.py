@@ -34,7 +34,7 @@ _YIKICI_AKISLAR = [
     "install_and_launch_ile",  # KP-6 D4: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     "repair_ile",  # KP-6 D4
     "uninstall_ile",  # KP-6 D5
-    "apply_runtime_update",
+    "apply_runtime_update_ile",  # KP-6 D6
     "apply_self_update",
 ]
 
@@ -50,7 +50,7 @@ def _govde(kaynak: str, ad: str) -> str:
     # KP-6 D4: gövdeler genel tür parametreli olabilir (`fn x_ile<O: KomutOrtami>(`)
     m = re.search(rf"(?:async\s+)?fn\s+{re.escape(ad)}\s*(?:<[^>(]*>)?\s*\(", kaynak)
     assert m, f"`{ad}` main.rs'te bulunamadi — ad degismis olabilir, kapi guncellensin"
-    sonraki = re.search(r"\n(?:#\[[^\n]*\]\n)*(?:pub\s+)?(?:async\s+)?fn\s+\w+\s*\(", kaynak[m.end() :])
+    sonraki = re.search(r"\n(?:#\[[^\n]*\]\n)*(?:pub\s+)?(?:async\s+)?fn\s+\w+\s*(?:<[^>(]*>)?\s*\(", kaynak[m.end() :])
     return kaynak[m.end() : m.end() + (sonraki.start() if sonraki else len(kaynak))]
 
 

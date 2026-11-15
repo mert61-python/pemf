@@ -28,7 +28,8 @@ _CI = _KOK / ".github" / "workflows" / "tests.yml"
 # KP-6 D3: `prefetch_runtime_update` Tauri komut kabuğu S (gövdesi `prefetch_runtime_update_ile` K; güvenlik listesinde GÖVDE) → 54.
 # KP-6 D4: `install_and_launch` / `start_installed` / `repair` / `remove_profiles` Tauri komut kabukları S (gövdeleri `_ile` K) → 58.
 # KP-6 D5: `uninstall` Tauri komut kabuğu S (gövdesi `uninstall_ile` K) → 59.
-BEKLENEN_S = 59
+# KP-6 D6: `apply_runtime_update` Tauri komut kabuğu S (gövdesi `apply_runtime_update_ile` K; güvenlik listesinde GÖVDE) → 60.
+BEKLENEN_S = 60
 _FN = re.compile(r"^(?:pub(?:\([^)]*\))? )?(?:async )?fn (\w+)")
 
 
@@ -92,7 +93,7 @@ def test_S_listesi_GUVENLIK_yollarini_ICERMEZ():
         "stop_tracked_backend",
         "yakma_bitene_kadar_bekle",
         "firmware_uyumsuz_geri_al",
-        "apply_runtime_update",
+        "apply_runtime_update_ile",  # KP-6 D6: güncelleme kararının GÖVDESİ (komut ince S kabuğu)
         "apply_self_update",
         "prefetch_runtime_update_ile",  # KP-6 D3: güncelleme kararının GÖVDESİ (komut ince S kabuğu)
         # KP-5 B2: güncelleme kararının GÖVDELERİ (ince kabukları S — yalnız gerçek kök / saat bağlar, karar içermez)

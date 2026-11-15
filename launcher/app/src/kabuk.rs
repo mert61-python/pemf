@@ -1039,6 +1039,39 @@ impl KomutOrtami for tauri::AppHandle {
     fn cik(&self) {
         self.exit(0);
     }
+    fn guncelleme_kapisi(&self, root: &std::path::Path) -> Result<(), String> {
+        aktif_seans_kapisi(root)
+    }
+    fn guncelle(
+        &self,
+        manifest_raw: &str,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<flow::GeriAlmaBilgisi, flow::FlowError> {
+        flow::update_installed(manifest_raw, root, on, control)
+    }
+    fn backend_baslat_kimlikli(
+        &self,
+        root: &std::path::Path,
+        on: &mut dyn FnMut(flow::Progress),
+        paket_kimligi: Option<&str>,
+    ) -> Result<(std::process::Child, String, u16), flow::FlowError> {
+        flow::start_backend_kimlikli(root, on, paket_kimligi)
+    }
+    fn uygulama_penceresini_yenile(&self, port: u16) -> bool {
+        uygulama_penceresini_yenile(self, port)
+    }
+}
+
+/// Bayat paketleri yenile (KP-6 D6: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `apply_runtime_update_ile`, K).
+#[tauri::command]
+async fn apply_runtime_update(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    manifest_raw: String,
+) -> Result<serde_json::Value, String> {
+    apply_runtime_update_ile(&app, state.inner(), install::default_install_root(&home_dir()), manifest_raw).await
 }
 
 /// Uygulamayı kaldır (KP-6 D5: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `uninstall_ile`, K).

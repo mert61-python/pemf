@@ -47,7 +47,7 @@ def _govde(rs: str, ad: str) -> str:
 
 def test_KRITIK_apply_runtime_update_TAM_kilit_alir(rs):
     """🔴 ASIL BULGU: ağacı değiştiren tek otomatik yol korumasızdı."""
-    g = _govde(rs, "apply_runtime_update")
+    g = _govde(rs, "apply_runtime_update_ile")  # KP-6 D6: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     assert "kurulum_kilidi_al" in g, (
         "oto-güncelleme kurulum kilidini ALMIYOR — ikinci pencere/onarım ile runtime.new üzerinde çakışır"
     )
@@ -58,9 +58,15 @@ def test_KRITIK_apply_runtime_update_TAM_kilit_alir(rs):
 
 def test_KRITIK_kilit_seans_kapisindan_ONCE_alinir(rs):
     """Kilit önce alınmazsa iki akış aynı anda seans kapısını geçip ilerleyebilir."""
-    g = _govde(rs, "apply_runtime_update")
+    g = _govde(rs, "apply_runtime_update_ile")  # KP-6 D6: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     i_kilit = g.index("kurulum_kilidi_al")
-    i_seans = g.index("aktif_seans_kapisi")
+    # KP-6 D6: seans kapısı `KomutOrtami` bağında (`guncelleme_kapisi`); üretim impl'i (kabuk.rs) `aktif_seans_kapisi`ni çağırır.
+    i_seans = g.index("ortam.guncelleme_kapisi(")
+    kabuk = (Path(__file__).resolve().parents[1] / "launcher" / "app" / "src" / "kabuk.rs").read_text(encoding="utf-8")
+    b = kabuk.find("fn guncelleme_kapisi(")
+    assert b != -1 and "aktif_seans_kapisi(root)" in kabuk[b : b + 200], (
+        "üretim bağı seans kapısını (aktif_seans_kapisi) çağırmıyor"
+    )
     assert i_kilit < i_seans, "kilit, seans kapısından SONRA alınıyor → yarış penceresi açık"
 
 
@@ -94,7 +100,7 @@ def test_prefetch_atlanmasi_HATA_gibi_gorunmez(rs):
 
 
 @pytest.mark.parametrize(
-    "komut", ["install_and_launch_ile", "repair_ile", "uninstall_ile", "apply_runtime_update"]
+    "komut", ["install_and_launch_ile", "repair_ile", "uninstall_ile", "apply_runtime_update_ile"]
 )  # KP-6 D4: gövdeler `_ile`
 def test_AGACI_DEGISTIREN_tum_yollar_kilitli(rs, komut):
     """Ağaca yazan her yol kilitli olmalı — biri unutulursa yarış geri gelir."""

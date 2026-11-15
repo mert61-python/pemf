@@ -63,7 +63,12 @@ def test_KRITIK_1b_IC_YOL_deterministik_hata_SAYILIR(main_rs, flow_rs):
     (C2/`otomatik_durduruldu`) HİÇ takılmadan her açılışta backend'i öldürüp ~1,19 GB açıp geri
     alıyordu. `apply_runtime_update`'in `update_installed` Err dalı, hata deterministikse (Cancel/
     Pause/geçici-ağ DEĞİL) deneme sayacını yazmalı; sınıflandırma `flow::hata_deterministik_mi`de."""
-    assert "flow::update_installed(" in main_rs, "apply_runtime_update update_installed çağrısı yok — main.rs değişmiş"
+    # KP-6 D6: güncelleme akışı `KomutOrtami` bağında (`ortam2.guncelle(`); üretim impl'i (kabuk.rs) `flow::update_installed`i çağırır.
+    assert "ortam2.guncelle(" in main_rs, "apply_runtime_update update_installed çağrısı yok — main.rs değişmiş"
+    kabuk = (Path(__file__).resolve().parents[1] / "launcher" / "app" / "src" / "kabuk.rs").read_text(encoding="utf-8")
+    assert "flow::update_installed(manifest_raw, root, on, control)" in kabuk, (
+        "üretim bağı update_installed'ı çağırmıyor"
+    )
     # ⚠️ YALNIZ update_installed'in Err(e) DALINA çıpalan (sağlık-kapısı geri almaları da
     # geri_almayi_kaydet çağırır; genış pencere onları kapsayıp mutasyonu KAÇIRIRDI). Err(e) dalı
     # match'in son kolu; ondan match kapanışına (`};`) kadar olan gövde ölçülür.
