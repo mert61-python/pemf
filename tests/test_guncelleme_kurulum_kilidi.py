@@ -94,7 +94,7 @@ def test_prefetch_atlanmasi_HATA_gibi_gorunmez(rs):
 
 
 @pytest.mark.parametrize(
-    "komut", ["install_and_launch_ile", "repair_ile", "uninstall", "apply_runtime_update"]
+    "komut", ["install_and_launch_ile", "repair_ile", "uninstall_ile", "apply_runtime_update"]
 )  # KP-6 D4: gövdeler `_ile`
 def test_AGACI_DEGISTIREN_tum_yollar_kilitli(rs, komut):
     """Ağaca yazan her yol kilitli olmalı — biri unutulursa yarış geri gelir."""

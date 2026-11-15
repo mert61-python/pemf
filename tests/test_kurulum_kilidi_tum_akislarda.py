@@ -33,7 +33,7 @@ _MAIN = _KOK / "launcher" / "app" / "src" / "main.rs"
 _YIKICI_AKISLAR = [
     "install_and_launch_ile",  # KP-6 D4: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     "repair_ile",  # KP-6 D4
-    "uninstall",
+    "uninstall_ile",  # KP-6 D5
     "apply_runtime_update",
     "apply_self_update",
 ]

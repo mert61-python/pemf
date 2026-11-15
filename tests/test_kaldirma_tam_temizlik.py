@@ -63,7 +63,7 @@ def test_KRITIK_eklenen_HER_kural_silme_betiginde_de_VAR():
 def test_KRITIK_kaldirma_akisi_firewall_temizligini_CAGIRIYOR():
     """⚠️ ZAYIF-ÇIPA KORUMASI: silme betiği var olabilir ama ÇAĞRILMIYORSA hiçbir şey değişmez."""
     kaynak = _MAIN_RS.read_text(encoding="utf-8")
-    i = kaynak.find("async fn uninstall(")
+    i = kaynak.find("async fn uninstall_ile")  # KP-6 D5: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     assert i != -1, "uninstall komutu bulunamadı"
     govde = kaynak[i : i + 3000]
     assert "silme_betigi" in govde, "kaldırma akışı firewall temizliğini çağırmıyor → kurallar makinede kalır"
@@ -102,7 +102,7 @@ def test_KRITIK_firewall_temizligi_CIKIS_KODUNU_gunluge_yazar_DEV_D5b():
     yalnız UAC reddi görülüyordu. Artık kodlu sarmalayıcı (`ps_yukselterek_kos_kodlu`, `-PassThru`) koşar; kod günlüğe yazılır ve sonuç
     YİNE yutulur (davranış aynı: kaldırma her durumda sürer)."""
     kaynak = _MAIN_RS.read_text(encoding="utf-8")
-    i = kaynak.find("async fn uninstall(")
+    i = kaynak.find("async fn uninstall_ile")  # KP-6 D5: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     assert i != -1, "uninstall komutu bulunamadı"
     govde = kaynak[i : i + 4000]
     # Tur 2 kolu (D67 çürütme, mutant w1): satır yorumları SOYULUR (dize dışındaki `//`) — çağrı yalnız bir yorumda kalırsa SAYILMAZ.

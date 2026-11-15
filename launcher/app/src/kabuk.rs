@@ -1024,6 +1024,27 @@ impl KomutOrtami for tauri::AppHandle {
     ) -> Result<flow::RemoveReport, flow::FlowError> {
         flow::remove_profiles(root, manifest, profiles, on)
     }
+    fn sokum(&self, tracked: Option<(std::process::Child, u16)>, root: &std::path::Path, bellek: Arc<Mutex<Option<auth::Session>>>) {
+        stop_backend_for_teardown(tracked, root, bellek);
+    }
+    fn ps_yukselterek_kos_kodlu(&self, betik: &str) -> Result<i32, String> {
+        ps_yukselterek_kos_kodlu(betik)
+    }
+    fn kaldirici_yolu(&self) -> Option<std::path::PathBuf> {
+        std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("uninstall.exe")))
+    }
+    fn kaldiriciyi_baslat(&self, yol: &std::path::Path) -> Result<(), String> {
+        spawn_uninstaller_detached(yol)
+    }
+    fn cik(&self) {
+        self.exit(0);
+    }
+}
+
+/// Uygulamayı kaldır (KP-6 D5: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `uninstall_ile`, K).
+#[tauri::command]
+async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    uninstall_ile(&app, state.inner(), install::default_install_root(&home_dir())).await
 }
 
 /// SEÇİLEN PROFİLLERİ kur ve başlat (KP-6 D4: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `install_and_launch_ile`, K).

@@ -394,6 +394,16 @@ trait KomutOrtami: Clone + Send + Sync + 'static {
         profiles: &[String],
         on: &mut dyn FnMut(flow::Progress),
     ) -> Result<flow::RemoveReport, flow::FlowError>;
+    /// Kaldırmada izlenen backend'in sökümü (üretim: `stop_backend_for_teardown` — E-stop → kill → artakalan → port dosyası).
+    fn sokum(&self, tracked: Option<(std::process::Child, u16)>, root: &std::path::Path, bellek: Arc<Mutex<Option<auth::Session>>>);
+    /// Yükseltilmiş PowerShell betiği, çıkış kodlu (üretim: `ps_yukselterek_kos_kodlu` — UAC).
+    fn ps_yukselterek_kos_kodlu(&self, betik: &str) -> Result<i32, String>;
+    /// Kayıtlı NSIS kaldırıcısının yolu (üretim: çalışan exe'nin yanındaki `uninstall.exe`).
+    fn kaldirici_yolu(&self) -> Option<std::path::PathBuf>;
+    /// Kaldırıcıyı ayrık başlat (üretim: `spawn_uninstaller_detached`).
+    fn kaldiriciyi_baslat(&self, yol: &std::path::Path) -> Result<(), String>;
+    /// Başlatıcıdan çık (üretim: `app.exit(0)`) — kaldırıcı çalışan exe'yi silebilsin.
+    fn cik(&self);
 }
 
 fn snapshot_yazici(
@@ -1451,9 +1461,11 @@ enum GuncellemeSonucu {
 /// 🔴 KIRMIZI ÇİZGİ (TIBBİ GÜVENLİK): E-stop → kill sırası AYNEN korunur ve `app.exit(0)` iş
 /// BİTMEDEN çağrılmaz — aksi halde süreç, bobin durdurma uçarken çıkar (ESP bobinleri 6-8'in
 /// link-watchdog'u YOKTUR).
-#[tauri::command]
-async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let root = install::default_install_root(&home_dir());
+///
+/// KP-6 D5 (madde 6): `uninstall` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kök ve dış bağ (`KomutOrtami`: söküm, yükseltilmiş betik,
+/// kaldırıcı yolu / başlatma, çıkış) ENJEKTE. Kilit, sıra (E-stop + kill → güvenlik duvarı temizliği (hatası YUTULUR) → kaldırıcı → çıkış)
+/// ve "kaldırıcı yoksa ÇIKMA" kuralı AYNEN.
+async fn uninstall_ile<O: KomutOrtami>(ortam: &O, state: &AppState, root: std::path::PathBuf) -> Result<(), String> {
     // ⚠️ EŞZAMANLI CLIENT KAPISI: diğer pencere kurulum yaparken kaldırmaya başlamak, yarı
     // kurulmuş bir ağacı silmeye çalışmak demektir (dosya kilitleri + yarım kalan artıklar).
     let _kilit = install::kurulum_kilidi_al(&root)?;
@@ -1462,8 +1474,9 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
     let tracked = state.proc.lock().unwrap().take();
     let root2 = root.clone();
     let bellek2 = state.session.clone(); // [S4]
+    let ortam2 = ortam.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        stop_backend_for_teardown(tracked, &root2, bellek2);
+        ortam2.sokum(tracked, &root2, bellek2);
     })
     .await
     .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kaldirmaHazirligiCoktu", &[("e", &e.to_string())]))?;
@@ -1486,7 +1499,7 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
         // Sonuç yine YUTULUR — kaldırma her durumda sürer.
         // SON-A1.53: yalnız BU launcher'ın exe'sinin (aynı kök) adlı kuralları + yetim kurallar silinir — servis kurulumunun aynı
         // adlı kuralı (başka program) KALIR (D5 I-1 değişmezi; eskiden adla hepsi siliniyordu → servis LAN'ı sessizce kapanırdı).
-        let fw_temizlik = ps_yukselterek_kos_kodlu(&pemf_launcher_core::firewall::silme_betigi(&install::backend_path(&root)));
+        let fw_temizlik = ortam.ps_yukselterek_kos_kodlu(&pemf_launcher_core::firewall::silme_betigi(&install::backend_path(&root)));
         if let Ok(kod) = &fw_temizlik {
             eprintln!("[uninstall] güvenlik duvarı temizliği çıkış kodu {kod}{} (0 = tamam) — kaldırma sürer", if *kod == pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI { format!(": {}", pemf_launcher_core::dil::t("rust.hata.yoneticiIzniVerilmedi")) } else { String::new() });
         }
@@ -1496,20 +1509,19 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
 
         // uninstall.exe launcher exe'sinin YANINDADIR (NSIS ikisini de $INSTDIR'a koyar). current_exe
         // üzerinden bul → özel kurulum dizinlerinde de doğru (sabit yol varsaymaz).
-        let uninstaller = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("uninstall.exe")))
+        let uninstaller = ortam
+            .kaldirici_yolu()
             .filter(|p| p.exists())
             .ok_or_else(|| {
                 pemf_launcher_core::dil::t("rust.hata.kaldiriciYok")
             })?;
-        spawn_uninstaller_detached(&uninstaller)?;
-        app.exit(0); // launcher ÇIKMALI ki uninstaller çalışan PEMFVetClient.exe'yi silebilsin
+        ortam.kaldiriciyi_baslat(&uninstaller)?;
+        ortam.cik(); // launcher ÇIKMALI ki uninstaller çalışan PEMFVetClient.exe'yi silebilsin
         Ok(())
     }
     #[cfg(not(windows))]
     {
-        let _ = app; // mac/linux: platform paket-kaldırıcısı ayrı → indirilen payload'u temizle
+        let _ = ortam; // mac/linux: platform paket-kaldırıcısı ayrı → indirilen payload'u temizle
         install::remove_install(&root)
             .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.kaldirmaBasarisiz", &[("e", &e.to_string())]))
     }
@@ -5250,6 +5262,11 @@ Connection: close
         onar_hata: Arc<Mutex<Option<flow::FlowError>>>,
         baslat_hata: bool,
         kaldir_hata: Arc<Mutex<Option<flow::FlowError>>>,
+        /// D5: güvenlik duvarı temizliğinin sonucu (None → Ok(0)) · kaldırıcı yolu · kaldırıcı başlatma düşer mi · son betik.
+        fw: Arc<Mutex<Option<Result<i32, String>>>>,
+        kaldirici: Option<std::path::PathBuf>,
+        kaldirici_hata: bool,
+        betik: Arc<Mutex<String>>,
     }
 
     impl Kp6Ortam {
@@ -5367,6 +5384,30 @@ Connection: close
                 return Err(e);
             }
             Ok(flow::RemoveReport { removed: profiles.to_vec(), installed: vec!["home".into()], freed_bytes: 1234, kept_shared: 2 })
+        }
+        fn sokum(&self, tracked: Option<(std::process::Child, u16)>, root: &std::path::Path, _bellek: Arc<Mutex<Option<auth::Session>>>) {
+            let kilitli = install::kurulum_kilidi_al(root).is_err();
+            self.yaz(format!("sokum:izlenen={} kilitli={kilitli}", tracked.is_some()));
+            if let Some((mut c, _)) = tracked {
+                let _ = c.kill();
+                let _ = c.wait();
+            }
+        }
+        fn ps_yukselterek_kos_kodlu(&self, betik: &str) -> Result<i32, String> {
+            *self.betik.lock().unwrap() = betik.to_string();
+            self.yaz("fw".into());
+            self.fw.lock().unwrap().take().unwrap_or(Ok(0))
+        }
+        fn kaldirici_yolu(&self) -> Option<std::path::PathBuf> {
+            self.yaz("kaldirici?".into());
+            self.kaldirici.clone()
+        }
+        fn kaldiriciyi_baslat(&self, yol: &std::path::Path) -> Result<(), String> {
+            self.yaz(format!("kaldirici_baslat:{}", yol.file_name().unwrap_or_default().to_string_lossy()));
+            if self.kaldirici_hata { Err("KP6 kaldirici baslamadi".into()) } else { Ok(()) }
+        }
+        fn cik(&self) {
+            self.yaz("cik".into());
         }
     }
 
@@ -5631,5 +5672,78 @@ Connection: close
         assert!(!o.izler().iter().any(|x| x.starts_with("devret") || x.starts_with("hazir")));
         let _ = std::fs::remove_dir_all(&kok);
         let _ = std::fs::remove_dir_all(&bos);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-6 D5 (madde 6) · `uninstall_ile` — kaldırmanın gövdesi, kayıtçı sahte `KomutOrtami` ile (gerçek UAC / NSIS / çıkış YOK).
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// KRİTİK (🔴 KIRMIZI ÇİZGİ — TIBBİ GÜVENLİK + DENETİM 2026-08-06 + SON-A1.53): kaldırma kilit TUTULURKEN izlenen backend'i ÖNCE söker
+    /// (E-stop + kill, `state.proc` alınır), SONRA BU kurulumun exe'sine ait güvenlik duvarı kurallarını yükseltilmiş betikle siler,
+    /// SONRA kaldırıcıyı başlatır, EN SON çıkar (iş bitmeden çıkılmaz). Güvenlik duvarı temizliğinin hatası (UAC reddi / kod) YUTULUR.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D5_uninstall_SIRA_sokum_fw_kaldirici_CIK_fw_hatasi_YUTULUR() {
+        for (ad, fw) in [
+            ("tamam", None),
+            ("uac_reddi_kodu", Some(Ok(pemf_launcher_core::paylasim::KOD_UAC_REDDEDILDI))),
+            ("calismadi", Some(Err("KP6 powershell yok".to_string()))),
+        ] {
+            let kok = kp6_kok(&format!("d5_{ad}"));
+            let kaldirici = kok.join("uninstall.exe");
+            std::fs::write(&kaldirici, b"NSIS").unwrap();
+            let st = AppState::default();
+            *st.proc.lock().unwrap() = Some((kp6_kisa_cocuk(), 51_777));
+            let o = Kp6Ortam { kaldirici: Some(kaldirici.clone()), ..Default::default() };
+            *o.fw.lock().unwrap() = fw;
+            tauri::async_runtime::block_on(uninstall_ile(&o, &st, kok.clone())).unwrap_or_else(|e| panic!("{ad}: {e}"));
+            assert_eq!(
+                o.izler(),
+                vec![
+                    "sokum:izlenen=true kilitli=true".to_string(),
+                    "fw".to_string(),
+                    "kaldirici?".to_string(),
+                    "kaldirici_baslat:uninstall.exe".to_string(),
+                    "cik".to_string(),
+                ],
+                "{ad}: kaldırma sırası"
+            );
+            assert!(st.proc.lock().unwrap().is_none(), "{ad}: izlenen backend söküme verilmedi");
+            let betik = o.betik.lock().unwrap().clone();
+            assert_eq!(betik, pemf_launcher_core::firewall::silme_betigi(&install::backend_path(&kok)), "{ad}: temizlik BU kurulumun exe'siyle değil");
+            assert!(install::kurulum_kilidi_al(&kok).is_ok(), "{ad}: kilit bırakılmadı");
+            let _ = std::fs::remove_dir_all(&kok);
+        }
+    }
+
+    /// KRİTİK: kaldırıcı YOKSA (ya da yolu var ama dosya yok) eylem söyleyen hata ve başlatıcı ÇIKMAZ (kullanıcı ekranda kalır); kaldırıcı
+    /// BAŞLAMAZSA hata ve ÇIKMAZ; başka pencere kurulum yaparken (kilit dolu) HİÇBİR ŞEYE dokunulmaz (backend sökülmez).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D5_uninstall_KALDIRICI_yok_ya_da_baslamazsa_CIKMAZ_kilit_doluysa_DOKUNMAZ() {
+        let kok = kp6_kok("d5_yok");
+        let st = AppState::default();
+        for kaldirici in [None, Some(kok.join("uninstall.exe"))] {
+            let o = Kp6Ortam { kaldirici, ..Default::default() };
+            let e = tauri::async_runtime::block_on(uninstall_ile(&o, &st, kok.clone())).unwrap_err();
+            assert_eq!(e, pemf_launcher_core::dil::t("rust.hata.kaldiriciYok"));
+            assert_eq!(o.izler(), vec!["sokum:izlenen=false kilitli=true".to_string(), "fw".to_string(), "kaldirici?".to_string()]);
+        }
+        std::fs::write(kok.join("uninstall.exe"), b"NSIS").unwrap();
+        let o = Kp6Ortam { kaldirici: Some(kok.join("uninstall.exe")), kaldirici_hata: true, ..Default::default() };
+        let e = tauri::async_runtime::block_on(uninstall_ile(&o, &st, kok.clone())).unwrap_err();
+        assert!(e.contains("KP6 kaldirici baslamadi"), "{e}");
+        assert!(!o.izler().contains(&"cik".to_string()), "kaldırıcı başlamadı ama başlatıcı çıktı");
+        let kilit = install::kurulum_kilidi_al(&kok).unwrap();
+        *st.proc.lock().unwrap() = Some((kp6_kisa_cocuk(), 51_778));
+        let o = Kp6Ortam { kaldirici: Some(kok.join("uninstall.exe")), ..Default::default() };
+        assert!(tauri::async_runtime::block_on(uninstall_ile(&o, &st, kok.clone())).is_err());
+        assert!(o.izler().is_empty(), "kilit doluyken dokunuldu: {:?}", o.izler());
+        assert!(st.proc.lock().unwrap().is_some(), "kilit doluyken izlenen backend söküldü");
+        drop(kilit);
+        if let Some((mut c, _)) = st.proc.lock().unwrap().take() {
+            let _ = c.wait();
+        }
+        let _ = std::fs::remove_dir_all(&kok);
     }
 }
