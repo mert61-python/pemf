@@ -139,3 +139,32 @@ def test_KRITIK_e2e_backend_ortami_GERCEK_sisteme_DOKUNAMAZ(ad, tmp_path, monkey
     )
     sizan = {d: env[d] for d in _MIRAS_NOBETCILERI if d in env}
     assert not sizan, f"{ad} backend'i dış ortamın GERÇEK kaynak değişkenlerini MİRAS aldı: {sizan}"
+
+
+def test_e2e_backend_SUREC_AGACIYLA_kapatilir_mosquitto_yetim_kalmaz(monkeypatch):
+    """2026-11-15: e2e_full'ün backend'i ESP açıkken mosquitto başlatır; yalnız `terminate()` onu YETİM bırakıp 1883'ü tutuyordu.
+    Windows'ta `taskkill /T /F` System32 TAM yoluyla çağrılmalı."""
+    import tools.e2e_ortam as eo
+
+    cagrilar = []
+
+    class _Sahte:
+        pid = 4242
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            cagrilar.append("terminate")
+
+        def kill(self):
+            cagrilar.append("kill")
+
+    monkeypatch.setattr(eo.os, "name", "nt")
+    monkeypatch.setattr(eo.subprocess, "run", lambda argv, **k: cagrilar.append(argv))
+    eo.surec_agacini_kapat(_Sahte(), 1)
+    assert cagrilar and isinstance(cagrilar[0], list), cagrilar
+    argv = cagrilar[0]
+    assert argv[0].lower().endswith("system32\\taskkill.exe"), argv
+    assert argv[1:] == ["/PID", "4242", "/T", "/F"], argv
+    assert "terminate" not in cagrilar

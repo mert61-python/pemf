@@ -12,6 +12,7 @@ Kapı: tests/test_e2e_alt_surec_ortami.py (her aracın `main()`i sahte Popen'la 
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 #: Bağlantı reddedilen loopback (discard portu): bulut cihaz kaydı buraya gider, üretime GİTMEZ.
@@ -90,3 +91,26 @@ def alt_surec_ortami(data_dir: Path, port: int, guii: Path, ek: dict | None = No
     # bırakır — PEMF_REQUIRE_AUTH, PEMF_REQUIRE_PATIENT_AUTH, PEMF_CORS_ORIGINS, PEMF_MASK_HISTORY_PII).
     env.update(ek or {})
     return env
+
+
+def surec_agacini_kapat(proc, bekle: float = 20.0) -> None:
+    """Backend'i ALT SÜREÇLERİYLE birlikte kapatır.
+
+    ⚠️ 2026-11-15: `proc.terminate()` Windows'ta yalnız backend'i öldürüyordu; ESP açık koşan e2e_full'de backend'in
+    başlattığı `mosquitto.exe` YETİM kalıp 1883'ü tutmaya devam etti (ürünün kendi broker'ı açılamaz). Windows'ta
+    `taskkill /T /F` ağacı kapatır (System32'deki TAM yol — PATH'teki sahte ikiliye düşmez); başka sistemde
+    terminate / kill."""
+    pid = getattr(proc, "pid", None)
+    if os.name == "nt" and isinstance(pid, int) and pid > 0:
+        taskkill = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "taskkill.exe")
+        subprocess.run([taskkill, "/PID", str(pid), "/T", "/F"], capture_output=True, check=False)
+        try:
+            proc.wait(timeout=bekle)
+            return
+        except Exception:
+            pass
+    try:
+        proc.terminate()
+        proc.wait(timeout=bekle)
+    except Exception:
+        proc.kill()

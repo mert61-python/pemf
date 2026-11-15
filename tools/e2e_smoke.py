@@ -38,7 +38,7 @@ GUII = Path(__file__).resolve().parent.parent
 # ⚠️ Gomulu Python dagitimi (._pth) depo kokunu sys.path'e koymaz → ortak ortam kurucusu icin ac.
 if str(GUII) not in sys.path:
     sys.path.insert(0, str(GUII))
-from tools.e2e_ortam import alt_surec_ortami  # noqa: E402
+from tools.e2e_ortam import alt_surec_ortami, surec_agacini_kapat  # noqa: E402
 
 PY = Path(sys.executable)
 # 8000 KULLANILMAZ - kullanicinin calisan ornegine ve gercek verisine dokunmamak icin alt-port.
@@ -174,11 +174,7 @@ def main():
         print("Backend hazir.\n")
         run_scenarios()
     finally:
-        try:
-            proc.terminate()
-            proc.wait(timeout=15)
-        except Exception:
-            proc.kill()
+        surec_agacini_kapat(proc, 15)
         log.close()
 
     ok = sum(1 for p, _, _ in _results if p)

@@ -38,7 +38,7 @@ GUII = Path(__file__).resolve().parent.parent
 # ⚠️ Gomulu Python dagitimi (._pth) depo kokunu sys.path'e koymaz → ortak ortam kurucusu icin ac.
 if str(GUII) not in sys.path:
     sys.path.insert(0, str(GUII))
-from tools.e2e_ortam import alt_surec_ortami  # noqa: E402
+from tools.e2e_ortam import alt_surec_ortami, surec_agacini_kapat  # noqa: E402
 
 PY = Path(sys.executable)
 PORT = int(os.environ.get("PEMF_E2E_PORT", "8124"))
@@ -827,11 +827,7 @@ def main():
             req("POST", "/api/hardware/emergency_stop", timeout=10)  # guvenli kapanis
         except Exception:
             pass
-        try:
-            proc.terminate()
-            proc.wait(timeout=20)
-        except Exception:
-            proc.kill()
+        surec_agacini_kapat(proc, 20)
         log.close()
 
     ok = sum(1 for p, _, _ in _results if p)
