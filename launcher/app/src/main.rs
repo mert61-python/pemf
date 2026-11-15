@@ -4771,4 +4771,131 @@ Connection: close
         assert_eq!(yollar.lock().unwrap().len(), 1, "bütçe dolmuşken yeniden yoklandı");
         assert!(sure < std::time::Duration::from_millis(900), "bütçe dolmuşken BEKLEDİ ({sure:?}) — kapanış ikinci azamiyi bekler");
     }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-6 D (madde 6) · `firmware_uyumsuz_geri_al` (LN L2 · Y16 + Y81) — Tauri'siz düz işlev: yeniden düzenleme GEREKMEDİ, GERÇEK
+    // işlev KP-5 B1 aparatıyla (sahte süreç + sahte backend + çekirdeğin `test-kancasi` artakalan gözlemcisi) davranışla sabitlenir.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// KRİTİK (L2 · Y16 + Y81): kart yazılımı uyumsuz → sıra ⚠️ E-stop (STOP) → yakma yoklaması → son oturum çekimi (süreç CANLIYKEN)
+    /// → kill → artakalan (süreç ÖLDÜKTEN sonra) → ANCAK SONRA deneme sayacı + eski sürüme dönüş (artakalan anında `runtime.old` henüz
+    /// yerinde, sayaç yazılmamış) → `GeriAlindi { kod: firmware_uyumsuz }` + eylem söyleyen neden; eski sürüm geri gelir, bozuk yeni silinir.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D_firmware_uyumsuz_geri_al_SIRA_estop_kill_SONRA_sayac_ve_ESKI_surume_donus() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let (cocuk, pid, ad) = kp5_sahte_surec();
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+        let sunucu = kp5_sahte_backend(ln, ad.clone(), pid, kayit.clone());
+        let kok = std::env::temp_dir().join(format!("pemf_kp6_d_fw_{}_{port}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&kok);
+        let exe_yolu = |k: &std::path::Path| k.join("PEMF_Backend").join(pemf_launcher_core::platform::backend_exe_name());
+        let yeni = install::runtime_dir(&kok);
+        let eski = install::runtime_old_dir(&kok);
+        for (dizin, icerik) in [(&yeni, b"YENI-SURUM".as_slice()), (&eski, b"ESKI-SURUM".as_slice())] {
+            std::fs::create_dir_all(exe_yolu(dizin).parent().unwrap()).unwrap();
+            std::fs::write(exe_yolu(dizin), icerik).unwrap();
+        }
+        install::record_base_sha(&kok, &"b".repeat(64));
+        let plat = pemf_launcher_core::platform::current();
+        let sha = "f".repeat(64);
+        let manifest = format!(
+            r#"{{"schema":2,"version":"9.9.9","runtimes":{{"{plat}":{{"url":"https://example.invalid/base.zip","sha256":"{sha}","size":5,"kind":"zip"}}}},"models":{{}},"model_parts":{{}}}}"#
+        );
+        std::fs::write(kok.join("backend.port"), port.to_string()).unwrap();
+        let artakalan_ani: Arc<Mutex<Option<(bool, bool, bool)>>> = Arc::new(Mutex::new(None));
+        let (ad_g, a_g, kok_g) = (ad.clone(), artakalan_ani.clone(), kok.clone());
+        backend::test_kancasi::gozlemci_kur(Some(Box::new(move |k: &std::path::Path| {
+            if k == kok_g {
+                let eski_yerinde = install::runtime_old_dir(&kok_g).is_dir();
+                let sayac_yok = install::read_runtime_attempt(&kok_g).is_none();
+                *a_g.lock().unwrap() = Some((kp5_cocuk_canli_mi(&ad_g, pid), eski_yerinde, sayac_yok));
+            }
+        })));
+        let geri = flow::GeriAlmaBilgisi { tam_takas: true, ..Default::default() };
+        let t0 = std::time::Instant::now();
+        let sonuc = firmware_uyumsuz_geri_al(cocuk, port, &kok, &manifest, &geri, Arc::new(Mutex::new(None)));
+        let sure = t0.elapsed();
+        backend::test_kancasi::gozlemci_kur(None);
+        assert!(sure < std::time::Duration::from_secs(30), "süreç öldürülmedi — geri alma {sure:?} bekledi");
+        let _ = sunucu.join();
+        // 1) E-stop ÖNCE: STOP → yakma yoklaması → son oturum çekimi, üçü de süreç CANLIYKEN; başka istek YOK.
+        assert_eq!(
+            kp5_yollar(&kayit),
+            vec![
+                kp5_cift("POST", "/api/hardware/kapanis_durdur"),
+                kp5_cift("GET", "/api/health"),
+                kp5_cift("GET", "/api/auth/desktop-session")
+            ],
+            "geri almada istek sırası E-stop → yakma → son oturum değil"
+        );
+        assert!(kayit.lock().unwrap().iter().all(|(_, _, _, c)| *c), "bir istek süreç ÖLDÜKTEN sonra geldi (kill E-stop'tan önce)");
+        // 2) Kill + artakalan: süreç öldü; artakalan anında süreç ölü, eski sürüm HENÜZ geri konmamış, sayaç HENÜZ yazılmamış.
+        assert!(!kp5_cocuk_canli_mi(&ad, pid), "yeni sürümün backend'i öldürülmedi");
+        assert_eq!(
+            *artakalan_ani.lock().unwrap(),
+            Some((false, true, true)),
+            "(süreç canlı, runtime.old yerinde, sayaç yok) artakalan anında beklenen değil — geri alma / sayaç kill'den ÖNCE"
+        );
+        // 3) Döngü kırıcı sayaç bu hedef için 1 (aynı hedef 2 kez geri alınınca otomatik kurulum durur).
+        assert_eq!(install::read_runtime_attempt(&kok), Some((format!("base:{sha}"), 1)), "geri alma deneme sayacı");
+        // 4) Eski sürüm geri geldi, bozuk yeni kenara alınıp silindi; port dosyası (ölü backend) temizlendi.
+        assert_eq!(std::fs::read(exe_yolu(&yeni)).unwrap(), b"ESKI-SURUM", "eski sürüme dönülmedi");
+        assert!(!eski.exists() && !kok.join("runtime.bozuk").exists(), "geri alma artığı kaldı");
+        assert!(!kok.join("backend.port").exists(), "ölü backend'in port dosyası kaldı");
+        // 5) Sonuç: GeriAlindi + arayüz notu kodu + eylem söyleyen neden; geri alma hatası YOK.
+        match sonuc {
+            GuncellemeSonucu::GeriAlindi { sebep, geri_alma_hatasi, kod } => {
+                assert_eq!(sebep, pemf_launcher_core::dil::t("rust.hata.guncellemeFirmwareUyumsuz"));
+                assert!(!sebep.is_empty() && sebep != "rust.hata.guncellemeFirmwareUyumsuz", "neden metni katalogdan çözülmedi");
+                assert_eq!(geri_alma_hatasi, None);
+                assert_eq!(kod, Some(KOD_FIRMWARE_UYUMSUZ));
+                assert_eq!(KOD_FIRMWARE_UYUMSUZ, "firmware_uyumsuz", "arayüz sözleşmesi (rtRollbackFirmware) kodu");
+            }
+            _ => panic!("firmware uyumsuzluğu GeriAlindi dönmedi"),
+        }
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KARŞIT (L2): eski sürüm yoksa (runtime.old yok, app yedeği de yok) geri alma hatası SÖYLENİR (sessiz "dönüldü" YOK) ama E-stop →
+    /// kill yine yapılır ve sayaç yine yazılır (döngü kırıcı çalışır).
+    #[cfg(windows)]
+    #[test]
+    fn KP6_D_firmware_uyumsuz_geri_al_YEDEK_YOKSA_hata_SOYLENIR_estop_ve_sayac_YINE() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let (cocuk, pid, ad) = kp5_sahte_surec();
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+        let sunucu = kp5_sahte_backend(ln, ad.clone(), pid, kayit.clone());
+        let kok = std::env::temp_dir().join(format!("pemf_kp6_d_fw_yok_{}_{port}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&kok);
+        let exe = install::backend_path(&kok);
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::write(&exe, b"YENI-SURUM").unwrap();
+        install::record_base_sha(&kok, &"b".repeat(64));
+        let plat = pemf_launcher_core::platform::current();
+        let sha = "e".repeat(64);
+        let manifest = format!(
+            r#"{{"schema":2,"version":"9.9.9","runtimes":{{"{plat}":{{"url":"https://example.invalid/base.zip","sha256":"{sha}","size":5,"kind":"zip"}}}},"models":{{}},"model_parts":{{}}}}"#
+        );
+        let geri = flow::GeriAlmaBilgisi { app_yedegi: true, app_degisti: true, ..Default::default() };
+        let sonuc = firmware_uyumsuz_geri_al(cocuk, port, &kok, &manifest, &geri, Arc::new(Mutex::new(None)));
+        let _ = sunucu.join();
+        assert_eq!(kp5_yollar(&kayit).first(), Some(&kp5_cift("POST", "/api/hardware/kapanis_durdur")), "E-stop yapılmadı");
+        assert!(!kp5_cocuk_canli_mi(&ad, pid), "backend öldürülmedi");
+        assert_eq!(install::read_runtime_attempt(&kok), Some((format!("base:{sha}"), 1)), "yedek yokken sayaç yazılmadı");
+        match sonuc {
+            GuncellemeSonucu::GeriAlindi { geri_alma_hatasi, kod, .. } => {
+                let h = geri_alma_hatasi.expect("yedek yokken geri alma hatası SÖYLENMEDİ (sessiz 'eski sürüme dönüldü')");
+                assert!(h.contains(&pemf_launcher_core::dil::t("rust.kurulum.appYedegiYok")), "{h}");
+                assert_eq!(kod, Some(KOD_FIRMWARE_UYUMSUZ));
+            }
+            _ => panic!("GeriAlindi dönmedi"),
+        }
+        assert_eq!(std::fs::read(&exe).unwrap(), b"YENI-SURUM", "yedek yokken canlı ağaca dokunuldu");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
 }

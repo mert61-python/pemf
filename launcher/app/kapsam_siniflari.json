@@ -4,7 +4,7 @@
  "s_sayisi": 52,
  "ozet": {
   "K": {
-   "islev": 43,
+   "islev": 44,
    "eksik_satir": 0
   },
   "S": {
@@ -16,8 +16,8 @@
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 16,
-   "eksik_satir": 578
+   "islev": 15,
+   "eksik_satir": 561
   }
  },
  "islevler": {
@@ -303,9 +303,9 @@
    "neden_T_Y_degil": "Yalnız pencere çağrısı; sıra kaynak-testiyle kilitli (`KRITIK_GK_hazir_kolu_…`)."
   },
   "firmware_uyumsuz_geri_al": {
-   "sinif": "Y",
-   "eksik": 17,
-   "neden": "GÜVENLİK / güncelleme yolu (Y16 geri alma) — KP-4."
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-6 D1: Tauri'siz düz işlev — GERÇEK gövde sahte süreç + sahte backend + artakalan gözlemcisiyle davranış testli (E-stop → kill → sayaç → geri alma sırası, yedeksiz hata)."
   },
   "uninstall": {
    "sinif": "Y",
