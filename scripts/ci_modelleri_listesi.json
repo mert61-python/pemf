@@ -1,0 +1,129 @@
+{
+ "aciklama": "KP-5 E13 (Y279 · Y282): CI'ın istediği AI ağırlıkları / git-ignored test eserleri. Paket depo DIŞINDA (açık depoya GİRMEZ); CI gizli anahtarla indirir, her dosyayı buradaki SHA-256 ile doğrular. Paketi kur / listeyi yenile: `python scripts/ci_modelleri.py paketle --modeller release_assets/ai_models --cikti <zip>`.",
+ "kaynak": {
+  "url": "",
+  "not": "Boş: adres depo değişkeni `PEMF_CI_MODEL_KAYNAGI`dan okunur (Settings → Secrets and variables → Actions → Variables)."
+ },
+ "dosyalar": [
+  {
+   "yol": "modeller/ai_hub/odak/veri/alan_tablosu.npz",
+   "sha256": "d67fb41812755ae75ba997666dd2948d9aeca60baae978e94654f43c9360af56",
+   "bayt": 3879705
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/e_tablosu.npz",
+   "sha256": "d2ce87eb68b953f5c399fcb1fdda54fc3705673f56381b39fc1fc4d378a6d1ca",
+   "bayt": 3956929
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_FANTOM.onnx",
+   "sha256": "69bc890fa886304a299bbb6744400e50dd1c906f914e003c1a812d35b7395478",
+   "bayt": 2579828
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_FANTOM_107Hz.onnx",
+   "sha256": "a384404458d68e737033849705b7b54056c44ad4e03dd2ee11186bba025c0257",
+   "bayt": 2277968
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_FANTOM_147Hz.onnx",
+   "sha256": "ad29f24d5ba60f33c5061538cae388f3171ada5536d5f535fbf3a2e4b14ce52e",
+   "bayt": 1617564
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_FANTOM_76Hz.onnx",
+   "sha256": "f29798651a840c314be42f13694948262d02b24a947f8308fe9a0f592e00f42d",
+   "bayt": 2580738
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN.onnx",
+   "sha256": "b60c23ddf4166f88058349f60f9d671020b16dd647100d27c9a120ff0e88bac8",
+   "bayt": 2637996
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN_107Hz.onnx",
+   "sha256": "7ca1a83f61186fd9764a55576c60c09e91e97a1ae1adfe7ca06490acde2a7bcf",
+   "bayt": 2388384
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN_147Hz.onnx",
+   "sha256": "18f201dea3d090e1ab3daba6798a83da895a06b7217fe084c08426cd9246f2ed",
+   "bayt": 1650632
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN_76Hz.onnx",
+   "sha256": "30c64065e342abefe0533139f4e7627084cb2414b2e443cf8f936e741b577036",
+   "bayt": 2639316
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV.onnx",
+   "sha256": "b2b2e9001ae3779800def04d7bcd67c36d37fe9446e1dc60a0a7d1e1b680d276",
+   "bayt": 990221
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV_107Hz.onnx",
+   "sha256": "95b919a9c1ed8c96335bb0a285dfdd230c7357608fa0e14bda8ab7910aab732c",
+   "bayt": 951413
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV_147Hz.onnx",
+   "sha256": "a4557c4429d2ff44265d886de3d27e529bd54ca63ff989504121794e6022345a",
+   "bayt": 644351
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV_76Hz.onnx",
+   "sha256": "f8ac05c9120f0b382b51674274865e947536e527d639070750cc1ffcca14b1fd",
+   "bayt": 1008743
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK.onnx",
+   "sha256": "de11bd938307d4a5b2edfdb8ffddf9e965400d75920b908a40e5bab03da61966",
+   "bayt": 3895031
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK_107Hz.onnx",
+   "sha256": "ac214c5f2d69ef5d1cdd6615f1aba13302f3fdc533b7b39d64512bb525c9a725",
+   "bayt": 3343271
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK_147Hz.onnx",
+   "sha256": "d29bc8c4dc50676123c18bb31919c50a9d5bb67515ba2e02620e2d7a440f6467",
+   "bayt": 2181669
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK_76Hz.onnx",
+   "sha256": "a387b5b17bc2a97c0dfc2aaa379b7be8976d48105ad0c5caed80ec962d94e50a",
+   "bayt": 3925259
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI.onnx",
+   "sha256": "e3fe881d440982bf2c7f5121d9f714df23f2f29dfa737472c92e5f17e16eb32e",
+   "bayt": 1501039
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI_107Hz.onnx",
+   "sha256": "8b0cfb58989d5706e0dfa803d151ca11a6a1a52f0cf49efeeaaa784466f7b92c",
+   "bayt": 1366255
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI_147Hz.onnx",
+   "sha256": "1611742d40fb3d8c0cd9cbb25504196161b821c59ab8e1a601bdf7ad47af5c4f",
+   "bayt": 932207
+  },
+  {
+   "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI_76Hz.onnx",
+   "sha256": "ce84f8234e6187eda1e97312c50cc810f07341308f8f2da58352dbcc83c205bc",
+   "bayt": 1509999
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_rna/mlp_medium_kirc.onnx",
+   "sha256": "a22282c7a9b14dd3e138231b9e8780d1446460cff2fd11ec67e81b3dae78a68f",
+   "bayt": 1207455
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_rna/scaler.pkl",
+   "sha256": "6526cf8490715bbb1bf72ed6f84ad221082e15d70ef499d4eddaa30143369b8d",
+   "bayt": 493311
+  }
+ ]
+}

@@ -100,6 +100,18 @@ jobs:
           pip install "pre-commit>=4.0,<5.0"
           pre-commit install-hooks
 
+      # KP-5 E13 (sahip Y279 · Y282, 12-11): AI ağırlıkları / git-ignored test eserleri (ODAK alan tablosu + ONNX dahil) AÇIK DEPOYA
+      # GİRMEZ — depo DIŞINDAKİ paketten GİZLİ ANAHTARLA indirilir, her dosya `scripts/ci_modelleri_listesi.json`daki SHA-256 ile
+      # doğrulanır, model kökü `PEMF_AI_MODELS_DIR`e yazılır. "Eser yoksa atla" koruması YOK (KP-4 [SAHİBE] 4): indirme / doğrulama
+      # düşerse iş KIRMIZI. Anahtar: depo Settings → Secrets → Actions → `PEMF_CI_MODEL_ANAHTARI`; kaynak listenin `kaynak.url`i
+      # (ya da `PEMF_CI_MODEL_KAYNAGI` değişkeni). Paket: `python scripts/ci_modelleri.py paketle` (sahip, yerelde).
+      - name: AI modelleri (gizli anahtarla indirme + SHA-256 doğrulama)
+        shell: bash
+        env:
+          PEMF_CI_MODEL_ANAHTARI: ${{ secrets.PEMF_CI_MODEL_ANAHTARI }}
+          PEMF_CI_MODEL_KAYNAGI: ${{ vars.PEMF_CI_MODEL_KAYNAGI }}
+        run: python scripts/ci_modelleri.py indir --hedef "$RUNNER_TEMP/pemf_ai_models" --github-env "$GITHUB_ENV"
+
       # ⚠️ Y30 / D4.10 (B-10.3): `-rs` her ATLAMAYI nedeniyle listeler — CI varsayılan kipte koşar ve kardeş kaynak
       # yoksa ≥193 test atlanır; nedenler görünmeden "yeşil" okunuyordu. Yayın öncesi ZORUNLU kip ayrı betikte:
       # scripts/yayin_oncesi_suit.ps1 (publish_release.ps1'in zorunlu adımı).
