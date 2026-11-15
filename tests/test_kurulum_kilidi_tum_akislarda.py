@@ -84,7 +84,7 @@ def test_KARSIT_KANIT_prefetch_kilidi_TUTMAZ(kaynak):
     Kapinin asiri genislemedigini olcer: `prefetch_runtime_update` kilidi yalnizca YOKLAR
     (mesgulse vazgecer) ve tutmaz. Bu KASITLI bir istisnadir.
     """
-    g = _govde(kaynak, "prefetch_runtime_update")
+    g = _govde(kaynak, "prefetch_runtime_update_ile")  # KP-6 D3: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     assert "kurulum_kilidi_al" in g, "prefetch kilidi hic yoklamiyor — mesgulken indirmeye girer"
     assert not re.search(r"let\s+_kilit\s*=\s*install::kurulum_kilidi_al", g), (
         "prefetch kilidi TUTUYOR — arka plan indirmesi kurulumu bloklar (kasitli istisna bozuldu)"

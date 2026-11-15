@@ -68,7 +68,7 @@ def test_KRITIK_prefetch_kilit_TUTMAZ_yalnizca_yoklar(rs):
 
     Doğru davranış: kilit YOKLANIR ve HEMEN bırakılır; doluysa bu tur atlanır.
     """
-    g = _govde(rs, "prefetch_runtime_update")
+    g = _govde(rs, "prefetch_runtime_update_ile")  # KP-6 D3: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     assert "kurulum_kilidi_al" in g, "ön-indirme kilidi hiç yoklamıyor → kurulumla aynı anda koşar"
     assert "drop(k)" in g, "kilit TUTULUYOR (drop yok) → 45 dakikalık indirme boyunca kullanıcı kurulum/onarım yapamaz"
     assert '"skipped"' in g, "kilit doluyken atlama durumu bildirilmiyor"
@@ -80,7 +80,7 @@ def test_KRITIK_prefetch_kilit_TUTMAZ_yalnizca_yoklar(rs):
 
 def test_prefetch_atlanmasi_HATA_gibi_gorunmez(rs):
     """Atlama normal bir durumdur; komut `Err` dönerse UI kırmızı hata gösterir."""
-    g = _govde(rs, "prefetch_runtime_update")
+    g = _govde(rs, "prefetch_runtime_update_ile")  # KP-6 D3: komut kabuk.rs'te ince S kabuğu, gövde `_ile`
     m = re.search(r"Err\(_\) => \{(.*?)\n        \}", g, re.S)
     assert m, "kilit-dolu dalı bulunamadı"
     dal = m.group(1)

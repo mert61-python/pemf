@@ -947,6 +947,16 @@ fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16, bellek: Ar
     );
 }
 
+/// ARKA PLAN İNDİRME — paketleri önbelleğe çeker, kuruluma DOKUNMAZ, UI'ı BLOKLAMAZ (KP-6 D3: İNCE KABUK — gerçek kök +
+/// `flow::prefetch_updates` bağlar; kilit / kanal / duraklat-iptal kablosu / durum eşlemesi gövdede: `prefetch_runtime_update_ile`, K).
+#[tauri::command]
+async fn prefetch_runtime_update(
+    state: tauri::State<'_, AppState>,
+    manifest_raw: String,
+) -> Result<serde_json::Value, String> {
+    prefetch_runtime_update_ile(state.inner(), install::default_install_root(&home_dir()), manifest_raw, flow::prefetch_updates).await
+}
+
 fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {
     check_runtime_update_ile(&install::default_install_root(&home_dir()), manifest_raw)
 }

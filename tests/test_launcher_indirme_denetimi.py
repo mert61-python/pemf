@@ -53,10 +53,17 @@ def _prefetch_govdesi() -> str:
 
 
 def _prefetch_cagrisi() -> str:
-    """`flow::prefetch_updates(...)` çağrısının kendisi — kontrol closure'ı dâhil."""
+    """İndirici çağrısının kendisi — kontrol closure'ı dâhil. KP-6 D3: gövde `prefetch_runtime_update_ile` (main.rs), indirici
+    ENJEKTE (`indir(`); komut kabuğu (kabuk.rs) gerçek `flow::prefetch_updates`i bağlar — o bağ ayrıca aranır (davranış testi:
+    main.rs `KRITIK_KP6_D3_*`)."""
     govde = _prefetch_govdesi()
-    i = govde.find("flow::prefetch_updates(")
-    assert i != -1, "prefetch_updates çağrısı bulunamadı"
+    i = govde.find("indir(&manifest_raw")
+    assert i != -1, "indirici çağrısı bulunamadı"
+    kabuk = _KABUK_RS.read_text(encoding="utf-8")
+    k = kabuk.find("async fn prefetch_runtime_update(")
+    assert k != -1 and "flow::prefetch_updates" in kabuk[k : k + 600], (
+        "komut kabuğu gerçek indiriciyi (prefetch_updates) bağlamıyor"
+    )
     return govde[i : i + 700]
 
 

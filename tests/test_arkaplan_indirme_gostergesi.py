@@ -50,7 +50,7 @@ def ui() -> str:
 
 def test_KRITIK_prefetch_ilerlemeyi_ARTIK_atmiyor(rs):
     """🔴 ASIL REGRESYON: eski hâlde ilerleme boş closure'a düşüyordu → bar hiç dolmazdı."""
-    govde = re.search(r"async fn prefetch_runtime_update\((.*?)\n}", rs, re.S)
+    govde = re.search(r"async fn prefetch_runtime_update_ile\((.*?)\n}", rs, re.S)
     assert govde, "prefetch_runtime_update bulunamadı"
     g = govde.group(1)
     assert "|_: flow::Progress| {}" not in g, (
@@ -61,7 +61,7 @@ def test_KRITIK_prefetch_ilerlemeyi_ARTIK_atmiyor(rs):
 
 def test_KRITIK_prefetch_KENDI_kanalina_yazar_kurulum_kanalina_DEGIL(rs):
     """🔴 Ayrı kanal: aynı anda kurulum sürerken ekran ele geçirilmemeli."""
-    govde = re.search(r"async fn prefetch_runtime_update\((.*?)\n}", rs, re.S).group(1)
+    govde = re.search(r"async fn prefetch_runtime_update_ile\((.*?)\n}", rs, re.S).group(1)
     assert "state.prefetch.clone()" in govde, "ön-indirme `prefetch` kanalını kullanmıyor"
     assert "state.progress" not in govde, (
         "ön-indirme KURULUM kanalına (`progress`) yazıyor — kurulum ekranı bunu yoklar ve "
@@ -71,7 +71,7 @@ def test_KRITIK_prefetch_KENDI_kanalina_yazar_kurulum_kanalina_DEGIL(rs):
 
 def test_prefetch_bitince_kanal_KAPANIR(rs):
     """Bitişte `None` yazılmazsa bar son yüzdede DONMUŞ kalır ve UI 'bitti' diyemez."""
-    govde = re.search(r"async fn prefetch_runtime_update\((.*?)\n}", rs, re.S).group(1)
+    govde = re.search(r"async fn prefetch_runtime_update_ile\((.*?)\n}", rs, re.S).group(1)
     assert govde.count("= None") >= 2, (
         "kanal başlangıçta sıfırlanmalı VE bitişte kapatılmalı (`*store.lock().unwrap() = None`)"
     )
@@ -87,7 +87,7 @@ def test_ilerleme_yazicisi_KURULUMLA_ayni_kaynak(rs, kabuk):
     Burada yalnız "iki yol tek kaynağı paylaşıyor mu" doğrulanır — ayrışırsa biri düzeltilip
     diğeri unutulur.
     """
-    govde = re.search(r"async fn prefetch_runtime_update\((.*?)\n}", rs, re.S).group(1)
+    govde = re.search(r"async fn prefetch_runtime_update_ile\((.*?)\n}", rs, re.S).group(1)
     assert "snapshot_yazici(" in govde, (
         "ön-indirme ortak yazıcıyı kullanmıyor → throttle/son-parça kuralı kopyalanmış olabilir"
     )
@@ -185,7 +185,7 @@ def test_KRITIK_basarisiz_on_indirme_BASARILI_denmez(rs, ui):
     eklenirken gerçekten oluştu ve denetimde yakalandı.)
     """
     # Ön koşul: komut gerçekten reject ETMİYOR — test bu varsayıma dayanıyor.
-    govde = re.search(r"async fn prefetch_runtime_update\((.*?)\n}", rs, re.S).group(1)
+    govde = re.search(r"async fn prefetch_runtime_update_ile\((.*?)\n}", rs, re.S).group(1)
     assert 'json!({ "status": "failed"' in govde, (
         "komut artık hata döndürüyor olabilir — bu testin dayandığı varsayım değişmiş, gözden geçir"
     )

@@ -1086,12 +1086,18 @@ fn guncelleme_engeli_json(kapi: Result<(), String>) -> serde_json::Value {
 /// kullanırken paketler iner. GÜNCELLEME ONAYI (Y253 / Y254, 2026-11-06) bu kararı DEĞİŞTİRDİ: UI bu komutu YALNIZ kullanıcı
 /// onayından (ya da zorunlu güncellemeden) SONRA çağırır ve indirme bitince kurulum "bir sonraki açılışı" BEKLEMEZ —
 /// seans kapısından (`guncelleme_engeli`) geçip `apply_runtime_update` ile sürer, uygulama kendiliğinden yeniden açılır.
-#[tauri::command]
-async fn prefetch_runtime_update(
-    state: tauri::State<'_, AppState>,
+///
+/// KP-6 D3 (madde 6): `prefetch_runtime_update` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kurulum kökü ve indirici ENJEKTE (üretim:
+/// gerçek kök + `flow::prefetch_updates`; test: geçici kök + sahte indirici). Kilit yoklaması, ayrı ilerleme kanalı, duraklat / iptal kablosu
+/// ve durum eşlemesi AYNEN.
+async fn prefetch_runtime_update_ile(
+    state: &AppState,
+    root: std::path::PathBuf,
     manifest_raw: String,
+    indir: impl FnOnce(&str, &std::path::Path, &mut dyn FnMut(flow::Progress), &dyn Fn() -> net::Control) -> Result<(), flow::FlowError>
+        + Send
+        + 'static,
 ) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
     // ⚠️ DENETİM 2026-08-16 (Bulgu 3) — DENE-VE-VAZGEÇ, tam kilit DEĞİL.
     // Ön-indirme 45 dakika sürebilir; kilidi o süre boyunca TUTSAYDI kullanıcı "Onar"/profil
     // kurulumu yapamaz ve "başka pencere güncelleme yapıyor" hatası alırdı — oysa bu akışın
@@ -1129,7 +1135,7 @@ async fn prefetch_runtime_update(
     let sonuc = tauri::async_runtime::spawn_blocking(move || {
         // Kurulum yolundakiyle AYNI yazıcı (throttle + son-parça istisnası) — tek kaynak.
         let mut on = snapshot_yazici(store_is, 150);
-        flow::prefetch_updates(&manifest_raw, &root, &mut on, &|| match ctl.load(Ordering::Relaxed)
+        indir(&manifest_raw, &root, &mut on, &|| match ctl.load(Ordering::Relaxed)
         {
             CTL_PAUSE => net::Control::Pause,
             CTL_CANCEL => net::Control::Cancel,
@@ -5013,6 +5019,148 @@ Connection: close
         assert!(!aktif.load(Ordering::Acquire));
         assert!(bellek.lock().unwrap().is_none());
         assert_eq!(std::fs::read_dir(&kok).unwrap().count(), 0, "ölü backend'te köke yazıldı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-6 D3 (madde 6) · `prefetch_runtime_update_ile` — arka plan ön-indirmesinin GÖVDESİ (kök + indirici enjekte). Geçici kök, sahte
+    // indirici (gerçek `flow::prefetch_updates` ile AYNI imza); ağ / gerçek kurulum YOK.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    fn kp6_kok(ad: &str) -> std::path::PathBuf {
+        let k = std::env::temp_dir().join(format!("pemf_kp6_{ad}_{}_{}", std::process::id(), line!()));
+        let _ = std::fs::remove_dir_all(&k);
+        std::fs::create_dir_all(&k).unwrap();
+        k
+    }
+
+    /// KRİTİK (saha 2026-08-16 / 08-28 + Y253): ön-indirme ilerlemeyi AYRI kanala (`prefetch`) yazar — kurulum kanalına (`progress`)
+    /// DOKUNMAZ; kanal başta sıfırlanır, bitişte KAPANIR (yüzde ekranda donmaz); indirici denetim kablosu `state.control`ü okur (Continue);
+    /// başarı `prefetched`.
+    #[test]
+    fn KRITIK_KP6_D3_on_indirme_AYRI_kanal_basta_sifir_bitiste_KAPANIR_kurulum_kanalina_DOKUNMAZ() {
+        let kok = kp6_kok("d3_kanal");
+        let st = AppState::default();
+        *st.progress.lock().unwrap() = Some(serde_json::json!("kurulum-ekrani"));
+        *st.prefetch.lock().unwrap() = Some(serde_json::json!("onceki-tur"));
+        let (kanal, kurulum) = (st.prefetch.clone(), st.progress.clone());
+        let gozlem: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let g = gozlem.clone();
+        let kok_ad = kok.file_name().unwrap().to_owned();
+        let sonuc = tauri::async_runtime::block_on(prefetch_runtime_update_ile(
+            &st,
+            kok.clone(),
+            "MANIFEST".to_string(),
+            move |m: &str, r: &std::path::Path, on: &mut dyn FnMut(flow::Progress), c: &dyn Fn() -> net::Control| {
+                let mut v = g.lock().unwrap();
+                v.push(format!("manifest={m} kok_ayni={}", r.ends_with(&kok_ad)));
+                v.push(format!("basta={:?}", kanal.lock().unwrap().clone()));
+                on(flow::Progress::Downloading { what: "deps".into(), done: 10, total: 100 });
+                let yazilan = kanal.lock().unwrap().clone();
+                v.push(format!("yazilan_done={}", yazilan.as_ref().map(|x| x.to_string().contains("\"done\":10")).unwrap_or(false)));
+                v.push(format!("kurulum={:?}", kurulum.lock().unwrap().clone()));
+                v.push(format!("denetim_continue={}", matches!(c(), net::Control::Continue)));
+                Ok(())
+            },
+        ));
+        assert_eq!(sonuc, Ok(serde_json::json!({ "status": "prefetched" })));
+        assert_eq!(
+            *gozlem.lock().unwrap(),
+            vec![
+                "manifest=MANIFEST kok_ayni=true".to_string(),
+                "basta=None".to_string(),
+                "yazilan_done=true".to_string(),
+                "kurulum=Some(String(\"kurulum-ekrani\"))".to_string(),
+                "denetim_continue=true".to_string(),
+            ],
+            "kanal sıfırlama / yazma / kurulum kanalı ayrımı / denetim kablosu"
+        );
+        assert!(st.prefetch.lock().unwrap().is_none(), "bitişte ön-indirme kanalı KAPANMADI (yüzde donar)");
+        assert_eq!(*st.progress.lock().unwrap(), Some(serde_json::json!("kurulum-ekrani")), "kurulum kanalına dokunuldu");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (saha 2026-08-28): duraklat / iptal KULLANICI KARARIDIR → `paused` / `cancelled` (hata DEĞİL); durum kodu hata TİPİNDEN.
+    /// Ön-indirme kullanıcının "duraklat" bayrağını SIFIRLAMAZ (tur açılınca ilk yığında durur). Başka hata `failed` + neden (Ok döner —
+    /// isteğe bağlı indirme). Her durumda kanal bitişte kapanır.
+    #[test]
+    fn KRITIK_KP6_D3_duraklat_iptal_KARAR_hata_DEGIL_bayrak_SIFIRLANMAZ_diger_hata_failed() {
+        let kok = kp6_kok("d3_durum");
+        for (bayrak, beklenen) in [(CTL_PAUSE, "paused"), (CTL_CANCEL, "cancelled")] {
+            let st = AppState::default();
+            st.control.store(bayrak, Ordering::Relaxed);
+            let sonuc = tauri::async_runtime::block_on(prefetch_runtime_update_ile(
+                &st,
+                kok.clone(),
+                "M".to_string(),
+                |_: &str, _: &std::path::Path, on: &mut dyn FnMut(flow::Progress), c: &dyn Fn() -> net::Control| {
+                    on(flow::Progress::Downloading { what: "app".into(), done: 1, total: 2 });
+                    Err(flow::FlowError::Net(match c() {
+                        net::Control::Pause => net::NetError::Paused,
+                        net::Control::Cancel => net::NetError::Cancelled,
+                        net::Control::Continue => panic!("denetim kablosu bayrağı okumuyor (sabit Continue)"),
+                    }))
+                },
+            ));
+            assert_eq!(sonuc, Ok(serde_json::json!({ "status": beklenen })), "{beklenen}");
+            assert_eq!(st.control.load(Ordering::Relaxed), bayrak, "ön-indirme kullanıcının {beklenen} kararını EZDİ");
+            assert!(st.prefetch.lock().unwrap().is_none(), "{beklenen}: kanal kapanmadı");
+        }
+        let st = AppState::default();
+        let sonuc = tauri::async_runtime::block_on(prefetch_runtime_update_ile(
+            &st,
+            kok.clone(),
+            "M".to_string(),
+            |_: &str, _: &std::path::Path, _: &mut dyn FnMut(flow::Progress), _: &dyn Fn() -> net::Control| {
+                Err(flow::FlowError::Io(std::io::Error::other("KP6 sahte ag kopuk")))
+            },
+        ))
+        .expect("ön-indirme hatası komutu düşürdü (isteğe bağlı indirme Ok dönmeli)");
+        assert_eq!(sonuc["status"], "failed");
+        assert!(sonuc["reason"].as_str().unwrap_or("").contains("KP6 sahte ag kopuk"), "neden taşınmadı: {sonuc}");
+        assert!(st.prefetch.lock().unwrap().is_none());
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (denetim 2026-08-16 Bulgu 3): kurulum / onarım kilidi tutuluyken ön-indirme BU TURU ATLAR (`skipped`), indirici HİÇ
+    /// çağrılmaz ve kanala dokunulmaz; kilit boşsa yalnız YOKLANIR — ön-indirme sürerken (kilitsiz) başka akış kilidi alabilir.
+    #[test]
+    fn KRITIK_KP6_D3_kurulum_SURERKEN_atlar_INDIRMEZ_kilidi_TUTMAZ() {
+        let kok = kp6_kok("d3_kilit");
+        let st = AppState::default();
+        *st.prefetch.lock().unwrap() = Some(serde_json::json!("onceki"));
+        let kilit = install::kurulum_kilidi_al(&kok).expect("aparat: kilit alınamadı");
+        let cagrildi = Arc::new(AtomicBool::new(false));
+        let c2 = cagrildi.clone();
+        let sonuc = tauri::async_runtime::block_on(prefetch_runtime_update_ile(
+            &st,
+            kok.clone(),
+            "M".to_string(),
+            move |_: &str, _: &std::path::Path, _: &mut dyn FnMut(flow::Progress), _: &dyn Fn() -> net::Control| {
+                c2.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+        ))
+        .unwrap();
+        assert_eq!(sonuc["status"], "skipped", "{sonuc}");
+        assert!(!sonuc["reason"].as_str().unwrap_or("").is_empty(), "atlama nedeni yok");
+        assert!(!cagrildi.load(Ordering::SeqCst), "kurulum sürerken ön-indirme İNDİRDİ");
+        assert_eq!(*st.prefetch.lock().unwrap(), Some(serde_json::json!("onceki")), "atlanan turda kanala dokunuldu");
+        drop(kilit);
+        let kok_i = kok.clone();
+        let sonuc = tauri::async_runtime::block_on(prefetch_runtime_update_ile(
+            &st,
+            kok.clone(),
+            "M".to_string(),
+            move |_: &str, _: &std::path::Path, _: &mut dyn FnMut(flow::Progress), _: &dyn Fn() -> net::Control| {
+                // indirme sürerken kurulum kilidi ALINABİLİR (ön-indirme kilidi yalnız yokladı, tutmuyor)
+                let k = install::kurulum_kilidi_al(&kok_i).map_err(|e| flow::FlowError::Io(std::io::Error::other(e)))?;
+                drop(k);
+                Ok(())
+            },
+        ))
+        .unwrap();
+        assert_eq!(sonuc["status"], "prefetched", "ön-indirme kilidi indirme boyunca TUTUYOR (kurulum / onarım engellenir): {sonuc}");
         let _ = std::fs::remove_dir_all(&kok);
     }
 }
