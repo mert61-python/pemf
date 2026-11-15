@@ -1,23 +1,23 @@
 {
  "aciklama": "KP-3 B1 / B4 (istem 38 + 41 C) + KP-4 A1 (istem 42 · Y257 c): başlatıcı uygulamasının (launcher/app/src/main.rs + kabuk.rs) üst düzey işlevlerinin kapsam sınıfı — T test edilebilir · Y yeniden düzenleme gerekir · S sınırda (pencere / Tauri çalışma zamanı / gerçek platform API'si — test edilemez) · K kapsanıyor. `eksik` = KP-3 AŞAMA 0 (d45d9cf2) cargo-llvm-cov eksik satırı. Kapı: tests/test_KP3_main_rs_kapsam_siniflari.py — HER üst düzey işlev TAM BİR sınıfta, S / Y gerekçeli, S listesi SAYILIR (`s_sayisi`). Y242: test yazılabilen satıra S YASAK. #[coverage(off)] bu derleyicide (rustc 1.98.1) kararlı DEĞİL (E0658) → KP-4 A1: S işlevleri main.rs'ten DEĞİŞTİRİLMEDEN launcher/app/src/kabuk.rs'e taşındı (main.rs `include!` ile AYNI modüle katar) ve CI kapsam adımı YALNIZ o dosyayı dışlar; kapı S'nin yalnız kabuk.rs'te, kabuk.rs'in yalnız S'den oluştuğunu da sayar. KP-5 B2 / B3 (sahip kararı 2, 11-11): A2c'nin 8 ince kök / Tauri kabuğu S'e taşındı (44 → 52; gövdeleri `_ile` K); kısmen test edilen 3 S işlevinin karar mantığı saf yardımcıya ayrıldı (`indirme_olayi_karari`, `indirme_adresi_denetle`, `yardimci_batch_yolu` + `yardimci_hemen_sonlandi_iletisi`).",
  "olcum": "d45d9cf2 · main.rs 2840 satır · 1411 eksik",
- "s_sayisi": 60,
+ "s_sayisi": 61,
  "ozet": {
   "K": {
-   "islev": 52,
+   "islev": 53,
    "eksik_satir": 0
   },
   "S": {
-   "islev": 60,
-   "eksik_satir": 561
+   "islev": 61,
+   "eksik_satir": 564
   },
   "T": {
    "islev": 4,
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 7,
-   "eksik_satir": 197
+   "islev": 6,
+   "eksik_satir": 112
   }
  },
  "islevler": {
@@ -402,9 +402,10 @@
    "neden": "KP-4 A2c: `discard_pending_blocking`'in gövdesi — kök enjekte, sahte kökle testli."
   },
   "apply_self_update": {
-   "sinif": "Y",
-   "eksik": 85,
-   "neden": "Güncelleme yolu (GK · istem 41: Y253 / Y254 ile YENİ yazıldı, L1.9.54'te sahada gözlemde) — KP-3 YENİDEN DÜZENLEMEZ → KP-4. Ağ + NSIS + süreç çıkışı."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-6 D7 (madde 6): İNCE Tauri komut KABUĞU — Windows dışı ret (platform dalı) + `tauri::State` + `AppHandle` (KomutOrtami üretim bağı: seans kapısı, kurucu indirme, güncelleme penceresi, NSIS yeniden başlatıcı, `app.exit`) + gerçek kök / TEMP bağlar ve `apply_self_update_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "Gerçek kendini güncelleme ağdan kurucu indirir, görünür pencere ve NSIS batch'i başlatır ve süreci sonlandırır; kararın tamamı `_ile` gövdesinde kayıtçı sahte + geçici kök / TEMP ile testli."
   },
   "guncelleme_modu": {
    "sinif": "S",
@@ -660,6 +661,11 @@
    "sinif": "K",
    "eksik": 0,
    "neden": "KP-6 D6: katman güncellemesinin gövdesi — kök + dış bağ enjekte; dbReady=false / firmware uyumsuz / sağlık kapısı düştü geri almaları (E-stop'lu söküm → sayaç → eski sürüm), onay + sayaç sıfırlama, duraklat / iptal / değişiklik yok, deterministik hata sayacı, hazır kolu sırası davranış testli."
+  },
+  "apply_self_update_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-6 D7: kendini güncellemenin gövdesi — kök + TEMP + dış bağ enjekte; sha boş reddi, kilit, seans kapısı (önce ve indirme sonrası), kurucu önbelleği + yeniden doğrulama, deneme kaydı, F5 son yakalama, işaret → pencere → batch → çık sırası, pencere hatası akışı durdurmaz, batch hatasında işaret temizlenir davranış testli."
   }
  }
 }

@@ -1062,6 +1062,55 @@ impl KomutOrtami for tauri::AppHandle {
     fn uygulama_penceresini_yenile(&self, port: u16) -> bool {
         uygulama_penceresini_yenile(self, port)
     }
+    fn kurucu_indir(
+        &self,
+        url: &str,
+        hedef: &std::path::Path,
+        boyut: u64,
+        sha: &str,
+        ilerleme: &mut dyn FnMut(u64, u64),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<u64, net::NetError> {
+        net::download_to_file(url, hedef, boyut, sha, ilerleme, control)
+    }
+    fn guncelleme_penceresini_ac(&self, sfx: &str) -> Result<std::path::PathBuf, String> {
+        guncelleme_penceresini_ac(sfx)
+    }
+    fn yeniden_baslaticiyi_baslat(&self, kurucu: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
+        spawn_update_relauncher(kurucu, pencere)
+    }
+}
+
+/// Başlatıcının kendini güncellemesi (KP-6 D7: İNCE KABUK — Windows dışı ret + gerçek kök / TEMP + `AppHandle` bağı; gövde
+/// `apply_self_update_ile`, K).
+#[tauri::command]
+async fn apply_self_update(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    url: String,
+    sha256: String,
+    size: u64,
+    version: String,
+) -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        let _ = (&app, &state, &url, &sha256, size, &version);
+        Err(pemf_launcher_core::dil::t("rust.hata.otoGuncellemeDesteklenmiyor"))
+    }
+    #[cfg(windows)]
+    {
+        apply_self_update_ile(
+            &app,
+            state.inner(),
+            install::default_install_root(&home_dir()),
+            std::env::temp_dir(),
+            url,
+            sha256,
+            size,
+            version,
+        )
+        .await
+    }
 }
 
 /// Bayat paketleri yenile (KP-6 D6: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `apply_runtime_update_ile`, K).

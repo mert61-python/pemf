@@ -423,6 +423,20 @@ trait KomutOrtami: Clone + Send + Sync + 'static {
     ) -> Result<(std::process::Child, String, u16), flow::FlowError>;
     /// Açık uygulama penceresini yeni arayüzle yenile (üretim: `uygulama_penceresini_yenile`).
     fn uygulama_penceresini_yenile(&self, port: u16) -> bool;
+    /// Başlatıcı kurucusunu indir (üretim: `net::download_to_file` — sha / boyut / host denetimli, duraklat / iptal kablolu).
+    fn kurucu_indir(
+        &self,
+        url: &str,
+        hedef: &std::path::Path,
+        boyut: u64,
+        sha: &str,
+        ilerleme: &mut dyn FnMut(u64, u64),
+        control: &dyn Fn() -> net::Control,
+    ) -> Result<u64, net::NetError>;
+    /// Ayrı süreçli güncelleme penceresi (üretim: `guncelleme_penceresini_ac` — görünür pencere).
+    fn guncelleme_penceresini_ac(&self, sfx: &str) -> Result<std::path::PathBuf, String>;
+    /// Sessiz NSIS kurucusunu çalıştıracak yeniden başlatıcı (üretim: `spawn_update_relauncher`).
+    fn yeniden_baslaticiyi_baslat(&self, kurucu: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String>;
 }
 
 fn snapshot_yazici(
@@ -1851,176 +1865,174 @@ fn discard_pending_ile(root: &std::path::Path, manifest_raw: Option<String>) -> 
 /// İlerleme `get_progress` ile POLL edilir. Başarılıysa uygulamadan ÇIKAR (detached helper setup'ı
 /// çalıştırıp yeni launcher'ı başlatır); BAŞARISIZSA Err → UI normal boot'a düşer (güncelleme
 /// kullanıcıyı ASLA bloklamaz — internet kesik/indirme bozuksa uygulama yine açılır).
-#[tauri::command]
-async fn apply_self_update(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
+///
+/// KP-6 D7 (madde 6): `apply_self_update` komutunun (kabuk.rs, İNCE S kabuğu; Windows dışı ret orada) GÖVDESİ — kurulum kökü, geçici dizin
+/// ve dış bağ (`KomutOrtami`: seans kapısı, kurucu indirme, çalışan backend, güncelleme penceresi, yeniden başlatıcı, çıkış) ENJEKTE. Sıra ve
+/// kararlar AYNEN.
+#[cfg(windows)]
+#[allow(clippy::too_many_arguments)]
+async fn apply_self_update_ile<O: KomutOrtami>(
+    ortam: &O,
+    state: &AppState,
+    kurulum_koku: std::path::PathBuf,
+    gecici: std::path::PathBuf,
     url: String,
     sha256: String,
     size: u64,
     // Hedef sürüm — SONSUZ DÖNGÜ koruması için kaydedilir (bkz. install::record_selfupdate_attempt).
     version: String,
 ) -> Result<(), String> {
-    #[cfg(not(windows))]
-    {
-        let _ = (&app, &state, &url, &sha256, size, &version);
-        Err(pemf_launcher_core::dil::t("rust.hata.otoGuncellemeDesteklenmiyor"))
+    // GÜVENLİK: imzasız setup exe çalıştırılacak → SHA256 ZORUNLU (manifest host-pinli kaynaktan
+    // geldiği için sha güven çıpasıdır). url host-pinlemesi download_to_file içinde uygulanır.
+    if sha256.trim().is_empty() {
+        return Err(pemf_launcher_core::dil::t("rust.hata.guncellemeSha256Yok"));
     }
-    #[cfg(windows)]
-    {
-        // GÜVENLİK: imzasız setup exe çalıştırılacak → SHA256 ZORUNLU (manifest host-pinli kaynaktan
-        // geldiği için sha güven çıpasıdır). url host-pinlemesi download_to_file içinde uygulanır.
-        if sha256.trim().is_empty() {
-            return Err(pemf_launcher_core::dil::t("rust.hata.guncellemeSha256Yok"));
-        }
-        // ⚠️ DENETİM 2026-08-04: AKTİF TEDAVİ SIRASINDA GÜNCELLEME YOK.
-        // Bu akış açılışta SESSİZ çalışır ve sonunda `/S` kurulum yapar; NSIS yükseltme kancası
-        // `taskkill /F /IM PEMF_Backend.exe` ile backend'i öldürür. Backend'i launcher'dan bağımsız
-        // sahiplenebildiğimiz için (bkz. detect_running_backend) launcher yeniden açıldığında
-        // HASTA ÜZERİNDE SÜREN bir seans olabilir; güncelleme onu yarıda keserdi. Bobinler
-        // uninstaller kancasının E-stop'uyla güvene alınır — yani hasta güvenliği korunur — ama
-        // tedavi yarım kalır ve veteriner sebebini göremez. Seans bitince güncelleme yapılır.
-        // P1: `None` = BİLİNMİYOR. Seans durumunu öğrenemiyorsak seansı kesme riskini ALMAYIZ →
-        // ertele. Kapı `aktif_seans_kapisi`'nda TEK yerde; `apply_runtime_update` de onu kullanır.
-        let kurulum_koku = install::default_install_root(&home_dir());
-        // ⚠️ DENETİM 2026-08-23 (C6): KURULUM KİLİDİ BURADA DA ALINIR.
-        // 2026-08-16'da (Bulgu 3) kilit `apply_runtime_update`e eklenmişti; `install_and_launch`,
-        // `repair` ve `uninstall` da alıyor — ağacı değiştiren akışlar arasında kilitsiz kalan
-        // TEK akış self-update'ti. Oysa bu akış da en sonunda NSIS'i `/S` ile çalıştırıyor ve
-        // kurulum kancası `taskkill /F /IM PEMF_Backend.exe /T` yapıyor: ikinci bir pencere o
-        // sırada kurulum/onarım/runtime-güncellemesi yapıyorsa ONUN backend'i ölür, sağlık kapısı
-        // düşer ve SAĞLAM bir güncelleme boşuna geri alınır (ya da ağaç yarım kalır).
-        // ⚠️ `let _ =` DEĞİL `let _kilit =`: `let _` bağlaması değeri ANINDA düşürür, koruma olmaz.
-        // Kilit elde edilemezse güncelleme yapılmaz — sonraki açılışta yeniden denenir
-        // (installer önbellekte, maliyeti yok). Bu, `apply_runtime_update` ile aynı sözleşmedir.
-        let _kilit = install::kurulum_kilidi_al(&kurulum_koku)?;
-        aktif_seans_kapisi(&kurulum_koku)?;
-        *state.progress.lock().unwrap() = None;
-        state.control.store(CTL_RUN, Ordering::Relaxed);
+    // ⚠️ DENETİM 2026-08-04: AKTİF TEDAVİ SIRASINDA GÜNCELLEME YOK.
+    // Bu akış açılışta SESSİZ çalışır ve sonunda `/S` kurulum yapar; NSIS yükseltme kancası
+    // `taskkill /F /IM PEMF_Backend.exe` ile backend'i öldürür. Backend'i launcher'dan bağımsız
+    // sahiplenebildiğimiz için (bkz. detect_running_backend) launcher yeniden açıldığında
+    // HASTA ÜZERİNDE SÜREN bir seans olabilir; güncelleme onu yarıda keserdi. Bobinler
+    // uninstaller kancasının E-stop'uyla güvene alınır — yani hasta güvenliği korunur — ama
+    // tedavi yarım kalır ve veteriner sebebini göremez. Seans bitince güncelleme yapılır.
+    // P1: `None` = BİLİNMİYOR. Seans durumunu öğrenemiyorsak seansı kesme riskini ALMAYIZ →
+    // ertele. Kapı `aktif_seans_kapisi`'nda TEK yerde; `apply_runtime_update` de onu kullanır.
+    // ⚠️ DENETİM 2026-08-23 (C6): KURULUM KİLİDİ BURADA DA ALINIR.
+    // 2026-08-16'da (Bulgu 3) kilit `apply_runtime_update`e eklenmişti; `install_and_launch`,
+    // `repair` ve `uninstall` da alıyor — ağacı değiştiren akışlar arasında kilitsiz kalan
+    // TEK akış self-update'ti. Oysa bu akış da en sonunda NSIS'i `/S` ile çalıştırıyor ve
+    // kurulum kancası `taskkill /F /IM PEMF_Backend.exe /T` yapıyor: ikinci bir pencere o
+    // sırada kurulum/onarım/runtime-güncellemesi yapıyorsa ONUN backend'i ölür, sağlık kapısı
+    // düşer ve SAĞLAM bir güncelleme boşuna geri alınır (ya da ağaç yarım kalır).
+    // ⚠️ `let _ =` DEĞİL `let _kilit =`: `let _` bağlaması değeri ANINDA düşürür, koruma olmaz.
+    // Kilit elde edilemezse güncelleme yapılmaz — sonraki açılışta yeniden denenir
+    // (installer önbellekte, maliyeti yok). Bu, `apply_runtime_update` ile aynı sözleşmedir.
+    let _kilit = install::kurulum_kilidi_al(&kurulum_koku)?;
+    ortam.guncelleme_kapisi(&kurulum_koku)?;
+    *state.progress.lock().unwrap() = None;
+    state.control.store(CTL_RUN, Ordering::Relaxed);
 
-        // ⚠️ DENETİM 2026-08-04: hedef SABİT bir addı (`PEMFVetClient-Update.exe`) ve batch onu
-        // ~3 sn SONRA `/S` ile SESSİZCE kuruyor. Sabit + tahmin edilebilir ad iki soruna yol açar:
-        //   (a) önceki bir denemeden kalan BAYAT exe aynı yolda durur (SHA doğrulaması onu yakalar
-        //       ama kullanıcı sebebi anlaşılmayan bir "doğrulanamadı" hatası görür);
-        //   (b) yol önceden bilindiği için dosya indirilmeden ÖNCE oraya bir şey konabilir.
-        // Adı beklenen SHA'ya bağlıyoruz: farklı içerik = farklı dosya, bayat dosya zararsız,
-        // yol da önceden tahmin edilemez. (Temp Windows'ta kullanıcıya özeldir; bu, aynı
-        // kullanıcı olarak koşan bir saldırganı DEĞİL, kaza ve önden-yerleştirmeyi keser.)
-        // Yalnız hex karakterleri al: manifest'ten gelen değer beklenmedik biçimdeyse bayt-indeksli
-        // dilimleme UTF-8 sınırını bölüp PANİKLEYEBİLİRDİ (launcher'da panik = pencere kapanır).
-        let sfx: String = sha256
-            .trim()
-            .chars()
-            .filter(|c| c.is_ascii_hexdigit())
-            .take(16)
-            .map(|c| c.to_ascii_lowercase())
-            .collect();
-        let sfx = if sfx.is_empty() { "x".to_string() } else { sfx };
-        let dest = std::env::temp_dir().join(format!("PEMFVetClient-Update-{sfx}.exe"));
-        // Eski sürümlerin bıraktığı sabit-adlı artığı temizle (disk + karışıklık).
-        let _ = std::fs::remove_file(std::env::temp_dir().join("PEMFVetClient-Update.exe"));
-        let (u, sha, dest2) = (url.clone(), sha256.clone(), dest.clone());
-        let store = state.progress.clone();
-        let app2 = app.clone();
-        let ctrl = state.control.clone();
-        tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-            let mut on = progress_reporter(app2, store);
-            let control = || match ctrl.load(Ordering::Relaxed) {
-                CTL_CANCEL => net::Control::Cancel,
-                CTL_PAUSE => net::Control::Pause,
-                _ => net::Control::Continue,
+    // ⚠️ DENETİM 2026-08-04: hedef SABİT bir addı (`PEMFVetClient-Update.exe`) ve batch onu
+    // ~3 sn SONRA `/S` ile SESSİZCE kuruyor. Sabit + tahmin edilebilir ad iki soruna yol açar:
+    //   (a) önceki bir denemeden kalan BAYAT exe aynı yolda durur (SHA doğrulaması onu yakalar
+    //       ama kullanıcı sebebi anlaşılmayan bir "doğrulanamadı" hatası görür);
+    //   (b) yol önceden bilindiği için dosya indirilmeden ÖNCE oraya bir şey konabilir.
+    // Adı beklenen SHA'ya bağlıyoruz: farklı içerik = farklı dosya, bayat dosya zararsız,
+    // yol da önceden tahmin edilemez. (Temp Windows'ta kullanıcıya özeldir; bu, aynı
+    // kullanıcı olarak koşan bir saldırganı DEĞİL, kaza ve önden-yerleştirmeyi keser.)
+    // Yalnız hex karakterleri al: manifest'ten gelen değer beklenmedik biçimdeyse bayt-indeksli
+    // dilimleme UTF-8 sınırını bölüp PANİKLEYEBİLİRDİ (launcher'da panik = pencere kapanır).
+    let sfx: String = sha256
+        .trim()
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .take(16)
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    let sfx = if sfx.is_empty() { "x".to_string() } else { sfx };
+    let dest = gecici.join(format!("PEMFVetClient-Update-{sfx}.exe"));
+    // Eski sürümlerin bıraktığı sabit-adlı artığı temizle (disk + karışıklık).
+    let _ = std::fs::remove_file(gecici.join("PEMFVetClient-Update.exe"));
+    let (u, sha, dest2) = (url.clone(), sha256.clone(), dest.clone());
+    let store = state.progress.clone();
+    let ortam2 = ortam.clone();
+    let ctrl = state.control.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let mut on = ortam2.ilerleme_yazici(store);
+        let control = || match ctrl.load(Ordering::Relaxed) {
+            CTL_CANCEL => net::Control::Cancel,
+            CTL_PAUSE => net::Control::Pause,
+            _ => net::Control::Continue,
+        };
+        // GÜNCELLEME ONAYI: onaylı akış etkin seans bitene dek bekleyip YENİDEN dener — doğrulanmış kurucu (adı sha'ya bağlı)
+        // zaten duruyorsa yeniden İNMEZ; bozuk / yarım dosya doğrulamadan geçemez → normal indirme.
+        if verify::verify_file(&dest2, &sha).is_err() {
+            let mut dl = |done, total| {
+                on(flow::Progress::Downloading { what: "Güncelleme".to_string(), done, total });
             };
-            // GÜNCELLEME ONAYI: onaylı akış etkin seans bitene dek bekleyip YENİDEN dener — doğrulanmış kurucu (adı sha'ya bağlı)
-            // zaten duruyorsa yeniden İNMEZ; bozuk / yarım dosya doğrulamadan geçemez → normal indirme.
-            if verify::verify_file(&dest2, &sha).is_err() {
-                let mut dl = |done, total| {
-                    on(flow::Progress::Downloading { what: "Güncelleme".to_string(), done, total });
-                };
-                net::download_to_file(&u, &dest2, size, &sha, &mut dl, &control)
-                    .map_err(|e| e.to_string())?;
-            }
-            on(flow::Progress::Verifying { what: "Güncelleme".to_string() });
-            verify::verify_file(&dest2, &sha).map_err(|e| {
-                // Bozuk/sahte setup'ı ASLA çalıştırma → sil.
-                let _ = std::fs::remove_file(&dest2);
-                pemf_launcher_core::dil::t_ile("rust.hata.guncellemeDogrulanamadi", &[("e", &e.to_string())])
-            })?;
-            Ok(())
-        })
-        .await
-        .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))??;
-
-        // DENETİM 2026-08-04: denemeyi installer'ı BAŞLATMADAN ÖNCE kaydet. Kurulum "başarılı"
-        // olup sürüm DEĞİŞMEZSE (manifest sürümü ile paketin gerçek sürümü ayrışmışsa) bir sonraki
-        // açılışta sayaç dolar ve OTOMATİK kurulum durur → sonsuz indir-kur-yeniden başlat
-        // döngüsü kırılır. Sürüm gerçekten yükselirse fetch_profiles kaydı temizler.
-        // ⚠️ DENETİM 2026-08-04 (P2 — KAPININ TOCTOU'SU): aktif-seans kontrolü İNDİRMEDEN ÖNCE
-        // bir kez yapılıyordu. İndirme klinik hattında dakikalar sürer (ve kullanıcı
-        // DURAKLATABİLİR → pencere sınırsız uzar). O sırada veteriner tedaviyi başlatırsa,
-        // indirme bitince NSIS `taskkill /F /IM PEMF_Backend.exe` ile SÜREN SEANSI keserdi —
-        // kapının engellemek için var olduğu sonucun aynısı. Yıkıcı adımdan HEMEN ÖNCE tekrar bak.
-        {
-            let root = install::default_install_root(&home_dir());
-            if let Some(p) = backend::detect_running_backend(&root) {
-                match backend::session_active(p) {
-                    Some(true) => {
-                        return Err(
-                            pemf_launcher_core::dil::t("rust.hata.seansBasladiGuncellemeErtelendi"),
-                        )
-                    }
-                    None => {
-                        return Err(
-                            pemf_launcher_core::dil::t("rust.hata.kurulumBackendYanitsiz"),
-                        )
-                    }
-                    Some(false) => {}
-                }
-            }
+            ortam2.kurucu_indir(&u, &dest2, size, &sha, &mut dl, &control)
+                .map_err(|e| e.to_string())?;
         }
-        install::record_selfupdate_attempt(&install::default_install_root(&home_dir()), &version);
-        // 🔴 [F5-SELFUPDATE] (saha bildirimi 2026-09-03): "güncelleme sonrası kapatıp açınca hesaptan
-        // çıkmış oluyor, e-posta+şifre yeniden isteniyor". Kök neden: bu yol `app.exit(0)` ile çıkar;
-        // teardown'daki [F5] "kapanış-ÖNCESİ son oturum yakalama" YALNIZ `WindowEvent::Destroyed`
-        // kancasında ve `stop_backend_for_teardown`da vardı — `app.exit()` açık pencerelere Destroyed'ı
-        // güvenilir teslim etmez (ve etse bile süreç çıkışıyla yarışır). Uygulama PENCERESİ (supabase-js)
-        // oturumu tazeledikçe refresh jetonunu DÖNDÜRÜR (tek-kullanımlık) ve backend posta kutusuna
-        // yazar; rotasyon-senkron thread'i 60 sn'de bir çektiği için diskteki kopya son rotasyonun
-        // gerisinde kalabilir. (NSIS `/S` sessiz kurulumda kancalar KOŞMAZ — backend yetim kalır; yeni
-        // launcher onu sahiplenir ya da runtime güncellemesi kill_stray ile öldürür.) Bu yol tek başına
-        // en fazla 1 nesil kaybettirir (GoTrue 1 nesil geriyi tolere eder) → İKİNCİL kemer. ASIL neden
-        // pencerenin kalıcı localStorage kopyası (app 1.9.40, pf/src/services/supabaseAuth.ts).
-        // Çözüm: relauncher'dan ÖNCE, teardown ile AYNI yardımcıyla son oturumu diske işle.
-        // ⚠️ YALNIZ bu oturumun TRACKED backend'i (`state.proc`): child ALINMAZ (kill burada değil, NSIS'te);
-        // `detect_running_backend`/`backend.port` (orphan) ASLA — başka sürecin jetonunu okumak
-        // zehirlenmedir (bkz. f5_kapanis_sirasi_* parite testi). Kilit: f5_selfupdate_son_yakalama_var.
-        {
-            let tracked_port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
-            if let Some(port) = tracked_port {
-                son_oturumu_yakala(port, &install::default_install_root(&home_dir()), &state.session); // [F5] relauncher ÖNCE
-            }
-        }
-        // İndirildi + SHA doğrulandı → sessiz kur + yeniden başlat helper'ını DETACHED başlat, sonra çık.
-        // [GÜNCELLEME EKRANI] (saha bildirimi 2026-09-04): çıkıştan yeni sürüm açılana kadar ekran
-        // BOŞTU (Defender'ın 265 MB setup taraması + NSIS + sabit beklemeler) → kullanıcı exe'ye
-        // yeniden tıklıyordu. Sıra: işaret → bilgilendirme penceresi → batch → çık. Pencere
-        // açılamazsa güncelleme YİNE sürer (eski davranış); batch başlatılamazsa işaret silinir.
-        let kok = install::default_install_root(&home_dir());
-        install::guncelleme_isareti_yaz(&kok, env!("CARGO_PKG_VERSION"), &version);
-        let pencere_sonuc = guncelleme_penceresini_ac(&sfx);
-        // Bulgu #6: pencere sonucunu yardımcının GÜNLÜĞÜNE yaz (aynı dosya; batch `>>` ile ekler).
-        // Dosya adı `build_relaunch_script`in %TEMP%\pemf_selfupdate_<pid>.log'uyla AYNI olmalı.
-        let _ = std::fs::write(
-            std::env::temp_dir().join(format!("pemf_selfupdate_{}.log", std::process::id())),
-            pencere_gunluk_satiri(&pencere_sonuc),
-        );
-        let pencere = pencere_sonuc.ok(); // akış değişmez: pencere hatası güncellemeyi DURDURMAZ
-        if let Err(e) = spawn_update_relauncher(&dest, pencere.as_deref()) {
-            install::guncelleme_isaretini_temizle(&kok);
-            return Err(e);
-        }
-        app.exit(0);
+        on(flow::Progress::Verifying { what: "Güncelleme".to_string() });
+        verify::verify_file(&dest2, &sha).map_err(|e| {
+            // Bozuk/sahte setup'ı ASLA çalıştırma → sil.
+            let _ = std::fs::remove_file(&dest2);
+            pemf_launcher_core::dil::t_ile("rust.hata.guncellemeDogrulanamadi", &[("e", &e.to_string())])
+        })?;
         Ok(())
+    })
+    .await
+    .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.guncellemeGorevCoktu", &[("e", &e.to_string())]))??;
+
+    // DENETİM 2026-08-04: denemeyi installer'ı BAŞLATMADAN ÖNCE kaydet. Kurulum "başarılı"
+    // olup sürüm DEĞİŞMEZSE (manifest sürümü ile paketin gerçek sürümü ayrışmışsa) bir sonraki
+    // açılışta sayaç dolar ve OTOMATİK kurulum durur → sonsuz indir-kur-yeniden başlat
+    // döngüsü kırılır. Sürüm gerçekten yükselirse fetch_profiles kaydı temizler.
+    // ⚠️ DENETİM 2026-08-04 (P2 — KAPININ TOCTOU'SU): aktif-seans kontrolü İNDİRMEDEN ÖNCE
+    // bir kez yapılıyordu. İndirme klinik hattında dakikalar sürer (ve kullanıcı
+    // DURAKLATABİLİR → pencere sınırsız uzar). O sırada veteriner tedaviyi başlatırsa,
+    // indirme bitince NSIS `taskkill /F /IM PEMF_Backend.exe` ile SÜREN SEANSI keserdi —
+    // kapının engellemek için var olduğu sonucun aynısı. Yıkıcı adımdan HEMEN ÖNCE tekrar bak.
+    {
+        let root = kurulum_koku.clone();
+        if let Some(p) = ortam.calisan_backend(&root) {
+            match backend::session_active(p) {
+                Some(true) => {
+                    return Err(
+                        pemf_launcher_core::dil::t("rust.hata.seansBasladiGuncellemeErtelendi"),
+                    )
+                }
+                None => {
+                    return Err(
+                        pemf_launcher_core::dil::t("rust.hata.kurulumBackendYanitsiz"),
+                    )
+                }
+                Some(false) => {}
+            }
+        }
     }
+    install::record_selfupdate_attempt(&kurulum_koku, &version);
+    // 🔴 [F5-SELFUPDATE] (saha bildirimi 2026-09-03): "güncelleme sonrası kapatıp açınca hesaptan
+    // çıkmış oluyor, e-posta+şifre yeniden isteniyor". Kök neden: bu yol `app.exit(0)` ile çıkar;
+    // teardown'daki [F5] "kapanış-ÖNCESİ son oturum yakalama" YALNIZ `WindowEvent::Destroyed`
+    // kancasında ve `stop_backend_for_teardown`da vardı — `app.exit()` açık pencerelere Destroyed'ı
+    // güvenilir teslim etmez (ve etse bile süreç çıkışıyla yarışır). Uygulama PENCERESİ (supabase-js)
+    // oturumu tazeledikçe refresh jetonunu DÖNDÜRÜR (tek-kullanımlık) ve backend posta kutusuna
+    // yazar; rotasyon-senkron thread'i 60 sn'de bir çektiği için diskteki kopya son rotasyonun
+    // gerisinde kalabilir. (NSIS `/S` sessiz kurulumda kancalar KOŞMAZ — backend yetim kalır; yeni
+    // launcher onu sahiplenir ya da runtime güncellemesi kill_stray ile öldürür.) Bu yol tek başına
+    // en fazla 1 nesil kaybettirir (GoTrue 1 nesil geriyi tolere eder) → İKİNCİL kemer. ASIL neden
+    // pencerenin kalıcı localStorage kopyası (app 1.9.40, pf/src/services/supabaseAuth.ts).
+    // Çözüm: relauncher'dan ÖNCE, teardown ile AYNI yardımcıyla son oturumu diske işle.
+    // ⚠️ YALNIZ bu oturumun TRACKED backend'i (`state.proc`): child ALINMAZ (kill burada değil, NSIS'te);
+    // `detect_running_backend`/`backend.port` (orphan) ASLA — başka sürecin jetonunu okumak
+    // zehirlenmedir (bkz. f5_kapanis_sirasi_* parite testi). Kilit: f5_selfupdate_son_yakalama_var.
+    {
+        let tracked_port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
+        if let Some(port) = tracked_port {
+            son_oturumu_yakala(port, &kurulum_koku, &state.session); // [F5] relauncher ÖNCE
+        }
+    }
+    // İndirildi + SHA doğrulandı → sessiz kur + yeniden başlat helper'ını DETACHED başlat, sonra çık.
+    // [GÜNCELLEME EKRANI] (saha bildirimi 2026-09-04): çıkıştan yeni sürüm açılana kadar ekran
+    // BOŞTU (Defender'ın 265 MB setup taraması + NSIS + sabit beklemeler) → kullanıcı exe'ye
+    // yeniden tıklıyordu. Sıra: işaret → bilgilendirme penceresi → batch → çık. Pencere
+    // açılamazsa güncelleme YİNE sürer (eski davranış); batch başlatılamazsa işaret silinir.
+    let kok = kurulum_koku.clone();
+    install::guncelleme_isareti_yaz(&kok, env!("CARGO_PKG_VERSION"), &version);
+    let pencere_sonuc = ortam.guncelleme_penceresini_ac(&sfx);
+    // Bulgu #6: pencere sonucunu yardımcının GÜNLÜĞÜNE yaz (aynı dosya; batch `>>` ile ekler).
+    // Dosya adı `build_relaunch_script`in %TEMP%\pemf_selfupdate_<pid>.log'uyla AYNI olmalı.
+    let _ = std::fs::write(
+        gecici.join(format!("pemf_selfupdate_{}.log", std::process::id())),
+        pencere_gunluk_satiri(&pencere_sonuc),
+    );
+    let pencere = pencere_sonuc.ok(); // akış değişmez: pencere hatası güncellemeyi DURDURMAZ
+    if let Err(e) = ortam.yeniden_baslaticiyi_baslat(&dest, pencere.as_deref()) {
+        install::guncelleme_isaretini_temizle(&kok);
+        return Err(e);
+    }
+    ortam.cik();
+    Ok(())
 }
 
 /// [GÜNCELLEME EKRANI] Bilgilendirme penceresi kipi (bkz. `guncelleme_ekranini_calistir`).
@@ -3047,12 +3059,13 @@ mod tests {
     #[test]
     fn f5_selfupdate_son_yakalama_var() {
         let soy = f5_yorumlari_soy(include_str!("main.rs"));
-        let i = soy.find("fn apply_self_update").expect("apply_self_update yok");
+        // KP-6 D7: gövde `apply_self_update_ile`de; yeniden başlatıcı / çıkış `KomutOrtami` bağında (davranış: KRITIK_KP6_D7_*).
+        let i = soy.find(concat!("async fn apply_self_", "update_ile<O: KomutOrtami>(")).expect("apply_self_update yok");
         let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
         let govde = &soy[i..son];
         let yakala = govde.find("son_oturumu_yakala(").expect("self-update son-yakalama YOK (F5-SELFUPDATE)");
-        let relauncher = govde.find("spawn_update_relauncher(").expect("self-update relauncher yok");
-        let cikis = govde.find("app.exit(").expect("self-update app.exit yok");
+        let relauncher = govde.find("yeniden_baslaticiyi_baslat(").expect("self-update relauncher yok");
+        let cikis = govde.find("ortam.cik()").expect("self-update app.exit yok");
         assert!(yakala < relauncher, "son-yakalama relauncher'dan SONRA — NSIS backend'i öldürür, jeton okunamaz");
         assert!(relauncher < cikis, "relauncher app.exit'ten SONRA — sıra bozuk");
         // Port kaynağı: yakalamadan önceki EN YAKIN kaynak tracked `state.proc` olmalı (orphan değil).
@@ -3519,12 +3532,13 @@ mod tests {
     #[test]
     fn guncelleme_ekrani_sirasi_ve_acilis_bekcisi() {
         let soy = f5_yorumlari_soy(include_str!("main.rs"));
-        let i = soy.find("fn apply_self_update").expect("apply_self_update yok");
+        // KP-6 D7: gövde `apply_self_update_ile`de; pencere / batch / çıkış `KomutOrtami` bağında (davranış: KRITIK_KP6_D7_*).
+        let i = soy.find(concat!("async fn apply_self_", "update_ile<O: KomutOrtami>(")).expect("apply_self_update yok");
         let g = &soy[i..];
         let a = g.find("guncelleme_isareti_yaz(").expect("işaret yazılmıyor");
         let b = g.find("guncelleme_penceresini_ac(").expect("pencere açılmıyor");
-        let c = g.find("spawn_update_relauncher(&dest").expect("relauncher yok");
-        let d = g.find("app.exit(0)").expect("exit yok");
+        let c = g.find("yeniden_baslaticiyi_baslat(&dest").expect("relauncher yok");
+        let d = g.find("ortam.cik()").expect("exit yok");
         assert!(a < b && b < c && c < d, "sıra: işaret → pencere → batch → çık olmalı");
         let m = soy.find("fn main()").expect("main yok");
         let mm = &soy[m..];
@@ -4104,9 +4118,9 @@ Connection: close
         let yenile = k.find("uygulama_penceresini_yenile(port)").expect("hazır kolunda pencere yenileme yok");
         let hazir = k.find("backend_hazir(").expect("on_backend_ready yok");
         assert!(devir < yenile && yenile < hazir, "sıra: oturum devri → pencere yenile → on_backend_ready olmalı");
-        let s = &soy[soy.find(concat!("async fn apply_", "self_update(")).expect("apply_self_update yok")..];
+        let s = &soy[soy.find(concat!("async fn apply_", "self_update_ile<O: KomutOrtami>(")).expect("apply_self_update yok")..];
         let kosul = s.find("if verify::verify_file(&dest2, &sha).is_err() {").expect("kurucu önbellek koşulu yok");
-        let indir = s.find("net::download_to_file(&u, &dest2").expect("indirme yok");
+        let indir = s.find("kurucu_indir(&u, &dest2").expect("indirme yok"); // KP-6 D7: üretim bağı `net::download_to_file`
         let dogrula = s.find("on(flow::Progress::Verifying").expect("indirme sonrası doğrulama yok");
         assert!(kosul < indir && indir < dogrula, "kurucu yalnız doğrulama DÜŞERSE inmeli ve her durumda yeniden doğrulanmalı");
     }
@@ -5301,6 +5315,11 @@ Connection: close
         guncelle_sonuc: Arc<Mutex<Option<Result<flow::GeriAlmaBilgisi, flow::FlowError>>>>,
         kimlikli: Arc<Mutex<Option<(std::process::Child, u16)>>>,
         kimlikli_hata: bool,
+        /// D7: indirilecek kurucunun içeriği (None → indirme hatası) · güncelleme penceresi açılır mı · yeniden başlatıcı düşer mi.
+        kurucu: Option<Vec<u8>>,
+        pencere_hata: bool,
+        batch_hata: bool,
+        kilit_koku: Option<std::path::PathBuf>,
     }
 
     impl Kp6Ortam {
@@ -5474,6 +5493,34 @@ Connection: close
         fn uygulama_penceresini_yenile(&self, port: u16) -> bool {
             self.yaz(format!("yenile:{port}"));
             true
+        }
+        fn kurucu_indir(
+            &self,
+            _url: &str,
+            hedef: &std::path::Path,
+            _boyut: u64,
+            _sha: &str,
+            ilerleme: &mut dyn FnMut(u64, u64),
+            control: &dyn Fn() -> net::Control,
+        ) -> Result<u64, net::NetError> {
+            let kilitli = self.kilit_koku.as_deref().map(|k| install::kurulum_kilidi_al(k).is_err());
+            self.yaz(format!("indir:{} denetim={:?} kilitli={kilitli:?}", hedef.file_name().unwrap().to_string_lossy(), control()));
+            ilerleme(1, 2);
+            match &self.kurucu {
+                Some(b) => {
+                    std::fs::write(hedef, b).unwrap();
+                    Ok(b.len() as u64)
+                }
+                None => Err(net::NetError::HttpStatus { status: 503, url: "kurucu".into() }),
+            }
+        }
+        fn guncelleme_penceresini_ac(&self, sfx: &str) -> Result<std::path::PathBuf, String> {
+            self.yaz(format!("pencere:{sfx}"));
+            if self.pencere_hata { Err("KP6 pencere acilmadi".into()) } else { Ok(std::path::PathBuf::from("pencere.bat")) }
+        }
+        fn yeniden_baslaticiyi_baslat(&self, kurucu: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
+            self.yaz(format!("batch:{}:pencere={}", kurucu.file_name().unwrap().to_string_lossy(), pencere.is_some()));
+            if self.batch_hata { Err("KP6 batch baslamadi".into()) } else { Ok(()) }
         }
     }
 
@@ -6019,5 +6066,158 @@ Connection: close
         assert!(e.contains("KP6 model kilitli"), "{e}");
         assert_eq!(install::read_runtime_attempt(&kok), Some((format!("base:{sha}"), 1)), "DETERMİNİSTİK hata sayılmadı (C2 iç yol)");
         let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-6 D7 (madde 6) · `apply_self_update_ile` — başlatıcının kendini güncellemesinin gövdesi. Kayıtçı sahte `KomutOrtami` (kapı /
+    // kurucu indirme / çalışan backend / pencere / batch / çıkış), geçici kök + geçici TEMP; F5 son yakalama rastgele portta sahte backend'e
+    // GERÇEK HTTP. Gerçek indirme / görünür pencere / NSIS / çıkış YOK.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    fn kp6_kurucu_sha(icerik: &[u8], gecici: &std::path::Path) -> String {
+        let p = gecici.join("_sha_hesap.bin");
+        std::fs::write(&p, icerik).unwrap();
+        let s = verify::sha256_file(&p).unwrap();
+        let _ = std::fs::remove_file(&p);
+        s
+    }
+
+    /// KRİTİK (GK · Y253 + F5 + güncelleme ekranı sırası): kilit TUTULURKEN kapı → kanal / bayrak sıfırlanmış indirme (eski sabit adlı kurucu
+    /// silinir) → doğrulama → indirme SONRASI seans yeniden kontrolü → deneme kaydı → TRACKED backend'ten son oturum yakalama (taze jeton) →
+    /// güncelleme işareti → pencere → batch (pencere yoluyla) → EN SON çıkış.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D7_kendini_guncelleme_SIRA_kapi_indir_dogrula_SEANS_kayit_YAKALA_isaret_pencere_batch_CIK() {
+        let kok = kp6_kok("d7_kok");
+        let tmp = kp6_kok("d7_tmp");
+        std::fs::write(tmp.join("PEMFVetClient-Update.exe"), b"ESKI-SABIT-AD").unwrap();
+        let icerik = b"KURUCU-1.9.99".to_vec();
+        let sha = kp6_kurucu_sha(&icerik, &tmp);
+        let sfx: String = sha.chars().take(16).collect();
+        let (port, kapat, yollar, h) = kp5_yanitlayan(|yol, _| if yol == "/api/auth/desktop-session" { kp6_oturum("r-son") } else { "{}".into() });
+        let st = AppState::default();
+        st.control.store(CTL_PAUSE, Ordering::Relaxed);
+        *st.progress.lock().unwrap() = Some(serde_json::json!("eski"));
+        *st.proc.lock().unwrap() = Some((kp6_kisa_cocuk(), port));
+        let o = Kp6Ortam { kurucu: Some(icerik.clone()), kilit_koku: Some(kok.clone()), ..Default::default() };
+        tauri::async_runtime::block_on(apply_self_update_ile(&o, &st, kok.clone(), tmp.clone(), "https://u/k.exe".into(), sha.clone(), 13, "1.9.99".into()))
+            .expect("kendini güncelleme düştü");
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        let kurucu = format!("PEMFVetClient-Update-{sfx}.exe");
+        assert_eq!(
+            o.izler(),
+            vec![
+                "kapi?".to_string(),
+                format!("indir:{kurucu} denetim=Continue kilitli=Some(true)"),
+                "ilerleme:\"downloading\"".to_string(),
+                "ilerleme:\"verifying\"".to_string(),
+                "calisan?".to_string(),
+                format!("pencere:{sfx}"),
+                format!("batch:{kurucu}:pencere=true"),
+                "cik".to_string(),
+            ],
+            "kendini güncelleme sırası"
+        );
+        assert!(!tmp.join("PEMFVetClient-Update.exe").exists(), "eski sabit adlı kurucu silinmedi");
+        assert_eq!(std::fs::read(tmp.join(&kurucu)).unwrap(), icerik);
+        assert_eq!(install::read_selfupdate_attempt(&kok), Some(("1.9.99".to_string(), 1)), "deneme kaydı (döngü kırıcı)");
+        let isaret = install::guncelleme_isareti_oku(&kok).expect("güncelleme işareti yazılmadı");
+        assert_eq!((isaret.0.as_str(), isaret.1.as_str()), (env!("CARGO_PKG_VERSION"), "1.9.99"));
+        assert_eq!(*yollar.lock().unwrap(), vec!["/api/auth/desktop-session".to_string()], "F5: son oturum TRACKED backend'ten yakalanmadı");
+        assert_eq!(st.session.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("r-son".into()));
+        assert!(st.progress.lock().unwrap().is_none(), "kurulum kanalı tur başında sıfırlanmadı");
+        assert!(tmp.join(format!("pemf_selfupdate_{}.log", std::process::id())).exists(), "pencere günlüğü yazılmadı");
+        if let Some((mut c, _)) = st.proc.lock().unwrap().take() {
+            let _ = c.wait();
+        }
+        let _ = std::fs::remove_dir_all(&kok);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// KRİTİK: sha boşsa (imzasız kurucu) HİÇBİR ŞEY yapılmaz · kilit doluysa / kapı reddederse dokunulmaz · önbellekte DOĞRULANMIŞ kurucu
+    /// varsa yeniden İNMEZ · indirme düşerse ya da inen dosya doğrulanamazsa (dosya SİLİNİR) hata, pencere / batch / çıkış YOK.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D7_SHA_yok_KILIT_KAPI_onbellek_INMEZ_indirme_ve_DOGRULAMA_hatasi_DURDURUR() {
+        let kok = kp6_kok("d7_ret_kok");
+        let tmp = kp6_kok("d7_ret_tmp");
+        let st = AppState::default();
+        let icerik = b"KURUCU-OK".to_vec();
+        let sha = kp6_kurucu_sha(&icerik, &tmp);
+        let cagir = |o: &Kp6Ortam, sha: &str| {
+            tauri::async_runtime::block_on(apply_self_update_ile(o, &st, kok.clone(), tmp.clone(), "u".into(), sha.into(), 9, "2.0.0".into()))
+        };
+        let o = Kp6Ortam::default();
+        assert_eq!(cagir(&o, "  ").unwrap_err(), pemf_launcher_core::dil::t("rust.hata.guncellemeSha256Yok"));
+        assert!(o.izler().is_empty());
+        let kilit = install::kurulum_kilidi_al(&kok).unwrap();
+        let o = Kp6Ortam::default();
+        assert!(cagir(&o, &sha).is_err());
+        assert!(o.izler().is_empty(), "kilit doluyken dokunuldu: {:?}", o.izler());
+        drop(kilit);
+        let o = Kp6Ortam { kapi_engeli: Some("SEANS".into()), ..Default::default() };
+        assert_eq!(cagir(&o, &sha).unwrap_err(), "SEANS");
+        assert_eq!(o.izler(), vec!["kapi?".to_string()]);
+        // önbellekte doğrulanmış kurucu → yeniden inmez
+        let sfx: String = sha.chars().take(16).collect();
+        std::fs::write(tmp.join(format!("PEMFVetClient-Update-{sfx}.exe")), &icerik).unwrap();
+        let o = Kp6Ortam::default();
+        cagir(&o, &sha).unwrap();
+        assert!(!o.izler().iter().any(|x| x.starts_with("indir")), "doğrulanmış kurucu yeniden indirildi: {:?}", o.izler());
+        assert!(o.izler().contains(&"cik".to_string()));
+        install::guncelleme_isaretini_temizle(&kok);
+        // indirme düşer → hata; pencere / batch / çıkış YOK
+        let _ = std::fs::remove_file(tmp.join(format!("PEMFVetClient-Update-{sfx}.exe")));
+        let o = Kp6Ortam::default();
+        assert!(cagir(&o, &sha).is_err());
+        assert!(!o.izler().iter().any(|x| x.starts_with("pencere") || x.starts_with("batch") || x == "cik"), "{:?}", o.izler());
+        // inen dosya doğrulanamaz → hata + dosya SİLİNİR
+        let o = Kp6Ortam { kurucu: Some(b"BOZUK".to_vec()), ..Default::default() };
+        let e = cagir(&o, &sha).unwrap_err();
+        let kalip = pemf_launcher_core::dil::t_ile("rust.hata.guncellemeDogrulanamadi", &[("e", "§KP6§")]);
+        assert!(e.starts_with(kalip.split("§KP6§").next().unwrap()), "doğrulama hatası iletisi değil: {e}");
+        assert!(!tmp.join(format!("PEMFVetClient-Update-{sfx}.exe")).exists(), "doğrulanamayan kurucu silinmedi");
+        assert!(!o.izler().iter().any(|x| x.starts_with("batch") || x == "cik"));
+        assert_eq!(install::read_selfupdate_attempt(&kok).map(|x| x.1), Some(1), "hatalı turlar deneme sayılmamalı (yalnız ilk başarılı tur)");
+        let _ = std::fs::remove_dir_all(&kok);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// KRİTİK: indirme bittiğinde seans BAŞLAMIŞSA ertelenir (eylem söyleyen ileti; deneme sayılmaz, pencere / batch YOK) · backend
+    /// yanıtsızsa ertelenir · güncelleme penceresi açılamazsa akış SÜRER (batch pencere yolsuz) · batch başlamazsa hata, güncelleme işareti
+    /// TEMİZLENİR ve başlatıcı ÇIKMAZ.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP6_D7_SEANS_basladiysa_ERTELE_yanitsiz_ERTELE_pencere_hatasi_SURER_batch_hatasi_ISARET_temizler_CIKMAZ() {
+        let kok = kp6_kok("d7_seans_kok");
+        let tmp = kp6_kok("d7_seans_tmp");
+        let st = AppState::default();
+        let icerik = b"KURUCU-2".to_vec();
+        let sha = kp6_kurucu_sha(&icerik, &tmp);
+        let cagir = |o: &Kp6Ortam| {
+            tauri::async_runtime::block_on(apply_self_update_ile(o, &st, kok.clone(), tmp.clone(), "u".into(), sha.clone(), 8, "3.0.0".into()))
+        };
+        let (port, kapat, _y, h) = kp5_yanitlayan(|yol, _| if yol == "/api/health" { r#"{"sessionActive":true}"#.into() } else { "{}".into() });
+        let o = Kp6Ortam { kurucu: Some(icerik.clone()), calisan: Some(port), ..Default::default() };
+        assert_eq!(cagir(&o).unwrap_err(), pemf_launcher_core::dil::t("rust.hata.seansBasladiGuncellemeErtelendi"));
+        kapat.store(true, Ordering::SeqCst);
+        let _ = h.join();
+        assert!(!o.izler().iter().any(|x| x.starts_with("pencere") || x.starts_with("batch") || x == "cik"));
+        assert_eq!(install::read_selfupdate_attempt(&kok), None, "ertelenen tur deneme sayıldı");
+        let o = Kp6Ortam { kurucu: Some(icerik.clone()), calisan: Some(kapali_port()), ..Default::default() };
+        assert_eq!(cagir(&o).unwrap_err(), pemf_launcher_core::dil::t("rust.hata.kurulumBackendYanitsiz"));
+        let o = Kp6Ortam { kurucu: Some(icerik.clone()), pencere_hata: true, ..Default::default() };
+        cagir(&o).expect("pencere hatası güncellemeyi durdurdu");
+        let sfx: String = sha.chars().take(16).collect();
+        assert!(o.izler().contains(&format!("batch:PEMFVetClient-Update-{sfx}.exe:pencere=false")), "{:?}", o.izler());
+        assert_eq!(o.izler().last(), Some(&"cik".to_string()));
+        let o = Kp6Ortam { kurucu: Some(icerik.clone()), batch_hata: true, ..Default::default() };
+        let e = cagir(&o).unwrap_err();
+        assert!(e.contains("KP6 batch baslamadi"), "{e}");
+        assert!(!o.izler().contains(&"cik".to_string()), "batch başlamadı ama başlatıcı çıktı");
+        assert!(install::guncelleme_isareti_oku(&kok).is_none(), "batch hatasında güncelleme işareti kaldı (sonraki açılış yanlış ekran)");
+        let _ = std::fs::remove_dir_all(&kok);
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

@@ -35,7 +35,7 @@ _YIKICI_AKISLAR = [
     "repair_ile",  # KP-6 D4
     "uninstall_ile",  # KP-6 D5
     "apply_runtime_update_ile",  # KP-6 D6
-    "apply_self_update",
+    "apply_self_update_ile",  # KP-6 D7
 ]
 
 
