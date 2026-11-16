@@ -4,7 +4,7 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 // Y211 · S-D67.8: Google AI Studio şablon artığı (Gemini anahtarı tanımı, AI Studio HMR anahtarı) kaldırıldı — simülatör Gemini'yi
-// çağırmaz. `@google/genai` paket kaydı çevrimdışı kaldırılamadı (npm ENOTCACHED) → package.json / kilit AYNEN (rapor).
+// çağırmaz. `@google/genai` paket kaydı da YH-A2'de (2026-11-16) package.json + kilitten kaldırıldı.
 export default defineConfig(() => {
   return {
     base: './',

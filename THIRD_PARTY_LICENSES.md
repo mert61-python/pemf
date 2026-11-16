@@ -251,6 +251,61 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `@babel/traverse` | 7.29.7 | MIT | arayüz |
 | `@babel/types` | 7.29.0 | MIT | DEMA |
 | `@babel/types` | 7.29.7 | MIT | arayüz |
+| `@emnapi/core` | 1.8.1 | MIT | DEMA |
+| `@emnapi/runtime` | 1.8.1 | MIT | DEMA |
+| `@emnapi/wasi-threads` | 1.1.0 | MIT | DEMA |
+| `@esbuild/aix-ppc64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/aix-ppc64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/android-arm` | 0.25.12 | MIT | DEMA |
+| `@esbuild/android-arm` | 0.27.7 | MIT | DEMA |
+| `@esbuild/android-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/android-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/android-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/android-x64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/darwin-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/darwin-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/darwin-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/darwin-x64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/freebsd-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/freebsd-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/freebsd-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/freebsd-x64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-arm` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-arm` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-ia32` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-ia32` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-loong64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-loong64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-mips64el` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-mips64el` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-ppc64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-ppc64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-riscv64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-riscv64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-s390x` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-s390x` | 0.27.7 | MIT | DEMA |
+| `@esbuild/linux-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/linux-x64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/netbsd-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/netbsd-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/netbsd-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/netbsd-x64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/openbsd-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/openbsd-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/openbsd-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/openbsd-x64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/openharmony-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/openharmony-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/sunos-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/sunos-x64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/win32-arm64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/win32-arm64` | 0.27.7 | MIT | DEMA |
+| `@esbuild/win32-ia32` | 0.25.12 | MIT | DEMA |
+| `@esbuild/win32-ia32` | 0.27.7 | MIT | DEMA |
+| `@esbuild/win32-x64` | 0.25.12 | MIT | DEMA |
+| `@esbuild/win32-x64` | 0.27.7 | MIT | DEMA |
 | `@expo-google-fonts/inter` | 0.4.2 | MIT AND OFL-1.1 | arayüz |
 | `@expo-google-fonts/material-symbols` | 0.4.38 | MIT AND Apache-2.0 | arayüz |
 | `@expo/cli` | 56.1.15 | MIT | arayüz |
@@ -286,7 +341,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `@expo/ui` | 56.0.17 | MIT | arayüz |
 | `@expo/ws-tunnel` | 2.0.0 | MIT | arayüz |
 | `@expo/xcpretty` | 4.4.4 | BSD-3-Clause | arayüz |
-| `@google/genai` | 1.49.0 | Apache-2.0 | DEMA |
 | `@isaacs/ttlcache` | 1.4.1 | ISC | arayüz |
 | `@jest/schemas` | 29.6.3 | MIT | arayüz |
 | `@jest/types` | 29.6.3 | MIT | arayüz |
@@ -296,19 +350,10 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `@jridgewell/source-map` | 0.3.11 | MIT | arayüz |
 | `@jridgewell/sourcemap-codec` | 1.5.5 | MIT | arayüz, DEMA |
 | `@jridgewell/trace-mapping` | 0.3.31 | MIT | arayüz, DEMA |
+| `@napi-rs/wasm-runtime` | 1.1.1 | MIT | DEMA |
 | `@postman/form-data` | 3.1.1 | MIT | site |
 | `@postman/tough-cookie` | 4.1.3-postman.1 | BSD-3-Clause | site |
 | `@postman/tunnel-agent` | 0.6.8 | Apache-2.0 | site |
-| `@protobufjs/aspromise` | 1.1.2 | BSD-3-Clause | DEMA |
-| `@protobufjs/base64` | 1.1.2 | BSD-3-Clause | DEMA |
-| `@protobufjs/codegen` | 2.0.4 | BSD-3-Clause | DEMA |
-| `@protobufjs/eventemitter` | 1.1.0 | BSD-3-Clause | DEMA |
-| `@protobufjs/fetch` | 1.1.0 | BSD-3-Clause | DEMA |
-| `@protobufjs/float` | 1.0.2 | BSD-3-Clause | DEMA |
-| `@protobufjs/inquire` | 1.1.0 | BSD-3-Clause | DEMA |
-| `@protobufjs/path` | 1.1.2 | BSD-3-Clause | DEMA |
-| `@protobufjs/pool` | 1.1.0 | BSD-3-Clause | DEMA |
-| `@protobufjs/utf8` | 1.1.0 | BSD-3-Clause | DEMA |
 | `@radix-ui/primitive` | 1.1.3 | MIT | arayüz |
 | `@radix-ui/react-collection` | 1.1.7 | MIT | arayüz |
 | `@radix-ui/react-compose-refs` | 1.1.2 | MIT | arayüz |
@@ -347,6 +392,31 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `@react-native/normalize-colors` | 0.85.3 | MIT | arayüz |
 | `@react-native/virtualized-lists` | 0.85.3 | MIT | arayüz |
 | `@rolldown/pluginutils` | 1.0.0-rc.3 | MIT | DEMA |
+| `@rollup/rollup-android-arm-eabi` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-android-arm64` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-darwin-arm64` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-darwin-x64` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-freebsd-arm64` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-freebsd-x64` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-arm-gnueabihf` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-arm-musleabihf` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-arm64-gnu` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-arm64-musl` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-loong64-gnu` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-loong64-musl` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-ppc64-gnu` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-ppc64-musl` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-riscv64-gnu` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-riscv64-musl` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-s390x-gnu` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-x64-gnu` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-linux-x64-musl` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-openbsd-x64` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-openharmony-arm64` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-win32-arm64-msvc` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-win32-ia32-msvc` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-win32-x64-gnu` | 4.60.1 | MIT | DEMA |
+| `@rollup/rollup-win32-x64-msvc` | 4.60.1 | MIT | DEMA |
 | `@sinclair/typebox` | 0.27.10 | MIT | arayüz |
 | `@supabase/auth-js` | 2.108.1 | MIT | arayüz |
 | `@supabase/auth-js` | 2.109.0 | MIT | site |
@@ -379,17 +449,17 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `@tailwindcss/vite` | 4.2.2 | MIT | DEMA |
 | `@testing-library/jest-dom` | 6.9.1 | MIT | arayüz |
 | `@testing-library/user-event` | 14.6.1 | MIT | arayüz |
+| `@tybys/wasm-util` | 0.10.1 | MIT | DEMA |
 | `@types/babel__core` | 7.20.5 | MIT | DEMA |
 | `@types/babel__generator` | 7.27.0 | MIT | DEMA |
 | `@types/babel__template` | 7.4.4 | MIT | DEMA |
 | `@types/babel__traverse` | 7.28.0 | MIT | DEMA |
 | `@types/emscripten` | 1.41.5 | MIT | arayüz |
+| `@types/estree` | 1.0.8 | MIT | DEMA |
 | `@types/istanbul-lib-coverage` | 2.0.6 | MIT | arayüz |
 | `@types/istanbul-lib-report` | 3.0.3 | MIT | arayüz |
 | `@types/istanbul-reports` | 3.0.4 | MIT | arayüz |
-| `@types/node` | 22.19.17 | MIT | DEMA |
 | `@types/node` | 26.1.0 | MIT | arayüz |
-| `@types/retry` | 0.12.0 | MIT | DEMA |
 | `@types/yargs` | 17.0.35 | MIT | arayüz |
 | `@types/yargs-parser` | 21.0.3 | MIT | arayüz |
 | `@ungap/structured-clone` | 1.3.1 | ISC | arayüz |
@@ -400,7 +470,7 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `accepts` | 1.3.8 | MIT | arayüz, DEMA |
 | `accepts` | 2.0.0 | MIT | arayüz |
 | `acorn` | 8.16.0 | MIT | arayüz |
-| `agent-base` | 7.1.4 | MIT | arayüz, site, DEMA |
+| `agent-base` | 7.1.4 | MIT | arayüz, site |
 | `anser` | 1.4.10 | MIT | arayüz |
 | `ansi-escapes` | 4.3.2 | MIT | arayüz |
 | `ansi-regex` | 4.1.1 | MIT | arayüz |
@@ -429,12 +499,11 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `babel-preset-expo` | 56.0.15 | MIT | arayüz |
 | `balanced-match` | 4.0.4 | MIT | arayüz |
 | `barcode-detector` | 3.1.3 | MIT | arayüz |
-| `base64-js` | 1.5.1 | MIT | arayüz, DEMA |
+| `base64-js` | 1.5.1 | MIT | arayüz |
 | `baseline-browser-mapping` | 2.10.17 | Apache-2.0 | DEMA |
 | `baseline-browser-mapping` | 2.10.33 | Apache-2.0 | arayüz |
 | `bcrypt-pbkdf` | 1.0.2 | BSD-3-Clause | site |
 | `big-integer` | 1.6.52 | Unlicense | arayüz |
-| `bignumber.js` | 9.3.1 | MIT | DEMA |
 | `bluebird` | 2.11.0 | MIT | site |
 | `body-parser` | 1.20.4 | MIT | DEMA |
 | `boolbase` | 1.0.0 | ISC | arayüz |
@@ -445,7 +514,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `braces` | 3.0.3 | MIT | arayüz |
 | `browserslist` | 4.28.2 | MIT | arayüz, DEMA |
 | `bser` | 2.1.1 | Apache-2.0 | arayüz |
-| `buffer-equal-constant-time` | 1.0.1 | BSD-3-Clause | DEMA |
 | `buffer-from` | 1.1.2 | MIT | arayüz |
 | `bytes` | 3.1.2 | MIT | arayüz, DEMA |
 | `call-bind-apply-helpers` | 1.0.2 | MIT | site, DEMA |
@@ -494,7 +562,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `css-what` | 6.2.2 | BSD-2-Clause | arayüz |
 | `css.escape` | 1.5.1 | MIT | arayüz |
 | `dashdash` | 1.14.1 | MIT | site |
-| `data-uri-to-buffer` | 4.0.1 | MIT | DEMA |
 | `debug` | 2.6.9 | MIT | arayüz, DEMA |
 | `debug` | 3.2.7 | MIT | arayüz |
 | `debug` | 4.4.3 | MIT | arayüz, site, DEMA |
@@ -515,7 +582,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `dotenv` | 17.4.1 | BSD-2-Clause | DEMA |
 | `dunder-proto` | 1.0.1 | MIT | site, DEMA |
 | `ecc-jsbn` | 0.1.2 | MIT | site |
-| `ecdsa-sig-formatter` | 1.0.11 | Apache-2.0 | DEMA |
 | `ee-first` | 1.1.1 | MIT | arayüz, DEMA |
 | `electron-to-chromium` | 1.5.334 | ISC | DEMA |
 | `electron-to-chromium` | 1.5.364 | ISC | arayüz |
@@ -529,6 +595,7 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `es-errors` | 1.3.0 | MIT | arayüz, site, DEMA |
 | `es-object-atoms` | 1.1.1 | MIT | DEMA |
 | `es-object-atoms` | 1.1.2 | MIT | site |
+| `esbuild` | 0.25.12 | MIT | DEMA |
 | `escalade` | 3.2.0 | MIT | arayüz, DEMA |
 | `escape-html` | 1.0.3 | MIT | arayüz, DEMA |
 | `escape-string-regexp` | 1.0.5 | MIT | arayüz |
@@ -566,15 +633,14 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `expo-system-ui` | 56.0.5 | MIT | arayüz |
 | `exponential-backoff` | 3.1.3 | Apache-2.0 | arayüz |
 | `express` | 4.22.1 | MIT | DEMA |
-| `extend` | 3.0.2 | MIT | site, DEMA |
+| `extend` | 3.0.2 | MIT | site |
 | `extsprintf` | 1.3.0 | MIT | site |
 | `fast-deep-equal` | 3.1.3 | MIT | arayüz |
 | `fb-dotslash` | 0.5.8 | (MIT OR Apache-2.0) | arayüz |
 | `fb-watchman` | 2.0.2 | Apache-2.0 | arayüz |
 | `fbjs` | 3.0.5 | MIT | arayüz |
 | `fbjs-css-vars` | 1.0.2 | MIT | arayüz |
-| `fdir` | 6.5.0 | MIT | arayüz |
-| `fetch-blob` | 3.2.0 | MIT | DEMA |
+| `fdir` | 6.5.0 | MIT | arayüz, DEMA |
 | `fetch-nodeshim` | 0.4.10 | MIT | arayüz |
 | `fill-range` | 7.1.1 | MIT | arayüz |
 | `filter-obj` | 1.1.0 | MIT | arayüz |
@@ -583,13 +649,11 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `flow-enums-runtime` | 0.0.6 | MIT | arayüz |
 | `fontfaceobserver` | 2.3.0 | BSD-2-Clause | arayüz |
 | `forever-agent` | 0.6.1 | Apache-2.0 | site |
-| `formdata-polyfill` | 4.0.10 | MIT | DEMA |
 | `forwarded` | 0.2.0 | MIT | DEMA |
 | `framer-motion` | 12.38.0 | MIT | DEMA |
 | `fresh` | 0.5.2 | MIT | arayüz, DEMA |
+| `fsevents` | 2.3.3 | MIT | DEMA |
 | `function-bind` | 1.1.2 | MIT | arayüz, site, DEMA |
-| `gaxios` | 7.1.4 | Apache-2.0 | DEMA |
-| `gcp-metadata` | 8.1.2 | Apache-2.0 | DEMA |
 | `gensync` | 1.0.0-beta.2 | MIT | arayüz, DEMA |
 | `get-caller-file` | 2.0.5 | ISC | arayüz |
 | `get-intrinsic` | 1.3.0 | MIT | site, DEMA |
@@ -598,8 +662,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `getenv` | 2.0.0 | MIT | arayüz |
 | `getpass` | 0.1.7 | MIT | site |
 | `glob` | 13.0.6 | BlueOak-1.0.0 | arayüz |
-| `google-auth-library` | 10.6.2 | Apache-2.0 | DEMA |
-| `google-logging-utils` | 1.1.3 | Apache-2.0 | DEMA |
 | `gopd` | 1.2.0 | MIT | site, DEMA |
 | `graceful-fs` | 4.2.11 | ISC | arayüz, DEMA |
 | `has-flag` | 3.0.0 | MIT | arayüz |
@@ -616,7 +678,7 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `html-parse-stringify` | 4.0.1 | MIT | arayüz, site |
 | `http-errors` | 2.0.1 | MIT | arayüz, DEMA |
 | `http-signature` | 1.4.0 | MIT | site |
-| `https-proxy-agent` | 7.0.6 | MIT | arayüz, DEMA |
+| `https-proxy-agent` | 7.0.6 | MIT | arayüz |
 | `hyphenate-style-name` | 1.1.0 | BSD-3-Clause | arayüz |
 | `i18next` | 26.4.2 | MIT | arayüz, site |
 | `iceberg-js` | 0.8.1 | MIT | arayüz, site |
@@ -651,13 +713,10 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `jsbn` | 0.1.1 | MIT | site |
 | `jsc-safe-url` | 0.2.4 | 0BSD | arayüz |
 | `jsesc` | 3.1.0 | MIT | arayüz, DEMA |
-| `json-bigint` | 1.0.0 | MIT | DEMA |
 | `json-schema` | 0.4.0 | (AFL-2.1 OR BSD-3-Clause) | site |
 | `json-stringify-safe` | 5.0.1 | ISC | site |
 | `json5` | 2.2.3 | MIT | arayüz, DEMA |
 | `jsprim` | 2.0.2 | MIT | site |
-| `jwa` | 2.0.1 | MIT | DEMA |
-| `jws` | 4.0.1 | MIT | DEMA |
 | `kleur` | 3.0.3 | MIT | arayüz |
 | `lan-network` | 0.2.1 | MIT | arayüz |
 | `leven` | 3.1.0 | MIT | arayüz |
@@ -677,7 +736,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `lodash.debounce` | 4.0.8 | MIT | arayüz |
 | `lodash.throttle` | 4.1.1 | MIT | arayüz |
 | `log-symbols` | 2.2.0 | MIT | arayüz |
-| `long` | 5.3.2 | Apache-2.0 | DEMA |
 | `loose-envify` | 1.4.0 | MIT | arayüz |
 | `lru-cache` | 10.4.3 | ISC | arayüz |
 | `lru-cache` | 11.5.1 | BlueOak-1.0.0 | arayüz |
@@ -727,13 +785,12 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `ms` | 2.0.0 | MIT | arayüz, DEMA |
 | `ms` | 2.1.3 | MIT | arayüz, site, DEMA |
 | `multitars` | 1.0.0 | MIT | arayüz |
+| `nanoid` | 3.3.11 | MIT | DEMA |
 | `nanoid` | 3.3.12 | MIT | arayüz |
 | `negotiator` | 0.6.3 | MIT | arayüz, DEMA |
 | `negotiator` | 0.6.4 | MIT | arayüz |
 | `negotiator` | 1.0.0 | MIT | arayüz |
-| `node-domexception` | 1.0.0 | MIT | DEMA |
 | `node-fetch` | 2.7.0 | MIT | arayüz |
-| `node-fetch` | 3.3.2 | MIT | DEMA |
 | `node-forge` | 1.4.0 | (BSD-3-Clause OR GPL-2.0) | arayüz |
 | `node-int64` | 0.4.0 | MIT | arayüz |
 | `node-releases` | 2.0.37 | MIT | DEMA |
@@ -751,7 +808,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `onetime` | 2.0.1 | MIT | arayüz |
 | `open` | 7.4.2 | MIT | arayüz |
 | `ora` | 3.4.0 | MIT | arayüz |
-| `p-retry` | 4.6.2 | MIT | DEMA |
 | `parse-png` | 2.1.0 | MIT | arayüz |
 | `parseurl` | 1.3.3 | MIT | arayüz, DEMA |
 | `path-key` | 3.1.1 | MIT | arayüz |
@@ -761,11 +817,12 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `paths-js` | 0.4.11 | Apache-2.0 | arayüz |
 | `picocolors` | 1.1.1 | ISC | arayüz, DEMA |
 | `picomatch` | 2.3.2 | MIT | arayüz |
-| `picomatch` | 4.0.4 | MIT | arayüz |
+| `picomatch` | 4.0.4 | MIT | arayüz, DEMA |
 | `plist` | 3.1.1 | MIT | arayüz |
 | `pngjs` | 3.4.0 | MIT | arayüz |
 | `point-in-polygon` | 1.1.0 | MIT | arayüz |
 | `postcss` | 8.5.15 | MIT | arayüz |
+| `postcss` | 8.5.9 | MIT | DEMA |
 | `postcss-value-parser` | 4.2.0 | MIT | arayüz |
 | `postman-request` | 2.88.1-postman.48 | Apache-2.0 | site |
 | `pretty-format` | 29.7.0 | MIT | arayüz |
@@ -774,7 +831,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `promise` | 7.3.1 | MIT | arayüz |
 | `promise` | 8.3.0 | MIT | arayüz |
 | `prompts` | 2.4.2 | MIT | arayüz |
-| `protobufjs` | 7.5.4 | BSD-3-Clause | DEMA |
 | `proxy-addr` | 2.0.7 | MIT | DEMA |
 | `psl` | 1.15.0 | MIT | site |
 | `punycode` | 2.3.1 | MIT | site |
@@ -825,7 +881,7 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `resolve-from` | 5.0.0 | MIT | arayüz |
 | `resolve-workspace-root` | 2.0.1 | MIT | arayüz |
 | `restore-cursor` | 2.0.0 | MIT | arayüz |
-| `retry` | 0.13.1 | MIT | DEMA |
+| `rollup` | 4.60.1 | MIT | DEMA |
 | `safe-buffer` | 5.2.1 | MIT | arayüz, site, DEMA |
 | `safer-buffer` | 2.1.2 | MIT | site, DEMA |
 | `sax` | 1.6.0 | BlueOak-1.0.0 | arayüz |
@@ -888,6 +944,7 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `terminal-link` | 2.1.1 | MIT | arayüz |
 | `terser` | 5.48.0 | BSD-2-Clause | arayüz |
 | `throat` | 5.0.0 | MIT | arayüz |
+| `tinyglobby` | 0.2.16 | MIT | DEMA |
 | `tinyglobby` | 0.2.17 | MIT | arayüz |
 | `tmpl` | 1.0.5 | BSD-3-Clause | arayüz |
 | `to-regex-range` | 5.0.1 | MIT | arayüz |
@@ -901,7 +958,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `type-fest` | 5.7.0 | (MIT OR CC0-1.0) | arayüz |
 | `type-is` | 1.6.18 | MIT | DEMA |
 | `ua-parser-js` | 1.0.41 | MIT | arayüz |
-| `undici-types` | 6.21.0 | MIT | DEMA |
 | `undici-types` | 8.3.0 | MIT | arayüz |
 | `unicode-canonical-property-names-ecmascript` | 2.0.1 | MIT | arayüz |
 | `unicode-match-property-ecmascript` | 2.0.0 | MIT | arayüz |
@@ -922,11 +978,11 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `vary` | 1.1.2 | MIT | arayüz, DEMA |
 | `vaul` | 1.1.2 | MIT | arayüz |
 | `verror` | 1.10.0 | MIT | site |
+| `vite` | 6.4.2 | MIT | DEMA |
 | `vlq` | 1.0.1 | MIT | arayüz |
 | `walker` | 1.0.8 | Apache-2.0 | arayüz |
 | `warn-once` | 0.1.1 | MIT | arayüz |
 | `wcwidth` | 1.0.1 | MIT | arayüz |
-| `web-streams-polyfill` | 3.3.3 | MIT | DEMA |
 | `webidl-conversions` | 3.0.1 | BSD-2-Clause | arayüz |
 | `whatwg-fetch` | 3.6.20 | MIT | arayüz |
 | `whatwg-url` | 5.0.0 | MIT | arayüz |
@@ -934,7 +990,6 @@ Kaynak: `apps/ui/package-lock.json` + `apps/web/package-lock.json` + `dema-terap
 | `which` | 2.0.2 | ISC | arayüz |
 | `wrap-ansi` | 7.0.0 | MIT | arayüz |
 | `ws` | 7.5.11 | MIT | arayüz |
-| `ws` | 8.20.0 | MIT | DEMA |
 | `ws` | 8.21.0 | MIT | arayüz |
 | `xcode` | 3.0.1 | Apache-2.0 | arayüz |
 | `xml2js` | 0.6.0 | MIT | arayüz |
