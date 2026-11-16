@@ -867,3 +867,33 @@ def get_build_id() -> str:
 
     sha = (_os.environ.get("PEMF_BASE_SHA") or "").strip().lower()
     return sha[:12] if len(sha) >= 12 else ""
+
+
+_PAKET_ICERIGI: str | None = None
+
+
+def get_paket_icerigi() -> str:
+    """ÇALIŞAN runtime'ın KENDİ içerik kimliği — YH-A4 (Tezgâh-2 listesi 5).
+
+    `get_build_id` launcher'ın KAYDINI söyler (`installed_packages.json` → `PEMF_BASE_SHA`; sözleşme [5.5]: manifest app-katmanı
+    sha'sı = CHANGELOG etiketi). Runtime kayıt dışı değiştirilince (yerel deneme kurulumu, elle kopya) kayıt ESKİ paketi gösterir:
+    13-11 tezgâhında ODK'nın yerel runtime'ı yayındaki buildId ile göründü. `make_base_zip` app katmanının içerik özetini
+    katmanın kendi sınır dosyasına (`PEMF_Backend/_app_roots.json` → `icerik`, EXE'nin yanında) yazar; bu işlev onu okur (ilk 12
+    hane). Kaynak ağacından koşuda, eski (alanı olmayan) pakette ya da bozuk dosyada BOŞ döner — uydurma değer ÜRETİLMEZ.
+    Süreç boyunca önbelleğe alınır (runtime dosyaları güncellemede backend yeniden başlar)."""
+    global _PAKET_ICERIGI
+    if _PAKET_ICERIGI is not None:
+        return _PAKET_ICERIGI
+    deger = ""
+    if getattr(sys, "frozen", False):
+        import json as _json
+
+        try:
+            veri = _json.loads((Path(sys.executable).resolve().parent / "_app_roots.json").read_text(encoding="utf-8"))
+            ic = str(veri.get("icerik", "")).strip().lower() if isinstance(veri, dict) else ""
+            if len(ic) == 64 and all(c in "0123456789abcdef" for c in ic):
+                deger = ic[:12]
+        except Exception:
+            deger = ""
+    _PAKET_ICERIGI = deger
+    return deger

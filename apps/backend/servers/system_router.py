@@ -23,7 +23,10 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 from utils import ceviri
-from utils.path_utils import HARDWARE_VERSION  # TEK donanim-surumu kaynagi (M6); leaf util, circular yok
+
+# HARDWARE_VERSION: TEK donanim-surumu kaynagi (M6); leaf util, circular yok · get_paket_icerigi: YH-A4 calisan runtime'in
+# icerik kimligi (/api/health `paketIcerigi`).
+from utils.path_utils import HARDWARE_VERSION, get_paket_icerigi
 
 router = APIRouter(tags=["system"])
 
@@ -285,6 +288,10 @@ async def health_check(request: Request):
         # sürümün söyleyemediğini söyler: aynı 1.9.5 farklı paket içeriği çalıştırabilir.
         "version": _api._APP_VERSION,
         "buildId": (_api._BUILD_ID or None),
+        # YH-A4 (Tezgâh-2 listesi 5): `buildId` launcher KAYDINI söyler (sözleşme [5.5] — manifest / CHANGELOG eşleşmesi AYNEN);
+        # `paketIcerigi` ÇALIŞAN dosyaların kimliğidir (app katmanı içerik özeti, `_app_roots.json`). İkisi yerel deneme kurulumunda
+        # ayrışır: kayıt yayındaki paketi, `paketIcerigi` diskteki runtime'ı söyler. Kaynaktan / eski pakette None (uydurma YOK).
+        "paketIcerigi": (get_paket_icerigi() or None),
         # Launcher'ın "bu port GERÇEKTEN benim başlattığım backend mi?" doğrulaması (bkz. üstteki not).
         "launcherNonce": (_health_nonce if (_health_nonce and _loopback_only) else None),
         # ── DENETİM 2026-08-04: AKTİF TEDAVİ BAYRAĞI (launcher oto-güncellemesi için) ─────────

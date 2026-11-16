@@ -76,6 +76,10 @@ GOLDEN_SHAPES = {
         # (uydurma kimlik URETILMEZ). Bkz. tests/test_version_visibility.py.
         "version",
         "buildId",
+        # YH-A4 (2026-11-16, BILINCLI sekil degisikligi · Tezgah-2 listesi 5): `paketIcerigi` = CALISAN runtime'in icerik
+        # kimligi (app katmani ozeti, `_app_roots.json`); `buildId` launcher KAYDINI soyler ve yerel deneme kurulumunda
+        # yayindaki paketi gosterir. Kaynaktan / eski pakette None. Bkz. tests/test_YH_A4_paket_icerigi_RUNTIME_kimligi.py.
+        "paketIcerigi",
         # D1.81 · Y4 (2026-10-01, BILINCLI sekil degisikligi): ACIL DURDURMA MANDALI — kuruluyken hicbir START kabul
         # edilmez; arayuz (oturumsuz Karsilama/Giris ekranlari dahil) durumu ve "Sifirla"yi gosterir. Uzak istemci
         # yalniz `aktif`i gorur. Bkz. tests/test_estop_MANDALI_Y4_hicbir_START_gecmez.py.

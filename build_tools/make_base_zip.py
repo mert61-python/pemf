@@ -291,8 +291,33 @@ def _gecicileri_sil():
             os.remove(g)
 
 
-# app zip'i kendi sinirini tasir → launcher eski kokleri buradan ogrenir.
-_roots_json = json.dumps({'roots': APP_ROOTS}, indent=2)
+def _icerik_ozeti(items):
+    """YH-A4 (Tezgah-2 listesi 5): app katmaninin ICERIK kimligi — siralı (yol, icerik sha256) ciftlerinin sha256'si.
+
+    Zip kendi sha'sini tasiyamaz; `buildId` (bkz. utils.path_utils.get_build_id) launcher KAYDINDAN gelir ve runtime kayit disi
+    degisince (yerel deneme kurulumu, elle kopya) ESKI paketi soyler (T2Y 13-11: ODK yerel runtime'i yayindaki buildId ile
+    gorundu). Bu ozet katmanin KENDI sinir dosyasina (`_app_roots.json` → `icerik`) yazilir; backend `/api/health`
+    `paketIcerigi` olarak verir. Belirlenimci: yazilan baytlarla AYNI kaynak (ic zip normallestirilmis), zaman damgasi yok;
+    yalniz app katmanina baglidir (deps degisince degismez). Sinir dosyasinin KENDISI ozete girmez (dongu olmasin)."""
+    h = hashlib.sha256()
+    for full, arc in sorted(items, key=lambda x: x[1]):
+        d = hashlib.sha256()
+        if os.path.basename(arc) in _IC_ZIPLER:
+            d.update(_ic_zip_belirlenimci(full))
+        else:
+            with open(full, 'rb') as fp:
+                for chunk in iter(lambda: fp.read(1 << 20), b''):
+                    d.update(chunk)
+        h.update(f'{arc}\0{d.hexdigest()}\n'.encode('utf-8'))
+    return h.hexdigest()
+
+
+APP_ICERIK = _icerik_ozeti(app_items)
+print(f'  app icerik kimligi: {APP_ICERIK}  (_app_roots.json "icerik"; /api/health paketIcerigi = ilk 12)', flush=True)
+
+# app zip'i kendi sinirini tasir → launcher eski kokleri buradan ogrenir. YH-A4: + katmanin icerik kimligi (`icerik`);
+# launcher `read_app_roots` yalniz `roots`u okur (bilinmeyen alan yok sayilir) — sinir sozlesmesi DEGISMEZ.
+_roots_json = json.dumps({'roots': APP_ROOTS, 'icerik': APP_ICERIK}, indent=2)
 _GECICILER = []
 try:
     app_tmp, app_size, app_sha = _yaz(OUT_APP, app_items, extra={APP_ROOTS_FILE: _roots_json})
@@ -387,7 +412,9 @@ def _katman_seti_yaz(app_sha, deps_sha):
     VALIDATION FAIL; diskteki eski kimlik yeni zip'lerle tutmayacagi icin make_manifest bu dizini MUHURLEMEZ (fail-closed)."""
     kayit = {
         'aciklama': 'make_base_zip ayni kosuda uretti — make_manifest iki katmanin AYNI build oldugunu bununla olcer',
-        'app': {'dosya': os.path.basename(OUT_APP), 'sha256': app_sha},
+        # YH-A4: `icerik` = app katmaninin icerik kimligi (_app_roots.json ile AYNI) — yerel kurulumda /api/health
+        # `paketIcerigi` ile karsilastirilir ("runtime = bu derleme mi?"). make_manifest yalniz `sha256`yi okur.
+        'app': {'dosya': os.path.basename(OUT_APP), 'sha256': app_sha, 'icerik': APP_ICERIK},
         'deps': {'dosya': os.path.basename(OUT_DEPS), 'sha256': deps_sha},
     }
     gecici = OUT_SET + '.tmp'
