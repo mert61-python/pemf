@@ -1166,9 +1166,13 @@ where
     // geri çağırma gerektiğinde hangi kliniğin hangi sürümde olduğu BİLİNİR.
     env.insert(ENV_LAUNCHER_VERSION.to_string(), env!("CARGO_PKG_VERSION").to_string());
     let paketler = read_installed_packages(install_root);
+    // YH · S-YH.1 (sahip Y294): kimlik YALNIZ kayıt diskteki runtime'la eşleşiyorsa geçer; geçmezse backend `buildId` olarak çalışan
+    // paketin içerik kimliğini verir (= `/api/health` `paketIcerigi`) — eski paketi söylemez. Güncelleme sağlık kapısında
+    // `paket_kimligini_uygula` onaylanacak kimliği ayrıca koyar (kayıt onaydan sonra yazılır).
+    let kayit_dogru = kayit_runtime_ile_ayni(&paketler, install_root);
     // Katmanlı kurulumda `app` bizim kodumuzdur (her sürümde değişir); katmansızda `base`.
     let sha = if paketler.app.is_empty() { paketler.base } else { paketler.app };
-    if !sha.is_empty() {
+    if !sha.is_empty() && kayit_dogru {
         env.insert(ENV_BASE_SHA.to_string(), sha);
     }
     if !health_nonce.is_empty() {
@@ -1352,6 +1356,12 @@ pub struct InstalledPackages {
     pub app: String,
     #[serde(default)]
     pub models: BTreeMap<String, String>,
+    /// YH · S-YH.1 (sahip Y294): kimlik (`app`; katmansızda `base`) kaydedildiği anda diskteki runtime'ın İÇERİK kimliği
+    /// (`_app_roots.json` → `icerik`; `make_base_zip` yazar). `backend_env_with` `ENV_BASE_SHA`yı yalnız bu değer diskteki runtime'la
+    /// eşleşiyorsa geçirir (`kayit_runtime_ile_ayni`). Boş = içeriği bilmeyen eski launcher kaydı / içeriksiz eski runtime. Boşken
+    /// YAZILMAZ (kayıt biçimi AYNEN); eski launcher dolu alanı yok sayar (serde bilinmeyen alanı reddetmez).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub app_icerik: String,
 }
 
 /// KURULUM KİMLİĞİ — kademeli yayın diliminin KARARLI kaynağı.
@@ -1394,7 +1404,12 @@ pub fn record_layer_sha(install_root: &Path, katman: &str, sha: &str) {
     let mut p = read_installed_packages(install_root);
     match katman {
         "deps" => p.deps = sha.to_ascii_lowercase(),
-        "app" => p.app = sha.to_ascii_lowercase(),
+        "app" => {
+            p.app = sha.to_ascii_lowercase();
+            // YH · S-YH.1: kimlikle birlikte diskteki runtime'ın içerik kimliği (kayıt app katmanı açıldıktan / sağlık kapısından
+            // SONRA yazılır → disk = kaydedilen paket). Kimlik silinince ("bilinmiyor") içerik kaydı da gider.
+            p.app_icerik = if sha.is_empty() { String::new() } else { read_app_icerik(install_root) };
+        }
         _ => return,
     }
     write_installed_packages(install_root, &p);
@@ -1432,6 +1447,35 @@ pub fn read_app_roots(install_root: &Path) -> Vec<String> {
         .collect()
 }
 
+/// YH · S-YH.1: diskteki app katmanının İÇERİK kimliği — `_app_roots.json` → `icerik` (64 hane küçük hex; backend aynı değerin ilk
+/// 12 hanesini `/api/health` `paketIcerigi` olarak verir). Dosya yok / bozuk / alan yok / biçim geçersiz (eski paket) → BOŞ.
+pub fn read_app_icerik(install_root: &Path) -> String {
+    #[derive(serde::Deserialize)]
+    struct R {
+        #[serde(default)]
+        icerik: String,
+    }
+    let ic = std::fs::read_to_string(app_roots_path(install_root))
+        .ok()
+        .and_then(|s| serde_json::from_str::<R>(&s).ok())
+        .map(|r| r.icerik.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    if ic.len() == 64 && ic.bytes().all(|b| b.is_ascii_hexdigit()) {
+        ic
+    } else {
+        String::new()
+    }
+}
+
+/// YH · S-YH.1: kayıttaki paket kimliği diskteki (başlatılacak) runtime'ın mı? Disk içerik kimliği taşımıyorsa (eski paket)
+/// doğrulanamaz → eski davranış (kayıt geçer). Taşıyorsa kayıt AYNI içeriği kaydetmiş olmalı; değilse runtime kayıt dışı değişmiştir
+/// (yerel deneme kurulumu, elle kopya) ya da kayıt içeriği bilmeyen eski launcher'dan kalmadır → kimlik backend'e GEÇMEZ, backend
+/// `buildId` olarak çalışan paketin içerik kimliğini verir (eski paketi söylemez).
+pub fn kayit_runtime_ile_ayni(p: &InstalledPackages, install_root: &Path) -> bool {
+    let disk = read_app_icerik(install_root);
+    disk.is_empty() || p.app_icerik == disk
+}
+
 /// Kurulu paket kaydını oku. Dosya yok/bozuksa BOŞ döner — bu "bilinmiyor" demektir,
 /// "güncel" değil (bkz. `flow::pending_updates`: bilinmeyen base = güncellenmeli).
 pub fn read_installed_packages(install_root: &Path) -> InstalledPackages {
@@ -1454,6 +1498,11 @@ fn write_installed_packages(install_root: &Path, p: &InstalledPackages) {
 pub fn record_base_sha(install_root: &Path, sha: &str) {
     let mut p = read_installed_packages(install_root);
     p.base = sha.to_ascii_lowercase();
+    // YH · S-YH.1: katmansız kurulumda kimlik kaynağı `base` → içerik kimliği onunla yazılır; katmanlıda (`app` dolu) kimlik
+    // kaynağı `app`tır ve onun içerik kaydı EZİLMEZ (onay sırası: app, sonra base).
+    if p.app.is_empty() {
+        p.app_icerik = if sha.is_empty() { String::new() } else { read_app_icerik(install_root) };
+    }
     write_installed_packages(install_root, &p);
 }
 
@@ -3158,6 +3207,108 @@ mod guncelleme_isareti_testleri {
         assert_eq!(backend_env_with(yok, d.path(), 8000, "").get(ENV_BASE_SHA).map(String::as_str), Some("b-sha"));
         std::fs::write(installed_packages_path(d.path()), r#"{"base":"b-sha","app":"a-sha"}"#).unwrap();
         assert_eq!(backend_env_with(yok, d.path(), 8000, "").get(ENV_BASE_SHA).map(String::as_str), Some("a-sha"));
+    }
+
+    // ═══ YH · S-YH.1 (sahip Y294): kayıt diskteki runtime'ın içerik kimliğini taşır; `ENV_BASE_SHA` YALNIZ kayıt diskle eşleşiyorsa
+    //     geçer (geçmezse backend `buildId` = çalışan paketin içerik kimliği = `paketIcerigi`; Python: test_YH_SYH1_*) ═══
+    fn syh1_isaret(root: &Path, govde: &str) {
+        let p = app_roots_path(root);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, govde).unwrap();
+    }
+
+    fn syh1_icerik(root: &Path, icerik: &str) {
+        syh1_isaret(root, &format!(r#"{{"roots":["PEMF_Backend/PEMF_Backend.exe"],"icerik":"{icerik}"}}"#));
+    }
+
+    fn syh1_kimlik(root: &Path) -> Option<String> {
+        let yok = |_: &str| -> Option<String> { None };
+        backend_env_with(yok, root, 8000, "").get(ENV_BASE_SHA).cloned()
+    }
+
+    #[test]
+    fn syh1_app_kaydi_diskteki_icerik_kimligini_yazar_bos_kimlik_temizler() {
+        let d = tempfile::tempdir().unwrap();
+        syh1_icerik(d.path(), &"AB".repeat(32));
+        record_layer_sha(d.path(), "app", &"c".repeat(64));
+        assert_eq!(read_installed_packages(d.path()).app_icerik, "ab".repeat(32), "app kaydı içerik kimliğini yazmadı");
+        record_layer_sha(d.path(), "deps", &"d".repeat(64));
+        assert_eq!(read_installed_packages(d.path()).app_icerik, "ab".repeat(32), "deps kaydı app içeriğini ezdi");
+        record_layer_sha(d.path(), "app", "");
+        assert_eq!(read_installed_packages(d.path()).app_icerik, "", "kimlik silinince içerik kaydı kaldı");
+    }
+
+    #[test]
+    fn syh1_KRITIK_kayit_disktekiyle_ayni_kimlik_GECER_runtime_kayit_disinda_degisince_GECMEZ() {
+        let d = tempfile::tempdir().unwrap();
+        syh1_icerik(d.path(), &"a".repeat(64));
+        record_layer_sha(d.path(), "app", &"c".repeat(64));
+        assert_eq!(syh1_kimlik(d.path()), Some("c".repeat(64)), "eşleşen kayıt geçmedi (sözleşme [5.5])");
+        // Yerel deneme kurulumu / elle kopya runtime'ı kayıt DIŞI değiştirdi → kayıt ESKİ paketi gösteriyor.
+        syh1_icerik(d.path(), &"b".repeat(64));
+        assert_eq!(syh1_kimlik(d.path()), None, "kayıt dışı değişen runtime'a ESKİ paketin kimliği geçti");
+        // Launcher yeni paketi kendisi kaydedince yeniden geçer.
+        record_layer_sha(d.path(), "app", &"e".repeat(64));
+        assert_eq!(syh1_kimlik(d.path()), Some("e".repeat(64)));
+    }
+
+    #[test]
+    fn syh1_KRITIK_icerigi_bilmeyen_eski_kayit_icerikli_runtime_ile_GECMEZ() {
+        // launcher ≤1.9.54 kaydı (`app_icerik` yok) + içerik kimlikli runtime → doğrulanamaz → backend içerik kimliğine düşer.
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(installed_packages_path(d.path()), r#"{"deps":"d-sha","app":"a-sha"}"#).unwrap();
+        syh1_icerik(d.path(), &"a".repeat(64));
+        assert_eq!(syh1_kimlik(d.path()), None);
+    }
+
+    #[test]
+    fn syh1_iceriksiz_eski_runtime_kayit_AYNEN_gecer_bozuk_isaret_dahil() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(installed_packages_path(d.path()), r#"{"app":"a-sha","app_icerik":"f"}"#).unwrap();
+        assert_eq!(syh1_kimlik(d.path()), Some("a-sha".to_string()), "işaretsiz runtime");
+        let hex_degil = format!(r#"{{"roots":[],"icerik":"{}"}}"#, "z".repeat(64));
+        let kisa = format!(r#"{{"roots":[],"icerik":"{}"}}"#, "a".repeat(63));
+        for govde in ["{bozuk", r#"{"roots":[]}"#, r#"{"roots":[],"icerik":7}"#, kisa.as_str(), hex_degil.as_str()] {
+            syh1_isaret(d.path(), govde);
+            assert_eq!(read_app_icerik(d.path()), "", "geçersiz işaretten içerik kimliği üretildi: {govde}");
+            assert_eq!(syh1_kimlik(d.path()), Some("a-sha".to_string()), "eski / bozuk işaret: {govde}");
+        }
+    }
+
+    #[test]
+    fn syh1_katmansiz_base_kaydi_icerigi_yazar_katmanlida_app_icerigine_DOKUNMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        syh1_icerik(d.path(), &"a".repeat(64));
+        record_base_sha(d.path(), &"b".repeat(64));
+        assert_eq!(read_installed_packages(d.path()).app_icerik, "a".repeat(64), "katmansız base kaydı içeriği yazmadı");
+        assert_eq!(syh1_kimlik(d.path()), Some("b".repeat(64)));
+        // Katmanlı: kimlik kaynağı `app` → base kaydı (onay sırası: app, sonra base) app'in içerik kaydını EZMEZ.
+        record_layer_sha(d.path(), "app", &"c".repeat(64));
+        syh1_icerik(d.path(), &"e".repeat(64)); // runtime kayıt dışı değişti
+        record_base_sha(d.path(), &"b".repeat(64));
+        assert_eq!(read_installed_packages(d.path()).app_icerik, "a".repeat(64), "base kaydı app'in içerik kaydını ezdi");
+        assert_eq!(syh1_kimlik(d.path()), None, "base kaydı kayıt dışı değişen runtime'ı 'doğruladı'");
+    }
+
+    #[test]
+    fn syh1_bos_alan_YAZILMAZ_eski_launcher_dolu_kaydi_okur() {
+        let d = tempfile::tempdir().unwrap();
+        record_layer_sha(d.path(), "deps", &"d".repeat(64));
+        let metin = std::fs::read_to_string(installed_packages_path(d.path())).unwrap();
+        assert!(!metin.contains("app_icerik"), "boş içerik alanı kayda yazıldı (kayıt biçimi değişti): {metin}");
+        syh1_icerik(d.path(), &"a".repeat(64));
+        record_layer_sha(d.path(), "app", &"c".repeat(64));
+        let metin = std::fs::read_to_string(installed_packages_path(d.path())).unwrap();
+        // launcher ≤1.9.54'ün yapısı (alan yok) yeni kaydı OKUR — geri dönüşte kayıt "bilinmiyor"a düşmez.
+        #[derive(serde::Deserialize)]
+        struct Eski {
+            #[serde(default)]
+            deps: String,
+            #[serde(default)]
+            app: String,
+        }
+        let e: Eski = serde_json::from_str(&metin).expect("eski launcher yeni kaydı okuyamadı");
+        assert_eq!((e.deps, e.app), ("d".repeat(64), "c".repeat(64)));
     }
 
     // ═══ KP-4 A4 · Win32 SALT-OKUR sorgular — gerçek kayıt / ACL / güvenlik duvarı YAZIMI YOK ═══

@@ -288,9 +288,10 @@ async def health_check(request: Request):
         # sürümün söyleyemediğini söyler: aynı 1.9.5 farklı paket içeriği çalıştırabilir.
         "version": _api._APP_VERSION,
         "buildId": (_api._BUILD_ID or None),
-        # YH-A4 (Tezgâh-2 listesi 5): `buildId` launcher KAYDINI söyler (sözleşme [5.5] — manifest / CHANGELOG eşleşmesi AYNEN);
-        # `paketIcerigi` ÇALIŞAN dosyaların kimliğidir (app katmanı içerik özeti, `_app_roots.json`). İkisi yerel deneme kurulumunda
-        # ayrışır: kayıt yayındaki paketi, `paketIcerigi` diskteki runtime'ı söyler. Kaynaktan / eski pakette None (uydurma YOK).
+        # YH-A4 (Tezgâh-2 listesi 5): `paketIcerigi` ÇALIŞAN dosyaların kimliğidir (app katmanı içerik özeti, `_app_roots.json`).
+        # S-YH.1 (sahip Y294): `buildId` launcher kaydı diskteki runtime'la EŞLEŞİYORSA manifest sha'sı (sözleşme [5.5] — CHANGELOG
+        # eşleşmesi AYNEN), değilse çalışan paketin içerik kimliği (= `paketIcerigi`) → iki alan çelişmez (`get_build_id`).
+        # Kaynaktan / eski pakette None (uydurma YOK).
         "paketIcerigi": (get_paket_icerigi() or None),
         # Launcher'ın "bu port GERÇEKTEN benim başlattığım backend mi?" doğrulaması (bkz. üstteki not).
         "launcherNonce": (_health_nonce if (_health_nonce and _loopback_only) else None),

@@ -862,11 +862,19 @@ def get_build_id() -> str:
     İki cihaz aynı `1.9.5`i raporlayıp farklı paket içeriği çalıştırabilir (yeniden yayın,
     yarım güncelleme, elle kopyalanmış dosya). Launcher kurduğu paketin sha256'sını
     `PEMF_BASE_SHA` ile geçirir; kısaltılmış hâli olay kaydında "hangi ikili" sorusunu
-    tek başına cevaplar. Launcher'sız çalıştırmada boş döner (uydurma değer ÜRETİLMEZ)."""
+    tek başına cevaplar.
+
+    YH · S-YH.1 (sahip Y294): launcher (1.9.55) `PEMF_BASE_SHA`yı YALNIZ kaydı diskteki runtime'la EŞLEŞİYORSA geçirir
+    (`install.rs` `kayit_runtime_ile_ayni`). Geçmediyse (runtime kayıt dışı değişti / kayıt içeriği bilmiyor) ya da değer
+    geçersizse kimlik ÇALIŞAN runtime'ın içerik kimliğidir (`get_paket_icerigi` = `/api/health` `paketIcerigi`) → iki alan
+    hiçbir durumda çelişmez, `buildId` eski paketi söylemez. İkisi de yoksa (kaynak ağacından koşu) boş döner (uydurma değer
+    ÜRETİLMEZ)."""
     import os as _os
 
     sha = (_os.environ.get("PEMF_BASE_SHA") or "").strip().lower()
-    return sha[:12] if len(sha) >= 12 else ""
+    if len(sha) >= 12:
+        return sha[:12]
+    return get_paket_icerigi()
 
 
 _PAKET_ICERIGI: str | None = None
@@ -876,7 +884,8 @@ def get_paket_icerigi() -> str:
     """ÇALIŞAN runtime'ın KENDİ içerik kimliği — YH-A4 (Tezgâh-2 listesi 5).
 
     `get_build_id` launcher'ın KAYDINI söyler (`installed_packages.json` → `PEMF_BASE_SHA`; sözleşme [5.5]: manifest app-katmanı
-    sha'sı = CHANGELOG etiketi). Runtime kayıt dışı değiştirilince (yerel deneme kurulumu, elle kopya) kayıt ESKİ paketi gösterir:
+    sha'sı = CHANGELOG etiketi) — S-YH.1'den beri yalnız kayıt diskteki runtime'la eşleşiyorsa, değilse bu işlevin değerini.
+    S-YH.1 öncesi: runtime kayıt dışı değiştirilince (yerel deneme kurulumu, elle kopya) kayıt ESKİ paketi gösteriyordu:
     13-11 tezgâhında ODK'nın yerel runtime'ı yayındaki buildId ile göründü. `make_base_zip` app katmanının içerik özetini
     katmanın kendi sınır dosyasına (`PEMF_Backend/_app_roots.json` → `icerik`, EXE'nin yanında) yazar; bu işlev onu okur (ilk 12
     hane). Kaynak ağacından koşuda, eski (alanı olmayan) pakette ya da bozuk dosyada BOŞ döner — uydurma değer ÜRETİLMEZ.
