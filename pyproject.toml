@@ -169,7 +169,8 @@ omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 # KP-3 AŞAMA D (2026-11-08, uç 6c7d4f10): tam süit (modeller açık, @argsfile) TOPLAM %99,88 (@ c83b47e9; C18 kalan 30 satırı kapattı + 1 ULASILAMAZ etiketi) (25865 ifade, 31 kapsanmayan); CI eşdeğeri
 # (modelsiz) tahmini ~%99 (KP-2'de modelli ↔ CI farkı 0,83 puan) → yuvarlama payıyla temkinli. Eşik 96 → 98. Taban artık 98.
 # KP-4 C (2026-11-11): CI eşdeğeri (temiz klon kp2s @ 147bcaea, modelsiz / eserSİZ, tests.yml Windows adımı aynen) TOPLAM %99,98 (26504 ifade, 5 kapsanmayan — hepsi ai_router model yolları). Eşik 98 → 99. Taban artık 99.
-fail_under = 99
+# KP-6 F (2026-11-16): kapanış (modelli tam süit, uç 03186e40) %100 (26 924 deyim, 0 eksik) + CI-eşdeğeri (E13 paketli, kp2s) ∪ K6C10 testleri %100 (0 eksik) → eşik 99 → 100 (yalnız ölçülen tutuyor; fail_under=100 tek eksik satırda da durdurur). Taban artık 100.
+fail_under = 100
 show_missing = false
 
 [tool.mypy]
