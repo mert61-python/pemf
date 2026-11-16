@@ -116,6 +116,14 @@ def _portlari_bul(istenen: str | None) -> list[str]:
 
 
 def main() -> int:
+    # YH-A4 (Tezgâh-2 listesi 7): Türkçe Windows konsolu (cp1254) karar satırındaki "✅ / ❌ / ❓"yi kodlayamıyor → betik tam
+    # cevabı basacağı anda UnicodeEncodeError ile ÇÖKÜYORDU (yalnız PYTHONIOENCODING=utf-8 ile geçiyordu). Çıkış UTF-8'e çevrilir
+    # (make_manifest deseni); yönlendirilmiş / eski akışta `reconfigure` yoksa sessizce geçilir.
+    for _akis in (sys.stdout, sys.stderr):
+        try:
+            _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001
+            pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default=None, help="orn. COM10 (verilmezse otomatik aranir)")
     ap.add_argument("--sure", type=float, default=12.0, help="her portta dinleme suresi (sn)")
