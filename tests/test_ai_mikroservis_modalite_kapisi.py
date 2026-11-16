@@ -285,6 +285,38 @@ def test_KRITIK_mikroserviste_GERCEK_kayit_hala_DEVREDILIR_karsit_kanit(client, 
     )
 
 
+def _sesli_wav(tmp_path: Path) -> Path:
+    """1 sn 440 Hz, genlik 0,5 sinüs (RMS ≈ −9 dBFS; sessizlik eşiği −45 dBFS) 22050 Hz mono 16-bit WAV."""
+    import math
+    import struct
+    import wave
+
+    p = tmp_path / "sesli.wav"
+    ornek = [int(0.5 * 32767 * math.sin(2 * math.pi * 440 * i / 22050)) for i in range(22050)]
+    with wave.open(str(p), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(22050)
+        w.writeframes(struct.pack(f"<{len(ornek)}h", *ornek))
+    return p
+
+
+@pytest.mark.skipif((not _ffmpeg_var()) and not capraz.ZORUNLU, reason="imageio_ffmpeg binary yok")
+def test_KRITIK_FIKSTURSUZ_sesli_kayit_mikroservise_BAYTLARIYLA_devredilir(client, mikroservis, tmp_path):
+    """KP-6: yukarıdaki karşıt kanıtın FİKSTÜRSÜZ ikizi. Gerçek kayıt (`10a_KediSesi_mutlu.mp3`) izlenmez → CI'da o test
+    atlanıyordu ve ses ucunun devretme satırı CI'da HİÇ koşmuyordu (CI-eşdeğeri ölçümü: `ai_router` tek eksik satır). Sentetik
+    sesli WAV sessizlik kapısından geçer; devredilen baytlar dosyanın KENDİSİ olmalı (tükenmiş `file` → boş gövde tuzağı)."""
+    p = _sesli_wav(tmp_path)
+    ham = p.read_bytes()
+    with p.open("rb") as f:
+        r = client.post("/api/ai/sound/cat", files={"file": (p.name, f, "audio/wav")})
+
+    assert r.status_code == 200, f"sesli sentetik kayit reddedildi: {r.text[:200]}"
+    assert len(mikroservis) == 1 and mikroservis[0]["name"] == "sound", f"devredilmedi: {mikroservis}"
+    assert base64.b64decode(mikroservis[0]["kwv"]["audio_base64"]) == ham, "devredilen baytlar dosyayla AYNI DEGIL"
+    assert mikroservis[0]["kwv"].get("data") is None, "explain istenmedi ama XAI formu gonderildi"
+
+
 @pytest.mark.skipif((not _ffmpeg_var()) and not capraz.ZORUNLU, reason="imageio_ffmpeg binary yok")
 def test_GOMULU_mod_sessizlik_karsit_kanit(client, api, monkeypatch, tmp_path):
     """Karşıt-kanıt: mikroservis KAPALIYKEN sessizlik kapısı davranışı hiç değişmemeli."""

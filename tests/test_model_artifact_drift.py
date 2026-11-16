@@ -25,6 +25,7 @@ dosyadaki baseline'ı boşalt ve `TOLERE_EDILEN_SAPMA = False` yap.
 Bu test AĞIR bağımlılık İSTEMEZ — pickle baytlarını okur, sklearn'i import etmez.
 """
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -147,16 +148,69 @@ def test_baselinedaki_eser_KAYBOLMAZ(olculen):
     devam eder — koruma kalkmaz, yalnız ortamda var olamayacak dosyalar beklenmez.
     """
     mevcut = set(olculen)
-    izlenen = _izlenen_eserler()
-    if izlenen is None:
-        beklenen = set(BASELINE)  # git yok → eski (tam) davranışa dön
-    else:
-        izlenmeyen = set(BASELINE) - izlenen
-        model_seti_kurulu = bool(izlenmeyen & mevcut)
-        beklenen = set(BASELINE) if model_seti_kurulu else (set(BASELINE) & izlenen)
-
+    beklenen = beklenen_eserler(set(BASELINE), _izlenen_eserler(), mevcut, _ci_paketi_eserleri())
     kayip = sorted(beklenen - mevcut)
     assert not kayip, f"BASELINE'da olup diskte olmayan eser: {kayip}"
+
+
+def _ci_paketi_eserleri() -> set:
+    """CI model paketinin (E13, `scripts/ci_modelleri_listesi.json`) depo ağacına koyduğu `ai_hub/**/*.pkl` eserleri (ai_hub göreli)."""
+    veri = json.loads((KOK / "scripts" / "ci_modelleri_listesi.json").read_text(encoding="utf-8"))
+    on = "depo/ai_hub/"
+    return {d["yol"][len(on) :] for d in veri["dosyalar"] if d["yol"].startswith(on) and d["yol"].endswith(".pkl")}
+
+
+def beklenen_eserler(baseline: set, izlenen, mevcut: set, ci_paketi: set) -> set:
+    """Diskte BULUNMASI gereken BASELINE eserleri.
+
+    ⚠️ KP-6 (2026-11-16, CI-eşdeğeri ölçümü): E13 CI model paketi izlenmeyen `inference_human_kidney_rna/scaler.pkl`i depo
+    ağacına koyar. Eski kural ("izlenmeyenlerden HERHANGİ biri varsa tam model seti kurulu") bunu tam set sandı ve CI'da
+    paketle birlikte em_petri ×3 + kidney_disease ölçekleyicilerini bekleyip KIRMIZI verdi (CI anahtarı eklendiği gün CI düşerdi).
+    Doğru çizgi: tam set, CI paketinde OLMAYAN bir izlenmeyen eserle anlaşılır; CI paketinin eserleri ise biri varsa HEPSİ
+    beklenir (paket kısmi yerleşemez). İzlenen eser her ortamda zorunlu; git yoksa (izlenen None) tam BASELINE."""
+    if izlenen is None:
+        return set(baseline)  # git yok → eski (tam) davranışa dön
+    izlenmeyen = baseline - izlenen
+    ci = ci_paketi & izlenmeyen
+    if (izlenmeyen - ci) & mevcut:
+        return set(baseline)
+    return (baseline & izlenen) | (ci if ci & mevcut else set())
+
+
+def test_KP6_ci_paketi_eserleri_BASELINEin_izlenmeyen_eserleri():
+    """Listedeki `.pkl` eserleri BASELINE'da olmalı (olmayan bir ad `beklenen_eserler`de sessizce etkisiz kalırdı)."""
+    ci = _ci_paketi_eserleri()
+    assert ci == {"inference_human_kidney_rna/scaler.pkl"}, ci
+    assert ci <= set(BASELINE)
+
+
+_B = {"a_izli.pkl", "b_izli.pkl", "c_petri.pkl", "d_ckd.pkl", "e_ci.pkl"}
+_IZ = {"a_izli.pkl", "b_izli.pkl"}
+_CI = {"e_ci.pkl"}
+
+
+@pytest.mark.parametrize(
+    "mevcut,kayip",
+    [
+        # CI paketiyle (E13): izlenen + paket eseri var → tam set SANILMAZ, kayıp YOK (KP-6 öncesi c, d "kayıp" sayılıyordu)
+        ({"a_izli.pkl", "b_izli.pkl", "e_ci.pkl"}, set()),
+        # temiz CI (paketsiz): yalnız izlenenler beklenir
+        ({"a_izli.pkl", "b_izli.pkl"}, set()),
+        # izlenen eser kaybı HER ortamda yakalanır (paketli de)
+        ({"a_izli.pkl", "e_ci.pkl"}, {"b_izli.pkl"}),
+        ({"a_izli.pkl"}, {"b_izli.pkl"}),
+        # geliştirici / yayın makinesi: tam set kurulu, kısmi kayıp YAKALANIR (paket eseri dahil)
+        ({"a_izli.pkl", "b_izli.pkl", "c_petri.pkl", "e_ci.pkl"}, {"d_ckd.pkl"}),
+        ({"a_izli.pkl", "b_izli.pkl", "c_petri.pkl", "d_ckd.pkl"}, {"e_ci.pkl"}),
+        ({"a_izli.pkl", "b_izli.pkl", "c_petri.pkl", "d_ckd.pkl", "e_ci.pkl"}, set()),
+    ],
+)
+def test_KP6_beklenen_eserler_karari(mevcut, kayip):
+    assert beklenen_eserler(_B, _IZ, mevcut, _CI) - mevcut == kayip
+
+
+def test_KP6_beklenen_eserler_git_yoksa_TAM_baseline():
+    assert beklenen_eserler(_B, None, set(), _CI) == _B
 
 
 def test_runtime_sklearn_sabiti_baseline_ile_TUTARLI():

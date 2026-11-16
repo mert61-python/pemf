@@ -238,6 +238,22 @@ def test_KRITIK_UC_aralik_disini_422_ile_REDDEDER(client, yakala):
     assert not yakala, "aralik disi istek boru hattini KURDU (dogrulama tespitten SONRA)"
 
 
+def test_KRITIK_UC_aralik_disini_FIKSTURSUZ_422_ile_REDDEDER(client, yakala):
+    """KP-6: yukarıdakinin FİKSTÜRSÜZ ikizi. Sınır doğrulaması görüntüyü OKUMADAN önce çalışır, yani gerçek petri fotoğrafına
+    gerek yok — ama tek 422 testi `_gonder` (izlenmeyen `06_PetriKuyu.jpg`) üzerinden gittiği için CI'da atlanıyor ve uçtaki
+    `AyarHatasi → 422` dalı CI'da HİÇ koşmuyordu (CI-eşdeğeri ölçümü). Gövde bilerek GÖRÜNTÜ DEĞİL: doğrulama sıradan
+    kayarsa (önce çözümleme) yanıt 422 + `resize_max` metni olmaz."""
+    r = client.post(
+        "/api/ai/vision/em_petri",
+        files={"file": ("bos.jpg", b"\x00" * 64, "image/jpeg")},
+        data={"resize_max": "1"},
+    )
+    assert r.status_code == 422, r.text
+    detay = r.json().get("detail", "")
+    assert "resize_max" in detay and "320" in detay, detay
+    assert not yakala, "aralik disi istek boru hattini KURDU"
+
+
 def test_YANIT_ETKIN_ayarlari_tasir(client, yakala):
     """Sonuç hangi eşiklerle üretildi? Gevşetilmiş bir koşu arayüzde "normal" görünmemeli."""
     r = _gonder(client, plaus_conf=0.42)
