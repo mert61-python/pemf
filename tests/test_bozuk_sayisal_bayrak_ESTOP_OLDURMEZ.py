@@ -349,6 +349,8 @@ def test_KARSIT_bekci_gercek_ESTOP_bulut_aynasi_denemesini_GORUR(tmp_path):
     )
     env = _ortam(tmp_path)
     env["PEMF_CLOUD_PROVISION_PATH"] = str(prov)
+    # YH-A3 (Y289): bulut aynası YALNIZ ESP AÇIKKEN denenir — karşıt kanıt aynanın gerçekten koştuğu dünyada ölçülür.
+    env["PEMF_ESP_ENABLED"] = "1"
     p = _kos(tmp_path, "PEMF_JETON_BORC_TAVANI", None, "servers.jeton", "BORC_TAVANI", env=env)
     s = _sonuc(p.stdout)
     assert p.returncode == 0 and s is not None, p.stderr[-600:]

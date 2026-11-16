@@ -7499,15 +7499,18 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
     # ⚠️ try/except ŞART (review F2): thread tükenmesinde istisna buradan yükselirse aşağıdaki
     # YEREL ESP STOP havuzu + live_state sıfırlama + DB finalize ATLANIR — ayna best-effort,
     # E-stop'un esas yolunu asla düşüremez (_estop_ack_watch spawn'ındaki korumanın simetriği).
-    try:
-        threading.Thread(
-            target=_estop_cloud_mirror,
-            args=(list(_estop_coils), reason),
-            name="estop-cloud-mirror",
-            daemon=True,
-        ).start()
-    except Exception:
-        logging.getLogger(__name__).error("E-stop bulut-ayna thread'i açılamadı (yerel yol sürüyor).")
+    # ⚠️ YH-A3 (Y289, P0-2): ayna YALNIZ ESP AÇIKKEN — ESP söküldü (Y230), aynanın tüketicisi (buluta göçmüş ESP) yok;
+    # her ACİL DURDUR'da eski HiveMQ kimliğiyle boşuna bağlanıp zaman aşımına düşüyordu (AP B9). Yerel yol aşağıda AYNEN.
+    if live_state.esp_etkin():
+        try:
+            threading.Thread(
+                target=_estop_cloud_mirror,
+                args=(list(_estop_coils), reason),
+                name="estop-cloud-mirror",
+                daemon=True,
+            ).start()
+        except Exception:
+            logging.getLogger(__name__).error("E-stop bulut-ayna thread'i açılamadı (yerel yol sürüyor).")
     import concurrent.futures as _cf
 
     with _cf.ThreadPoolExecutor(max_workers=max(1, len(_estop_coils))) as _ex:

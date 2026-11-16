@@ -120,6 +120,8 @@ def test_ESTOP_her_yan_arizada_istisnasiz_STOP_gonderir_kismi_sonuc(ortam, monke
     from utils import dongu_disi_yazim, estop_mandali, firmware_yakma_penceresi
 
     a = ortam.a
+    # YH-A3 (Y289): bulut aynası iş parçacığı YALNIZ ESP AÇIKKEN açılır — "her yan arıza" senaryosu aynanın açılamamasını da kapsar.
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     ortam.engelli.extend(["estop-ack-", "estop-cloud-mirror"])
     core = SimpleNamespace(hw_yazim_isareti=_patlayan(OSError("iz yok")))
     hc = SimpleNamespace(
