@@ -7,11 +7,14 @@
  * ⚠️ ACİL DURDUR bu pencerenin ALTINDA KALMAZ: kayan ACİL DURDUR `document.body` portalıyla her RN-web Modal'ının üstündedir
  * (`UstKatman.web.tsx`, D1.E05 · İG-6.6); bu pencere de sıradan bir Modal'dır (Ö.4-Y8: STOP hiçbir pencereye bağlanmaz).
  * Sağlayıcı sökülürse bekleyen sorular "vazgeç" (false) ile çözülür — askıda söz kalmaz.
+ * KISA EKRAN (YH-B1 kapı bulgusu, test_modal_kaydirilabilir_kapisi): kart ortak `ScrollableModalCard` — başlık ve eylem satırı
+ * SABİT, gövde kaydırılır; uzun metinde / yatay telefonda Vazgeç / Onay ekran dışına itilmez. Perde dokunuşu KAPATMAZ (onay
+ * kazara verilmez / geçilmez); Esc / geri tuşu = Vazgeç.
  */
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Card } from "@/components/ui/Card";
+import { ScrollableModalCard } from "@/components/ui/ScrollableModalCard";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { OnayIstegi, setOnayIsleyici } from "@/services/onayKoprusu";
 
@@ -56,41 +59,45 @@ export function OnayPenceresiSaglayici({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      <Modal visible={!!ust} transparent animationType="fade" onRequestClose={() => kapat(uyari)}>
-        <View style={styles.perde}>
-          {ust ? (
-            <Card style={styles.kart}>
-              <View style={styles.govde} accessibilityRole="alert" accessibilityViewIsModal testID="onay-penceresi">
-                <Text style={styles.baslik} testID="onay-penceresi-baslik">{ust.baslik}</Text>
-                {ust.govde ? <Text style={styles.metin} testID="onay-penceresi-govde">{ust.govde}</Text> : null}
-                <View style={styles.satirBtn}>
-                  {uyari ? null : (
-                    <TouchableOpacity style={styles.ikincil} onPress={() => kapat(false)} accessibilityRole="button"
-                      testID="onay-penceresi-vazgec">
-                      <Text style={styles.ikincilText}>{t("ortak.iptal")}</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={styles.birincil} onPress={() => kapat(true)} accessibilityRole="button"
-                    testID="onay-penceresi-onay">
-                    <Text style={styles.birincilText}>{uyari ? t("ortak.kapat") : ust.onayEtiketi || t("ortak.onayla")}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Card>
-          ) : null}
-        </View>
-      </Modal>
+      <ScrollableModalCard
+        visible={!!ust}
+        onRequestClose={() => kapat(uyari)}
+        maxWidth={rs(440)}
+        testID="onay-penceresi-kart"
+        header={
+          ust ? (
+            <View accessibilityRole="alert" testID="onay-penceresi">
+              <Text style={styles.baslik} testID="onay-penceresi-baslik">{ust.baslik}</Text>
+            </View>
+          ) : null
+        }
+        footer={
+          ust ? (
+            <View style={styles.satirBtn}>
+              {uyari ? null : (
+                <TouchableOpacity style={styles.ikincil} onPress={() => kapat(false)} accessibilityRole="button"
+                  testID="onay-penceresi-vazgec">
+                  <Text style={styles.ikincilText}>{t("ortak.iptal")}</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.birincil} onPress={() => kapat(true)} accessibilityRole="button"
+                testID="onay-penceresi-onay">
+                <Text style={styles.birincilText}>{uyari ? t("ortak.kapat") : ust.onayEtiketi || t("ortak.onayla")}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
+      >
+        {ust?.govde ? <Text style={styles.metin} testID="onay-penceresi-govde">{ust.govde}</Text> : null}
+      </ScrollableModalCard>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  perde: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: spacing.md },
-  kart: { width: "100%", maxWidth: rs(440), maxHeight: "92%" },
-  govde: { gap: spacing.sm },
   baslik: { color: colors.text, fontSize: rf(16), fontWeight: "800" },
   metin: { color: colors.textMuted, fontSize: rf(13), lineHeight: rf(19) },
-  satirBtn: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
+  satirBtn: { flexDirection: "row", gap: spacing.sm },
   birincil: { flex: 1, backgroundColor: colors.cyan, borderRadius: radius.md, paddingVertical: rs(11), alignItems: "center",
               minHeight: touch.min, justifyContent: "center" },
   birincilText: { color: "#04121F", fontWeight: "800", fontSize: rf(13) },

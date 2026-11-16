@@ -10,9 +10,8 @@
  * sağlayıcı sökülünce bekleyen soru false. Telefon (native) `Alert.alert` yolu DEĞİŞMEDİ (KP3-servis-kollari "native onay").
  * ⚠️ MUTASYON: apiClient'ta köprü çağrısı silinirse / pencere onay-vazgeç değerlerini karıştırırsa KIRMIZI.
  */
-import React from "react";
 import { Modal, Platform } from "react-native";
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import i18n from "i18next";
 import { platformAlert, platformConfirm } from "@/services/apiClient";
 import { OnayPenceresiSaglayici } from "@/components/ui/OnayPenceresiSaglayici";
@@ -97,6 +96,21 @@ it("web'de platformAlert uygulama içi TEK düğmeli pencere ('Kapat'); yerli uy
   expect(screen.queryByTestId("onay-penceresi")).toBeNull();
 });
 
+it("KRİTİK (YH-B1 kapı bulgusu): KISA EKRANDA gövde KAYDIRILIR, eylem satırı (Vazgeç / Onay) kaydırma alanının DIŞINDA sabit", async () => {
+  // test_modal_kaydirilabilir_kapisi sözleşmesi: yatay telefonda / uzun metinde düğmeye ulaşılabilmeli (ScrollableModalCard).
+  agac();
+  await act(async () => {
+    void platformConfirm("Uzun onay", "Bobin bilgisi satırı.\n".repeat(120), "Evet");
+  });
+  const kaydirma = screen.queryByTestId("onay-penceresi-kart-govde");
+  expect(kaydirma).not.toBeNull(); // gövde kaydırma alanında (ScrollableModalCard gövdesi = ScrollView)
+  expect(within(kaydirma!).queryByTestId("onay-penceresi-govde")).not.toBeNull();
+  expect(within(kaydirma!).queryByTestId("onay-penceresi-onay")).toBeNull(); // eylem satırı kaydırma alanının DIŞINDA
+  expect(within(kaydirma!).queryByTestId("onay-penceresi-vazgec")).toBeNull();
+  expect(within(kaydirma!).queryByTestId("onay-penceresi-baslik")).toBeNull(); // başlık da sabit
+  expect(screen.getByTestId("onay-penceresi-onay")).toBeTruthy();
+});
+
 it("KARŞIT: sağlayıcı YOKKEN eski yerli pencereye düşer (sessiz 'evet' YOK) — yerli yanıt aynen döner", async () => {
   yerliOnay.mockReturnValueOnce(false);
   await expect(platformConfirm("Sil", "Emin misiniz?")).resolves.toBe(false);
@@ -117,32 +131,4 @@ it("sağlayıcı SÖKÜLÜNCE bekleyen soru false ile çözülür (askıda söz 
   expect(yerliOnay).toHaveBeenCalledTimes(1);
 });
 
-it("KRİTİK: kök düzen (app/_layout) sağlayıcıyı TAKAR — gerçek uygulamada web onayları köprüye düşer", () => {
-  // KP3-RootLayout deseni: yalıtılmış kayıtta kök düzen + AYNI kayıttaki köprü (tek React örneği).
-  let Kok: React.ComponentType | undefined;
-  let kopru: typeof import("@/services/onayKoprusu") | undefined;
-  jest.isolateModules(() => {
-    jest.doMock("react", () => React);
-    jest.doMock("@/theme/fonts", () => ({ useFonts: () => [true], INTER_FONTS: {}, applyGlobalInter: () => undefined }));
-    jest.doMock("expo-router", () => ({ Stack: () => null }));
-    jest.doMock("expo-status-bar", () => ({ StatusBar: () => null }));
-    jest.doMock("react-native-safe-area-context", () => ({
-      SafeAreaProvider: ({ children }: { children: unknown }) => children,
-      useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-    }));
-    jest.doMock("@/components/domain/MobileUpdateGate", () => ({
-      MobileUpdateGate: ({ children }: { children: unknown }) => children,
-    }));
-    Kok = require("../../../../app/_layout").default;
-    kopru = require("@/services/onayKoprusu");
-  });
-  expect(kopru!.uygulamaIciOnay({ baslik: "x", govde: "y", tur: "onay" })).toBeNull(); // aparat: takılmadan önce boş
-  const u = render(React.createElement(Kok!));
-  let soz: Promise<boolean> | null = null;
-  act(() => {
-    soz = kopru!.uygulamaIciOnay({ baslik: "x", govde: "y", tur: "onay" });
-  });
-  expect(soz).not.toBeNull();
-  u.unmount();
-  return expect(soz).resolves.toBe(false);
-});
+// Kök düzen testi → OnayPenceresi.YH_A4.kokDuzen.test.tsx (YH-B1: dış kayıtta önbelleğe alınan güvenli alan modülü yalıtılmış taklidi gölgeler).
