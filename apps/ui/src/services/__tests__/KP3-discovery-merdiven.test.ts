@@ -18,6 +18,8 @@
  * GERÇEK: config (adres doğrulama + kalıcılık), apiClient (`isPrivateHost`), duzHttpKapisi, AsyncStorage (jest.setup bellek sahtesi).
  */
 const mockZc = { kip: "paketYok" as "paketYok" | "bul" | "sessiz" | "kurucuAtar", adres: [] as string[], durdur: 0, sok: 0, stopAtar: false };
+// ⚠️ KP-6 madde 14: `{ virtual: true }` YOK — paket GERÇEK bağımlılık; sanal mock jest-resolve'un işçi içinde paylaşılan modül kimliği
+// önbelleğiyle sıraya bağlı KAÇIYORDU ("paketYok" kipi `default` alıcısıyla aynı ölçülür). Gerekçe: LiveDataContext.BE1.yenidenBaglanma.
 jest.mock(
   "react-native-zeroconf",
   () => {
@@ -41,7 +43,6 @@ jest.mock(
       },
     };
   },
-  { virtual: true },
 );
 let mockNetIp = "10.0.5.23";
 jest.mock("@react-native-community/netinfo", () => ({

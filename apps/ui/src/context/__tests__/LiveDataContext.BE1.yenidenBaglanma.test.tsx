@@ -18,6 +18,10 @@ jest.mock("@/services/apiClient", () => ({
 }));
 // İnternet / bulut yok (Supabase cihaz kaydı erişilemez) — G/Ç sınırı.
 jest.mock("@/services/deviceRegistry", () => ({ getRemoteUrlForDevice: jest.fn(async () => null) }));
+// ⚠️ KP-6 madde 14: `{ virtual: true }` YOK — paket GERÇEK bağımlılık (package.json). jest-resolve 29 modül kimliğini işçi içinde
+// dosyalar arası PAYLAŞILAN önbellekte (`from + ad`) tutar, kimlik ise o dosyanın sanal mock kaydına göre değişir: sanal OLMAYAN
+// sahteli bir dosya (KP2_SettingsScreen_native) aynı işçide ÖNCE koşunca `discovery.ts`in require'ı bu sahteyi kaçırıp gerçek
+// modülü alıyordu → mDNS null, tam jest listesinde aralıklı KIRMIZI. Kapı: tests/test_jest_sanal_mock_KURULU_pakette_YOK_KP6.py
 jest.mock(
   "react-native-zeroconf",
   () => {
@@ -38,8 +42,7 @@ jest.mock(
         removeDeviceListeners() {}
       },
     };
-  },
-  { virtual: true }
+  }
 );
 const mockNet: { dinleyici: ((s: unknown) => void) | null } = { dinleyici: null };
 jest.mock("@react-native-community/netinfo", () => ({
