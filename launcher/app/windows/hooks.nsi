@@ -314,6 +314,14 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
   ${If} ${Silent}
   ${OrIf} $UpdateMode = 1
     DetailPrint "$(PEMF_yukseltmeKorunuyor)"
+    ; YH · S-YH.2 (sahip Y294): GERÇEK sessiz kaldırmada (`uninstall.exe /S`, yükseltme DEĞİL) indirilenler ve veri kökü kaydı
+    ; (`veri_koku.txt` — yeniden kurulum aynı hasta veri kökünü bulsun) KORUNUR, ama `backend.port` SİLİNİR: PREUNINSTALL her yolda
+    ; önce bobin E-stop'unu POST'ladı, sonra `taskkill /F /IM PEMF_Backend.exe` ile backend'i öldürdü → dosya ölü bir portun bayat
+    ; ipucudur (işaretli dal aşağıda onu zaten siliyor). Yükseltmede (`/UPDATE`) hiçbir şey silinmez — launcher yeni backend'i
+    ; başlatınca dosyayı yeniden yazar. Kapı: tests/test_YH_SYH2_sessiz_kaldirma_backend_port_SILINIR_veri_koku_KALIR.py.
+    ${If} $UpdateMode <> 1
+      Delete "$INSTDIR\backend.port"
+    ${EndIf}
   ${ElseIf} $DeleteAppDataCheckboxState = 1
     DetailPrint "$(PEMF_veriSilIsaretli)"
     RMDir /r "$INSTDIR\runtime"
