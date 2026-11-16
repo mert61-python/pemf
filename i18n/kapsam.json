@@ -150,7 +150,7 @@
    "aciklama": "ortak bileşenler + kabuk (AppShell, bildirim, toast, hata sınırı, sayfa başlıkları, tema)",
    "durum": "tamam",
    "metin": 140,
-   "dosyaSayisi": 41
+   "dosyaSayisi": 42
   },
   {
    "ad": "arayuz-02-giris-hesap",
@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 25
+   "dosyaSayisi": 26
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -13316,6 +13316,28 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": "ODAK (istem 45) onay özeti + 24 kuyu haritası; bütün metin katalogdan"
+  },
+  "apps/ui/src/components/ui/OnayPenceresiSaglayici.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-01-ortak-kabuk",
+   "sira": 1,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/ui/src/services/onayKoprusu.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
   }
  }
 }

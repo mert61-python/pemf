@@ -2,6 +2,7 @@
 import { serviceConfig } from "@/services/config";
 import { Alert, Platform } from "react-native";
 import { emitToast } from "@/services/toastBridge";
+import { uygulamaIciOnay } from "@/services/onayKoprusu";
 import { etkinDilDegeri } from "@/i18n/durum";
 import i18n from "i18next";
 import { isCleartextAllowed, isPrivateHost } from "@/services/duzHttpKapisi";
@@ -16,18 +17,23 @@ export {
   soketAdresiGuvenliMi,
 } from "@/services/duzHttpKapisi";
 
-/** Web-güvenli uyarı — Alert.alert web'de no-op olduğundan window.alert'e düşer. */
+/** Web-güvenli uyarı — Alert.alert web'de no-op. YH-A4: web'de önce UYGULAMA İÇİ pencere (`onayKoprusu`; tarayıcı yerlisi
+ *  "127.0.0.1:8000 şunu diyor:" başlığı yok); sağlayıcı takılı değilse window.alert'e düşer. */
 export function platformAlert(title: string, message: string) {
   if (Platform.OS === "web") {
+    if (uygulamaIciOnay({ baslik: title, govde: message, tur: "uyari" })) return;
     if (typeof window !== "undefined") window.alert(`${title}\n${message}`);
   } else {
     Alert.alert(title, message);
   }
 }
 
-/** Web-güvenli onay diyaloğu — Alert.alert çoklu-buton web'de tetiklenmez (window.confirm'e düşer). */
+/** Web-güvenli onay diyaloğu — Alert.alert çoklu-buton web'de tetiklenmez. YH-A4: web'de önce UYGULAMA İÇİ pencere (İptal /
+ *  Esc → false); sağlayıcı takılı değilse window.confirm'e düşer (onay hiçbir yolda sessizce "evet" sayılmaz). */
 export function platformConfirm(title: string, message: string, confirmLabel: string = i18n.t("ortak.onayla")): Promise<boolean> {
   if (Platform.OS === "web") {
+    const icte = uygulamaIciOnay({ baslik: title, govde: message, onayEtiketi: confirmLabel, tur: "onay" });
+    if (icte) return icte;
     return Promise.resolve(typeof window !== "undefined" ? window.confirm(`${title}\n\n${message}`) : false);
   }
   return new Promise((resolve) => {

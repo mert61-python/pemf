@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ToastProvider } from "@/components/ui/ToastProvider";
+import { OnayPenceresiSaglayici } from "@/components/ui/OnayPenceresiSaglayici";
 import { MobileUpdateGate } from "@/components/domain/MobileUpdateGate";
 import { colors } from "@/theme/tokens";
 import { useFonts, INTER_FONTS, applyGlobalInter } from "@/theme/fonts";
@@ -33,18 +34,21 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ToastProvider>
-        <StatusBar style="light" />
-        {ready ? (
-          // AÇILIŞ KAPISI (2026-08-16 sahip isteği): Android'de önce güncelleme kontrolü, SONRA
-          // açılış ve kullanım. Kapı `<Stack/>`in ÜSTÜNDE durur → hiçbir rota (login dahil)
-          // kontrol bitmeden çizilmez. Web/iOS'ta hiç kapanmaz. Ayrıntı + güvenlik sınırları:
-          // MobileUpdateGate başlığı.
-          <MobileUpdateGate>
-            <Stack screenOptions={{ headerShown: false }} />
-          </MobileUpdateGate>
-        ) : (
-          <View style={{ flex: 1, backgroundColor: colors.bg }} />
-        )}
+        {/* YH-A4: web onay / uyarı pencereleri UYGULAMANIN İÇİNDE (tarayıcı yerlisi "127.0.0.1:8000 şunu diyor:" değil). */}
+        <OnayPenceresiSaglayici>
+          <StatusBar style="light" />
+          {ready ? (
+            // AÇILIŞ KAPISI (2026-08-16 sahip isteği): Android'de önce güncelleme kontrolü, SONRA
+            // açılış ve kullanım. Kapı `<Stack/>`in ÜSTÜNDE durur → hiçbir rota (login dahil)
+            // kontrol bitmeden çizilmez. Web/iOS'ta hiç kapanmaz. Ayrıntı + güvenlik sınırları:
+            // MobileUpdateGate başlığı.
+            <MobileUpdateGate>
+              <Stack screenOptions={{ headerShown: false }} />
+            </MobileUpdateGate>
+          ) : (
+            <View style={{ flex: 1, backgroundColor: colors.bg }} />
+          )}
+        </OnayPenceresiSaglayici>
       </ToastProvider>
     </SafeAreaProvider>
   );
