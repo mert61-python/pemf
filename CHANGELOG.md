@@ -44,7 +44,9 @@ pencereleri) telefonda da.
 
 **Sahibe (teknik):** ACİL DURDUR'un bulut aynası (HiveMQ) yalnız ESP açıkken çalışır — ESP söküldüğü için her ACİL DURDUR'da
 boşuna bulut bağlantısı denenip zaman aşımına düşülüyordu; yerel STOP yolu aynen. `/api/health` artık çalışan paketin içerik
-kimliğini (`paketIcerigi`) de söyler (yerel deneme kurulumunda `buildId` kayıttaki paketi gösterir). Veri kökü çözülemezse yedek
+kimliğini (`paketIcerigi`) de söyler; PEMF Vet Client 1.9.55 bu kimliği kurulu paket kaydına da yazar ve kayıt diskteki paketle
+eşleşmezse (yerel deneme kurulumu, elle kopya) `buildId` de çalışan paketin içerik kimliğini söyler — iki alan çelişmez. Sessiz
+kaldırmada (`/S`, veriler korunarak) bayat `backend.port` silinir, veri kökü kaydı (`veri_koku.txt`) kalır. Veri kökü çözülemezse yedek
 kök kurulur. DEMA simülatöründen kullanılmayan bir paket kaydı (`@google/genai`) kaldırıldı. Paket kimliği (buildId): B6'da yazılır.
 
 ## launcher 1.9.54 — 2026-11-07 (🔔 güncellemeler artık onayla; app 1.9.52 ile)
