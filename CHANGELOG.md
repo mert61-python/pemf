@@ -6,6 +6,47 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.53 · launcher 1.9.55 · mobile 2.3.36 — TASLAK (yayınlanmadı; B6'da tarih, paket kimliği ve kesin sürümler yazılır)
+
+> ⚠️ TASLAK — bu girdi yayın hazırlığında (YH-A, 15-16 Kasım 2026) yazıldı; yayın sahibin "yayınla"sıyla yapılır. **Kontrolcü
+> yazılımı DDS v2.6** (sensör yeniden bağlanma) bu sürümle AYNI gün karta yüklenmelidir; v2.5 kartla uygulama çalışır ama koparsa
+> sensörü yeniden bağlayamaz. AI Pro'nun yeni alan modelleri **Veteriner ve Araştırma model paketlerindedir** — bu paketler de
+> yenilenmeden AI Pro "model dosyaları bulunamadı" der ve sürmez.
+
+**🎯 AI Pro önerisi artık alan modelinden (ODAK).** Petri ve fantomda faz ve doluluk oranı (duty) ölçülmüş alan modelinden
+hesaplanır; frekans **76 / 100 / 107 / 147 Hz** arasından seçilir. Yarı dolu petri plakası da kullanılabilir (görülen kuyulardan
+plaka yeri bulunur; boş kuyu hedef olamaz). Hedef kuyu, onay penceresindeki kuyu haritasından seçilir; yeniden hesap, onay ve
+başlatma hataları pencerenin içinde, ne yapılacağını söyleyen metinle gösterilir. Sekme değiştirmek AI Pro seansını kesmez.
+**Kedi ve fantom için AI Pro sürüşü KAPALI kalır** (öneri gösterilir, bobin sürülmez).
+
+**📷 Kabin kamerası sabit düzlem kalibrasyonu.** Kamera üst kapağa, plaka tabana sabit kabul edilir; plakanın köşeleriyle bir kez
+(birden çok konumda) kalibre edilir, ArUco işareti gerekmez. Kalibre etmeden devam edilebilir; kalibrasyon kartı ne
+yapılacağını söyler. Kamera açılışı hızlandı.
+
+**🧲 Manyetik alan ölçümü.** Sensörün kendi sıfır kayması (bobinler kapalıyken ölçülen) gösterilen değerden düşülür — düşük
+dozda alan eskiden olduğundan yüksek görünüyordu. Sensör (MLX90393) bağlantısı koparsa ya da açılışta yoksa kart onu birkaç
+saniyede bir yeniden arar; bağlanamazsa ekranda "manyetik alan sensörü düştü" uyarısı ve yapılacak adım çıkar (DDS v2.6).
+Sensör Monitörü grafiğinde saat ekseni ve yakınlaştırma var.
+
+**🪟 Onay pencereleri uygulamanın içinde.** Sürüş Kipi, ACİL DURDUR mandalını Sıfırla, silme gibi onaylar artık tarayıcının
+"127.0.0.1:8000 şunu diyor:" penceresiyle değil, uygulamanın kendi penceresiyle (Türkçe / İngilizce) sorulur. ACİL DURDUR
+düğmesi bu pencere açıkken de üsttedir ve basılabilir.
+
+**👥 Aynı bilgisayarda ikinci Windows hesabı.** Paylaşım kartı açılışta kaybolmaz; erişimi olmayan hesapta hasta listesi nedenini
+ve yapılacak adımı söyler. "İzin ver" (yönetici) artık PEMF'in kendi programlarının (sunucu ve kendi MQTT aracısı) Windows güvenlik
+duvarı engelini kaldırır.
+
+**PEMF Vet Client 1.9.55:** internetsiz açıldıysa bağlantı gelince kendiliğinden çevrimiçine döner (eskiden yeniden açmak
+gerekiyordu). Kurulum bittiğinde durum satırı "hazır — uygulama penceresi açıldı" der (eskiden yanlışlıkla "tarayıcıda açıldı").
+
+**Telefon 2.3.36:** bilgisayardaki 1.9.53 ile gelen ekran değişiklikleri (sensör grafiği, hasta listesi iletileri, AI Pro
+pencereleri) telefonda da.
+
+**Sahibe (teknik):** ACİL DURDUR'un bulut aynası (HiveMQ) yalnız ESP açıkken çalışır — ESP söküldüğü için her ACİL DURDUR'da
+boşuna bulut bağlantısı denenip zaman aşımına düşülüyordu; yerel STOP yolu aynen. `/api/health` artık çalışan paketin içerik
+kimliğini (`paketIcerigi`) de söyler (yerel deneme kurulumunda `buildId` kayıttaki paketi gösterir). Veri kökü çözülemezse yedek
+kök kurulur. DEMA simülatöründen kullanılmayan bir paket kaydı (`@google/genai`) kaldırıldı. Paket kimliği (buildId): B6'da yazılır.
+
 ## launcher 1.9.54 — 2026-11-07 (🔔 güncellemeler artık onayla; app 1.9.52 ile)
 
 > Yalnız PEMF Vet Client değişti: uygulama **1.9.52** ve telefon uygulaması **2.3.35** AYNI kalır. Kontrolcü yazılımı DEĞİŞMEDİ (DDS v2.5).
