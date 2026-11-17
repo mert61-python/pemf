@@ -226,6 +226,30 @@ describe("KP-7 B · ev sahibi — askıdaki analiz ve açılamayan arama", () =>
   });
 });
 
+// ── KP-7 G1 · sahip kararı (17-11): "Yeni Fotoğraf" önceki görüntünün blob: adresini BIRAKIR ──────────────────────────────────────
+// ÖNCE-KIRMIZI: düğme imageUri'yi bırakmadan siliyordu → gün boyu açık klinik istemcisinde tam boyutlu görüntüler bellekte birikiyordu
+// (seçimdeki bırakma, seçim düğmeleri yalnız görüntü yokken çizildiği için hiç çalışmıyordu).
+describe("KP-7 G1 · Yeni Fotoğraf görüntü adresini bırakır", () => {
+  it("kamera ve galeri: 'Yeni Fotoğraf' önceki blob: adresini serbest bırakır; yeni seçim yeni adres alır", async () => {
+    await ekraniCiz(s);
+    web.dosyaSiradaki = FOTO;
+    await metneBas(s, T("ai.hayvanSahibi.kamerayiAc"));
+    await s.bosalt(4);
+    const ilk = Array.from(web.nesneUrlleri.keys()).pop()!;
+    expect(ilk).toMatch(/^blob:/);
+    expect(web.serbestBirakilan).not.toContain(ilk);
+    await metneBas(s, T("ai.hayvanSahibi.yeniFotograf"));
+    expect(web.serbestBirakilan).toContain(ilk);
+    web.dosyaSiradaki = FOTO;
+    await metneBas(s, T("ai.ortak.galeridenSec"));
+    await s.bosalt(4);
+    const ikinci = Array.from(web.nesneUrlleri.keys()).pop()!;
+    expect(ikinci).not.toBe(ilk);
+    await metneBas(s, T("ai.hayvanSahibi.yeniFotograf"));
+    expect(web.serbestBirakilan).toContain(ikinci);
+  });
+});
+
 describe("ses kartı hata yolları", () => {
   async function sesYukleVeAnaliz() {
     await ekraniCiz(s);

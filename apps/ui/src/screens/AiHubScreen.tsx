@@ -556,10 +556,8 @@ function PetOwnerAiScreen() {
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
-          // `pickImage` bunu yapıyordu, `takePhoto` YAPMIYORDU: her yeni fotoğrafta önceki blob
-          // URL'si serbest bırakılmadan yenisi oluşturuluyor, tam boyutlu görüntüler bellekte
-          // birikiyordu (web istemcisi klinikte gün boyu açık kalır).
-          if (imageUri && imageUri.startsWith("blob:")) URL.revokeObjectURL(imageUri);
+          // KP-7 G1 (sahip kararı 17-11): önceki görüntünün blob: adresi "Yeni Fotoğraf"ta bırakılır — seçim düğmeleri yalnız görüntü
+          // YOKKEN çizildiği için buradaki bırakma hiç çalışmıyordu (ölü kod silindi, Y242).
           setResult(null); setTreatmentStatus("");
           // ⚠️ WEB KÜÇÜLTME (AI Hub planı, ADIM 1): web'de HİÇ küçültme yoktu → ham dosya
           // yükleniyor, aynı analiz platforma göre 8× farklı boyutta gidiyor ve backend'in
@@ -589,8 +587,7 @@ function PetOwnerAiScreen() {
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
-          // BUG #3 FIX: Eski objectURL'yi revoke et, memory leak önlenir
-          if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
+          // KP-7 G1: önceki blob: adresi "Yeni Fotoğraf"ta bırakılır (buradaki bırakma ölüydü — seçim yalnız görüntü yokken; Y242).
           setResult(null); setTreatmentStatus("");
           // ⚠️ WEB KÜÇÜLTME (AI Hub planı, ADIM 1): web'de HİÇ küçültme yoktu → ham dosya
           // yükleniyor, aynı analiz platforma göre 8× farklı boyutta gidiyor ve backend'in
@@ -748,7 +745,12 @@ function PetOwnerAiScreen() {
                 {/* ⚠️ `setResult(null)` EKLENDİ: sonuç temizlenmeyince "Yeni Fotoğraf"a basıldığında
                     girdi gidiyor ama ALTTAKİ ESKİ TEŞHİS ekranda kalıyordu — hayvan sahibi, henüz
                     yüklemediği bir fotoğrafın sonucuna bakıyor sanıyordu. */}
-                <Button variant="secondary" label={t("ai.hayvanSahibi.yeniFotograf")} onPress={() => { setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null); }} />
+                {/* KP-7 G1 (sahip kararı 17-11): önceki görüntünün blob: adresi BIRAKILIR — eskiden bırakılmadan siliniyordu, gün boyu
+                    açık klinik istemcisinde tam boyutlu görüntüler bellekte birikiyordu. Yerelde (file://) bırakılacak adres yok. */}
+                <Button variant="secondary" label={t("ai.hayvanSahibi.yeniFotograf")} onPress={() => {
+                  if (imageUri && imageUri.startsWith("blob:")) URL.revokeObjectURL(imageUri);
+                  setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null);
+                }} />
               </View>
               <View style={{ flex: 1 }}>
                 <Button variant="primary" label={loading ? t("ai.ortak.analizEdiliyor") : t("ai.hayvanSahibi.teshisEt")} onPress={() => analyzeImage()} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
