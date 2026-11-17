@@ -393,6 +393,10 @@ LangString PEMF_yukseltmeKorunuyor 1033 "PEMF: upgrade — downloaded models and
     DetailPrint "$(PEMF_temizlikTamam)"
   ${Else}
     DetailPrint "$(PEMF_veriSilIsaretsiz)"
+    ; YH B2 · Y296 (sahip): etkileşimli kaldırmada kutu İŞARETSİZKEN de sessiz kaldırmanın (S-YH.2) aynısı — ölü backend'in bayat
+    ; `backend.port`'u SİLİNİR, veri kökü kaydı (`veri_koku.txt`) ve indirilenler KALIR. Bu dala yükseltme (`/UPDATE`) GİRMEZ
+    ; (yukarıdaki `$UpdateMode = 1` dalı). Kapı: tests/test_YH_Y296_etkilesimli_kaldirma_ISARETSIZ_backend_port_SILINIR.py.
+    Delete "$INSTDIR\backend.port"
   ${EndIf}
   ; ── KVKK AÇIKLIĞI (2026-08-08) ────────────────────────────────────────────────────────────
   ; "Uygulama verilerini sil" kutusu tıbbi veriyi SİLMEZ (yalnız indirilen runtime/model/önbellek).
