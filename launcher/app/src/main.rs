@@ -5636,6 +5636,8 @@ Connection: close
         hedef: Option<u16>,
         cokme: bool,
         devirde_oturum: Arc<Mutex<Vec<bool>>>,
+        /// KP-8: akış SÜRERKEN kullanıcının bastığı düğme (komutun denetim bayrağı + değer) — sahte akış denetimi okumadan hemen önce yazar.
+        basilan: Arc<Mutex<Option<(Arc<AtomicU8>, u8)>>>,
     }
 
     impl Kp6Ortam {
@@ -5646,7 +5648,14 @@ Connection: close
             self.iz.lock().unwrap().clone()
         }
         /// Akış çağrısı sırasında: kilit TUTULUYOR mu (başka pencere alamıyor mu), yarım-kurulum kaydı, denetim bayrağı.
+        /// KP-8: ayarlıysa kullanıcının düğmesine BAS (bayrağa yaz); akış `control()`ü bundan SONRA okur.
+        fn dugmeye_bas(&self) {
+            if let Some((bayrak, deger)) = self.basilan.lock().unwrap().take() {
+                bayrak.store(deger, Ordering::Relaxed);
+            }
+        }
         fn akis_ani(&self, ad: &str, root: &std::path::Path, control: Option<&dyn Fn() -> net::Control>) {
+            self.dugmeye_bas();
             let kilitli = install::kurulum_kilidi_al(root).is_err();
             let bekleyen = install::read_pending(root).join(",");
             let c = control.map(|c| format!("{:?}", c())).unwrap_or_default();
@@ -5823,6 +5832,7 @@ Connection: close
             control: &dyn Fn() -> net::Control,
         ) -> Result<u64, net::NetError> {
             let kilitli = self.kilit_koku.as_deref().map(|k| install::kurulum_kilidi_al(k).is_err());
+            self.dugmeye_bas();
             self.yaz(format!("indir:{} denetim={:?} kilitli={kilitli:?}", hedef.file_name().unwrap().to_string_lossy(), control()));
             ilerleme(1, 2);
             match &self.kurucu {
@@ -5866,6 +5876,58 @@ Connection: close
 
     fn kp6_bos_manifest() -> String {
         r#"{"schema":2,"version":"9.9.9","models":{},"model_parts":{}}"#.to_string()
+    }
+
+    /// KP-8 (başlatıcı): akış SÜRERKEN basılan "Duraklat" / "İptal" DENETİME ULAŞIR — kurulum, onarım, çalışma zamanı güncellemesi ve
+    /// kendini güncelleme indirmesi bayrağı `Pause` / `Cancel` olarak okur (komut başında bayrak `RUN`a çekilir; düğme akış İÇİNDE
+    /// basılır). Akış kararı geri döndürünce kurulum / onarım `paused` / `cancelled` (hata DEĞİL).
+    #[cfg(windows)]
+    #[test]
+    fn KP8_akis_SURERKEN_basilan_DURAKLAT_IPTAL_denetime_ULASIR() {
+        for (deger, ad, durum) in [(CTL_PAUSE, "Pause", "paused"), (CTL_CANCEL, "Cancel", "cancelled")] {
+            let denetim = format!("denetim={ad}");
+            let karar = || flow::FlowError::Net(if deger == CTL_PAUSE { net::NetError::Paused } else { net::NetError::Cancelled });
+            // kurulum
+            let st = AppState::default();
+            let kok = kp6_kok(&format!("k8_kur_{ad}"));
+            let o = Kp6Ortam::default();
+            *o.basilan.lock().unwrap() = Some((st.control.clone(), deger));
+            *o.kur_hata.lock().unwrap() = Some(karar());
+            let r = tauri::async_runtime::block_on(install_and_launch_ile(&o, &st, kok.clone(), kp6_bos_manifest(), vec!["vet".into()])).unwrap();
+            assert!(o.izler().iter().any(|x| x.starts_with("kur:vet ") && x.ends_with(&denetim)), "kurulum {ad}: {:?}", o.izler());
+            assert_eq!(r, serde_json::json!({ "status": durum }), "kurulum {ad}");
+            let _ = std::fs::remove_dir_all(&kok);
+            // onarım
+            let st = AppState::default();
+            let kok = kp6_kok(&format!("k8_onar_{ad}"));
+            let o = Kp6Ortam::default();
+            *o.basilan.lock().unwrap() = Some((st.control.clone(), deger));
+            *o.onar_hata.lock().unwrap() = Some(karar());
+            let r = tauri::async_runtime::block_on(repair_ile(&o, &st, kok.clone(), kp6_bos_manifest())).unwrap();
+            assert!(o.izler().iter().any(|x| x.starts_with("onar ") && x.ends_with(&denetim)), "onarım {ad}: {:?}", o.izler());
+            assert_eq!(r, serde_json::json!({ "status": durum }), "onarım {ad}");
+            let _ = std::fs::remove_dir_all(&kok);
+            // çalışma zamanı güncellemesi
+            let st = AppState::default();
+            let kok = kp6_kok(&format!("k8_guncelle_{ad}"));
+            let o = Kp6Ortam::default();
+            *o.basilan.lock().unwrap() = Some((st.control.clone(), deger));
+            *o.guncelle_sonuc.lock().unwrap() = Some(Err(karar()));
+            let _ = tauri::async_runtime::block_on(apply_runtime_update_ile(&o, &st, kok.clone(), kp6_bos_manifest()));
+            assert!(o.izler().iter().any(|x| x.starts_with("guncelle ") && x.ends_with(&denetim)), "güncelleme {ad}: {:?}", o.izler());
+            let _ = std::fs::remove_dir_all(&kok);
+            // kendini güncelleme indirmesi (kurucu yok → indirme hatası; denetim okunmuş olmalı)
+            let st = AppState::default();
+            let kok = kp6_kok(&format!("k8_kendi_{ad}"));
+            let tmp = kp6_kok(&format!("k8_kendi_tmp_{ad}"));
+            let o = Kp6Ortam { kilit_koku: Some(kok.clone()), ..Default::default() };
+            *o.basilan.lock().unwrap() = Some((st.control.clone(), deger));
+            let e = tauri::async_runtime::block_on(apply_self_update_ile(&o, &st, kok.clone(), tmp.clone(), "https://u/k.exe".into(), "ab".repeat(32), 13, "1.9.99".into()));
+            assert!(e.is_err(), "kurucu inmediği hâlde kendini güncelleme sürdü");
+            assert!(o.izler().iter().any(|x| x.starts_with("indir:") && x.contains(&format!("{denetim} "))), "kendini güncelleme {ad}: {:?}", o.izler());
+            let _ = std::fs::remove_dir_all(&kok);
+            let _ = std::fs::remove_dir_all(&tmp);
+        }
     }
 
     fn kp6_kurulu_kok(ad: &str) -> std::path::PathBuf {

@@ -1274,6 +1274,39 @@ mod tests {
         Control::Continue
     }
 
+    /// KP-8: hedefin üst dizini kurulamazsa (yolda DOSYA var) yerel G/Ç hatası — ağa istek GİTMEZ.
+    #[test]
+    fn KP8_hedef_dizini_kurulamazsa_LocalIo_istek_GITMEZ() {
+        let d = tempfile::tempdir().unwrap();
+        let engel = d.path().join("dosya");
+        std::fs::write(&engel, b"x").unwrap();
+        let dest = engel.join("alt").join("base.zip");
+        let t = SahteTasiyici::ile(vec![]);
+        let (r, ilerleme) = indir(&t, &dest, 10, UZUN, &devam);
+        assert!(matches!(r, Err(NetError::LocalIo(_))), "dizin kurulamadı ama yerel G/Ç hatası dönmedi: {r:?}");
+        assert!(t.istekler().is_empty(), "dizin kurulamadan ağa istek gitti");
+        assert!(ilerleme.is_empty(), "başlamayan indirme ilerleme bildirdi");
+    }
+
+    /// KP-8 (#95 · P3): aynı hedefin FARKLI sha'lı yetim `.part`'ı yeni indirme başlarken SİLİNİR; bizim sha'lı `.part` (devam noktası)
+    /// ve BAŞKA hedefin `.part`'ı KORUNUR (yalnız kendi artığını temizler).
+    #[test]
+    fn KP8_farkli_sha_yetim_part_SILINIR_bizimki_ve_baska_hedefinki_KORUNUR() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let yetim = d.path().join("base.111111111111.part");
+        let baska = d.path().join("profile.111111111111.part");
+        std::fs::write(&yetim, b"eski-surum").unwrap();
+        std::fs::write(&baska, b"baska-hedef").unwrap();
+        std::fs::write(part_path(&dest, SHA), b"01234").unwrap();
+        let t = SahteTasiyici::ile(vec![Ok(yanit(206, CDN, &[("Content-Range", "bytes 5-9/10"), ("Content-Length", "5")], b"56789"))]);
+        let (r, _) = indir(&t, &dest, 10, UZUN, &devam);
+        assert_eq!(r.unwrap(), 10);
+        assert!(!yetim.exists(), "farklı sha'lı yetim .part silinmedi (her sürümde diskte birikir)");
+        assert!(baska.exists(), "başka hedefin .part'ı silindi");
+        assert_eq!(std::fs::read(&dest).unwrap(), b"0123456789", "bizim .part (devam noktası) korunmadı");
+    }
+
     #[test]
     fn KRITIK_KP4_A2_taze_indirme_part_uzerinden_hedefe_TASINIR_Range_YOK() {
         let d = tempfile::tempdir().unwrap();

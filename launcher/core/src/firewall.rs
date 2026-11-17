@@ -625,6 +625,14 @@ mod tests {
         assert!(!y.contains("x()") && !y.contains("y()") && !y.contains("c("), "yorum kaldı: {y}");
     }
 
+    /// KP-8: Rust blok yorumları İÇ İÇE olabilir — iç `*/` dış yorumu kapatmaz; aradaki çağrı "var" sayılmaz (kapı kandırılmaz).
+    #[test]
+    fn rust_yorumsuz_ic_ice_blok_yorum() {
+        let y = rust_yorumsuz("a(); /* dis /* ic() */ hala_yorum() */ b();");
+        assert!(y.contains("a();") && y.contains("b();"), "{y}");
+        assert!(!y.contains("ic()") && !y.contains("hala_yorum()"), "iç içe blok yorumun içi kod sayıldı: {y}");
+    }
+
     /// D5 I-1 · çağrı yerleri (`launcher/app` — bu crate'in testi o crate'i derlemez): kural portu ÇOCUĞUN portundan, exe ile AYNI
     /// kurulum kökünden. Yorumlar (`//` ve — D5 J-3 tur 2 — `/* … */`) atılır (çağrı yalnız yorumda kalırsa KIRMIZI), boşluklar silinir.
     #[test]
