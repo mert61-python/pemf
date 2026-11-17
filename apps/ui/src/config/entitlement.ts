@@ -115,7 +115,7 @@ export function allowedProfiles(e: Entitlement, now: Date = new Date()): Profile
 
 /** Sert-gating kararı: enforced kapalıyken HER ZAMAN izinli (UI yalnız rozet gösterir). */
 export function gateProfile(e: Entitlement, profile: Profile, now: Date = new Date()): boolean {
-  return ENTITLEMENT_ENFORCED ? canUseProfile(e, profile, now) : true;
+  return ENTITLEMENT_ENFORCED ? /* istanbul ignore next -- ULASILAMAZ: ENTITLEMENT_ENFORCED sabit false (sahip: sert kapı kapalı) */ canUseProfile(e, profile, now) : true;
 }
 export function gateFeature(
   e: Entitlement,
@@ -123,5 +123,5 @@ export function gateFeature(
   now: Date = new Date(),
 ): boolean {
   const has = feature === "realtime" ? hasRealtime(e, now) : hasResearch(e, now);
-  return ENTITLEMENT_ENFORCED ? has : true;
+  return ENTITLEMENT_ENFORCED ? /* istanbul ignore next -- ULASILAMAZ: ENTITLEMENT_ENFORCED sabit false (sahip: sert kapı kapalı) */ has : true;
 }

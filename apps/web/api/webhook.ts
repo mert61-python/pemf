@@ -77,6 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (durum === 'active' || durum === 'trialing') {
         try {
           const hak = JETON_HAKLARI[meta.tier]
+          /* istanbul ignore else -- SAVUNMA: JETON_HAKLARI planMeta'nın verebileceği her katmanı (pro / pro_plus) karşılar */
           if (hak) await jetonDonemYenile(userId, hak)
         } catch (e) {
           console.error('webhook: jeton yüklenemedi (abonelik YAZILDI — elle yükleme gerekir)', {

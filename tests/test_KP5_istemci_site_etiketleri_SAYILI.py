@@ -59,7 +59,13 @@ BEKLENEN: dict[str, list[tuple[str, str]]] = {
         ("if", "ULASILAMAZ"),
         ("if", "ULASILAMAZ"),
         ("next", "SAVUNMA"),
-    ],
+    ]
+    # KP-8 D: analiz işleyicisi girdi yokken (düğme aynı koşulla pasif) · blob her yolda kurulur · byClass her sınıfı taşır
+    + [("if", "ULASILAMAZ")] * 11
+    + [("if", "SAVUNMA")] * 6
+    + [("next", "ULASILAMAZ")],
+    # KP-8 D: ENTITLEMENT_ENFORCED sabit false (sahip: sert kapı kapalı) — gateProfile / gateFeature
+    "apps/ui/src/config/entitlement.ts": [("next", "ULASILAMAZ")] * 2,
     "apps/ui/src/screens/ControlScreen.tsx": [
         ("if", "ULASILAMAZ"),
         ("next", "SAVUNMA"),
@@ -80,6 +86,9 @@ BEKLENEN: dict[str, list[tuple[str, str]]] = {
     "apps/web/src/components/AppScreenshots.tsx": [("if", "ULASILAMAZ")],
     "apps/web/src/components/DownloadStats.tsx": [("next", "SAVUNMA")],
     "apps/web/src/lib/usageStats.ts": [("if", "SAVUNMA")],
+    # KP-8 D: JETON_HAKLARI planMeta'nın verebileceği her ücretli katmanı karşılar
+    "apps/web/api/webhook.ts": [("else", "SAVUNMA")],
+    "apps/web/api/callback.ts": [("else", "SAVUNMA")],
     "apps/web/src/pages/Pricing.tsx": [("if", "ULASILAMAZ")],
 }
 
@@ -145,9 +154,9 @@ def test_KRITIK_istemci_site_etiketleri_GEREKCELI_ve_SAYILI():
 def test_etiket_toplami_ve_sinif_dagilimi_SABIT():
     toplam = Counter(e for v in BEKLENEN.values() for _, e in v)
     # KP-5 kapanış: 27 = ULASILAMAZ 13 + SAVUNMA 13 + PLATFORM 1 (sayı yalnız BİLİNÇLİ değişir)
-    assert toplam == Counter({"ULASILAMAZ": 31, "SAVUNMA": 21, "PLATFORM": 1}), (
+    assert toplam == Counter({"ULASILAMAZ": 45, "SAVUNMA": 29, "PLATFORM": 1}), (
         toplam
-    )  # KP-7 B: SAVUNMA 13 → 21 · B2: ULASILAMAZ 13 → 31
+    )  # KP-7 B: SAVUNMA 13 → 21 · B2: ULASILAMAZ 13 → 31 · KP-8 D: ULASILAMAZ 31 → 45, SAVUNMA 21 → 29
     assert set(toplam) <= set(ETIKETLER)
 
 

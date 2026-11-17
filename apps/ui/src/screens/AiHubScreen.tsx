@@ -611,6 +611,7 @@ function PetOwnerAiScreen() {
 
   const analyzeImage = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -913,6 +914,7 @@ function PetOwnerSoundCard() {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!audioUri) return;
     setLoading(true);
     try {
@@ -1729,6 +1731,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
   const analyzeImage = async (uriToAnalyze?: string | null) => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
     uriToAnalyze = typeof uriToAnalyze === "string" ? uriToAnalyze : imageUri;
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!uriToAnalyze) return;
     // BUG #2 FIX: loadingRef hem state hem de interval closure için güncelleniyor
     setLoading(true);
@@ -2604,6 +2607,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -2618,6 +2622,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         } else {
           const r = await korunanFetch(imageUri); blob = await r.blob();
         }
+        /* istanbul ignore if -- SAVUNMA: blob her yolda kurulur (seçilen dosya / base64 / Response.blob() Blob döner) */
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "phantom.jpg");
       } else {
@@ -2958,6 +2963,7 @@ function PetriModule({ patientName }: { patientName: string }) {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -2972,6 +2978,7 @@ function PetriModule({ patientName }: { patientName: string }) {
         } else {
           const r = await korunanFetch(imageUri); blob = await r.blob();
         }
+        /* istanbul ignore if -- SAVUNMA: blob her yolda kurulur (seçilen dosya / base64 / Response.blob() Blob döner) */
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "petri.jpg");
       } else {
@@ -3304,6 +3311,7 @@ function RnaModule({ patientName }: { patientName: string }) {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!file) return;
     setLoading(true);
     try {
@@ -3676,6 +3684,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!audioUri) return;
     setLoading(true);
     try {
@@ -3874,6 +3883,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -3883,6 +3893,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         if (imageFile) blob = imageFile;
         else if (imageBase64) { const bstr = atob(imageBase64); let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n); blob = new Blob([u8], { type: 'image/jpeg' }); }
         else { const r = await korunanFetch(imageUri); blob = await r.blob(); }
+        /* istanbul ignore if -- SAVUNMA: blob her yolda kurulur (seçilen dosya / base64 / Response.blob() Blob döner) */
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "ct.jpg");
       } else {
@@ -3925,7 +3936,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
   dets.forEach((d: AiDetection) => { (byClass[d.class_name] = byClass[d.class_name] || []).push(d); });
   const cx = (d: AiDetection) => (((d.bbox_xyxy?.[0] ?? 0) + (d.bbox_xyxy?.[2] ?? 0)) / 2);
   const posLabel = (d: AiDetection) => {
-    const g = byClass[d.class_name] || [];
+    const g = byClass[d.class_name] || /* istanbul ignore next -- ULASILAMAZ: byClass tüm tespitlerden kurulur, her sınıf anahtarı var */ [];
     if (g.length < 2) return "";
     const sorted = [...g].sort((a, b) => cx(a) - cx(b));
     const idx = sorted.indexOf(d);
@@ -4088,6 +4099,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -4097,6 +4109,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         if (imageFile) blob = imageFile;
         else if (imageBase64) { const bstr = atob(imageBase64); let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n); blob = new Blob([u8], { type: 'image/jpeg' }); }
         else { const r = await korunanFetch(imageUri); blob = await r.blob(); }
+        /* istanbul ignore if -- SAVUNMA: blob her yolda kurulur (seçilen dosya / base64 / Response.blob() Blob döner) */
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "histo.jpg");
       } else {
@@ -4303,6 +4316,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
 
   const analiz = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!dosya || loading) return;
     setLoading(true); setLongLoading(false);
     const benimIstek = ++istekRef.current;
@@ -4312,6 +4326,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
       if (Platform.OS === "web") {
         let blob: Blob | null = dosya.file;
         if (!blob && dosya.uri) blob = await (await korunanFetch(dosya.uri)).blob();
+        /* istanbul ignore if -- SAVUNMA: web belge seçicisi varlığı dosya ya da adres taşır; Response.blob() Blob döner */
         if (!blob) throw new Error("Dosya okunamadı.");
         fd.append("file", blob, dosya.name);
       } else {
@@ -4697,6 +4712,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
 
   const analyze = async () => {
     const hasta = hastaAnligi(); // D2.E09 (Y87): kayıt analizin BAŞLADIĞI hastaya yazılır
+    /* istanbul ignore if -- ULASILAMAZ: analiz düğmesi girdi yokken pasif (disabled aynı koşul) — işleyici girdisiz çağrılamaz */
     if (!imageUri) return;
     setLoading(true);
     try {
@@ -4706,6 +4722,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         if (imageFile) blob = imageFile;
         else if (imageBase64) { const bstr = atob(imageBase64); let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n); blob = new Blob([u8], { type: 'image/jpeg' }); }
         else { const r = await korunanFetch(imageUri); blob = await r.blob(); }
+        /* istanbul ignore if -- SAVUNMA: blob her yolda kurulur (seçilen dosya / base64 / Response.blob() Blob döner) */
         if (!blob) throw new Error("Görüntü hazırlanamadı.");
         formData.append("file", blob, "cat.jpg");
       } else {
