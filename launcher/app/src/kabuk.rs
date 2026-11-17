@@ -1079,6 +1079,21 @@ impl KomutOrtami for tauri::AppHandle {
     fn yeniden_baslaticiyi_baslat(&self, kurucu: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
         spawn_update_relauncher(kurucu, pencere)
     }
+    fn oturumu_yenile(&self, refresh_token: &str, eposta: &str) -> (Result<auth::Session, auth::AuthError>, Option<String>) {
+        (auth::refresh_budgeted(refresh_token, eposta), auth::son_yenileme_reddi())
+    }
+    fn giris_yap(&self, eposta: &str, parola: &str) -> Result<auth::Session, auth::AuthError> {
+        auth::login_budgeted(eposta, parola)
+    }
+    fn oturum_hedef_portu(&self, izlenen: Option<u16>, root: &std::path::Path) -> Option<u16> {
+        backend::session_target_port(izlenen, root)
+    }
+    fn backend_oturumunu_temizle(&self, port: u16) {
+        backend::clear_desktop_session(port)
+    }
+    fn aga_cikis_bildir(&self, jeton: &str) {
+        let _ = auth::logout(jeton);
+    }
 }
 
 /// Başlatıcının kendini güncellemesi (KP-6 D7: İNCE KABUK — Windows dışı ret + gerçek kök / TEMP + `AppHandle` bağı; gövde
@@ -1165,6 +1180,30 @@ async fn remove_profiles(
     profiles: Vec<String>,
 ) -> Result<serde_json::Value, String> {
     remove_profiles_ile(&app, state.inner(), install::default_install_root(&home_dir()), manifest_raw, profiles).await
+}
+
+/// Açılış oturum durumu (KP-7 A2: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `auth_status_ile`, K).
+#[tauri::command]
+async fn auth_status(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<AuthStatus, String> {
+    auth_status_ile(&app, state.inner(), install::default_install_root(&home_dir())).await
+}
+
+/// E-posta + parola ile giriş (KP-7 A2: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `auth_login_ile`, K).
+#[tauri::command]
+async fn auth_login(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    email: String,
+    password: String,
+    remember: bool,
+) -> Result<AuthStatus, GirisHatasi> {
+    auth_login_ile(&app, state.inner(), install::default_install_root(&home_dir()), email, password, remember).await
+}
+
+/// Çıkış (KP-7 A2: İNCE KABUK — gerçek kök + `AppHandle` bağı; gövde `auth_logout_ile`, K).
+#[tauri::command]
+async fn auth_logout(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<AuthStatus, String> {
+    auth_logout_ile(&app, state.inner(), install::default_install_root(&home_dir())).await
 }
 
 fn check_runtime_update_blocking(manifest_raw: String) -> Result<serde_json::Value, String> {

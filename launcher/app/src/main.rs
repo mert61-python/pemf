@@ -437,6 +437,18 @@ trait KomutOrtami: Clone + Send + Sync + 'static {
     fn guncelleme_penceresini_ac(&self, sfx: &str) -> Result<std::path::PathBuf, String>;
     /// Sessiz NSIS kurucusunu çalıştıracak yeniden başlatıcı (üretim: `spawn_update_relauncher`).
     fn yeniden_baslaticiyi_baslat(&self, kurucu: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String>;
+    /// KP-7 A2: kayıtlı oturumun sessiz yenilemesi + sunucunun ret nedeni (üretim: `auth::refresh_budgeted` +
+    /// `auth::son_yenileme_reddi` — duvar saati bütçeli ağ isteği).
+    fn oturumu_yenile(&self, refresh_token: &str, eposta: &str) -> (Result<auth::Session, auth::AuthError>, Option<String>);
+    /// KP-7 A2: e-posta + parola ile giriş (üretim: `auth::login_budgeted` — ağ).
+    fn giris_yap(&self, eposta: &str, parola: &str) -> Result<auth::Session, auth::AuthError>;
+    /// KP-7 A2: oturumun devredileceği backend portu (üretim: `backend::session_target_port` — izlenen yoksa port dosyası /
+    /// varsayılan port `/api/health` imzasıyla doğrulanır; BLOKLAYAN HTTP).
+    fn oturum_hedef_portu(&self, izlenen: Option<u16>, root: &std::path::Path) -> Option<u16>;
+    /// KP-7 A2: backend'deki devredilmiş oturumu sil (üretim: `backend::clear_desktop_session` — best-effort).
+    fn backend_oturumunu_temizle(&self, port: u16);
+    /// KP-7 A2: çıkışı sunucuya bildir (üretim: `auth::logout` — best-effort, sonuç yutulur).
+    fn aga_cikis_bildir(&self, jeton: &str);
 }
 
 fn snapshot_yazici(
@@ -1610,11 +1622,12 @@ impl AuthStatus {
 /// getirilirse internetsiz bir klinikte tedavi cihazı açılamaz — az önce (A) maddesinde
 /// düzelttiğimiz kilidin aynısını kimlik katmanında geri getirmiş oluruz. Jetonun tazeliği
 /// bulut senkronizasyonu için önemlidir, cihazın çalışması için değil.
-#[tauri::command]
-async fn auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, String> {
+///
+/// KP-7 A2 (madde 2): `auth_status` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kurulum kökü ve dış bağ (`KomutOrtami`: sessiz
+/// yenileme) ENJEKTE. Sıra ve iletiler AYNEN.
+async fn auth_status_ile<O: KomutOrtami>(ortam: &O, state: &AppState, root: std::path::PathBuf) -> Result<AuthStatus, String> {
     // KP-5 B4: kararlar `oturum_ilk_durum` / `oturum_yenileme_sonucu`nda (kök, bellek, saat ve yenileyici ENJEKTE — testli); burada yalnız
     // gerçek kök + iki `spawn_blocking` evresi (okuma · yenileme; iletileri AYNEN).
-    let root = install::default_install_root(&home_dir());
     let (bellek, root2) = (state.session.clone(), root.clone());
     let ilk = tauri::async_runtime::spawn_blocking(move || oturum_ilk_durum(&bellek, &root2, auth::now_unix()))
         .await
@@ -1623,9 +1636,9 @@ async fn auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
         OturumIlkDurum::Sonuc(durum) => return Ok(durum),
         OturumIlkDurum::Yenile(kayitli) => kayitli,
     };
-    let bellek = state.session.clone();
+    let (bellek, o) = (state.session.clone(), ortam.clone());
     tauri::async_runtime::spawn_blocking(move || {
-        oturum_yenileme_sonucu(&bellek, &root, kayitli, |rt, eposta| (auth::refresh_budgeted(rt, eposta), auth::son_yenileme_reddi()))
+        oturum_yenileme_sonucu(&bellek, &root, kayitli, |rt, eposta| o.oturumu_yenile(rt, eposta))
     })
     .await
     .map_err(|e| pemf_launcher_core::dil::t_ile("rust.hata.oturumYenilemeGorevCoktu", &[("e", &e.to_string())]))
@@ -1777,22 +1790,26 @@ struct GirisHatasi {
 /// E-posta + parola ile giriş. `remember` → oturum işletim sistemi korumalı depoya yazılır.
 ///
 /// GÜVENLİK: parola YALNIZ burada geçer; hiçbir yere yazılmaz, hata metinlerine konmaz.
-#[tauri::command]
-async fn auth_login(
-    state: tauri::State<'_, AppState>,
+///
+/// KP-7 A2 (madde 2): `auth_login` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kurulum kökü (`kok`) ve dış bağ (`KomutOrtami`:
+/// giriş isteği, çalışan backend hedefi, oturum devri) ENJEKTE. Sıra ve hata eşlemesi AYNEN.
+async fn auth_login_ile<O: KomutOrtami>(
+    ortam: &O,
+    state: &AppState,
+    kok: std::path::PathBuf,
     email: String,
     password: String,
     remember: bool,
 ) -> Result<AuthStatus, GirisHatasi> {
-    let (e, p) = (email.trim().to_string(), password);
-    let sonuc = tauri::async_runtime::spawn_blocking(move || auth::login_budgeted(&e, &p)).await.map_err(|err| GirisHatasi {
+    let (e, p, o) = (email.trim().to_string(), password, ortam.clone());
+    let sonuc = tauri::async_runtime::spawn_blocking(move || o.giris_yap(&e, &p)).await.map_err(|err| GirisHatasi {
         kod: "gorev_coktu",
         mesaj: pemf_launcher_core::dil::t_ile("rust.hata.girisGorevCoktu", &[("err", &err.to_string())]),
     })?;
     // `AuthError`'ın Display'i zaten TÜRKÇE ve HTTP gövdesini yansıtmaz (bkz. core/auth.rs).
     let session = sonuc.map_err(|err| GirisHatasi { kod: err.kod(), mesaj: err.to_string() })?;
 
-    let root = install::default_install_root(&home_dir());
+    let root = kok.clone();
     let s2 = session.clone();
     let hatirla = remember && secret_store::available();
     let _ = tauri::async_runtime::spawn_blocking(move || giris_kaydini_isle(&root, &s2, hatirla)).await; // KP-5 B4: gövde testli
@@ -1802,8 +1819,8 @@ async fn auth_login(
 
     // Backend ZATEN çalışıyorsa (kullanıcı önce Başlat'a bastıysa) oturumu HEMEN devret —
     // uygulama bir sonraki yüklemede kendi login'ini atlar.
-    if let Some(port) = calisan_backend_portu(&state).await {
-        hand_off_session(&state, port).await;
+    if let Some(port) = calisan_backend_portu_ile(ortam, state, kok).await {
+        ortam.oturumu_devret(state, port).await;
     }
     Ok(AuthStatus::giris_yapildi(&email_out, "fresh", false))
 }
@@ -1812,16 +1829,18 @@ async fn auth_login(
 ///
 /// Sıra önemli: ÖNCE yerel/backend temizliği (kesin çalışır), SONRA ağ bildirimi (best-effort).
 /// Böylece internet yokken de çıkış GERÇEKTEN olur.
-#[tauri::command]
-async fn auth_logout(state: tauri::State<'_, AppState>) -> Result<AuthStatus, String> {
+///
+/// KP-7 A2 (madde 2): `auth_logout` komutunun (kabuk.rs, İNCE S kabuğu) GÖVDESİ — kurulum kökü ve dış bağ (`KomutOrtami`: çalışan
+/// backend hedefi, backend devir oturumunun temizliği, ağ çıkışı) ENJEKTE. Sıra AYNEN.
+async fn auth_logout_ile<O: KomutOrtami>(ortam: &O, state: &AppState, root: std::path::PathBuf) -> Result<AuthStatus, String> {
     let session = state.session.lock().unwrap().take();
-    let port = calisan_backend_portu(&state).await;
-    let root = install::default_install_root(&home_dir());
+    let port = calisan_backend_portu_ile(ortam, state, root.clone()).await;
+    let o = ortam.clone();
 
     let _ = tauri::async_runtime::spawn_blocking(move || {
         // KP-5 B4: sıra `cikis_isle`de (testli); ağ çıkışı best-effort, çevrimdışıysa sessizce geçer.
-        cikis_isle(&root, port, session, backend::clear_desktop_session, |jeton| {
-            let _ = auth::logout(jeton);
+        cikis_isle(&root, port, session, |p| o.backend_oturumunu_temizle(p), |jeton| {
+            o.aga_cikis_bildir(jeton);
         })
     })
     .await
@@ -1841,10 +1860,13 @@ async fn auth_logout(state: tauri::State<'_, AppState>) -> Result<AuthStatus, St
 ///
 /// `async`: doğrulama BLOKLAYAN HTTP → olay-döngüsü thread'inde çalışmamalı (bu oturumdaki P0
 /// donma hatasının aynısı). Kendi sürecimiz varsa ağa hiç çıkılmaz.
-async fn calisan_backend_portu(state: &tauri::State<'_, AppState>) -> Option<u16> {
+///
+/// KP-7 A2 (madde 2): kurulum kökü ve hedef port kararı (`KomutOrtami::oturum_hedef_portu` — üretim `backend::session_target_port`)
+/// ENJEKTE; testte gerçek kök / varsayılan port yoklaması YOK.
+async fn calisan_backend_portu_ile<O: KomutOrtami>(ortam: &O, state: &AppState, root: std::path::PathBuf) -> Option<u16> {
     let tracked = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
-    let root = install::default_install_root(&home_dir());
-    tauri::async_runtime::spawn_blocking(move || backend::session_target_port(tracked, &root))
+    let o = ortam.clone();
+    tauri::async_runtime::spawn_blocking(move || o.oturum_hedef_portu(tracked, &root))
         .await
         .ok()
         .flatten()
@@ -3149,7 +3171,9 @@ mod tests {
     #[test]
     fn giris_beni_hatirla_kararini_tercih_isaretine_yazar() {
         let soy = f5_yorumlari_soy(include_str!("main.rs"));
-        let i = soy.find("async fn auth_login(").expect("auth_login yok");
+        // KP-7 A2: gövde `auth_login_ile`de (komut kabuk.rs'te ince S kabuğu) — KÖR ÇAPA dersi: aranan metin `concat!` ile (test kendi
+        // dizgesini bulmasın).
+        let i = soy.find(concat!("async fn auth_login", "_ile<O: KomutOrtami>(")).expect("auth_login_ile yok");
         let son = soy[i + 1..].find("\nasync fn ").map(|j| i + 1 + j).unwrap_or(soy.len());
         // KP-5 B4: yazım `giris_kaydini_isle`de (davranış testi: KRITIK_KP5_B4_giris_kaydi_…); auth_login ona bağlanır.
         assert!(soy[i..son].contains("giris_kaydini_isle(&root, &s2, hatirla)"), "giris tercihi isarete yazilmiyor (auth_login baglanmiyor)");
@@ -3163,7 +3187,9 @@ mod tests {
     #[test]
     fn KRITIK_Y211_auth_login_hatasi_KOD_ve_MESAJ_tasir() {
         let soy = f5_yorumlari_soy(include_str!("main.rs"));
-        let i = soy.find("async fn auth_login(").expect("auth_login yok");
+        // KP-7 A2: gövde `auth_login_ile`de (komut kabuk.rs'te ince S kabuğu) — KÖR ÇAPA dersi: aranan metin `concat!` ile (test kendi
+        // dizgesini bulmasın).
+        let i = soy.find(concat!("async fn auth_login", "_ile<O: KomutOrtami>(")).expect("auth_login_ile yok");
         let son = soy[i + 1..].find("\nasync fn ").map(|j| i + 1 + j).unwrap_or(soy.len());
         let g: String = soy[i..son].chars().filter(|c| !c.is_whitespace()).collect();
         assert!(g.contains("->Result<AuthStatus,GirisHatasi>"), "auth_login hata tipi kodlu degil");
@@ -4910,6 +4936,186 @@ Connection: close
     }
 
     // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-7 A2 (madde 2) · `auth_status_ile` · `auth_login_ile` · `auth_logout_ile` · `calisan_backend_portu_ile` — auth komut
+    // gövdeleri, kayıtçı sahte `KomutOrtami` (ağ / gerçek kök / varsayılan port yoklaması YOK) + geçici kök (gerçek DPAPI kaydı, gerçek
+    // kurulum kökü DEĞİL). `spawn_blocking` görevi ÇÖKERSE (panik → JoinError) komut kendi iletisiyle Err döner — o kollar da davranışla.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// Komut hata iletisinin `{{e}}` / `{{err}}` ÖNCESİ sabit kısmı — etkin dilde, iddia anında hesaplanır.
+    fn kp7_ileti_basi(anahtar: &str, yer: &str) -> String {
+        pemf_launcher_core::dil::t_ile(anahtar, &[(yer, "")])
+    }
+
+    /// KRİTİK (KP-7 A2 · OFFLINE KARARI): açılış oturum durumu — kayıt yok → çıkış (ağa çıkılmaz) · bayat kayıt → kayıtlı refresh_token +
+    /// e-posta ile sessiz yenileme; yenilendi → "fresh", yeni jeton belleğe VE diske · bellekte oturum → "fresh", ağa YENİDEN çıkılmaz ·
+    /// bayat kayıt + sunucuya ulaşılamadı → kayıtlı oturumla çevrimdışı ("cached", offline) — cihaz kilitlenmez.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP7_A2_auth_status_ile_KAYITSIZ_cikis_BAYAT_yenilenir_BELLEK_aga_cikmaz_ULASILAMAZSA_cevrimdisi() {
+        let kok = kp5_b4_kok("kp7_durum");
+        let state = AppState::default();
+        let o = Kp6Ortam::default();
+        let d = tauri::async_runtime::block_on(auth_status_ile(&o, &state, kok.clone())).unwrap();
+        assert_eq!(kp5_b4_durum(&d), (false, String::new(), "none", false), "kayıt yokken giriş sayıldı");
+        assert!(o.izler().is_empty(), "kayıt yokken ağa çıkıldı: {:?}", o.izler());
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("kp7-bayat", 500)));
+        *o.yenileme.lock().unwrap() = Some((Ok(kp5_b4_oturum("kp7-yeni", 0)), None));
+        let d = tauri::async_runtime::block_on(auth_status_ile(&o, &state, kok.clone())).unwrap();
+        assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "fresh", false));
+        assert_eq!(o.izler(), vec!["yenile:kp7-bayat:vet@klinik.tr".to_string()], "yenileyiciye kayıtlı jeton / e-posta gitmedi");
+        assert_eq!(state.session.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("kp7-yeni".into()), "bellek tazelenmedi");
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("kp7-yeni".into()), "yenilenen jeton diske işlenmedi");
+        let d = tauri::async_runtime::block_on(auth_status_ile(&o, &state, kok.clone())).unwrap();
+        assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "fresh", false));
+        assert_eq!(o.izler().len(), 1, "bellekte oturum varken ağa yeniden çıkıldı: {:?}", o.izler());
+        let state2 = AppState::default();
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("kp7-kayitli", 500)));
+        let d = tauri::async_runtime::block_on(auth_status_ile(&o, &state2, kok.clone())).unwrap();
+        assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "cached", true), "ulaşılamayınca cihaz kilitlendi (OFFLINE KARARI)");
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("kp7-kayitli".into()), "çevrimdışıyken kayıt silindi");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-7 A2): `auth_status`un iki `spawn_blocking` evresi ÇÖKERSE (okuma: bellek kilidi zehirli · yenileme: yenileyici
+    /// panikler) komut süreci düşürmez, evrenin KENDİ iletisiyle Err döner.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP7_A2_auth_status_ile_GOREV_COKERSE_evrenin_iletisiyle_Err() {
+        let kok = kp5_b4_kok("kp7_durum_cok");
+        let state = AppState::default();
+        let s = state.session.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = s.lock().unwrap();
+            panic!("KP7 bellek zehri");
+        })
+        .join();
+        let Err(e) = tauri::async_runtime::block_on(auth_status_ile(&Kp6Ortam::default(), &state, kok.clone())) else {
+            panic!("okuma evresi çöktüğü halde durum döndü")
+        };
+        assert!(e.starts_with(&kp7_ileti_basi("rust.hata.oturumOkumaGorevCoktu", "e")), "okuma evresi çöküşü iletisi değil: {e}");
+        let state = AppState::default();
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("kp7-bayat", 500)));
+        let o = Kp6Ortam { cokme: true, ..Default::default() };
+        let Err(e) = tauri::async_runtime::block_on(auth_status_ile(&o, &state, kok.clone())) else {
+            panic!("yenileme evresi çöktüğü halde durum döndü")
+        };
+        assert!(e.starts_with(&kp7_ileti_basi("rust.hata.oturumYenilemeGorevCoktu", "e")), "yenileme evresi çöküşü iletisi değil: {e}");
+        assert_eq!(o.izler(), vec!["yenile:kp7-bayat:vet@klinik.tr".to_string()]);
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-7 A2 · Y211): giriş — e-posta KIRPILIR · başarıda "Beni hatırla" kaydı + bellek, SONRA çalışan backend'e devir (devir
+    /// anında oturum ZATEN bellekte) · izlenen backend varsa hedefe izlenen port gider · hatırla İŞARETSİZ → önceki kayıt silinir · hedef
+    /// yoksa devir YOK · kimlik hatası arayüze `{kod, mesaj}` (kod `AuthError::kod`) ve bellek / kayıt / hedef / devir YOK · giriş görevi
+    /// ÇÖKERSE `{kod: "gorev_coktu"}`.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP7_A2_auth_login_ile_KAYIT_BELLEK_sonra_DEVIR_izlenen_hedef_HATA_KODU_gorev_cokmesi() {
+        let kok = kp5_b4_kok("kp7_giris");
+        let state = AppState::default();
+        let o = Kp6Ortam { hedef: Some(KP6_PORT), ..Default::default() };
+        let Ok(d) = tauri::async_runtime::block_on(auth_login_ile(&o, &state, kok.clone(), "  vet@klinik.tr ".into(), "parola".into(), true))
+        else {
+            panic!("başarılı giriş Err döndü")
+        };
+        assert_eq!(kp5_b4_durum(&d), (true, "vet@klinik.tr".into(), "fresh", false));
+        assert_eq!(o.izler(), vec!["giris:vet@klinik.tr:6".to_string(), "hedef:izlenen=None".into(), format!("devret:{KP6_PORT}")]);
+        assert_eq!(*o.devirde_oturum.lock().unwrap(), vec![true], "oturum belleğe yazılmadan devredildi");
+        assert_eq!(state.session.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()), Some("kp7-giris".into()));
+        assert_eq!(secret_store::load(&kok).map(|s| s.refresh_token), Some("kp7-giris".into()), "hatırla işaretliyken kaydedilmedi");
+        let state = AppState::default();
+        *state.proc.lock().unwrap() = Some((kp6_kisa_cocuk(), 4321));
+        let o = Kp6Ortam::default();
+        let Ok(_) = tauri::async_runtime::block_on(auth_login_ile(&o, &state, kok.clone(), "vet@klinik.tr".into(), "p".into(), false)) else {
+            panic!("başarılı giriş Err döndü")
+        };
+        assert_eq!(o.izler(), vec!["giris:vet@klinik.tr:1".to_string(), "hedef:izlenen=Some(4321)".into()], "hedefe izlenen port gitmedi / devir yapıldı");
+        assert!(secret_store::load(&kok).is_none(), "hatırla işaretsizken önceki kayıt kaldı");
+        if let Some((mut c, _)) = state.proc.lock().unwrap().take() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+        let state = AppState::default();
+        let o = Kp6Ortam { hedef: Some(KP6_PORT), ..Default::default() };
+        *o.giris.lock().unwrap() = Some(Err(auth::AuthError::BadCredentials));
+        let Err(h) = tauri::async_runtime::block_on(auth_login_ile(&o, &state, kok.clone(), "vet@klinik.tr".into(), "yanlis".into(), true)) else {
+            panic!("kimlik hatası başarı döndü")
+        };
+        assert_eq!((h.kod, h.mesaj), ("kimlik_hatali", auth::AuthError::BadCredentials.to_string()), "hata kodu / metni arayüze gitmiyor");
+        assert_eq!(o.izler(), vec!["giris:vet@klinik.tr:6".to_string()], "kimlik hatasından sonra hedef / devir yapıldı");
+        assert!(state.session.lock().unwrap().is_none(), "kimlik hatasında bellekte oturum var");
+        let o = Kp6Ortam { cokme: true, ..Default::default() };
+        let Err(h) = tauri::async_runtime::block_on(auth_login_ile(&o, &state, kok.clone(), "vet@klinik.tr".into(), "p".into(), true)) else {
+            panic!("çöken giriş görevi başarı döndü")
+        };
+        assert_eq!(h.kod, "gorev_coktu");
+        assert!(h.mesaj.starts_with(&kp7_ileti_basi("rust.hata.girisGorevCoktu", "err")), "giriş görevi çöküşü iletisi değil: {}", h.mesaj);
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (KP-7 A2): çıkış — bellekteki oturum ALINIR · hedef port (izlenen yok) → ÖNCE backend devir oturumu temizlenir, SONRA ağa
+    /// bildirilir (bellekteki erişim jetonuyla) · "Beni hatırla" kaydı silinir · çıkış görevi ÇÖKERSE kendi iletisiyle Err (bellek yine boş).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP7_A2_auth_logout_ile_ONCE_backend_SONRA_ag_kayit_ve_BELLEK_bosalir_gorev_cokmesi() {
+        let kok = kp5_b4_kok("kp7_cikis");
+        assert!(secret_store::save(&kok, &kp5_b4_oturum("kp7-c", 0)));
+        let state = AppState::default();
+        *state.session.lock().unwrap() = Some(kp5_b4_oturum("kp7-c", 0));
+        let o = Kp6Ortam { hedef: Some(KP6_PORT), ..Default::default() };
+        let d = tauri::async_runtime::block_on(auth_logout_ile(&o, &state, kok.clone())).unwrap();
+        assert_eq!(kp5_b4_durum(&d), (false, String::new(), "none", false));
+        assert_eq!(
+            o.izler(),
+            vec!["hedef:izlenen=None".to_string(), format!("temizle:{KP6_PORT}"), "ag_cikis:a-kp7-c".into()],
+            "çıkış sırası backend temizliği → ağ bildirimi değil"
+        );
+        assert!(state.session.lock().unwrap().is_none(), "çıkıştan sonra bellekte oturum kaldı");
+        assert!(secret_store::load(&kok).is_none(), "çıkıştan sonra 'Beni hatırla' kaydı kaldı");
+        let state = AppState::default();
+        *state.session.lock().unwrap() = Some(kp5_b4_oturum("kp7-c2", 0));
+        let o = Kp6Ortam { hedef: Some(KP6_PORT), cokme: true, ..Default::default() };
+        let Err(e) = tauri::async_runtime::block_on(auth_logout_ile(&o, &state, kok.clone())) else {
+            panic!("çıkış görevi çöktüğü halde durum döndü")
+        };
+        assert!(e.starts_with(&kp7_ileti_basi("rust.hata.cikisGorevCoktu", "e")), "çıkış görevi çöküşü iletisi değil: {e}");
+        assert!(state.session.lock().unwrap().is_none(), "çöken çıkışta bellekte oturum kaldı");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KP-7 A2: auth komutlarının İNCE kabukları (kabuk.rs — ölçüm dışı) `#[tauri::command]`dır ve gövdeye gerçek kök + `AppHandle` ile
+    /// bağlanır; `AppHandle` bağı her yeni dış bağı TEK üretim çağrısına verir. Aranan metin kabuk.rs'te (bu dosyada değil — kör çapa yok).
+    #[test]
+    fn KRITIK_KP7_A2_auth_kabuklari_GOVDEYE_ve_URETIM_baglarina_baglanir() {
+        let kab = kabuk_soy();
+        for (komut, govde) in [
+            ("auth_status", "auth_status_ile(&app, state.inner(), install::default_install_root(&home_dir())).await"),
+            (
+                "auth_login",
+                "auth_login_ile(&app, state.inner(), install::default_install_root(&home_dir()), email, password, remember).await",
+            ),
+            ("auth_logout", "auth_logout_ile(&app, state.inner(), install::default_install_root(&home_dir())).await"),
+        ] {
+            let i = kab.find(&format!("async fn {komut}(")).unwrap_or_else(|| panic!("{komut} kabuğu kabuk.rs'te yok"));
+            assert!(kab[..i].ends_with("#[tauri::command]\n"), "{komut} Tauri komutu değil");
+            let blok = &kab[i..i + kab[i..].find("\n}\n").unwrap()];
+            assert!(blok.contains(govde), "{komut} kabuğu gövdeye gerçek kök + AppHandle ile bağlanmıyor: {blok}");
+        }
+        let imp = &kab[kab.find("impl KomutOrtami for tauri::AppHandle {").expect("üretim bağı yok")..];
+        for (yontem, cagri) in [
+            ("fn oturumu_yenile(", "(auth::refresh_budgeted(refresh_token, eposta), auth::son_yenileme_reddi())"),
+            ("fn giris_yap(", "auth::login_budgeted(eposta, parola)"),
+            ("fn oturum_hedef_portu(", "backend::session_target_port(izlenen, root)"),
+            ("fn backend_oturumunu_temizle(", "backend::clear_desktop_session(port)"),
+            ("fn aga_cikis_bildir(", "let _ = auth::logout(jeton);"),
+        ] {
+            let j = imp.find(yontem).unwrap_or_else(|| panic!("{yontem} üretim bağı yok"));
+            let g = &imp[j..j + imp[j..].find("\n    }\n").unwrap()];
+            assert!(g.contains(cagri), "{yontem} üretim bağı {cagri} çağırmıyor: {g}");
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
     // KP-5 B4b: güvenlik yolu yardımcılarının kalan KOLLARI davranışla — `son_oturumu_yakala` (oturum / çıkış) ve
     // `yakma_bitene_kadar_bekle` (yakma BİTTİ / azami bütçe DOLDU). Sahte HTTP backend (rastgele port; yol başına sıralı yanıt).
     // ═════════════════════════════════════════════════════════════════════════════════════
@@ -5422,6 +5628,14 @@ Connection: close
         pencere_hata: bool,
         batch_hata: bool,
         kilit_koku: Option<std::path::PathBuf>,
+        /// KP-7 A2: sessiz yenileme sonucu (None → ulaşılamadı: `Offline`, ret nedeni yok) · giriş sonucu (None → başarılı oturum
+        /// `kp7-giris`) · oturum hedef portu · görev ÇÖKSÜN mü (yenileme / giriş / backend temizliği panikler — `spawn_blocking`
+        /// JoinError kolu) · devir anında bellekte oturum var mıydı.
+        yenileme: Arc<Mutex<Option<(Result<auth::Session, auth::AuthError>, Option<String>)>>>,
+        giris: Arc<Mutex<Option<Result<auth::Session, auth::AuthError>>>>,
+        hedef: Option<u16>,
+        cokme: bool,
+        devirde_oturum: Arc<Mutex<Vec<bool>>>,
     }
 
     impl Kp6Ortam {
@@ -5462,10 +5676,13 @@ Connection: close
         }
         fn oturumu_devret<'a>(
             &'a self,
-            _state: &'a AppState,
+            state: &'a AppState,
             port: u16,
         ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
-            Box::pin(async move { self.yaz(format!("devret:{port}")) })
+            Box::pin(async move {
+                self.devirde_oturum.lock().unwrap().push(state.session.lock().unwrap().is_some());
+                self.yaz(format!("devret:{port}"))
+            })
         }
         fn backend_hazir(&self, state: &AppState, mut child: std::process::Child, url: &str, port: u16) {
             let _ = child.wait();
@@ -5623,6 +5840,27 @@ Connection: close
         fn yeniden_baslaticiyi_baslat(&self, kurucu: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
             self.yaz(format!("batch:{}:pencere={}", kurucu.file_name().unwrap().to_string_lossy(), pencere.is_some()));
             if self.batch_hata { Err("KP6 batch baslamadi".into()) } else { Ok(()) }
+        }
+        fn oturumu_yenile(&self, refresh_token: &str, eposta: &str) -> (Result<auth::Session, auth::AuthError>, Option<String>) {
+            self.yaz(format!("yenile:{refresh_token}:{eposta}"));
+            assert!(!self.cokme, "KP7 yenileme gorevi coktu");
+            self.yenileme.lock().unwrap().take().unwrap_or((Err(auth::AuthError::Offline), None))
+        }
+        fn giris_yap(&self, eposta: &str, parola: &str) -> Result<auth::Session, auth::AuthError> {
+            self.yaz(format!("giris:{eposta}:{}", parola.len()));
+            assert!(!self.cokme, "KP7 giris gorevi coktu");
+            self.giris.lock().unwrap().take().unwrap_or_else(|| Ok(kp5_b4_oturum("kp7-giris", 0)))
+        }
+        fn oturum_hedef_portu(&self, izlenen: Option<u16>, _root: &std::path::Path) -> Option<u16> {
+            self.yaz(format!("hedef:izlenen={izlenen:?}"));
+            self.hedef
+        }
+        fn backend_oturumunu_temizle(&self, port: u16) {
+            self.yaz(format!("temizle:{port}"));
+            assert!(!self.cokme, "KP7 cikis gorevi coktu");
+        }
+        fn aga_cikis_bildir(&self, jeton: &str) {
+            self.yaz(format!("ag_cikis:{jeton}"));
         }
     }
 

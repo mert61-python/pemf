@@ -30,7 +30,8 @@ _CI = _KOK / ".github" / "workflows" / "tests.yml"
 # KP-6 D5: `uninstall` Tauri komut kabuğu S (gövdesi `uninstall_ile` K) → 59.
 # KP-6 D6: `apply_runtime_update` Tauri komut kabuğu S (gövdesi `apply_runtime_update_ile` K; güvenlik listesinde GÖVDE) → 60.
 # KP-6 D7: `apply_self_update` Tauri komut kabuğu S (gövdesi `apply_self_update_ile` K; güvenlik listesinde GÖVDE) → 61.
-BEKLENEN_S = 61
+# KP-7 A2 (madde 2): `auth_status` / `auth_login` / `auth_logout` Tauri komut kabukları S (gövdeleri `auth_*_ile` K) → 64.
+BEKLENEN_S = 64
 _FN = re.compile(r"^(?:pub(?:\([^)]*\))? )?(?:async )?fn (\w+)")
 
 

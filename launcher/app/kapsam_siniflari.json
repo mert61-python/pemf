@@ -1,23 +1,23 @@
 {
  "aciklama": "KP-3 B1 / B4 (istem 38 + 41 C) + KP-4 A1 (istem 42 · Y257 c): başlatıcı uygulamasının (launcher/app/src/main.rs + kabuk.rs) üst düzey işlevlerinin kapsam sınıfı — T test edilebilir · Y yeniden düzenleme gerekir · S sınırda (pencere / Tauri çalışma zamanı / gerçek platform API'si — test edilemez) · K kapsanıyor. `eksik` = KP-3 AŞAMA 0 (d45d9cf2) cargo-llvm-cov eksik satırı. Kapı: tests/test_KP3_main_rs_kapsam_siniflari.py — HER üst düzey işlev TAM BİR sınıfta, S / Y gerekçeli, S listesi SAYILIR (`s_sayisi`). Y242: test yazılabilen satıra S YASAK. #[coverage(off)] bu derleyicide (rustc 1.98.1) kararlı DEĞİL (E0658) → KP-4 A1: S işlevleri main.rs'ten DEĞİŞTİRİLMEDEN launcher/app/src/kabuk.rs'e taşındı (main.rs `include!` ile AYNI modüle katar) ve CI kapsam adımı YALNIZ o dosyayı dışlar; kapı S'nin yalnız kabuk.rs'te, kabuk.rs'in yalnız S'den oluştuğunu da sayar. KP-5 B2 / B3 (sahip kararı 2, 11-11): A2c'nin 8 ince kök / Tauri kabuğu S'e taşındı (44 → 52; gövdeleri `_ile` K); kısmen test edilen 3 S işlevinin karar mantığı saf yardımcıya ayrıldı (`indirme_olayi_karari`, `indirme_adresi_denetle`, `yardimci_batch_yolu` + `yardimci_hemen_sonlandi_iletisi`).",
  "olcum": "d45d9cf2 · main.rs 2840 satır · 1411 eksik",
- "s_sayisi": 61,
+ "s_sayisi": 64,
  "ozet": {
   "K": {
-   "islev": 55,
+   "islev": 59,
    "eksik_satir": 0
   },
   "S": {
-   "islev": 61,
-   "eksik_satir": 564
+   "islev": 64,
+   "eksik_satir": 573
   },
   "T": {
    "islev": 4,
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 4,
-   "eksik_satir": 107
+   "islev": 0,
+   "eksik_satir": 0
   }
  },
  "islevler": {
@@ -321,9 +321,10 @@
    "neden_T_Y_degil": "Gerçek kaldırma UAC ister, NSIS kaldırıcısını başlatır ve süreci sonlandırır; kararın tamamı (kilit, sıra, hata yutma, kaldırıcı yoksa çıkmama) `_ile` gövdesinde kayıtçı sahteyle testli."
   },
   "auth_status": {
-   "sinif": "Y",
-   "eksik": 50,
-   "neden": "KP-5 B4 (A2 deseni): gövde `oturum_ilk_durum` + `oturum_yenileme_sonucu`'e ayrıldı (K, geçici kök + sahte ağ adımlarıyla testli); kalan Tauri komutu yalnız `State` + gerçek kök + `spawn_blocking` + gerçek ağ (giriş / devir) bağlar. S'e taşınması S sayısını değiştirir (sahip kararı 2a yalnız 8 kabuk) → KP-6."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-7 A2 (madde 2): İNCE Tauri komut KABUĞU — `tauri::State` + `AppHandle` (KomutOrtami üretim bağı: sessiz yenileme) + gerçek kurulum kökü (`home_dir()`) bağlar ve `auth_status_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "`tauri::State` / `AppHandle` yalnız çalışan uygulamada kurulur; gerçek kök sahibin 'Beni hatırla' kaydıdır ve yenileme gerçek ağa çıkar. Kararın tamamı `_ile` gövdesinde kayıtçı sahte `KomutOrtami` + geçici kökle testli."
   },
   "oturum_gunlugu_olayi": {
    "sinif": "K",
@@ -334,19 +335,16 @@
    "eksik": 0
   },
   "auth_login": {
-   "sinif": "Y",
-   "eksik": 32,
-   "neden": "KP-5 B4 (A2 deseni): gövde `giris_kaydini_isle`'e ayrıldı (K, geçici kök + sahte ağ adımlarıyla testli); kalan Tauri komutu yalnız `State` + gerçek kök + `spawn_blocking` + gerçek ağ (giriş / devir) bağlar. S'e taşınması S sayısını değiştirir (sahip kararı 2a yalnız 8 kabuk) → KP-6."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-7 A2 (madde 2): İNCE Tauri komut KABUĞU — `tauri::State` + `AppHandle` (KomutOrtami üretim bağı: giriş isteği, oturum hedef portu, oturum devri) + gerçek kök bağlar ve `auth_login_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "Gerçek giriş Supabase'e parola gönderir ve sahibin kaydına yazar; kararın tamamı (kırpma, kayıt, bellek, devir sırası, hata kodu, görev çöküşü) `_ile` gövdesinde kayıtçı sahte + geçici kökle testli."
   },
   "auth_logout": {
-   "sinif": "Y",
-   "eksik": 17,
-   "neden": "KP-5 B4 (A2 deseni): gövde `cikis_isle`'e ayrıldı (K, geçici kök + sahte ağ adımlarıyla testli); kalan Tauri komutu yalnız `State` + gerçek kök + `spawn_blocking` + gerçek ağ (giriş / devir) bağlar. S'e taşınması S sayısını değiştirir (sahip kararı 2a yalnız 8 kabuk) → KP-6."
-  },
-  "calisan_backend_portu": {
-   "sinif": "Y",
-   "eksik": 8,
-   "neden": "State + çekirdek tespit; KP-4."
+   "sinif": "S",
+   "eksik": 3,
+   "neden": "KP-7 A2 (madde 2): İNCE Tauri komut KABUĞU — `tauri::State` + `AppHandle` (KomutOrtami üretim bağı: oturum hedef portu, backend devir oturumu temizliği, ağ çıkışı) + gerçek kök bağlar ve `auth_logout_ile`yi bekler; karar YOK.",
+   "neden_T_Y_degil": "Gerçek çıkış sahibin kaydını siler, çalışan backend'e ve Supabase'e istek atar; kararın tamamı (sıra, kayıt / bellek temizliği, görev çöküşü) `_ile` gövdesinde kayıtçı sahte + geçici kökle testli."
   },
   "app_window_open": {
    "sinif": "S",
@@ -666,6 +664,26 @@
    "sinif": "K",
    "eksik": 0,
    "neden": "KP-6 D7: kendini güncellemenin gövdesi — kök + TEMP + dış bağ enjekte; sha boş reddi, kilit, seans kapısı (önce ve indirme sonrası), kurucu önbelleği + yeniden doğrulama, deneme kaydı, F5 son yakalama, işaret → pencere → batch → çık sırası, pencere hatası akışı durdurmaz, batch hatasında işaret temizlenir davranış testli."
+  },
+  "auth_status_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-7 A2: `auth_status` komutunun gövdesi — kök + dış bağ (`KomutOrtami`) enjekte; kayıtsız / bayat-yenilendi / bellek / çevrimdışı ve iki görev çöküşü kolu davranış testli."
+  },
+  "auth_login_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-7 A2: `auth_login` komutunun gövdesi — kök + dış bağ enjekte; kayıt / bellek / devir sırası, izlenen hedef, hatırla işaretsiz, kimlik hatası kodu ve görev çöküşü davranış testli."
+  },
+  "auth_logout_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-7 A2: `auth_logout` komutunun gövdesi — kök + dış bağ enjekte; backend temizliği → ağ sırası, kayıt / bellek boşalması ve görev çöküşü davranış testli."
+  },
+  "calisan_backend_portu_ile": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-7 A2: oturum devrinin hedef portu — izlenen port + kök enjekte, karar `KomutOrtami::oturum_hedef_portu` (üretim `backend::session_target_port`); giriş / çıkış testlerinde izlenen ve izlenmeyen kolla testli."
   }
  }
 }
