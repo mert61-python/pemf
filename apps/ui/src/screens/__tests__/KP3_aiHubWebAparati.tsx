@@ -8,7 +8,8 @@
  * SAHTE yalnız EN ALT katta (tarayıcı sınırı):
  *  · `fetch` — her isteği yöntem + yol + gövde (çok parçalı → `FormData`) ile KAYDEDER; `blob:` URL'si okunursa tarayıcı gibi o URL'ye
  *    bağlı Blob'u döndürür.
- *  · `<input type=file>`'ın `click`'i — açılan seçicinin `accept` / `capture` öznitelikleri kaydedilir, `dosyaSiradaki` seçilir.
+ *  · `<input type=file>`'ın `click`'i — açılan seçicinin `accept` / `capture` öznitelikleri kaydedilir, `dosyaSiradaki` seçilir
+ *    (`bosDegisim`: dosyasız kapanışta `change` boş FileList ile gelir — KP-8).
  *  · `URL.createObjectURL` / `revokeObjectURL` (jsdom'da yok) — URL ↔ Blob eşlemi tutulur, serbest bırakılan URL'ler kaydedilir.
  *  · `Date.now` — ürünün `Button`'ı aynı etiketin 400 ms içindeki ikinci basışını yutar; `saatiIlerlet()` gerçek bekleme olmadan aşar.
  * Çağıran test dosyası: `@jest-environment jsdom`, `jest.mock("react-native", () => jest.requireActual("react-native-web"))`, bağlam ve
@@ -37,6 +38,8 @@ export const web = {
   nesneUrlleri: new Map<string, Blob>(),
   /** createObjectURL'ın üreteceği URL biçimi (varsayılan `blob:kp2-N`). */
   urlUret: null as null | ((b: Blob, n: number) => string),
+  /** KP-8: dosya seçilmeden kapanan seçici `change`'i BOŞ FileList ile verir (bazı tarayıcılar); varsayılan: olay hiç gelmez. */
+  bosDegisim: false,
 };
 
 let kayma = 0;
@@ -65,6 +68,7 @@ export function webKur(ozel?: Ozel) {
   web.serbestBirakilan = [];
   web.nesneUrlleri = new Map();
   web.urlUret = null;
+  web.bosDegisim = false;
   kayma = 0;
   const gercekSimdi = Date.now.bind(Date);
   saatYamasi = jest.spyOn(Date, "now").mockImplementation(() => gercekSimdi() + kayma);
@@ -72,6 +76,11 @@ export function webKur(ozel?: Ozel) {
     if (this.type !== "file") return;
     web.acilanSeciciler.push({ accept: this.accept, capture: (this as unknown as { capture?: string }).capture ?? null });
     const f = web.dosyaSiradaki;
+    if (!f && web.bosDegisim) {
+      Object.defineProperty(this, "files", { value: [], configurable: true });
+      (this.onchange as ((e: unknown) => void) | null)?.({ target: this });
+      return;
+    }
     if (!f) return;
     web.dosyaSiradaki = null;
     Object.defineProperty(this, "files", { value: [f], configurable: true });
