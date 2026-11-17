@@ -408,3 +408,32 @@ describe("KP-7 B · kalan kollar", () => {
     expect(urller()).not.toContain("http://192.168.1.40:8000/api/health");
   });
 });
+
+// ── KP-7 F1 · sahip kararı (17-11, seçenek a): alt ağ taraması KAYITLI cihazı tercih eder ─────────────────────────────────────
+// ÖNCE-KIRMIZI: tek çağıran `discoverSubnet(undefined, …)` geçiyordu → aynı ağda iki PEMF varken İLK yanıt veren seçilir, kayıtlı cihaz
+// kimliği onunla DEĞİŞİRDİ (çok cihazlı klinikte yanlış makineyi sürme riski).
+describe("KP-7 F1 · alt ağ kayıtlı cihaz tercihi", () => {
+  it("kayıtlı cihaz (B) da yanıt veriyorsa ilk bulunan (A) DEĞİL kayıtlı seçilir; kimlik B kalır, jeton B'den", async () => {
+    const uyari = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    await setStoredDeviceId("B");
+    tablo["http://10.0.5.1:8000/api/health"] = PEMF("A");
+    tablo["http://10.0.5.100:8000/api/health"] = PEMF("B");
+    tablo["http://10.0.5.1:8000/api/auth/token"] = [200, { token: "A-T" }];
+    tablo["http://10.0.5.100:8000/api/auth/token"] = [200, { token: "B-T" }];
+    await expect(discoverBackend()).resolves.toEqual({ address: "http://10.0.5.100:8000", source: "subnet" });
+    expect(uyari).toHaveBeenCalledWith("Keşif: 2 PEMF cihazı bulundu, 10.0.5.100 seçildi.");
+    expect(await getStoredDeviceId()).toBe("B");
+    expect(serviceConfig.apiToken).toBe("B-T");
+    expect(urller()).not.toContain("http://10.0.5.1:8000/api/auth/token");
+  });
+
+  it("KARŞIT: kayıtlı cihaz yanıt VERMİYORSA ilk bulunan seçilir (bağlantı kesilmez — eski davranış)", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    await setStoredDeviceId("YOK-C");
+    tablo["http://10.0.5.1:8000/api/health"] = PEMF("A");
+    tablo["http://10.0.5.100:8000/api/health"] = PEMF("B");
+    tablo["http://10.0.5.1:8000/api/auth/token"] = [200, { token: "A-T" }];
+    await expect(discoverBackend()).resolves.toEqual({ address: "http://10.0.5.1:8000", source: "subnet" });
+    expect(await getStoredDeviceId()).toBe("A");
+  });
+});

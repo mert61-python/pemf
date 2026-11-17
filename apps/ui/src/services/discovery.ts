@@ -484,7 +484,10 @@ async function _discoverBackendImpl(): Promise<DiscoveryResult | null> {
   if (gecersiz()) return null;
 
   // 4) Subnet tarama — HER ZAMAN son çare. Aynı WiFi'de mDNS başarısızsa cihazı bulan KANITLI yol.
-  const s = await discoverSubnet(undefined, gecersiz);
+  // KP-7 · sahip kararı (17-11, seçenek a): KAYITLI cihaz kimliği taramaya GEÇİRİLİR — aynı ağda birden çok PEMF yanıt verirse
+  // kayıtlı olan seçilir; kayıtlı cihaz yanıt vermezse ilk bulunan (eski davranış). Eskiden `undefined` geçiyordu: tercih kolu hiç
+  // çalışmıyor, ilk yanıt veren seçilip kayıtlı kimlik onunla DEĞİŞİYORDU (yanlış makineyi sürme riski).
+  const s = await discoverSubnet(await getStoredDeviceId(), gecersiz);
   if (s && !gecersiz() && (await apply(s))) return { address: s, source: "subnet" };
 
   return null;
