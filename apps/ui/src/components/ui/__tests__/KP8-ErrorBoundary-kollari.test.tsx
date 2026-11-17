@@ -94,3 +94,17 @@ it("sınır (pencere YOKKEN): Error OLMAYAN değer fırlatılırsa rapora değer
     sus.mockRestore();
   }
 });
+
+it("sınır: `null` fırlatılırsa rapor iletisi boş, ekranda 'bilinmeyen hata' (çökmez)", () => {
+  // eslint-disable-next-line no-throw-literal
+  const Patlayan = (): React.ReactElement => { throw null; };
+  const sus = jest.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const u = render(<ErrorBoundary><Patlayan /></ErrorBoundary>);
+    expect(u.getByText(T("ortak.hata.bilinmeyen"))).toBeTruthy();
+    expect(govde(mockPost.mock.calls.length - 1).message).toBe("");
+    u.unmount();
+  } finally {
+    sus.mockRestore();
+  }
+});

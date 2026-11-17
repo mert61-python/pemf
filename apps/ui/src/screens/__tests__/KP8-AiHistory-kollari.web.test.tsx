@@ -8,7 +8,7 @@
  *  - modül adı / kimliği yoksa "AI"; özet ve hasta adı yoksa satırları YOK; tanınmayan kip / girdi tipi HAM değeriyle; sayısal ama
  *    geçersiz tarih ham metinden (ilk 16 karakter).
  *  - önceki değerlendirmede tanınmayan karar HAM, hekim yoksa "imzasız", zaman / not yoksa satırı yok.
- *  - hasta adı olmayan kaydın PDF'i "analiz" adıyla iner.
+ *  - hasta adı olmayan kaydın PDF'i "analiz" adıyla iner; önceki değerlendirmeler ucu gerekçesiz 503 dönerse "şu an okunamıyor".
  */
 jest.mock("react-native", () => jest.requireActual("react-native-web"));
 jest.mock("@/services/supabaseAuth", () => {
@@ -115,4 +115,13 @@ test("alanları eksik eski kayıt: 'AI' adı, özet / hasta satırı yok, ham ki
   await s.testIdTikla("ai-paylas-7");
   await s.bosalt(4);
   expect((downloadFileWithAuth as jest.Mock).mock.calls[0][1]).toBe("PEMF_AI_analiz_7.pdf");
+});
+
+test("önceki değerlendirmeler ucu GEREKÇESİZ 503 dönerse 'şu an okunamıyor' (gerekçe boş, 'undefined' yazmaz)", async () => {
+  await kur({ status: "success", data: [ESKI] }, [503, {}]);
+  await s.tikla(T("ai.gecmis.kayitEtiketi", { ad: "AI", acik: "" }));
+  await s.bosalt(10);
+  const m = s.metin();
+  expect(m).toMatch(/okunamıyor/);
+  expect(m).not.toContain("undefined");
 });
