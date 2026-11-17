@@ -36,6 +36,8 @@ module.exports = {
   // fonksiyon %95,81 → 98 / 96 / 88 / 94. Kalan satırlar ULAŞILAMAZ savunmalar + 1 ZAMAN (KAPSAM.md KP-4 · B1).
   // KP-5 F (2026-11-15, uç 97b8d61e, 471 süit) ölçülen: satır %100 (8 547 / 8 547) · deyim %98,21 · dal %90,08 · fonksiyon %97,04
   // → 99 / 97 / 89 / 96. Erişilemez satırlar gerekçeli `istanbul ignore` + sayan kapı (Y279, test_KP5_istemci_site_etiketleri_SAYILI).
+  // KP-8 D (2026-11-17, KP-7 ile birleşik SON tur — arayüz dalı test edilebilen azamiye): TAM jest (504 süit / 4 001 test) satır %100
+  // (8 582) · deyim %99,26 (10 432) · dal %94,03 (9 588 / 10 196) · işlev %100 (2 105) → 99 / 98 / 93 / 99 (ölçülenin tam kısmı − 1; Y243).
   collectCoverageFrom: [
     "src/**/*.{ts,tsx,js,jsx}",
     "app/**/*.{ts,tsx,js,jsx}",
@@ -47,6 +49,6 @@ module.exports = {
     "!**/node_modules/**",
   ],
   coverageThreshold: {
-    global: { lines: 99, statements: 97, branches: 89, functions: 96 },
+    global: { lines: 99, statements: 98, branches: 93, functions: 99 },
   },
 };

@@ -12,13 +12,15 @@ export default defineConfig({
   // KP-3 AŞAMA D (2026-11-08, uç 6c7d4f10) ölçülen: satır %100 · deyim %99,09 · dal %92,09 · fonksiyon %99,31 (b04f518d; site o günden beri değişmedi).
   // KP-5 F (2026-11-15, uç 97b8d61e) ölçülen: satır %100 (1 142) · deyim %100 (1 329) · dal %93,03 · fonksiyon %100 → 99 / 99 / 92 / 99
   // (Y279: erişilemez 4 deyim gerekçeli `istanbul ignore` + sayan kapı).
+  // KP-8 D (2026-11-17, KP-7 ile birleşik SON tur): TAM vitest (72 dosya / 1 215 test) satır / deyim / fonksiyon %100 · dal %97,84
+  // (995 / 1 017; ödeme API'leri, plan fiyatı, sayfalar + 2 SAVUNMA etiketi) → 99 / 99 / 96 / 99.
   test: {
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'scripts/**/*.mjs'],
       exclude: ['**/__tests__/**', '**/*.test.*', '**/*.d.ts'],
       reporter: ['text-summary', 'json-summary'],
-      thresholds: { lines: 99, statements: 99, branches: 92, functions: 99 },
+      thresholds: { lines: 99, statements: 99, branches: 96, functions: 99 },
     },
   },
 })
