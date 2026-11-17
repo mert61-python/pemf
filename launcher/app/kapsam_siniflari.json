@@ -4,7 +4,7 @@
  "s_sayisi": 61,
  "ozet": {
   "K": {
-   "islev": 53,
+   "islev": 55,
    "eksik_satir": 0
   },
   "S": {
@@ -16,15 +16,15 @@
    "eksik_satir": 36
   },
   "Y": {
-   "islev": 6,
-   "eksik_satir": 112
+   "islev": 4,
+   "eksik_satir": 107
   }
  },
  "islevler": {
   "stop_tracked_backend": {
-   "sinif": "Y",
-   "eksik": 4,
-   "neden": "GÜVENLİK YOLU — State + stop_backend_for_teardown; KP-4."
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-7 A1 (madde 2 · Y257): GÜVENLİK YOLU — `state.proc`tan alma + söküm sırası (STOP → yakma yoklaması → son oturum çekimi süreç CANLIYKEN → kill → artakalan → port dosyası) + AppState belleğinin tazelenmesi B1 sahte süreç + sahte backend ile davranış testli; ürün kodu DEĞİŞMEDİ."
   },
   "stop_backend_for_teardown": {
    "sinif": "K",
@@ -217,9 +217,9 @@
    "neden_T_Y_degil": "Gövde `aktif_seans_kapisi_portla` enjekte portla testli."
   },
   "aktif_seans_kapisi_portla": {
-   "sinif": "Y",
-   "eksik": 1,
-   "neden": "1 satır (yakma yanıtsız kolu) — gerçek HTTP; çekirdekte `yakma_suruyor_mu` testli; KP-4."
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "KP-7 A1 (madde 2): yakma-yanıtsız kolu — kimlik + seans yanıtı geldikten sonra yakma yoklaması yanıtsız → güncelleme ertelenir; tam iki isteği yanıtlayan sahte backend ile davranış testli."
   },
   "plan_to_json": {
    "sinif": "K",

@@ -4003,6 +4003,28 @@ Connection: close
         let _ = std::fs::remove_dir_all(&d2);
     }
 
+    /// KRİTİK (KP-7 A1 · LN L3 / Y82): kimlik + seans yanıtı geldikten SONRA yakma yoklaması YANITSIZ kalırsa güncelleme ERTELENİR —
+    /// "bilinmiyor" seans kuralıyla aynı (fail-safe). Sahte backend TAM İKİ isteği (kimlik, seans) yanıtlayıp dinleyiciyi kapatır; iki
+    /// isteğin de alındığı (ret seans kolundan DEĞİL, yakma kolundan geldiği) sunucu iş parçacığının bitmesiyle kanıtlanır.
+    #[test]
+    fn KRITIK_KP7_A1_yakma_yoklamasi_YANITSIZ_ise_guncelleme_ERTELENIR() {
+        let (port, h) = sahte_backend(r#"{"service":"PEMF-Vet","status":"ok","sessionActive":false}"#, 2);
+        let d = gecici_kok("yakmayanitsiz", port);
+        let r = aktif_seans_kapisi_portla(&d, kapali_port());
+        assert_eq!(
+            r,
+            Err(pemf_launcher_core::dil::t("rust.hata.guncellemeBackendYanitsiz")),
+            "yakma yoklaması yanıtsızken güncelleme ertelenmedi"
+        );
+        let iki_istek = (0..300).any(|_| h.is_finished() || {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            false
+        });
+        assert!(iki_istek, "sahte backend kimlik + seans isteklerini almadı — ret yakma kolundan gelmiyor");
+        drop(h);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     /// Backend hiç çalışmıyorsa kapı engel OLMAMALI (ilk kurulum / temiz makine).
     #[test]
     fn backend_yoksa_kapi_engellemez() {
@@ -4413,6 +4435,16 @@ Connection: close
         canli_mi: impl Fn() -> bool + Send + 'static,
         kayit: Kp5Kayit,
     ) -> std::thread::JoinHandle<()> {
+        kp7_sahte_backend_oturumlu(ln, canli_mi, kayit, "{}")
+    }
+
+    /// KP-7 A: `kp5_sahte_backend_ile` + son oturum çekiminin (`/api/auth/desktop-session`) yanıt gövdesi ENJEKTE (söküm belleği bağı).
+    fn kp7_sahte_backend_oturumlu(
+        ln: std::net::TcpListener,
+        canli_mi: impl Fn() -> bool + Send + 'static,
+        kayit: Kp5Kayit,
+        oturum_govdesi: &'static str,
+    ) -> std::thread::JoinHandle<()> {
         use std::io::{Read, Write};
         ln.set_nonblocking(true).unwrap();
         std::thread::spawn(move || {
@@ -4439,7 +4471,7 @@ Connection: close
                         ("200 OK", r#"{"status":"success","confirmed":true,"stmStopped":true,"mqttResults":[]}"#)
                     }
                     "/api/health" => ("200 OK", r#"{"service":"PEMF-Vet","status":"ok"}"#),
-                    "/api/auth/desktop-session" => ("200 OK", "{}"),
+                    "/api/auth/desktop-session" => ("200 OK", oturum_govdesi),
                     _ => ("404 Not Found", "{}"),
                 };
                 let yanit = format!(
@@ -4668,6 +4700,76 @@ Connection: close
         let ak = backend::test_kancasi::cagrilar(&kok);
         assert_eq!(ak.len(), 1, "artakalan temizliği çağrı sayısı");
         assert!(Some(ak[0]) > son_istek, "artakalan temizliği STOP'tan ÖNCE");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // KP-7 A1 (madde 2 · Y257): `stop_tracked_backend` (GÜVENLİK YOLU) davranışı SABİTLEYEN test — ürün kodu DEĞİŞMEDİ; B1 sahte süreç +
+    // rastgele portta sahte backend. İzlenen backend VARKEN orphan kolu çalışmaz → varsayılan porta (8000) istek YOK.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// KRİTİK (KP-7 A1 · Y257): `stop_tracked_backend` izlenen backend'i `state.proc`tan ALIR (sonra boş — ikinci söküm onu yeniden
+    /// durdurmaz) ve söküm sırası AYNEN: STOP (kapanış ucu) → yakma yoklaması → son oturum çekimi — üçü süreç CANLIYKEN — → kill →
+    /// artakalan temizliği süreç ÖLDÜKTEN sonra → ölü backend'in port dosyası silinir. Son oturum çekimi `state.session` BELLEĞİNİ
+    /// tazeler (söküm `AppState`in belleğine bağlı; başka bir belleğe değil).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_KP7_A1_stop_tracked_backend_IZLENENI_ALIR_STOP_yakma_yakala_SUREC_CANLIYKEN_sonra_kill_BELLEK_tazelenir() {
+        let _k = KP5_B1_KILIT.lock().unwrap_or_else(|e| e.into_inner());
+        let (cocuk, pid, ad) = kp5_sahte_surec();
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let kayit: Kp5Kayit = Arc::new(Mutex::new(Vec::new()));
+        let ad_s = ad.clone();
+        let sunucu = kp7_sahte_backend_oturumlu(
+            ln,
+            move || kp5_cocuk_canli_mi(&ad_s, pid),
+            kayit.clone(),
+            r#"{"access_token":"a-kp7","refresh_token":"kp7-dondu","email":"vet@klinik.tr","expires_at":0}"#,
+        );
+        let kok = std::env::temp_dir().join(format!("pemf_kp7_a1_{}_{port}", std::process::id()));
+        std::fs::create_dir_all(&kok).unwrap();
+        std::fs::write(kok.join("backend.port"), port.to_string()).unwrap();
+        let aninda = Arc::new(Mutex::new(None::<bool>));
+        let (ad_g, a_g, kok_g) = (ad.clone(), aninda.clone(), kok.clone());
+        backend::test_kancasi::gozlemci_kur(Some(Box::new(move |k: &std::path::Path| {
+            if k == kok_g {
+                *a_g.lock().unwrap() = Some(kp5_cocuk_canli_mi(&ad_g, pid));
+            }
+        })));
+        let state = AppState::default();
+        *state.proc.lock().unwrap() = Some((cocuk, port));
+        *state.session.lock().unwrap() = Some(kp5_b4_oturum("kp7-eski", 0));
+        let t0 = std::time::Instant::now();
+        stop_tracked_backend(&state, &kok);
+        let sure = t0.elapsed();
+        backend::test_kancasi::gozlemci_kur(None);
+        // Sahte süreç 120 sn uyur: söküm onu ÖLDÜRMEK yerine kendiliğinden çıkmasını beklerse (kill yok) bu sınır aşılır.
+        assert!(sure < std::time::Duration::from_secs(30), "süreç öldürülmedi — söküm {sure:?} bekledi");
+        let _ = sunucu.join();
+        assert!(state.proc.lock().unwrap().is_none(), "izlenen backend state.proc'ta KALDI (alınmadı)");
+        assert_eq!(
+            kp5_yollar(&kayit),
+            vec![
+                kp5_cift("POST", "/api/hardware/kapanis_durdur"),
+                kp5_cift("GET", "/api/health"),
+                kp5_cift("GET", "/api/auth/desktop-session")
+            ],
+            "söküm istek sırası STOP → yakma yoklaması → son oturum çekimi değil"
+        );
+        let k = kayit.lock().unwrap().clone();
+        assert!(k.iter().all(|(_, _, _, c)| *c), "bir istek süreç ÖLDÜKTEN sonra geldi (kill erken): {k:?}");
+        assert!(!kp5_cocuk_canli_mi(&ad, pid), "izlenen backend öldürülmedi");
+        let ak = backend::test_kancasi::cagrilar(&kok);
+        assert_eq!(ak.len(), 1, "artakalan temizliği çağrı sayısı");
+        assert_eq!(*aninda.lock().unwrap(), Some(false), "artakalan temizliği süreç CANLIYKEN (kill'den önce) çağrıldı");
+        assert!(ak[0] > k.last().unwrap().2 && ak[0] > t0, "artakalan temizliği son istekten ÖNCE");
+        assert!(!kok.join("backend.port").exists(), "ölü backend'in port dosyası kaldı");
+        assert_eq!(
+            state.session.lock().unwrap().as_ref().map(|s| s.refresh_token.clone()),
+            Some("kp7-dondu".into()),
+            "son oturum çekimi AppState belleğini tazelemedi (söküm başka belleğe bağlı)"
+        );
         let _ = std::fs::remove_dir_all(&kok);
     }
 
