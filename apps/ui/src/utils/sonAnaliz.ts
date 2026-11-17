@@ -20,6 +20,7 @@
 
 import { aramaNormalize } from "@/utils/aramaNormalize";
 import { inScope, type PatientScope } from "@/utils/patientScope";
+import { etkinBicimYereli } from "@/i18n/dil";
 
 /** `/api/ai/log` kaydının bu modülün ihtiyaç duyduğu asgari şekli. */
 export interface AnalizKaydi {
@@ -135,12 +136,12 @@ export function adAnahtari(ad: string | null | undefined): string {
   return aramaNormalize(String(ad ?? "").trim());
 }
 
-/** Kart altına yazılacak kısa özet ("12.09.2026 · Kapanma %42") — yoksa null. */
+/** Kart altına yazılacak kısa özet (TR "12.09.2026 · Kapanma %42" · EN "12/09/2026 · …" — Y295) — yoksa null. */
 export function sonAnalizOzeti(k: AnalizKaydi | undefined | null): string | null {
   if (!k) return null;
   const parcalar: string[] = [];
   const t = Date.parse(k.created_at ?? "");
-  if (Number.isFinite(t)) parcalar.push(new Date(t).toLocaleDateString("tr-TR"));
+  if (Number.isFinite(t)) parcalar.push(new Date(t).toLocaleDateString(etkinBicimYereli()));
   const ozet = (k.result_summary || "").trim();
   if (ozet) parcalar.push(ozet);
   else {

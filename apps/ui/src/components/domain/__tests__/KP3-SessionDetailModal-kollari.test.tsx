@@ -19,6 +19,8 @@ jest.mock("@/services/apiClient", () => ({
 }));
 
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
+import { __bayrakTestiAyarla } from "@/i18n/dil";
+import { dilSec } from "@/i18n";
 
 const T = (k: string, o?: object): string => (i18n.t as unknown as (k: string, o?: object) => string)(k, o);
 const seans = (id: number, ad: string) => ({
@@ -64,4 +66,34 @@ it("hiç geçerli örnek yoksa 'sensör verisi yok'", async () => {
   });
   const u = render(<SessionDetailModal visible sessionId={9} onClose={() => {}} />);
   await waitFor(() => expect(u.getByText(T("seans.detay.sensorVerisiYok"))).toBeTruthy());
+});
+
+// KP-7 C · Y295 (17-11, sahip): bobin çalışmasının başlangıç SAATİ etkin dilde biçimlenir — İngilizce arayüzde İngiliz biçimi (`en-GB`,
+// 24 saat), Türkçede `tr-TR`. ÖNCE-KIRMIZI: sabit "tr-TR" ile biçimleniyordu. Dil AÇIKÇA kurulur (makine yereline yaslanmaz).
+it("KP-7 C · Y295: bobin başlangıç saati İngilizcede en-GB ile, Türkçede tr-TR ile biçimlenir", async () => {
+  const depo = { setItem: async () => undefined };
+  const casus = jest.spyOn(Date.prototype, "toLocaleTimeString");
+  mockApiGet.mockResolvedValue({
+    session: seans(11, "Mia"), sensor_samples: [],
+    coil_runs: [{ coil_id: 3, started_epoch: Math.floor(new Date(2026, 10, 17, 14, 5, 9).getTime() / 1000), duration_seconds: 60 }],
+  });
+  try {
+    __bayrakTestiAyarla(true);
+    await act(async () => { await dilSec("en", depo); });
+    const en = render(<SessionDetailModal visible sessionId={11} onClose={() => {}} />);
+    await waitFor(() => expect(en.getByTestId("seans-bobin-satiri-3")).toBeTruthy());
+    expect(en.getByText("14:05:09")).toBeTruthy();
+    expect(casus.mock.calls.map((c) => c[0])).toContain("en-GB");
+    expect(casus.mock.calls.map((c) => c[0])).not.toContain("tr-TR");
+    en.unmount();
+    casus.mockClear();
+    await act(async () => { await dilSec("tr", depo); });
+    const tr = render(<SessionDetailModal visible sessionId={11} onClose={() => {}} />);
+    await waitFor(() => expect(tr.getByTestId("seans-bobin-satiri-3")).toBeTruthy());
+    expect(casus.mock.calls.map((c) => c[0])).toContain("tr-TR");
+  } finally {
+    casus.mockRestore();
+    await act(async () => { await dilSec("tr", depo); });
+    __bayrakTestiAyarla(null);
+  }
 });

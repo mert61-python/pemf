@@ -24,6 +24,7 @@ import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { backendBuMakinede } from "@/services/backendKonumu";
 import { DilSecimKarti } from "@/components/domain/DilSecimKarti";
 import { dilSecimiGorunur } from "@/i18n";
+import { etkinBicimYereli } from "@/i18n/dil";
 import {
   disaAktarmaAgHatasiMesaji,
   disaAktarmaZamanAsimiMesaji,
@@ -39,7 +40,7 @@ import { useTranslation } from "react-i18next";
 function sonTurZamani(at: string | null | undefined, bilinmiyor: string): string {
   if (!at) return bilinmiyor;
   const t = new Date(at);
-  return Number.isNaN(t.getTime()) ? String(at) : t.toLocaleString("tr-TR");
+  return Number.isNaN(t.getTime()) ? String(at) : t.toLocaleString(etkinBicimYereli()); // Y295: biçim etkin dilde
 }
 
 export function SettingsScreen() {

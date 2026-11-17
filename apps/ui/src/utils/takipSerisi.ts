@@ -20,6 +20,7 @@
  */
 import i18n from "i18next";
 import type { AnalizKaydi } from "@/utils/sonAnaliz";
+import { etkinBicimYereli } from "@/i18n/dil";
 
 /**
  * Zaman serisine alınabilecek sayısal ölçütler — modül bazında; `etiket` bir katalog ANAHTARIDIR (gösterimde çevrilir).
@@ -129,7 +130,8 @@ export function takipSerisiKur(kayitlar: readonly DetayliKayit[] | null | undefi
     // Güven 0-1 aralığında saklanır; yüzdeye çevrilir (etiket "%" diyor).
     const deger = olcut.alan === "confidence" ? Math.round(sayi * 100) : sayi;
     const t = Date.parse(k.created_at ?? "");
-    noktalar.push({ t, deger, etiket: new Date(t).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" }) });
+    // Y295: eksen etiketi etkin dilin yerel ayarıyla (TR tr-TR · EN en-GB; CLDR'de ikisinin gün-ay kalıbı da "17/11").
+    noktalar.push({ t, deger, etiket: new Date(t).toLocaleDateString(etkinBicimYereli(), { day: "2-digit", month: "2-digit" }) });
   }
   // ⚠️ Eskiden yeniye: grafik soldan sağa zamanı izlemeli.
   noktalar.sort((a, b) => a.t - b.t);

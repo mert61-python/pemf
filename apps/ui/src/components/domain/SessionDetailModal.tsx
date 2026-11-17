@@ -30,6 +30,7 @@ import { apiGet } from "@/services/apiClient";
 import { kayitYogunlugu, olculenAlanOrt } from "@/utils/yogunlukGosterimi";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { hedefEtiketi, modEtiketi } from "@/utils/seansDegerEtiketi";
+import { etkinBicimYereli } from "@/i18n/dil";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
 
@@ -136,7 +137,7 @@ interface SessionDetails {
 function fmtClock(epoch?: number): string {
   if (!epoch || !Number.isFinite(epoch)) return "—";
   try {
-    return new Date(epoch * 1000).toLocaleTimeString("tr-TR", {
+    return new Date(epoch * 1000).toLocaleTimeString(etkinBicimYereli(), { // Y295: biçim etkin dilde
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",

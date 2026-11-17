@@ -11,6 +11,7 @@ import { platformConfirm } from "@/services/apiClient";
 import type { AppNotification, NotificationLevel } from "@/types/domain";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { useTranslation } from "react-i18next";
+import { etkinBicimYereli } from "@/i18n/dil";
 
 const LEVEL_CONFIG: Record<NotificationLevel, { color: string; bg: string; icon: string }> = {
   success: { color: "#22c55e", bg: "#052e16", icon: "✅" },
@@ -137,7 +138,8 @@ function NotificationItem({ notification: n, compact }: { notification: AppNotif
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    // Y295: biçim etkin dilde (en-GB de 24 saat — "2:05 PM" değil).
+    return d.toLocaleTimeString(etkinBicimYereli(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   } catch {
     /* istanbul ignore next -- SAVUNMA: toLocaleTimeString geçerli seçeneklerle fırlatmaz */
     return iso;

@@ -10,7 +10,7 @@
  */
 import { NativeModules, Platform } from "react-native";
 import { I18N_EN_ACIK } from "./bayrak";
-import type { Dil } from "./durum";
+import { etkinDilDegeri, type Dil } from "./durum";
 
 export type { Dil };
 export const DILLER: readonly Dil[] = ["tr", "en"];
@@ -92,4 +92,14 @@ export function kayitliDilEszamanli(): Dil | null {
 /** Gösterim yerel ayarı (`Intl` biçimleri için): tr → tr-TR, en → en-GB (24 saat, gün-ay-yıl). */
 export function bicimYereli(d: Dil): string {
   return d === "en" ? "en-GB" : "tr-TR";
+}
+
+/**
+ * Y295 (17-11, sahip): ekrandaki tarih / saat / sayı biçiminin yerel ayarı ETKİN DİLDEN türer — TEK yardımcı (eşleme `bicimYereli`):
+ * tr → `tr-TR` (17.11.2026) · en → `en-GB` (17/11/2026, 24 saat, 1,234.56). Sabit `"tr-TR"` YAZILMAZ (İngilizce arayüzde Türkçe
+ * tarih biçimi kalıyordu). Ad sıralaması (`localeCompare(…, "tr")`) ve arama katlaması (`aramaNormalize`) bunu KULLANMAZ — veri
+ * Türkçe. Bileşen dışı yardımcılar da okur; bileşenler dil değişince zaten yeniden çizilir.
+ */
+export function etkinBicimYereli(): string {
+  return bicimYereli(etkinDilDegeri());
 }

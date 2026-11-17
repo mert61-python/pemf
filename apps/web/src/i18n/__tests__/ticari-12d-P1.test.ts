@@ -4,7 +4,7 @@
  * Mod: ücretsiz dönem (FREE_MODE=true — üretim ayarı).
  *  · ALTIN: göç ÖNCESİ kaynaktan Türkçe değerler (fiyat.* · odeme.* — 73 anahtar; her biri HEAD kaynağında birebir doğrulandı).
  *  · Çizim: Türkçe (bayrak kapalı) eski dizgilerle TAM metin düğümü eşitliği; bayrak AÇIK + İngilizce → her satırın İngilizcesi, Türkçesi KALMAZ.
- *  · Para: Türkçe `₺1.990` (tr-TR), İngilizce `₺1,990` (en-US); sayılar iki dilde aynı rakamlardır.
+ *  · Para: Türkçe `₺1.990` (tr-TR), İngilizce `₺1,990` (en-GB); sayılar iki dilde aynı rakamlardır.
  *  · API / istemci hata dizgileri (api/*.ts, lib/checkout.ts) gösterilmez, `odemeHatasiTurkce` ile SINIFLANIR → iki dilde aynı sınıf.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -359,7 +359,7 @@ describe('site-12d-ticari · fiyat gösterimi ve sayı / para biçimi', () => {
   const proPlus = PLANS.find((p) => p.tier === 'pro_plus')!
   const kullandikca = PLANS.find((p) => p.tier === 'kullandikca')!
 
-  it('Türkçe: para ₺1.990 (tr-TR), İngilizce ₺1,990 (en-US); sayı biçimi etkin dile göre', async () => {
+  it('Türkçe: para ₺1.990 (tr-TR), İngilizce ₺1,990 (en-GB); sayı biçimi etkin dile göre', async () => {
     expect(tl(1990)).toBe('₺1.990')
     expect(sayi(2000)).toBe('2.000')
     dilMod.__bayrakTestiAyarla(true)

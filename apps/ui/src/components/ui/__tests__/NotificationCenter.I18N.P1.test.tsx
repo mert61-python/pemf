@@ -72,3 +72,28 @@ describe("KRİTİK: bildirim merkezi — sunucu bildirimi seçili dilde", () => 
     expect(u.queryByText(EN_STOP)).toBeNull();
   });
 });
+
+// KP-7 C · Y295 (17-11, sahip): bildirim SAATİ etkin dilde biçimlenir — İngilizcede İngiliz biçimi (`en-GB`, 24 saat: "12:00:00", "12:00:00
+// PM" DEĞİL), Türkçede `tr-TR`. ÖNCE-KIRMIZI: sabit "tr-TR". Dil AÇIKÇA kurulur.
+describe("KP-7 C · Y295 bildirim saati", () => {
+  it("İngilizcede en-GB ile (24 saat), Türkçede tr-TR ile biçimlenir", async () => {
+    const casus = jest.spyOn(Date.prototype, "toLocaleTimeString");
+    try {
+      __bayrakTestiAyarla(true);
+      await act(async () => { await dilSec("en", depo); });
+      const en = render(<NotificationCenter />);
+      await waitFor(() => en.getAllByTestId("bildirim-metni"));
+      expect(casus.mock.calls.map((c) => c[0])).toContain("en-GB");
+      expect(casus.mock.calls.map((c) => c[0])).not.toContain("tr-TR");
+      expect(en.queryAllByText(/PM|AM/)).toHaveLength(0);
+      en.unmount();
+      casus.mockClear();
+      await act(async () => { await dilSec("tr", depo); });
+      const tr = render(<NotificationCenter />);
+      await waitFor(() => tr.getAllByTestId("bildirim-metni"));
+      expect(casus.mock.calls.map((c) => c[0])).toContain("tr-TR");
+    } finally {
+      casus.mockRestore();
+    }
+  });
+});
