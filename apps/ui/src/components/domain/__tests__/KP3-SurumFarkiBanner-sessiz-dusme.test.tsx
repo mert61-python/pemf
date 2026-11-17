@@ -7,7 +7,7 @@
  * ⚠️ Sıra önemli: "sabitler okunamaz" İLK test (modül bir kez yüklenince önbelleğe alınır).
  */
 import React from "react";
-import { act, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import i18n from "i18next";
 
 jest.mock("@/context/LiveDataContext", () => ({
@@ -51,6 +51,23 @@ it("kapatma kaydı okunamazsa bant yine gösterilir", async () => {
   const u = render(<SurumFarkiBanner />);
   expect(await u.findByText(/2\.3\.22/)).toBeTruthy();
   mockDepoAtar = false;
+});
+
+// KP-7 B (işlev ölçüsü): kapatma kaydı YAZILAMAZSA (depolama arızası) bant yine bu oturumda kapanır — dokunuş boşa gitmez, işlenmemiş
+// ret yok (bir sonraki açılışta bant yeniden görünebilir: kayıt yok sayılır).
+it("kapatma kaydı yazılamasa da bant bu oturumda kapanır", async () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const AS = require("@react-native-async-storage/async-storage") as { setItem: jest.Mock };
+  AS.setItem.mockRejectedValueOnce(new Error("depo yazılamadı (aparat)"));
+  mockDurum = async () => ({ varMi: true, surum: YENI });
+  const u = render(<SurumFarkiBanner />);
+  expect(await u.findByText(/2\.3\.22/)).toBeTruthy();
+  await act(async () => {
+    fireEvent.press(u.getByLabelText(T("bant.surumFarki.kapatEtiketi")));
+  });
+  await bosalt();
+  expect(AS.setItem).toHaveBeenCalled();
+  expect(u.queryByText(/2\.3\.22/)).toBeNull();
 });
 
 it("güncelleme bilgisi alınamazsa bant yok, çökme yok", async () => {

@@ -90,7 +90,7 @@ export function webKur(ozel?: Ozel) {
     web.serbestBirakilan.push(u);
   };
   g.URL = U;
-  global.fetch = jest.fn(async (url: unknown, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) => {
+  global.fetch = jest.fn(async (url: unknown, init: { method?: string; body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } = {}) => {
     const ham = String(url);
     if (ham.startsWith("blob:")) {
       const b = web.nesneUrlleri.get(ham);
@@ -106,6 +106,12 @@ export function webKur(ozel?: Ozel) {
     web.istekler.push({ yontem, yol, govde, basliklar: init.headers || {} });
     const o = ozel?.(yol, govde, yontem);
     if (o && "hata" in (o as object)) throw (o as { hata: unknown }).hata;
+    // KP-7 B: `{ askida: true }` — yanıt vermeyen sunucu; istek yalnız iptal sinyaliyle (zaman aşımı) reddedilir.
+    if (o && "askida" in (o as object)) {
+      return new Promise((_coz, reddet) => {
+        init.signal?.addEventListener("abort", () => reddet(Object.assign(new Error("aborted"), { name: "AbortError" })));
+      });
+    }
     if (o && "blob" in (o as object)) return { ok: true, status: 200, blob: async () => (o as { blob: Blob | null }).blob };
     if (Array.isArray(o)) return yanitNesnesi(o[0], o[1]);
     if (yontem === "GET" && yol.startsWith("/ai/log")) return yanitNesnesi(200, { status: "success", data: [] });

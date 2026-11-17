@@ -64,6 +64,33 @@ it("raporlama atsa da akış bozulmaz", () => {
   expect(() => a.dinleyiciler.error({ message: "x" })).not.toThrow();
 });
 
+// KP-7 B (işlev ölçüsü): rapor isteği REDDEDİLİRSE (backend kapalı / ağ yok) ret yutulur — genel işleyici de sınırın kartı da
+// etkilenmez, işlenmemiş ret OLUŞMAZ (aksi halde `unhandledrejection` dinleyicisi kendi raporunu yeniden tetiklerdi).
+it("rapor isteği reddedilse de genel işleyici ve hata kartı etkilenmez (ret yutulur)", async () => {
+  const a = kurVeYukle();
+  const ret = jest.fn();
+  const dinle = (e: unknown) => ret(e);
+  process.on("unhandledRejection", dinle);
+  try {
+    mockPost.mockImplementation(() => Promise.reject(new Error("backend kapalı")));
+    expect(() => a.dinleyiciler.error({ message: "pencere hatası" })).not.toThrow();
+    const { ErrorBoundary } = require("@/components/ui/ErrorBoundary");
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    function Patla(): React.ReactElement {
+      throw new Error("ekran çöktü");
+    }
+    const u = render(<ErrorBoundary><Patla /></ErrorBoundary>);
+    expect(u.getByText("ekran çöktü")).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect(ret).not.toHaveBeenCalled();
+  } finally {
+    process.off("unhandledRejection", dinle);
+    mockPost.mockReset().mockImplementation(() => Promise.resolve(null));
+    (console.error as jest.Mock).mockRestore?.();
+  }
+});
+
 it("'Tekrar dene' sınırı sıfırlar ve çocuk yeniden çizilir", async () => {
   const { ErrorBoundary } = require("@/components/ui/ErrorBoundary");
   jest.spyOn(console, "error").mockImplementation(() => undefined);

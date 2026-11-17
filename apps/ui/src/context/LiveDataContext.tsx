@@ -568,7 +568,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       await loadStoredApiToken();
       // BE 1(a): kayıtlı ÖZEL ağ adresi sağlık denetimi BEKLENMEDEN uygulanır → ilk soket PC'yi arar (PC kapalıyken açılan
       // telefon eskiden 70 sn kendi 127.0.0.1'ini arıyordu). Tünel adresinde device_id şartı aynen (merdivende).
-      if (yerelMi()) await Promise.resolve(discoverBackend("kayitliHemen")).catch(() => null);
+      if (yerelMi()) await Promise.resolve(discoverBackend("kayitliHemen")).catch(/* istanbul ignore next -- SAVUNMA: kayitliHemen reddetmez (iç try / catch null döner) */ () => null);
       if (cancelled) return;
       setTokenLoaded(true);
       runDiscovery(true);
@@ -633,7 +633,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         if (yalnizAdresDegisirse && serviceConfig.websocketUrl === oncekiWs) return;
         hafifYoklamaSonucu(r, oncekiWs);
       })
-      .catch(() => {});
+      .catch(/* istanbul ignore next -- SAVUNMA: hafif yoklama reddetmez (iç try / catch; sağlık / uygulama fırlatmaz) */ () => {});
   }, [hafifYoklamaSonucu]);
   useEffect(() => {
     if (!yerelMi() || !tokenLoaded || wsConnected) return;

@@ -50,7 +50,7 @@ const NodeURL = require("url").URL;
 
 type Cagri = { url: string; yol: string; yontem: string; govde: Record<string, unknown> | null };
 let cagrilar: Cagri[];
-let ozel: (yol: string, yontem: string, url: string) => unknown | undefined;
+let ozel: (yol: string, yontem: string, url: string, init?: RequestInit) => unknown | undefined;
 let s: Sahne;
 let eskiURL: unknown;
 let eskiTaban: string;
@@ -92,7 +92,7 @@ beforeEach(() => {
     const yol = String(url).replace(/^[a-z]+:\/\/[^/]+/i, "").replace(/^\/api/, "").split("?")[0];
     const yontem = (init?.method || "GET").toUpperCase();
     cagrilar.push({ url: String(url), yol, yontem, govde: init?.body ? JSON.parse(String(init.body)) : null });
-    const o = ozel(yol, yontem, String(url));
+    const o = ozel(yol, yontem, String(url), init);
     if (o instanceof Error) return Promise.reject(o);
     if (o !== undefined) return Promise.resolve(o);
     if (yol === "/settings/retention" && yontem === "GET") return Promise.resolve(sahteYanit(RETENTION));
@@ -272,6 +272,74 @@ describe("web bağlantı testi / yeniden tarama — taban DEĞİŞMEZ, kendi kö
     await s.bosalt(5);
     expect(toastlar()).toEqual([[t("ayarlar.baglanti.ulasilamadi"), "error"]]);
     expect(s.metin()).toContain(t("ayarlar.baglanti.durumBaglanamadi"));
+  });
+});
+
+// ── KP-7 B (işlev ölçüsü): zamanlı kollar ────────────────────────────────────────────────────────────────────────────────────
+describe("KP-7 B · zamanlı kollar — askıdaki köken yoklaması kesilir, indirme adresi ve kayıt satırı gecikmeyle temizlenir", () => {
+  const KOKEN = () => `${window.location.origin}/api/health`;
+  /** İstek ASKIDA kalır; yalnız iptal sinyaliyle reddedilir (yanıt vermeyen sunucu). */
+  const askida = (init?: RequestInit) =>
+    new Promise((_coz, reddet) => {
+      (init?.signal as AbortSignal | undefined)?.addEventListener("abort", () => reddet(new Error("AbortError")));
+    });
+
+  test("Test Et: köken yanıt vermezse 5 sn sonra kesilir → 'zaman aşımı', arama kilidi kalkar", async () => {
+    ozel = (_y, _m, url, init) => (url === KOKEN() ? askida(init) : undefined);
+    await ekran();
+    await s.metneTikla(t("ayarlar.baglanti.testEt"));
+    await act(async () => { jest.advanceTimersByTime(4999); });
+    await s.bosalt(5);
+    expect(toastlar()).toEqual([]);
+    await act(async () => { jest.advanceTimersByTime(1); });
+    await s.bosalt(5);
+    expect(toastlar()).toEqual([[t("ayarlar.baglanti.zamanAsimi"), "error"]]);
+    expect(s.metin()).not.toContain(t("ayarlar.baglanti.araniyor"));
+  });
+
+  test("Yeniden Tara (web): köken yanıt vermezse 5 sn sonra kesilir → 'ulaşılamadı', 'Bağlanamadı' rozeti", async () => {
+    ozel = (_y, _m, url, init) => (url === KOKEN() ? askida(init) : undefined);
+    await ekran();
+    await s.metneTikla(t("ayarlar.baglanti.yenidenTara"));
+    await act(async () => { jest.advanceTimersByTime(4999); });
+    await s.bosalt(5);
+    expect(toastlar()).toEqual([]);
+    await act(async () => { jest.advanceTimersByTime(1); });
+    await s.bosalt(5);
+    expect(toastlar()).toEqual([[t("ayarlar.baglanti.ulasilamadi"), "error"]]);
+    expect(s.metin()).toContain(t("ayarlar.baglanti.durumBaglanamadi"));
+  });
+
+  test("LAN yedeği indirilince nesne adresi 10 sn SONRA bırakılır (hemen değil — indirme kesilmesin)", async () => {
+    const indir = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    ozel = (yol, yontem) =>
+      yol === "/data/export" && yontem === "POST"
+        ? sahteYanit({ status: "success", filename: "y.pemfbak", data_b64: "UEVNRg==", counts: { patients: 1 } })
+        : undefined;
+    const birak = (global as unknown as { URL: { revokeObjectURL: jest.Mock } }).URL.revokeObjectURL;
+    try {
+      await ekran("http://192.168.1.50:8000/api");
+      await disaAktarBaslat();
+      expect(indir).toHaveBeenCalledTimes(1);
+      await act(async () => { jest.advanceTimersByTime(9999); });
+      expect(birak).not.toHaveBeenCalled();
+      await act(async () => { jest.advanceTimersByTime(1); });
+      expect(birak).toHaveBeenCalledWith("blob:yedek");
+    } finally {
+      indir.mockRestore();
+    }
+  });
+
+  test("ayar kaydı başarılıysa 'Kaydedildi' satırı 3 sn sonra kendiliğinden silinir", async () => {
+    ozel = (yol, yontem) => (yol === "/settings/" && yontem === "POST" ? sahteYanit({ status: "success" }) : undefined);
+    await ekran();
+    await s.metneTikla(t("ayarlar.kaydetDugme"));
+    await s.bosalt(5);
+    expect(s.metin()).toContain(t("ayarlar.kaydedildi"));
+    await act(async () => { jest.advanceTimersByTime(2999); });
+    expect(s.metin()).toContain(t("ayarlar.kaydedildi"));
+    await act(async () => { jest.advanceTimersByTime(1); });
+    expect(s.metin()).not.toContain(t("ayarlar.kaydedildi"));
   });
 });
 

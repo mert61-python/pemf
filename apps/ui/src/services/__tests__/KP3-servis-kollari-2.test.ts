@@ -100,6 +100,31 @@ describe("checkMobileUpdate", () => {
     global.fetch = manifest("v2.3.36");
     expect((await u.checkMobileUpdate()).available).toBe(true);
   });
+
+  // KP-7 B (işlev ölçüsü): manifest isteği ASKIDA kalırsa (yanıt yok) 8 sn sonra kesilir → güncelleme YOK (açılış beklemez).
+  it("manifest isteği askıda kalırsa 8 sn sonra kesilir → güncelleme yok", async () => {
+    const u = guncelleme("2.3.35");
+    (Platform as { OS: string }).OS = "android";
+    let sinyal: AbortSignal | undefined;
+    global.fetch = jest.fn(
+      (_u: string, o?: { signal?: AbortSignal }) =>
+        new Promise((_coz, reddet) => {
+          sinyal = o?.signal;
+          o?.signal?.addEventListener("abort", () => reddet(new Error("AbortError")));
+        }),
+    ) as unknown as typeof fetch;
+    jest.useFakeTimers();
+    try {
+      const p = u.checkMobileUpdate();
+      await jest.advanceTimersByTimeAsync(7999);
+      expect(sinyal?.aborted).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(p).resolves.toEqual({ available: false });
+      expect(sinyal?.aborted).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe("fmtVal", () => {

@@ -435,7 +435,7 @@ export function ControlScreen() {
     setStopRound(true);
     try {
     // D1.82: başlatma UÇUŞTAYKEN de seans durdurulur — kanca, geç gelen başlatma yanıtından SONRA STOP'u yeniden gönderir.
-    if (isActive || starting) await stopSession().catch(() => {});
+    if (isActive || starting) await stopSession().catch(/* istanbul ignore next -- SAVUNMA: stopSession reddetmez (iç try / catch false döner) */ () => {});
     // DURDURULACAK KÜME: "o an SEÇİLİ olanlar" DEĞİL, "gerçekten ÇALIŞANLAR + seçili olanlar".
     // Kullanıcı bir bobini başlattıktan sonra seçimden çıkarırsa (ör. başka bobinlere geçmek için),
     // "Durdur" o bobine hiç komut göndermiyordu → hayvanın üzerinde sessizce enerjili kalıyordu.

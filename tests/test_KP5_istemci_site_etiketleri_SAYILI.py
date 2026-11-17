@@ -32,7 +32,13 @@ ETIKETLI = re.compile(
 #: KP-5 C9 / D10 — dosya → [(tür, ETİKET)] SABİT (mutant kaynaktan okunmaz). Gerekçeler etiketin kendisinde (satır içi).
 BEKLENEN: dict[str, list[tuple[str, str]]] = {
     # C9 istemci (KP-4 B1 ölçümü + KP-5 yeniden ölçüm; satır içi gerekçe etiketin kendisinde)
-    "apps/ui/src/components/domain/AiProPanel.tsx": [("if", "ULASILAMAZ"), ("if", "ULASILAMAZ"), ("if", "SAVUNMA")],
+    "apps/ui/src/components/domain/AiProPanel.tsx": [
+        ("if", "ULASILAMAZ"),
+        ("if", "ULASILAMAZ"),
+        ("if", "SAVUNMA"),
+        ("next", "SAVUNMA"),  # KP-7 B: getClientInstanceId reddetmez
+        ("next", "SAVUNMA"),  # KP-7 B: apiPost fırlatmaz (AI Pro durdurma)
+    ],
     "apps/ui/src/components/domain/ObservationNotesModal.tsx": [("next", "ULASILAMAZ")],
     "apps/ui/src/components/domain/SessionDetailModal.tsx": [("next", "SAVUNMA"), ("if", "ULASILAMAZ")],
     "apps/ui/src/components/domain/SurusKipiSecici.tsx": [("next", "SAVUNMA")],
@@ -47,10 +53,17 @@ BEKLENEN: dict[str, list[tuple[str, str]]] = {
         ("if", "ULASILAMAZ"),
         ("next", "SAVUNMA"),
     ],
-    "apps/ui/src/screens/ControlScreen.tsx": [("if", "ULASILAMAZ")],
+    "apps/ui/src/screens/ControlScreen.tsx": [
+        ("if", "ULASILAMAZ"),
+        ("next", "SAVUNMA"),
+    ],  # KP-7 B: stopSession reddetmez
     "apps/ui/src/screens/SettingsScreen.tsx": [("next", "SAVUNMA")],
     "apps/ui/src/services/apiClient.ts": [("next", "ULASILAMAZ")],
     "apps/ui/src/services/desktopSession.ts": [("next", "SAVUNMA")],
+    # KP-7 B (madde 7): setStoredDeviceId ×2 · discoverMdns reddetmez
+    "apps/ui/src/services/discovery.ts": [("next", "SAVUNMA"), ("next", "SAVUNMA"), ("next", "SAVUNMA")],
+    # KP-7 B (madde 7): kayitliHemen · hafif yoklama reddetmez
+    "apps/ui/src/context/LiveDataContext.tsx": [("next", "SAVUNMA"), ("next", "SAVUNMA")],
     "apps/ui/src/services/updates.ts": [("next", "SAVUNMA")],
     "apps/ui/src/tembelEkranlar.ts": [("file", "PLATFORM")],
     "apps/ui/src/theme/fonts.ts": [("next", "SAVUNMA")],
@@ -123,7 +136,7 @@ def test_KRITIK_istemci_site_etiketleri_GEREKCELI_ve_SAYILI():
 def test_etiket_toplami_ve_sinif_dagilimi_SABIT():
     toplam = Counter(e for v in BEKLENEN.values() for _, e in v)
     # KP-5 kapanış: 27 = ULASILAMAZ 13 + SAVUNMA 13 + PLATFORM 1 (sayı yalnız BİLİNÇLİ değişir)
-    assert toplam == Counter({"ULASILAMAZ": 13, "SAVUNMA": 13, "PLATFORM": 1}), toplam
+    assert toplam == Counter({"ULASILAMAZ": 13, "SAVUNMA": 21, "PLATFORM": 1}), toplam  # KP-7 B: SAVUNMA 13 → 21
     assert set(toplam) <= set(ETIKETLER)
 
 

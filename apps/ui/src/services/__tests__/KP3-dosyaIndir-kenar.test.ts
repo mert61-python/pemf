@@ -87,3 +87,19 @@ it("native yol: sunucu 200 dışı → 'İndirilemedi', hata gövdesi paylaşıl
   expect(toastlar).toEqual([[T("seans.indir.indirilemedi"), "error"]]);
   expect(mockShareAsync).not.toHaveBeenCalled();
 });
+
+// KP-7 B (işlev ölçüsü): paylaşımdan SONRA önbellekteki rapor silinir (#84 KVKK); silme REDDEDİLSE de (dosya kilitli / yok) paylaşım
+// başarılı sayılır — hata bildirimi YOK, işlenmemiş ret YOK.
+it("native yol: önbellek silme reddedilse de paylaşım başarılı, hata bildirimi yok", async () => {
+  mockPlatformOS = "android";
+  mockConfig.apiBaseUrl = "https://klinik.example.com/api";
+  mockDownloadAsync.mockResolvedValue({ uri: "/tmp/r.pdf", status: 200 });
+  mockIsSharingAvailable.mockResolvedValue(true);
+  mockShareAsync.mockResolvedValue(undefined);
+  mockDeleteAsync.mockReset().mockRejectedValue(new Error("EBUSY"));
+  await downloadFileWithAuth("https://klinik.example.com/api/history/export_pdf", "r.pdf", toast);
+  await Promise.resolve();
+  expect(mockShareAsync).toHaveBeenCalledWith("/tmp/r.pdf");
+  expect(mockDeleteAsync).toHaveBeenCalledWith("/tmp/r.pdf", { idempotent: true });
+  expect(toastlar).toEqual([]);
+});

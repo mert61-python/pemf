@@ -65,8 +65,10 @@ jest.mock("expo-linear-gradient", () => {
   return { LinearGradient: ({ children, style }: { children?: unknown; style?: unknown }) => R.createElement(View, { style }, children) };
 });
 
+import { act } from "react";
 import i18n from "i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { aiZamanAsimiMesaji } from "@/services/apiClient";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import {
@@ -173,6 +175,54 @@ describe("şiddetli ağrı → klinik araması", () => {
     expect(alertYamasi).toHaveBeenCalledWith(
       `${T("ai.hayvanSahibi.klinikTelefonuYokBaslik")}\n${T("ai.hayvanSahibi.klinikTelefonuYokGovde")}`,
     );
+  });
+});
+
+// ── KP-7 B (işlev ölçüsü): yanıtsız sunucu ve açılamayan arama ─────────────────────────────────────────────────────────────────
+describe("KP-7 B · ev sahibi — askıdaki analiz ve açılamayan arama", () => {
+  afterEach(() => jest.useRealTimers());
+
+  it("teşhis askıda kalırsa 8 sn sonra 'model hazırlanıyor' ipucu; 120 sn sonra istek kesilir → zaman aşımı iletisi, ipucu kalkar", async () => {
+    jest.useFakeTimers();
+    ozel = (y, _g, m) => (m === "POST" && y === "/ai/vision/landmark" ? { askida: true } : undefined);
+    await ekraniCiz(s);
+    await fotografCekVeTeshis();
+    await act(async () => { jest.advanceTimersByTime(7999); });
+    expect(s.metin()).not.toContain(T("ai.hayvanSahibi.modelHazirlaniyor"));
+    await act(async () => { jest.advanceTimersByTime(1); });
+    expect(s.metin()).toContain(T("ai.hayvanSahibi.modelHazirlaniyor"));
+    await act(async () => { jest.advanceTimersByTime(112_000); });
+    await s.bosalt(8);
+    expect(ileti()).toBe(aiZamanAsimiMesaji());
+    expect(s.metin()).not.toContain(T("ai.hayvanSahibi.modelHazirlaniyor"));
+    expect(postlar("/ai/log")).toHaveLength(0);
+  });
+
+  it("ses analizi askıda kalırsa 120 sn sonra istek kesilir → zaman aşımı iletisi", async () => {
+    jest.useFakeTimers();
+    ozel = (y, _g, m) => (m === "POST" && y === "/ai/sound/cat" ? { askida: true } : undefined);
+    await ekraniCiz(s);
+    web.dosyaSiradaki = new File([new Uint8Array([1, 2, 3])], "miyav.wav", { type: "audio/wav" });
+    await metneBas(s, T("ai.ses.sesYukle"));
+    await metneBas(s, T("ai.ses.sesiAnalizEt"));
+    expect(postlar("/ai/sound/cat")).toHaveLength(1);
+    await act(async () => { jest.advanceTimersByTime(119_999); });
+    expect(ileti()).toBeNull();
+    await act(async () => { jest.advanceTimersByTime(1); });
+    await s.bosalt(8);
+    expect(ileti()).toBe(aiZamanAsimiMesaji());
+  });
+
+  it("klinik araması açılamazsa (tel: desteklenmiyor) uygulama düşmez, uyarı ya da hata iletisi çıkmaz", async () => {
+    mockOturum = { email: "sahip@ev.com", profile: { clinic_phone: "0532 111 22 33" } };
+    linkYamasi.mockRejectedValueOnce(new Error("tel: desteklenmiyor"));
+    ozel = (y, _g, m) => (m === "POST" && y === "/ai/vision/landmark" ? [200, { status: "success", detected: true, fgs_total: 7 }] : undefined);
+    await ekraniCiz(s);
+    await fotografCekVeTeshis();
+    await metneBas(s, T("ai.hayvanSahibi.klinigiAra"));
+    expect(linkYamasi).toHaveBeenCalledWith("tel:05321112233");
+    expect(alertYamasi).not.toHaveBeenCalled();
+    expect(ileti()).toBeNull();
   });
 });
 

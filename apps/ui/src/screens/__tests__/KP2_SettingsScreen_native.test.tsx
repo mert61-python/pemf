@@ -163,6 +163,29 @@ describe("Bağlantıyı Test Et (yerel) — yalnız PEMF kimliği doğrulanan ad
     expect(u.getByText(t("ayarlar.baglanti.durumBagli"))).toBeTruthy();
   });
 
+  // KP-7 B (işlev ölçüsü): kalıcı adres YAZILAMAZSA (depo arızası) bağlantı yine kurulur — taban + WS bu oturumda yeni cihazda,
+  // 'Bağlantı başarılı' (yalnız bir sonraki açılışta adres hatırlanmaz).
+  test("kalıcı adres yazılamasa da bağlantı kurulur: taban + WS yeni cihazda, 'Bağlantı başarılı'", async () => {
+    yanitlar["http://192.168.1.71:8000/api/health"] = [200, PEMF("d71")];
+    // ⚠️ AsyncStorage.setItem zaten bir jest.fn (depo sahtesi): `spyOn` + `mockRestore` onun ASIL uygulamasını siler ve sonraki
+    // testlerin deposu bozulur (ölçüldü: "Ağı Yeniden Tara" kırmızı). Asıl uygulama saklanır, yalnız adres anahtarı reddedilir, geri konur.
+    const yaz = AsyncStorage.setItem as unknown as jest.Mock;
+    const gercek = yaz.getMockImplementation()!;
+    yaz.mockImplementation((k: string, v: string) =>
+      k === "@pemf_server_address" ? Promise.reject(new Error("depo yazılamadı")) : gercek(k, v),
+    );
+    try {
+      await testEt("192.168.1.71");
+      await waitFor(() => expect(toastlar()).toEqual([[t("ayarlar.baglanti.basarili"), "success"]]));
+      expect(yaz).toHaveBeenCalledWith("@pemf_server_address", "192.168.1.71");
+      expect(await AsyncStorage.getItem("@pemf_server_address")).toBeNull();
+      expect(serviceConfig.apiBaseUrl).toBe("http://192.168.1.71:8000/api");
+      expect(mockReconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      yaz.mockImplementation(gercek);
+    }
+  });
+
   test("/api/health 200 ama PEMF kimliği YOK (router paneli) → 'PEMF cihazı bulunamadı', taban/kalıcı adres DEĞİŞMEZ", async () => {
     yanitlar["http://192.168.1.1:8000/api/health"] = [200, { status: "online" }];
     const u = await testEt("192.168.1.1");

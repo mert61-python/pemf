@@ -135,6 +135,40 @@ it("KRİTİK: bildirim sayfası geri tuşuyla da, boşluğa dokununca da KAPANIR
   expect(acikModaller(u).length).toBe(once);
 });
 
+// KP-7 B (işlev ölçüsü): KARŞIT — kartın / sayfanın İÇİNE (satır dışı boşluk, başlık) dokunmak menüyü KAPATMAZ; yalnız perde kapatır.
+// Kartın kendi boş `onPress`i dokunuşu yutar (düz View yutmazdı → kart içi dokunuş perdeye kabarcıklanıp menüyü kapatıyordu).
+it("KARŞIT: profil menüsü / 'Daha Fazla' / bildirim — kartın İÇİNE dokunmak KAPATMAZ", async () => {
+  const { u, git } = await kur();
+  const kart = (m: Dugum) => m.findAll((n: Dugum) => typeof n.props?.onPress === "function")[1];
+  await act(async () => { fireEvent.press(u.getByLabelText(T("kabuk.profil.degistirEtiketi"))); });
+  await act(async () => { fireEvent.press(kart(modalIcinde(u, T("kabuk.profil.degistir")))); });
+  expect(u.queryByText(T("kabuk.profil.degistir"))).not.toBeNull();
+  await act(async () => { fireEvent.press(bosluk(modalIcinde(u, T("kabuk.profil.degistir")))); });
+  await act(async () => { fireEvent.press(u.getByLabelText(T("kabuk.menu.dahaFazlaEtiketi"))); });
+  await act(async () => { fireEvent.press(kart(modalIcinde(u, T("kabuk.menu.raporlar")))); });
+  expect(u.queryByText(T("kabuk.menu.raporlar"))).not.toBeNull();
+  await act(async () => { fireEvent.press(bosluk(modalIcinde(u, T("kabuk.menu.raporlar")))); });
+  const once = acikModaller(u).length;
+  await act(async () => { fireEvent.press(u.getByLabelText(T("kabuk.bildirim.baslik"))); });
+  const bildirim = () => { const t = u.UNSAFE_getAllByType(Modal); return t[t.length - 1]; };
+  await act(async () => { fireEvent.press(kart(bildirim())); });
+  expect(acikModaller(u).length).toBe(once + 1);
+  expect(git).not.toHaveBeenCalled();
+});
+
+// KP-7 B (işlev ölçüsü): yatay sürükleme İPTAL edilirse (dokunuşu başka bir bileşen aldı) sekme DEĞİŞMEZ — yarım hareket geçiş sayılmaz.
+it("sekme sürüklemesi iptal edilirse rota değişmez", async () => {
+  const { u, git } = await kur();
+  const surukleme = u.UNSAFE_root.findAll(
+    (n: Dugum) => typeof n.props?.onMoveShouldSetResponderCapture === "function" && typeof n.props?.onResponderTerminate === "function",
+  )[0];
+  expect(surukleme).toBeTruthy();
+  await act(async () => {
+    surukleme.props.onResponderTerminate({ nativeEvent: { touches: [], changedTouches: [] }, touchHistory: { touchBank: [] } });
+  });
+  expect(git).not.toHaveBeenCalled();
+});
+
 it("profil menüsü boşluğa dokununca kapanır (profil değişmez)", async () => {
   const { u } = await kur();
   await act(async () => { fireEvent.press(u.getByLabelText(T("kabuk.profil.degistirEtiketi"))); });

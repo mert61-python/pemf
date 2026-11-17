@@ -105,6 +105,24 @@ describe("supabaseAuth masaüstü (loopback) oturum deposu", () => {
     expect(await st.getItem(KEY)).toBeNull();
   });
 
+  // KP-7 B (işlev ölçüsü): açılıştaki bayat kopya temizliği AsyncStorage'da REDDEDİLSE de (depo kapalı) modül yüklenir, üç anahtarın
+  // üçü için de silme denenir ve bellek deposu çalışır — temizlik hatası oturumu / açılışı bozmaz.
+  it("loopback: AsyncStorage silmesi reddedilse de modül yüklenir, üç anahtar denenir, bellek deposu çalışır", async () => {
+    pencereyiKur("127.0.0.1");
+    const silinen: string[] = [];
+    const { st, masaustuLoopbackMi } = moduluYukle("web", (AS) => {
+      (AS as unknown as { removeItem: (k: string) => Promise<void> }).removeItem = (k: string) => {
+        silinen.push(k);
+        return Promise.reject(new Error("depo kapalı"));
+      };
+    });
+    await Promise.resolve();
+    expect(masaustuLoopbackMi()).toBe(true);
+    expect(silinen).toEqual([KEY, `${KEY}-user`, `${KEY}-code-verifier`]);
+    await st.setItem(KEY, "TAZE");
+    expect(await st.getItem(KEY)).toBe("TAZE");
+  });
+
   it("loopback 'localhost' da masaüstü sayılır", () => {
     pencereyiKur("localhost");
     expect(moduluYukle("web").masaustuLoopbackMi()).toBe(true);

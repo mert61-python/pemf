@@ -156,7 +156,7 @@ export async function checkHealth(
     // yanlış makineyi sürmek = tıbbi risk). requireDeviceId yoksa (ilk eşleşme / manuel) serbest.
     if (requireDeviceId && data?.deviceId && String(data.deviceId) !== requireDeviceId) return false;
     if (secenekler?.kimligiKaydet !== false) {
-      if (data?.deviceId) await setStoredDeviceId(String(data.deviceId)).catch(() => {});
+      if (data?.deviceId) await setStoredDeviceId(String(data.deviceId)).catch(/* istanbul ignore next -- SAVUNMA: setStoredDeviceId reddetmez (iç try / catch) */ () => {});
       await provisionToken(base); // yerelse token sakla; uzaksa backend 403 → no-op
     }
     // [17. parti] kimligiKaydet:false = ön-prob TAMAMEN yan-etkisiz: kimlikle birlikte TOKEN da
@@ -307,7 +307,7 @@ async function discoverSubnet(requireDeviceId: string | null | undefined, gecers
         console.warn(`Keşif: ${hits.length} PEMF cihazı bulundu, ${winner.ip} seçildi.`);
       }
       const base = `http://${winner.ip}:8000`;
-      if (winner.deviceId) await setStoredDeviceId(winner.deviceId).catch(() => {});
+      if (winner.deviceId) await setStoredDeviceId(winner.deviceId).catch(/* istanbul ignore next -- SAVUNMA: setStoredDeviceId reddetmez (iç try / catch) */ () => {});
       await provisionToken(base); // yerel bulundu → token sakla (uzaktan erişim için)
       return base;
     }
@@ -387,7 +387,7 @@ function hafifYokla(): Promise<DiscoveryResult | null> {
   return _hafifInFlight;
 }
 async function _hafifYoklaImpl(): Promise<DiscoveryResult | null> {
-  const mdns = discoverMdns(HAFIF_MDNS_MS).catch(() => null);
+  const mdns = discoverMdns(HAFIF_MDNS_MS).catch(/* istanbul ignore next -- SAVUNMA: discoverMdns reddetmez (tarama her yolda çözülür) */ () => null);
   try {
     const saved = (await AsyncStorage.getItem(ADDR_KEY)) || (await AsyncStorage.getItem("@pemf_server_ip"));
     if (saved) {

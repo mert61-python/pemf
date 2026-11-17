@@ -554,7 +554,7 @@ export function AiProPanel({
   /** Onay / red isteği uçuşta mı (eşzamanlı bekçi — `approveAndStart` notu). */
   const onayAkisiRef = useRef(false);
   useEffect(() => {
-    getClientInstanceId().then((id) => { clientIdRef.current = id; }).catch(() => {});
+    getClientInstanceId().then((id) => { clientIdRef.current = id; }).catch(/* istanbul ignore next -- SAVUNMA: getClientInstanceId reddetmez (depo hatasında oturum-ömürlü kimlik döner) */ () => {});
   }, []);
 
   /**
@@ -1217,7 +1217,7 @@ export function AiProPanel({
     if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
     if (oneriTekrarZamanRef.current) clearTimeout(oneriTekrarZamanRef.current);
     if (!IS_WEB && runningRef.current && ownedRef.current) {
-      apiPost<AiProAction | null>("/ai/pro/stop", {}, null, { durdurma: true }).catch(() => {});
+      apiPost<AiProAction | null>("/ai/pro/stop", {}, null, { durdurma: true }).catch(/* istanbul ignore next -- SAVUNMA: apiPost fırlatmaz (fallback döner) */ () => {});
     }
   }, []);
 

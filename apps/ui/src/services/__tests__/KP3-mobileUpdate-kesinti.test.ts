@@ -150,6 +150,45 @@ it("tıkanma bekçisi: 90 sn bayt akmazsa pauseAsync ile düşürülür ve yinel
   expect(d.olustur).toHaveBeenCalledTimes(2);
 });
 
+// KP-7 B (işlev ölçüsü): YAN bağımlılıklar reddetse de güncelleme iner — ekranı uyanık tutma (aç / kapat), ön plan indirme servisi
+// (başlat / durdur), eski APK temizliği (silme) ve tıkanma bekçisinin duraklatması "kolaylık"tır; hiçbiri indirmeyi düşürmez.
+it("uyanık tutma / indirme servisi / eski APK silme / duraklatma REDDETSE de indirme tamamlanır; eski APK silinmeye çalışılır", async () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ka = require("expo-keep-awake") as { activateKeepAwakeAsync: jest.Mock; deactivateKeepAwake: jest.Mock };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const apk = require("../../../modules/apk-installer") as { indirmeServisiniBaslat: jest.Mock; indirmeServisiniDurdur: jest.Mock };
+  ka.activateKeepAwakeAsync.mockRejectedValueOnce(new Error("uyanık tutma yok"));
+  ka.deactivateKeepAwake.mockRejectedValueOnce(new Error("uyanık tutma yok"));
+  apk.indirmeServisiniBaslat.mockRejectedValueOnce(new Error("servis başlamadı"));
+  apk.indirmeServisiniDurdur.mockRejectedValueOnce(new Error("servis durmadı"));
+  let reddet: (e: Error) => void = () => undefined;
+  const durdur = jest.fn(async () => {
+    reddet(new Error("paused"));
+    throw new Error("pauseAsync desteklenmiyor");
+  });
+  const tikali = (): Deneme => ({ downloadAsync: () => new Promise((_c, r) => { reddet = r; }), pauseAsync: durdur });
+  const d = dunya([tikali, in_]);
+  const silinen: string[] = [];
+  const deps = {
+    ...d.deps,
+    readDirectoryAsync: (async () => ["pemf-vet-12.apk", "pemf-vet-14.apk", "baska.apk"]) as never,
+    deleteAsync: (async (u: string) => {
+      silinen.push(u);
+      if (u.endsWith("pemf-vet-12.apk")) throw new Error("dosya kilitli");
+    }) as never,
+  };
+  const p = apkIndir(SURUM, undefined, deps);
+  await bosalt();
+  await act(105_000); // tıkanma: 90 sn+ sessizlik → duraklatma (reddeder)
+  expect(durdur).toHaveBeenCalledTimes(1);
+  await act(3000);
+  await expect(p).resolves.toEqual({ ok: true, dosyaUri: HEDEF });
+  expect(silinen).toContain("file:///cache/pemf-vet-12.apk");
+  expect(silinen).not.toContain("file:///cache/baska.apk");
+  expect(apk.indirmeServisiniDurdur).toHaveBeenCalled();
+  expect(ka.deactivateKeepAwake).toHaveBeenCalled();
+});
+
 it("sonuç dosya adresi taşımıyorsa 'indirme' hatası; bozuk devam kaydı indirmeyi düşürmez", async () => {
   const d = dunya([() => ({ downloadAsync: async () => undefined })]);
   await expect(apkIndir(SURUM, undefined, { ...d.deps, azamiYenidenDeneme: 0 })).resolves.toEqual({ ok: false, hata: "indirme" });

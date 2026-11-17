@@ -75,6 +75,18 @@ it("KRİTİK: kayıt formunda 'ileri' odağı sıradaki alana taşır (unvan →
   expect(await ileri(u, "giris.klinik.adres")).toBe(T("giris.klinik.acilTelefon"));
 });
 
+// KP-7 B (işlev ölçüsü): KP-6 kapanış ölçümünde bu beş halka hiçbir testte tetiklenmiyordu — ad → soyad → unvan · klinik adı →
+// şehir → ilçe → adres.
+it("kayıt formunda kalan halkalar: ad → soyad → unvan · klinik adı → şehir → ilçe → adres", async () => {
+  const u = render(<AuthScreen />);
+  await act(async () => { fireEvent.press(u.getAllByText(T("giris.kayitOl"))[0]); });
+  expect(await ileri(u, "giris.alan.ad")).toBe(T("giris.alan.soyad"));
+  expect(await ileri(u, "giris.alan.soyad")).toBe(T("giris.alan.unvan"));
+  expect(await ileri(u, "giris.klinik.ad")).toBe(T("giris.klinik.sehir"));
+  expect(await ileri(u, "giris.klinik.sehir")).toBe(T("giris.klinik.ilce"));
+  expect(await ileri(u, "giris.klinik.ilce")).toBe(T("giris.klinik.adres"));
+});
+
 it("KARŞIT: girişte şifre alanındaki 'Git' odak TAŞIMAZ (gönderim yolu); e-posta 'ileri' şifreye taşır", async () => {
   const u = render(<AuthScreen />);
   expect(await ileri(u, "giris.alan.eposta")).toBe(T("giris.alan.sifre"));

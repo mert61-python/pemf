@@ -161,7 +161,6 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
   const kaydirmaRef = useRef({ x: 0, y: 0 });
   const baslangicRef = useRef({ x: 0, y: 0 });
   const tamTabanRef = useRef<{ width: number; height: number } | null>(null);
-  const sinirlaRef = useRef<(n: { x: number; y: number }, o: { width: number; height: number } | null) => { x: number; y: number }>(() => ({ x: 0, y: 0 }));
 
   const tamTaban = gorunum.w > 0 && gorunum.h > 0 ? kameraKutusu(gorunum.w, oran, gorunum.h, 1) : kutu;
   const tamOlcu = tamTaban
@@ -176,6 +175,9 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
     const sy = Math.max(0, (olcu.height - gorunum.h) / 2);
     return { x: Math.min(sx, Math.max(-sx, n.x)), y: Math.min(sy, Math.max(-sy, n.y)) };
   };
+  // KP-7 B (Y242): ref'in İLK değeri gerçek `sinirla`. Eski `() => ({ x: 0, y: 0 })` yer tutucusu hiç çağrılamıyordu — sürükleme
+  // `tamTabanRef` boşken döner ve iki ref AYNI efektte eşitlenir — ölü kod silindi (davranış aynı).
+  const sinirlaRef = useRef(sinirla);
 
   const basamaklar = zoomBasamaklari({ kaynakW, kaynakH, kutuW: tamTaban?.width ?? 0 });
   const birebir = birebirOrani({ kaynakW, kaynakH, kutuW: tamTaban?.width ?? 0 });

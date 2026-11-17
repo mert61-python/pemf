@@ -71,10 +71,13 @@ import { act, fireEvent, render, type RenderResult } from "@testing-library/reac
 import i18n from "i18next";
 
 import { AiHubScreen } from "@/screens/AiHubScreen";
+import { aiZamanAsimiMesaji } from "@/services/apiClient";
 
 const T = (k: string, o?: object): string => (i18n.t as unknown as (k: string, o?: object) => string)(k, o);
 
-type Yanit = { durum: number; govde: unknown } | { hata: Error };
+// KP-7 B: `askida` — istek yanıtsız kalır, yalnız iptal sinyaliyle reddedilir (yanıt vermeyen sunucu); `bozukGovde` — HTTP durumu var
+// ama gövde JSON değil (vekil sunucunun HTML hata sayfası).
+type Yanit = { durum: number; govde: unknown } | { hata: Error } | { askida: true } | { bozukGovde: number };
 let rotalar: Record<string, Yanit[]>;
 let fetchSahte: jest.Mock;
 
@@ -98,10 +101,19 @@ beforeEach(() => {
   mockToast.mockClear();
   mockFoto.mockReset().mockResolvedValue({ uri: "file:///kare.jpg" });
   rotalar = {};
-  fetchSahte = jest.fn(async (url: unknown) => {
+  fetchSahte = jest.fn(async (url: unknown, init?: { signal?: AbortSignal }) => {
     const kuyruk = rotalar[yolu(url)];
     const y: Yanit = kuyruk && kuyruk.length ? (kuyruk.length > 1 ? kuyruk.shift()! : kuyruk[0]) : basari({});
     if ("hata" in y) throw y.hata;
+    if ("askida" in y) {
+      return new Promise((_c, reddet) => {
+        init?.signal?.addEventListener("abort", () => reddet(Object.assign(new Error("aborted"), { name: "AbortError" })));
+      });
+    }
+    if ("bozukGovde" in y) {
+      return { ok: y.bozukGovde < 400, status: y.bozukGovde, json: async () => { throw new SyntaxError("Unexpected token <"); },
+        text: async () => "<html>502</html>", headers: { get: () => "text/html" } };
+    }
     return { ok: y.durum < 400, status: y.durum, json: async () => y.govde, text: async () => JSON.stringify(y.govde),
       headers: { get: () => "application/json" } };
   });
@@ -263,6 +275,60 @@ describe("Petri / Fantom canlı (telefon kamerası)", () => {
   });
 });
 
+// ── KP-7 B (işlev ölçüsü): canlı kare isteği ASKIDA kalırsa kendi sınırında kesilir (kamera akışı kilitlenmez) ve gövdesi JSON olmayan
+// yanıt (vekil HTML sayfası) döngüyü durdurmaz — üç canlı döngü (görüntü 15 sn · fantom 30 sn · kedi organ 25 sn).
+describe("KP-7 B · canlı döngüde askıda istek ve bozuk gövde", () => {
+  const ZAMAN_ASIMI = () => T("ai.canli.sonKareHata", { hata: aiZamanAsimiMesaji() });
+  /** Durum satırı ilk kare sonucuna dek çizilmez → yoksa boş. */
+  const durumVarsa = (u: RenderResult) => (u.queryByTestId("canli-durum") ? durum(u) : "");
+
+  it("görüntü canlı: askıdaki kare 15 sn sonra kesilir (zaman aşımı); bozuk gövde 'analiz edilemedi'; döngü sürer", async () => {
+    rotalar["/ai/vision/segmentation"] = [{ askida: true }, { bozukGovde: 502 }, basari({ status: "success", cat_count: 1, image_base64: "S" })];
+    const u = await canliAc(T("ai.modul.segmentasyon.ad"));
+    await ilerle(1100);
+    expect(cagrilar("/ai/vision/segmentation")).toHaveLength(1);
+    await ilerle(14_998);
+    expect(durumVarsa(u)).not.toBe(ZAMAN_ASIMI());
+    await ilerle(2);
+    expect(durum(u)).toBe(ZAMAN_ASIMI());
+    await ilerle(1100);
+    expect(cagrilar("/ai/vision/segmentation")).toHaveLength(2);
+    expect(durum(u)).toContain("502");
+    await ilerle(1100);
+    expect(durum(u)).toBe(T("ai.canli.durum.analizEdildi"));
+  });
+
+  it("fantom canlı: askıdaki kare 30 sn sonra kesilir (zaman aşımı); bozuk gövde döngüyü durdurmaz", async () => {
+    mockKip = "researcher";
+    rotalar["/ai/vision/em_fantom"] = [{ askida: true }, { bozukGovde: 502 }];
+    const u = await modulAc(T("ai.modul.fantomTumor.ad"));
+    await bas(u, T("ai.gorsel.canliKamera"));
+    await ilerle(1100);
+    await ilerle(29_998);
+    expect(durumVarsa(u)).not.toBe(ZAMAN_ASIMI());
+    await ilerle(2);
+    expect(durum(u)).toBe(ZAMAN_ASIMI());
+    await ilerle(1100);
+    expect(cagrilar("/ai/vision/em_fantom").length).toBe(2);
+    expect(durum(u)).toContain("502");
+    await bas(u, T("ai.gorsel.canliyiDurdur"));
+  });
+
+  it("kedi organ canlı: askıdaki kare 25 sn sonra kesilir (zaman aşımı); bozuk gövde eski sonucu GÖSTERMEZ", async () => {
+    rotalar["/ai/vision/cat_organ"] = [{ askida: true }, { bozukGovde: 502 }];
+    const u = await canliAc(T("ai.modul.kediOrgan.ad"));
+    await ilerle(1100);
+    await ilerle(24_998);
+    expect(durumVarsa(u)).not.toBe(ZAMAN_ASIMI());
+    await ilerle(2);
+    expect(durum(u)).toBe(ZAMAN_ASIMI());
+    await ilerle(1100);
+    expect(cagrilar("/ai/vision/cat_organ")).toHaveLength(2);
+    expect(durum(u)).toContain("502");
+    expect(u.queryByTestId("canli-son-kare")).toBeNull();
+  });
+});
+
 describe("Görüntü modülü yorumları", () => {
   it("KRİTİK: FGS 6/10 'şiddetli' yorumu (5'in üstü); 5/10 'orta'", async () => {
     rotalar["/ai/vision/landmark"] = [basari({ status: "success", fgs_total: 6 }), basari({ status: "success", fgs_total: 5 })];
@@ -342,6 +408,18 @@ describe("Hastalık modülü vital girişleri", () => {
     expect(giden).toHaveLength(1);
     const govde = JSON.parse(String((giden[0][1] as { body: string }).body));
     expect(govde).toEqual(expect.objectContaining({ age: 3, weight: 5.2, hr: 180, temp: 39.6, duration: 10, symptom_indices: [2, 3] }));
+  });
+
+  // KP-7 B (işlev ölçüsü): seçili belirtiye İKİNCİ kez dokunmak seçimi KALDIRIR — kaldırılan belirti isteğe GİTMEZ (yanlışlıkla seçilen
+  // belirti teşhisi saptırmasın).
+  it("seçili belirtiye ikinci dokunuş seçimi kaldırır; kaldırılan belirti isteğe gitmez", async () => {
+    const u = await hastalikAc(); // kusma (2) + ishal (3) seçili
+    await act(async () => { fireEvent.press(u.getByText(T("ai.hastalik.semptom.kusma"))); }); // kusma KALDIRILIR
+    await act(async () => { fireEvent.press(u.getByText(T("ai.hastalik.semptom.oksuruk"))); }); // en az 2 kuralı: öksürük (4)
+    await bas(u, T("ai.hastalik.teshisiBaslat"));
+    expect(cagrilar("/ai/disease")).toHaveLength(1);
+    const govde = JSON.parse(String((cagrilar("/ai/disease")[0][1] as { body: string }).body));
+    expect(govde.symptom_indices).toEqual([3, 4]);
   });
 
   it("KARŞIT: aralık dışı ateş (50 °C) gönderilmez, aralık iletisi çıkar", async () => {

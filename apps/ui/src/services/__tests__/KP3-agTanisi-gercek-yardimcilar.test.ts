@@ -58,3 +58,27 @@ it("yerel IP yok / telefon adresi okunamaz → bilinmiyor", async () => {
   netFetch.mockRejectedValue(new Error("netinfo yok"));
   await expect(agTanisiYap(kimlik)).resolves.toEqual({ durum: "bilinmiyor" });
 });
+
+// KP-7 B (işlev ölçüsü): tünel YANIT VERMEZSE (istek askıda) sağlık yoklaması 2,5 sn sonra kesilir → cihaz AYAKTA sayılmaz (tanı
+// kullanıcıyı bekletmez).
+it("tünel yanıt vermezse yoklama 2,5 sn sonra kesilir → cihaz_kapali", async () => {
+  let sinyal: AbortSignal | undefined;
+  global.fetch = jest.fn(
+    (_u: string, o?: { signal?: AbortSignal }) =>
+      new Promise((_coz, reddet) => {
+        sinyal = o?.signal;
+        o?.signal?.addEventListener("abort", () => reddet(new Error("AbortError")));
+      }),
+  ) as unknown as typeof fetch;
+  jest.useFakeTimers();
+  try {
+    const p = agTanisiYap(kimlik);
+    await jest.advanceTimersByTimeAsync(2499);
+    expect(sinyal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await expect(p).resolves.toEqual({ durum: "cihaz_kapali" });
+    expect(sinyal?.aborted).toBe(true);
+  } finally {
+    jest.useRealTimers();
+  }
+});

@@ -154,6 +154,9 @@ describe("theme/fonts", () => {
       expect((jsxMod as { __interPatched?: boolean }).__interPatched).toBe(true);
       jsxMod.jsx(RN.Text, { style: { fontWeight: "800" } });
       expect((cagri[0] as { style: { fontFamily: string } }).style.fontFamily).toBe("Inter_800ExtraBold");
+      // KP-7 B (işlev ölçüsü): çok çocuklu JSX (`jsxs`) de sarılır — birden çok çocuklu Text de Inter kesimini alır.
+      jsxMod.jsxs(RN.Text, { style: { fontWeight: "700" }, children: ["a", "b"] });
+      expect((cagri[1] as { style: { fontFamily: string } }).style.fontFamily).toBe("Inter_700Bold");
       const el = RN.Text.render();
       expect(el.props.style.fontFamily).toBe("Inter_600SemiBold");
       expect(RN.TextInput.render()).toBeNull();

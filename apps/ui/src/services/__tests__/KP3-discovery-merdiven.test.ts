@@ -17,7 +17,13 @@
  * SAHTE (en alt kat): fetch (URL tablosu), react-native-zeroconf, NetInfo (yerel modüller), Supabase cihaz kaydı (`deviceRegistry`);
  * GERÇEK: config (adres doğrulama + kalıcılık), apiClient (`isPrivateHost`), duzHttpKapisi, AsyncStorage (jest.setup bellek sahtesi).
  */
-const mockZc = { kip: "paketYok" as "paketYok" | "bul" | "sessiz" | "kurucuAtar", adres: [] as string[], durdur: 0, sok: 0, stopAtar: false };
+const mockZc = {
+  kip: "paketYok" as "paketYok" | "bul" | "hataSonraBul" | "sessiz" | "kurucuAtar",
+  adres: [] as string[],
+  durdur: 0,
+  sok: 0,
+  stopAtar: false,
+};
 // ⚠️ KP-6 madde 14: `{ virtual: true }` YOK — paket GERÇEK bağımlılık; sanal mock jest-resolve'un işçi içinde paylaşılan modül kimliği
 // önbelleğiyle sıraya bağlı KAÇIYORDU ("paketYok" kipi `default` alıcısıyla aynı ölçülür). Gerekçe: LiveDataContext.BE1.yenidenBaglanma.
 jest.mock(
@@ -31,6 +37,13 @@ jest.mock(
       on(e: string, f: (s: unknown) => void) { this.h[e] = f; }
       scan() {
         if (mockZc.kip === "bul") setTimeout(() => this.h.resolved?.({ addresses: mockZc.adres, port: 8000 }), 0);
+        // KP-7 B: tarama sırasında yerel modül HATA olayı yayar (ör. ağ arabirimi düştü), ardından hizmet yine çözülür.
+        if (mockZc.kip === "hataSonraBul") {
+          setTimeout(() => {
+            this.h.error?.(new Error("mDNS arabirimi düştü"));
+            this.h.resolved?.({ addresses: mockZc.adres, port: 8000 });
+          }, 0);
+        }
       }
       stop() { mockZc.durdur += 1; if (mockZc.stopAtar) throw new Error("stop düştü"); }
       removeDeviceListeners() { mockZc.sok += 1; }
@@ -340,5 +353,58 @@ describe("kayitliHemen + hafif mDNS", () => {
     jest.useRealTimers();
     mockZc.kip = "kurucuAtar";
     await expect(discoverBackend("hafif")).resolves.toBeNull();
+  });
+});
+
+// ── KP-7 B (işlev ölçüsü) ────────────────────────────────────────────────────────────────────────────────────────────────────
+describe("KP-7 B · kalan kollar", () => {
+  it("mDNS taraması HATA olayı yayarsa yok sayılır, sonra çözülen cihaza bağlanılır; tarama durdurulur", async () => {
+    mockZc.kip = "hataSonraBul";
+    mockZc.adres = ["192.168.1.42"];
+    tablo["http://192.168.1.42:8000/api/health"] = PEMF("D-42");
+    await expect(discoverBackend("hafif")).resolves.toEqual({ address: "http://192.168.1.42:8000", source: "mdns" });
+    expect([mockZc.durdur, mockZc.sok]).toEqual([1, 1]);
+  });
+
+  it("bulunan adres KALICI yazılamasa da (depo arızası) bağlanılır — taban bu oturumda yeni adreste", async () => {
+    // ⚠️ AsyncStorage depo sahtesi jest.fn: asıl uygulama saklanır, yalnız adres anahtarı reddedilir, geri konur (spyOn + mockRestore
+    // asıl uygulamayı SİLER).
+    const yaz = AsyncStorage.setItem as unknown as jest.Mock;
+    const gercek = yaz.getMockImplementation()!;
+    yaz.mockImplementation((k: string, v: string) =>
+      k === "@pemf_server_address" ? Promise.reject(new Error("depo yazılamadı")) : gercek(k, v),
+    );
+    try {
+      mockZc.kip = "bul";
+      mockZc.adres = ["192.168.1.43"];
+      tablo["http://192.168.1.43:8000/api/health"] = PEMF("D-43");
+      await expect(discoverBackend("hafif")).resolves.toEqual({ address: "http://192.168.1.43:8000", source: "mdns" });
+      expect(serviceConfig.apiBaseUrl).toBe("http://192.168.1.43:8000/api");
+      expect(await AsyncStorage.getItem("@pemf_server_address")).toBeNull();
+    } finally {
+      yaz.mockImplementation(gercek);
+    }
+  });
+
+  it("LAN yükseltmesinde tünel sağlığı YANITSIZ kalırsa 2,5 sn sonra kesilir → tünelde kalınır, LAN denenmez", async () => {
+    const TUNEL = "https://kp7.trycloudflare.com";
+    await setStoredDeviceId("DEV-7");
+    mockUzakUrl = TUNEL;
+    let n = 0;
+    tablo[`${TUNEL}/api/health`] = (k) => {
+      n += 1;
+      return n === 1
+        ? Promise.resolve({ ok: true, status: 200, json: async () => ({ service: "PEMF-Vet", deviceId: "DEV-7", localIp: "192.168.1.40" }) })
+        : askidaYanit(k);
+    };
+    tablo[`${TUNEL}/api/auth/token`] = [403, {}];
+    tablo["http://192.168.1.40:8000/api/health"] = PEMF("DEV-7");
+    jest.useFakeTimers({ doNotFake: ["nextTick", "queueMicrotask"] });
+    const p = discoverBackend();
+    for (let i = 0; i < 400 && n < 2; i++) await jest.advanceTimersByTimeAsync(50);
+    expect(n).toBe(2);
+    await jest.advanceTimersByTimeAsync(2500);
+    await expect(p).resolves.toEqual({ address: TUNEL, source: "remote" });
+    expect(urller()).not.toContain("http://192.168.1.40:8000/api/health");
   });
 });

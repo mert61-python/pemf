@@ -65,3 +65,17 @@ it("disabled/loading iken hiç tetiklenmez", () => {
   fireEvent.press(getByText("Kaydet"));
   expect(spy).not.toHaveBeenCalled();
 });
+
+// KP-7 B (işlev ölçüsü): cihazda titreşim yoksa / reddedilirse (native) eylem YİNE tetiklenir — dokunsal geri bildirim yalnız süs,
+// ret yutulur (işlenmemiş ret yok).
+it("titreşim reddedilse de eylem tetiklenir", async () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Haptics = require("expo-haptics") as { impactAsync: jest.Mock };
+  Haptics.impactAsync.mockRejectedValueOnce(new Error("titreşim desteklenmiyor"));
+  const spy = jest.fn();
+  const { getByText } = render(<Button label="Kaydet" onPress={() => spy()} />);
+  fireEvent.press(getByText("Kaydet"));
+  await act(async () => { await Promise.resolve(); });
+  expect(Haptics.impactAsync).toHaveBeenCalled();
+  expect(spy).toHaveBeenCalledTimes(1);
+});
