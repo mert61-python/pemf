@@ -324,3 +324,17 @@ it("KARŞIT-KANIT: veterinerde uyarı metni AYNEN 'Hasta seçilmedi' kalır", as
   expect(String(govde)).toMatch(/hiçbir hastaya bağlanmadan/);
   expect(dugme).toBe("Hastasız başlat");
 });
+
+// KP-7 B (deyim ölçüsü): hazırlık envanteri ve durum ucu yanıt VERMEZSE (null) model kartları KİLİTLENMEZ ve "paket kurulu değil"
+// DENMEZ (bilinmiyor ≠ eksik — yanlış engel yok); panel çalışmayı sürdürür, başlat düğmesi yerinde.
+it("KP-7 B: hazırlık / durum yanıtı alınamazsa kartlar kilitlenmez, 'kurulu değil' denmez, panel çalışır", async () => {
+  mockEnvanter = null;
+  mockDurum = null as unknown as Record<string, unknown>;
+  const u = ciz();
+  await act(async () => {});
+  await bekle(u);
+  expect(u.queryByText(/Araştırma model paketi bu cihazda kurulu değil/)).toBeNull();
+  expect(u.getByLabelText(/Petri Kuyu/).props.accessibilityState?.disabled).toBeFalsy();
+  expect(u.getByLabelText("AI Pro otonom seansı başlat")).toBeTruthy();
+  expect((apiGet as jest.Mock).mock.calls.some((k: unknown[]) => k[0] === "/ai/hazirlik")).toBe(true);
+});

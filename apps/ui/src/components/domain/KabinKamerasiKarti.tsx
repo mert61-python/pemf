@@ -67,6 +67,7 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
   }, [yukle]);
 
   const tara = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Tara düğmesi kilitliyken pasif (tek çağıran) */
     if (kilitli) return;
     setTaraniyor(true);
     try {
@@ -87,6 +88,7 @@ export function KabinKamerasiKarti({ kilitli = false }: { kilitli?: boolean }) {
   };
 
   const sec = async (indeks: number) => {
+    /* istanbul ignore if -- ULASILAMAZ: kamera seçim düğmeleri kilitliyken pasif (tek çağıran) */
     if (kilitli) return;
     const r = await apiPost<({ secili: Secim } & Baglanti) | null>("/settings/kabin-kamerasi", { indeks }, null);
     if (r?.secili) {

@@ -80,6 +80,7 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
   }, []);
 
   const gecisYap = useCallback(async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Geçiş düğmesi PIN eksik ya da operatör seçilmemişken pasif (gecisPasif) */
     if (pin.length !== PIN_UZUNLUK || !secili) return;
     setMesgul(true); setHata("");
     const r = await ctx!.switchTo(secili, pin);
@@ -93,7 +94,9 @@ export function OperatorSwitcher({ onBaskaHesap, kip }: {
   }, [pin, secili, ctx, kapat, t]);
 
   const kaydet = useCallback(async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Kaydol düğmesi PIN eksik ya da ad boşken pasif (kaydolPasif) */
     if (pin.length !== PIN_UZUNLUK || !ad.trim()) return;
+    /* istanbul ignore if -- ULASILAMAZ: Kaydol düğmesi eski PIN gerekip eksikken pasif (kaydolPasif) */
     if (eskiPinGerek && eskiPin.length !== PIN_UZUNLUK) return;
     setMesgul(true); setHata("");
     const r = await ctx!.enroll(ad.trim(), pin, eskiPin);

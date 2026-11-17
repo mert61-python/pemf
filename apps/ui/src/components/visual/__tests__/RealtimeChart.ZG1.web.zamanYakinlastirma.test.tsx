@@ -104,3 +104,38 @@ it("KARŞIT (KP-5 C9): zaman damgası YOKKEN (eski backend) saat ekseni çizilme
   fireEvent(tuvalEl, "mouseUp", {});
   expect(sec).not.toHaveBeenCalled();
 });
+
+// ── KP-7 B (deyim ölçüsü) ─────────────────────────────────────────────────────────────────────────────────────────────────────
+it("KP-7 B: koordinatsız fare olayı (offsetX yok) seçim BAŞLATMAZ ve süren sürüklemeyi BOZMAZ", async () => {
+  const sec = jest.fn();
+  const { u } = ciz({ onAralikSec: sec });
+  await act(async () => {});
+  const tuvalEl = u.UNSAFE_getByType("canvas" as any);
+  fireEvent(tuvalEl, "mouseDown", { nativeEvent: {} });
+  fireEvent(tuvalEl, "mouseUp", {});
+  expect(sec).not.toHaveBeenCalled();
+  fireEvent(tuvalEl, "mouseDown", { nativeEvent: { offsetX: 120 } });
+  fireEvent(tuvalEl, "mouseMove", { nativeEvent: {} });
+  fireEvent(tuvalEl, "mouseMove", { nativeEvent: { offsetX: 360 } });
+  fireEvent(tuvalEl, "mouseUp", {});
+  expect(sec).toHaveBeenCalledTimes(1);
+  expect(sec.mock.calls[0][1] - sec.mock.calls[0][0]).toBeGreaterThan(30);
+});
+
+it("KP-7 B: manyetik seri KAPALI + sıcaklık SABİT → eksen etiketleri 'NaN' / 'Infinity' basmaz (güvenli aralık)", async () => {
+  const { yazilar } = ciz({ showMagnetic: false, showTemp: true });
+  await act(async () => {});
+  expect(yazilar.length).toBeGreaterThan(0);
+  expect(yazilar.filter((y) => /NaN|Infinity/.test(y.metin))).toHaveLength(0);
+});
+
+it("KP-7 B: tuval ya da 2B bağlamı yoksa çizim sessizce atlanır (çökme yok)", async () => {
+  for (const tuval of [null, { width: 0, height: 0, style: {}, getContext: () => null }]) {
+    const u = render(<RealtimeChart history={GECMIS} visibleCoils={new Set([1])} width={600} height={300} />, {
+      createNodeMock: (el: any) => (el.type === "canvas" ? tuval : null),
+    });
+    await act(async () => {});
+    expect(u.UNSAFE_getByType("canvas" as any)).toBeTruthy();
+    u.unmount();
+  }
+});

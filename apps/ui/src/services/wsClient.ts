@@ -144,6 +144,7 @@ export function connectPemfWebSocket(
   };
 
   const scheduleReconnect = () => {
+    /* istanbul ignore if -- ULASILAMAZ: çağıranların hepsi aynı korumadan geçer ya da kapatma zamanlayıcılarını temizler */
     if (closedByCaller) return;
     consecutiveFails += 1;
     // Adres değişmiş olabilir (DHCP / ağ geçişi / tünel URL rotasyonu) → yeniden keşif iste.
@@ -163,6 +164,7 @@ export function connectPemfWebSocket(
   };
 
   const openSocket = () => {
+    /* istanbul ignore if -- ULASILAMAZ: kapatma yeniden bağlanma zamanlayıcısını temizler; ilk açılış kapatmadan önce */
     if (closedByCaller) return;
     // serviceConfig.websocketUrl her seferinde taze okunur — keşif sonrası yeni URL'yi alır.
     const wsBase = serviceConfig.websocketUrl;

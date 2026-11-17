@@ -41,6 +41,7 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 import { Edit3 } from "lucide-react-native";
 import i18n from "i18next";
 import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { profilSozlugu } from "@/utils/profilSozlugu";
 
 const T = (k: string, o?: object): string => (i18n.t as unknown as (k: string, o?: object) => string)(k, o);
@@ -173,5 +174,21 @@ describe("kart + toplu silme", () => {
     expect(mockToast).toHaveBeenLastCalledWith(T("hasta.sil.topluBasarisizKisa"), "error");
     await bas(u, T("seans.gecmis.benimEtiket"));
     expect(u.queryByText("Hasta-2")).toBeNull();
+  });
+});
+
+// KP-7 B (deyim ölçüsü): durum hapı — tamamlandı → yeşil (online), sürüyor → sarı (warning), YARIDA KALDI / hata / kurtarıldı → gri
+// (offline) — yarıda kalan seans "tamamlandı" gibi yeşil GÖRÜNMEZ.
+describe("KP-7 B · durum hapı", () => {
+  it("tamamlandı yeşil, sürüyor sarı; yarıda kaldı / hata / kurtarıldı gri", async () => {
+    const u = await ekran([
+      seans(11, { session_status: "completed" }),
+      seans(12, { session_status: "running" }),
+      seans(13, { session_status: "interrupted" }),
+      seans(14, { session_status: "error" }),
+      seans(15, { session_status: "aborted_recovered" }),
+    ]);
+    const durumlar = u.UNSAFE_getAllByType(StatusPill).map((p) => p.props.state);
+    expect(durumlar).toEqual(["online", "warning", "offline", "offline", "offline"]);
   });
 });

@@ -119,6 +119,20 @@ test("KRITIK: boyutu BILINMEYEN sayfa YUKLENINCE oran DUZELIR", () => {
   expect(sonra.width / sonra.height).toBeCloseTo(3024 / 4032, 1);
 });
 
+// KP-7 B (deyim ölçüsü): yükleme olayı BOYUTSUZ / sıfır boyutlu gelirse (bozuk ya da boyut bildirmeyen kaynak) ölçüm ALINMAZ — oran
+// yön varsayılanında kalır (NaN / sonsuz oranla kutu bozulmaz); sonraki GEÇERLİ yükleme oranı düzeltir.
+test("KP-7 B: boyutsuz / sıfır boyutlu yükleme olayı ölçüm ALMAZ; sonraki geçerli yükleme oranı düzeltir", () => {
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  fireEvent.press(api.getByTestId("gorsel-sahne-cip-01_input"));
+  const once = kutuOlcusu(api);
+  fireEvent(api.getByTestId("gorsel-sahne-gorsel-sahne"), "load", { nativeEvent: {} });
+  fireEvent(api.getByTestId("gorsel-sahne-gorsel-sahne"), "load", { nativeEvent: { source: { width: 0, height: 900 } } });
+  expect(kutuOlcusu(api)).toEqual(once);
+  fireEvent(api.getByTestId("gorsel-sahne-gorsel-sahne"), "load", { nativeEvent: { source: { width: 3024, height: 4032 } } });
+  expect(kutuOlcusu(api).width / kutuOlcusu(api).height).toBeCloseTo(3024 / 4032, 1);
+});
+
 test("KRITIK: sunucu boyut BILDIRDIYSE olcum HIC ALINMAZ", () => {
   // ⚠️ Sunucunun boyutu KODLANAN kareye aittir ve oran kilidinin tek kaynağıdır; tarayıcının
   // bildirdiği ham boyut onu ezerse istemci farklı bir kutu çizer ve işaretler kayar.

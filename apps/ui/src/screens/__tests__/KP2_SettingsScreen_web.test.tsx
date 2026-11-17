@@ -341,6 +341,57 @@ describe("KP-7 B · zamanlı kollar — askıdaki köken yoklaması kesilir, ind
     await act(async () => { jest.advanceTimersByTime(1); });
     expect(s.metin()).not.toContain(t("ayarlar.kaydedildi"));
   });
+
+  test("art arda iki başarılı kayıt: satır İKİNCİ kayıttan 3 sn sonra silinir (ilk zamanlayıcı erken silmez)", async () => {
+    ozel = (yol, yontem) => (yol === "/settings/" && yontem === "POST" ? sahteYanit({ status: "success" }) : undefined);
+    await ekran();
+    await s.metneTikla(t("ayarlar.kaydetDugme"));
+    await s.bosalt(5);
+    await act(async () => { jest.advanceTimersByTime(2000); });
+    await act(async () => { jest.advanceTimersByTime(500); }); // düğmenin çift dokunuş korumasını aş
+    await s.metneTikla(t("ayarlar.kaydetDugme"));
+    await s.bosalt(5);
+    expect(istek("/settings/")).toHaveLength(2);
+    await act(async () => { jest.advanceTimersByTime(1000); }); // ilk kaydın 3 sn'si doldu
+    expect(s.metin()).toContain(t("ayarlar.kaydedildi"));
+    await act(async () => { jest.advanceTimersByTime(2000); });
+    expect(s.metin()).not.toContain(t("ayarlar.kaydedildi"));
+  });
+
+  test("geri yükleme: dosya SEÇİLMEDEN ya da parola girilmeden vazgeçilirse /data/import gönderilmez, onay sorulmaz", async () => {
+    await ekran("http://127.0.0.1:8000/api");
+    const gercekOlustur = document.createElement.bind(document);
+    let girdi: HTMLInputElement | null = null;
+    const casus = jest.spyOn(document, "createElement").mockImplementation(((ad: string, sec?: ElementCreationOptions) => {
+      const el = gercekOlustur(ad, sec);
+      if (ad === "input") {
+        girdi = el as HTMLInputElement;
+        jest.spyOn(girdi, "click").mockImplementation(() => {});
+      }
+      return el;
+    }) as typeof document.createElement);
+    const onay = jest.spyOn(window, "confirm").mockImplementation(() => true);
+    try {
+      await s.tikla(t("ayarlar.veriTasima.geriYukleEtiketi"));
+      Object.defineProperty(girdi!, "files", { value: [], configurable: true });
+      await act(async () => { await (girdi as unknown as { onchange: () => Promise<void> }).onchange(); });
+      expect(s.varMi(t("ayarlar.yedekParola.parolaEtiketi"))).toBe(false);
+      await act(async () => { jest.advanceTimersByTime(500); });
+      await s.tikla(t("ayarlar.veriTasima.geriYukleEtiketi"));
+      const dosya = { name: "yedek.pemfbak", arrayBuffer: async () => new Uint8Array([80, 69, 77, 70]).buffer };
+      Object.defineProperty(girdi!, "files", { value: [dosya], configurable: true });
+      await act(async () => { void (girdi as unknown as { onchange: () => Promise<void> }).onchange(); });
+      await s.bosalt();
+      await s.tikla(t("ortak.vazgec"));
+      await s.bosalt(10);
+    } finally {
+      casus.mockRestore();
+      onay.mockRestore();
+    }
+    expect(onay).not.toHaveBeenCalled();
+    expect(istek("/data/import")).toHaveLength(0);
+    expect(s.etiket(t("ayarlar.veriTasima.geriYukleEtiketi")).getAttribute("aria-disabled")).not.toBe("true");
+  });
 });
 
 // ── Kopyalama ────────────────────────────────────────────────────────────────────────────────────────────────────────────────

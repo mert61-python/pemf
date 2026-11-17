@@ -935,6 +935,7 @@ export function AiProPanel({
 
   /** Hekim ONAYLADI → onayı işaretle, sonra mühürlenmiş parametrelerle tedaviyi başlat. */
   const approveAndStart = useCallback(async () => {
+    /* istanbul ignore if -- ULASILAMAZ: öneri yalnız kimliğiyle kurulur ve onay penceresi yalnız öneri varken çizilir */
     if (!proposal?.proposalId) return;
     // Y142: sürüş kapalıyken onay seans BAŞLATMAZ — /approve ve /start GÖNDERİLMEZ (düğme zaten pasif; klavye/otomasyon yolu).
     const kapali = oneriSurusuKapali(proposal, kediSurusAcik);
@@ -1035,6 +1036,7 @@ export function AiProPanel({
 
   /** Hekim REDDETTİ → gerekçeyle kaydet; tedavi BAŞLAMAZ. */
   const rejectProposal = useCallback(async (reason: string) => {
+    /* istanbul ignore if -- ULASILAMAZ: öneri yalnız kimliğiyle kurulur ve onay penceresi yalnız öneri varken çizilir */
     if (!proposal?.proposalId) return;
     if (onayAkisiRef.current) return;   // D5: çift dokunma — gerekçe iki kez gönderilmez (yukarıdaki not)
     onayAkisiRef.current = true;

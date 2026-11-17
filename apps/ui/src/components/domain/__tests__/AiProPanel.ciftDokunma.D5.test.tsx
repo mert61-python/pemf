@@ -10,6 +10,8 @@
 let mockDurum: Record<string, unknown> = { active: false, kediAiProSurusAcik: true };
 let onayCoz: ((v: unknown) => void) | null = null;
 let mockOnayYaniti: "bekle" | "red" = "bekle";
+/** KP-7 B: önerinin `surusAcik` alanı (undefined → alan YOK: eski backend). */
+let mockOneriSurusAcik: boolean | undefined = true;
 
 jest.mock("@/services/apiClient", () => ({
   apiGet: jest.fn(async () => mockDurum),
@@ -23,7 +25,7 @@ jest.mock("@/services/apiClient", () => ({
         },
         meta: {},
         expiresAt: 0,
-        surusAcik: true,
+        surusAcik: mockOneriSurusAcik,
       };
     }
     if (yol === "/ai/pro/approve") {
@@ -66,6 +68,8 @@ import React from "react";
 import { apiPost } from "@/services/apiClient";
 
 import { AiProPanel } from "../AiProPanel";
+import { AiSpecApprovalModal } from "../AiSpecApprovalModal";
+import i18n from "i18next";
 
 const cagrilar = (yol: string) => (apiPost as jest.Mock).mock.calls.filter((c) => c[0] === yol);
 
@@ -83,6 +87,7 @@ beforeEach(() => {
   (apiPost as jest.Mock).mockClear();
   mockDurum = { active: false, kediAiProSurusAcik: true };
   mockOnayYaniti = "bekle";
+  mockOneriSurusAcik = true;
   onayCoz = null;
 });
 
@@ -141,4 +146,30 @@ it("KARŞIT: onay geçmezse (yanıt yok) bekçi BIRAKILIR — hekim yeniden doku
   await act(async () => {});
   expect(cagrilar("/ai/pro/approve").length).toBe(2);
   expect(cagrilar("/ai/pro/start").length).toBe(0);
+});
+
+// ── KP-7 B (deyim ölçüsü) ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// Eşzamanlı bekçi: onay uçuştayken (aynı karede, düğme henüz pasifleşmeden) gelen "yeniden hesapla" isteği GİTMEZ — onaylanan öneri
+// onay sürerken değişmez. Pencerenin işleyicisi doğrudan çağrılır (yeniden çizimden önceki an).
+it("KP-7 B: onay uçuştayken 'yeniden hesapla' isteği GİTMEZ (eşzamanlı bekçi)", async () => {
+  const u = await onayPenceresi();
+  await act(async () => { fireEvent.press(u.getByLabelText("Öneriyi onayla ve seansı başlat")); });
+  expect(cagrilar("/ai/pro/approve").length).toBe(1);
+  const once = (apiPost as jest.Mock).mock.calls.length;
+  await act(async () => { await u.UNSAFE_getByType(AiSpecApprovalModal).props.onYenidenHesapla(0.05, "sabit"); });
+  expect((apiPost as jest.Mock).mock.calls.length).toBe(once);
+  await act(async () => { onayCoz?.({ status: "success" }); });
+});
+
+// Y142: öneri yanıtı `surusAcik` alanı TAŞIMIYORSA (eski backend) durum ucunun kedi sürüşü KAPALI bilgisi yine geçerli — kedi önerisiyle
+// sürüş başlatılamaz, pencere nedenini söyler.
+it("KP-7 B · Y142: öneride alan yok + durum ucu kedi sürüşü kapalı → pencere 'sürüş kapalı' der", async () => {
+  mockOneriSurusAcik = undefined;
+  mockDurum = { active: false, kediAiProSurusAcik: false };
+  const u = render(<AiProPanel patientName="Tekir" />);
+  await act(async () => {});
+  await act(async () => { fireEvent.press(u.getByLabelText(i18n.t("ai.pro.dugme.analizOneriEtiket"))); });
+  await ilerlet();
+  expect(cagrilar("/ai/pro/propose").length).toBe(1);
+  expect(u.UNSAFE_getByType(AiSpecApprovalModal).props.surusKapali).toBe(i18n.t("ai.pro.kediSurusKapali"));
 });

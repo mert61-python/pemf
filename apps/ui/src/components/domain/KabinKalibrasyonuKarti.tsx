@@ -131,6 +131,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   };
 
   const kareAl = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Kare Al düğmeleri aynı koşulla pasif; baslat kareAl'ı yalnız bu koşul yanlışken çağırır */
     if (kilitli || aliniyor) return;
     setMesaj(null);
     setDogrulama(null);
@@ -150,6 +151,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   };
 
   const baslat = (yeni: Kip) => {
+    /* istanbul ignore if -- ULASILAMAZ: Başlat düğmeleri aynı koşulla pasif (kilitli / kare alınıyor) */
     if (kilitli || aliniyor) return;
     setKip(yeni);
     setKare(null);
@@ -180,6 +182,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
     o.map((x) => (gecerliSayi(x.sol) && gecerliSayi(x.on) ? { solCm: sayi(x.sol), onCm: sayi(x.on) } : null));
 
   const konumEkle = () => {
+    /* istanbul ignore if -- ULASILAMAZ: Konum Ekle düğmesi eklenebilir değilken pasif; eklenebilir plakalı kareyi gerektirir */
     if (!kare || !eklenebilir) return;
     setKonumlar((p) => [...p, { kareKimligi: kare.kareKimligi, olcum }]);
     setKare(null);
@@ -205,12 +208,14 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   };
 
   const hesapla = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Hesapla düğmesi aynı koşulla pasif */
     if (konumlar.length < 2 || mesgul) return;
     const r = await istek<Sonuc>("/ai/pro/kalibrasyon/hesapla", govde());
     if (r) setSonuc(r);
   };
 
   const kaydet = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Kaydet düğmesi yalnız geçerli sonuçta çizilir ve kalan koşulla pasif */
     if (mesgul || !sonuc?.gecerli || (sonuc.lensUyarisi && !lensOnay)) return;
     const r = await istek<{ durum: Durum }>("/ai/pro/kalibrasyon/kaydet", govde());
     if (r?.durum) {
@@ -223,6 +228,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   };
 
   const dogrula = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Doğrula düğmesi aynı koşulla pasif; doğrulanabilir plakalı kareyi gerektirir */
     if (!kare || !dogrulanabilir || mesgul) return;
     const r = await istek<Dogrulama>("/ai/pro/kalibrasyon/dogrula", { kareKimligi: kare.kareKimligi, olcumler: olcuGovdesi(olcum) });
     if (r) {
@@ -232,6 +238,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   };
 
   const fantomKaydet = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Fantom Kaydet düğmesi bu koşulla (ve kilitliyken) pasif */
     if (mesgul || !gecerliSayi(fantom.kalinlik)) return;
     const boyVar = gecerliSayi(fantom.boy) && gecerliSayi(fantom.en);
     const r = await istek<{ durum: Durum }>("/ai/pro/kalibrasyon/fantom", {
@@ -247,6 +254,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   };
 
   const tabanUygula = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Taban Uygula düğmesi bu koşulla (ve kilitliyken) pasif */
     if (mesgul || !gecerliSayi(tabanUzaklik)) return;
     const r = await istek<{ durum: Durum }>("/ai/pro/kalibrasyon/taban", { lensUzaklikCm: sayi(tabanUzaklik) });
     if (r?.durum) {
@@ -256,6 +264,7 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
   };
 
   const devamEt = async () => {
+    /* istanbul ignore if -- ULASILAMAZ: Devam düğmesi aynı koşulla pasif */
     if (mesgul || kilitli) return;
     const r = await istek<{ durum: Durum; kaymaPx: number }>("/ai/pro/kalibrasyon/sahne-yenile", {}, KAMERA_TIMEOUT_MS);
     if (r?.durum) {

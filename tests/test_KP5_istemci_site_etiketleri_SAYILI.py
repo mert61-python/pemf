@@ -38,8 +38,15 @@ BEKLENEN: dict[str, list[tuple[str, str]]] = {
         ("if", "SAVUNMA"),
         ("next", "SAVUNMA"),  # KP-7 B: getClientInstanceId reddetmez
         ("next", "SAVUNMA"),  # KP-7 B: apiPost fırlatmaz (AI Pro durdurma)
+        ("if", "ULASILAMAZ"),  # KP-7 B2: approveAndStart — öneri yalnız kimliğiyle, pencere yalnız öneriyle
+        ("if", "ULASILAMAZ"),  # KP-7 B2: rejectProposal — aynı
     ],
+    # KP-7 B2 (madde 7): işleyici korumaları düğmenin disabled / çizim koşuluyla AYNI
+    "apps/ui/src/components/domain/KabinKalibrasyonuKarti.tsx": [("if", "ULASILAMAZ")] * 9,
+    "apps/ui/src/components/domain/KabinKamerasiKarti.tsx": [("if", "ULASILAMAZ")]
+    * 2,  # KP-7 B2: tara / seç kilitliyken pasif
     "apps/ui/src/components/domain/ObservationNotesModal.tsx": [("next", "ULASILAMAZ")],
+    "apps/ui/src/components/domain/OperatorSwitcher.tsx": [("if", "ULASILAMAZ")] * 3,  # KP-7 B2: PIN / ad korumaları
     "apps/ui/src/components/domain/SessionDetailModal.tsx": [("next", "SAVUNMA"), ("if", "ULASILAMAZ")],
     "apps/ui/src/components/domain/SurusKipiSecici.tsx": [("next", "SAVUNMA")],
     "apps/ui/src/components/ui/JetonRozeti.tsx": [("next", "SAVUNMA")],
@@ -60,6 +67,8 @@ BEKLENEN: dict[str, list[tuple[str, str]]] = {
     "apps/ui/src/screens/SettingsScreen.tsx": [("next", "SAVUNMA")],
     "apps/ui/src/services/apiClient.ts": [("next", "ULASILAMAZ")],
     "apps/ui/src/services/desktopSession.ts": [("next", "SAVUNMA")],
+    # KP-7 B2: yeniden bağlanma zinciri — çağıranlar aynı korumadan geçer / kapatma zamanlayıcıları temizler
+    "apps/ui/src/services/wsClient.ts": [("if", "ULASILAMAZ"), ("if", "ULASILAMAZ")],
     # KP-7 B (madde 7): setStoredDeviceId ×2 · discoverMdns reddetmez
     "apps/ui/src/services/discovery.ts": [("next", "SAVUNMA"), ("next", "SAVUNMA"), ("next", "SAVUNMA")],
     # KP-7 B (madde 7): kayitliHemen · hafif yoklama reddetmez
@@ -136,7 +145,9 @@ def test_KRITIK_istemci_site_etiketleri_GEREKCELI_ve_SAYILI():
 def test_etiket_toplami_ve_sinif_dagilimi_SABIT():
     toplam = Counter(e for v in BEKLENEN.values() for _, e in v)
     # KP-5 kapanış: 27 = ULASILAMAZ 13 + SAVUNMA 13 + PLATFORM 1 (sayı yalnız BİLİNÇLİ değişir)
-    assert toplam == Counter({"ULASILAMAZ": 13, "SAVUNMA": 21, "PLATFORM": 1}), toplam  # KP-7 B: SAVUNMA 13 → 21
+    assert toplam == Counter({"ULASILAMAZ": 31, "SAVUNMA": 21, "PLATFORM": 1}), (
+        toplam
+    )  # KP-7 B: SAVUNMA 13 → 21 · B2: ULASILAMAZ 13 → 31
     assert set(toplam) <= set(ETIKETLER)
 
 

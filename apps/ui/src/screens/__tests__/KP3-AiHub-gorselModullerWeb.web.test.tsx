@@ -70,6 +70,9 @@ import { AI_TIMEOUT_MS } from "@/services/apiClient";
 import {
   alanlar, blobMetni, ekraniCiz, etiketeBas, ileti, metneBas, postlar, Sahne, web, webKur, webSok,
 } from "./KP3_aiHubWebAparati";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import { saatiIlerlet } from "./KP3_aiHubWebAparati";
 
 const T = (k: string, o?: object): string => (i18n.t as unknown as (k: string, o?: object) => string)(k, o);
 
@@ -218,5 +221,37 @@ describe.each(MODULLER.filter((m) => m.kabinli))("$uc · kabin kamerası (backen
     await metneBas(s, T("ai.gorsel.fotografCek"));
     expect(ileti()).toBe(EYLEM);
     expect(postlar(m.uc)).toHaveLength(0);
+  });
+});
+
+// ── KP-7 B (deyim ölçüsü): Böbrek BT · Böbrek Patolojisi · Kedi Organ — web'de DOSYA NESNESİ YOKKEN (eski seçici: yalnız base64)
+// görüntü JPEG Blob olarak gider (ev sahibi ekranındaki KP-3 "eski seçici" yöntemi: çekim ANINDA platform yerel dal, ardından web).
+const ESKI_SECICI = new Set(["/ai/vision/kidney_ct", "/ai/vision/histopath", "/ai/vision/cat_organ"]);
+describe.each(MODULLER.filter((m) => ESKI_SECICI.has(m.uc)))("KP-7 B · $uc eski seçici (base64)", (m) => {
+  it("dosya nesnesi yok, base64 var → 'image/jpeg' Blob AYNI baytlarla gider", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const RNW = require("react-native");
+    ozel = (y, _g, yon) => (yon === "POST" && y === m.uc ? [200, { status: "success" }] : undefined);
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockReset().mockResolvedValue({ canceled: false, assets: [{ uri: "file:///eski.jpg" }] });
+    (ImageManipulator.manipulateAsync as jest.Mock).mockReset().mockResolvedValue({ uri: "file:///eski-k.jpg", base64: btoa("JPEGBAYT") });
+    await moduluAc(m);
+    const dugme = Array.from(document.querySelectorAll("*")).filter(
+      (e) => (e.textContent || "").trim() === T("ai.ortak.galeridenSec") && !e.children.length,
+    ).pop() as HTMLElement;
+    saatiIlerlet();
+    RNW.Platform.OS = "ios";
+    try {
+      dugme.click();
+    } finally {
+      RNW.Platform.OS = "web";
+    }
+    await s.bosalt(8);
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledTimes(1); // ARA: eski seçici dalı gerçekten koştu
+    await metneBas(s, T(m.baslat));
+    const giden = postlar(m.uc);
+    expect(giden).toHaveLength(1);
+    const f = alanlar(giden[0].govde).file as File;
+    expect(f.type).toBe("image/jpeg");
+    expect(await blobMetni(f)).toBe("JPEGBAYT");
   });
 });
