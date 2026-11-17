@@ -70,6 +70,10 @@ _durum: dict = {
     # "client geri alınmalı" sinyali (KESİN uyumsuz + STM bağlı + ileri gidilemiyor). Geri almayı LAUNCHER yapar.
     "uyum": None,
     "istemciGeriAlinmali": False,
+    # YH B2 · S-YLI.4 (yalnız-ek): bu karar STM 20 sn'de bağlanmadığı için yapılan YEDEK ÖLÇÜM mü (`backend_service.
+    # DONANIM_KARAR_YEDEK_S`)? `True` iken gerçek karar ilk el sıkışmada GELECEK — launcher bunu son karar saymaz, bütçe içinde
+    # bekler (`launcher/core/src/backend.rs::firmware_karari_govdeden`). Gerçek karar her zaman `False` yazar.
+    "yedekOlcum": False,
     # LN L1 · Y82 (yalnız-ek): açılışta bulunan "yarım yakma" kaydının akıbeti — None (kayıt yok) ya da
     # {"sonuc": "tamamlanmis" | "geri_donuldu" | "elle" | "basarisiz", "ayrinti": "…"}.
     "yarimYakma": None,
@@ -345,11 +349,14 @@ def acilis_denetimi(
     stm_bagli: bool,
     uygula: bool = True,
     banner_kaynagi=None,
+    yedek_olcum: bool = False,
 ) -> dict:
     """Uyumu ölç, plan yap, gerekirse uygula. Her yol `durum()`a yazar.
 
     ⚠️ HİÇBİR DALI SESSİZ DEĞİL: internet yok / STM bağlı değil / kural yok / uyumlu —
     hepsi gerekçesiyle kaydedilir. "Atlandı" ile "yapıldı" ayırt edilebilmeli.
+    YH B2 · S-YLI.4: `yedek_olcum` = STM 20 sn'de bağlanmadı, bu SON karar DEĞİL (gerçek karar ilk el sıkışmada) — durum
+    `yedekOlcum` ile launcher'a söyler; karar dalları AYNEN.
     """
     # LN L1 · Y82: önceki süreçte YARIDA KALAN yakma (kayıt duruyor) — ağdan ÖNCE, planlamadan ÖNCE ele alınır.
     _durum_yaz(yarimYakma=_yarim_yakmayi_ele_al(firmware_surum, stm_bagli, uygula, banner_kaynagi))
@@ -374,6 +381,7 @@ def acilis_denetimi(
             hata="",
             uyum=None,
             istemciGeriAlinmali=False,
+            yedekOlcum=bool(yedek_olcum),
         )
 
     girdi = _stm32_girdisi(manifest)
@@ -429,6 +437,7 @@ def acilis_denetimi(
         hata="",
         uyum=uyum,
         istemciGeriAlinmali=istemci_geri,
+        yedekOlcum=bool(yedek_olcum),
     )
     if not uygula or plan.eylem != su.FIRMWARE_GUNCELLE:
         logger.info("donanım güncellemesi: %s — %s", plan.eylem, gerekce)

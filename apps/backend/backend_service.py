@@ -985,6 +985,8 @@ def _donanim_guncellemesi_safe(core, logger: logging.Logger, *, yalniz_olcum: bo
             stm_bagli=stm_bagli,
             uygula=(not yalniz_olcum) and os.environ.get("PEMF_FW_AUTO_UPDATE", "0").strip() == "1",
             banner_kaynagi=banner_kaynagi,
+            # YH B2 · S-YLI.4: yedek ölçüm SON karar değil — `/api/health` `yedekOlcum: true`; launcher geç el sıkışmadaki kararı bekler.
+            yedek_olcum=yalniz_olcum,
         )
         logger.info(
             "Donanım güncellemesi: %s — %s (banner sürümü %r)", durum.get("eylem"), durum.get("gerekce"), ham_surum

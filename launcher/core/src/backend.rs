@@ -189,7 +189,8 @@ pub enum FirmwareKarari {
     GeriAl,
     /// Açılış kararı verildi (`kontrol_edildi: true`), geri alma gerekmiyor.
     Devam,
-    /// Alan var ama açılış kararı henüz verilmedi (STM el sıkışması / uyum varlığı bekleniyor — backend D1.121).
+    /// Alan var ama açılış kararı henüz verilmedi (STM el sıkışması / uyum varlığı bekleniyor — backend D1.121) ya da yalnız
+    /// STM bağlanmadan yapılan YEDEK ÖLÇÜM var (`yedekOlcum: true`, S-YLI.4 — gerçek karar ilk el sıkışmada).
     Bekliyor,
     /// Alan yok / `null` / nesne değil / gövde bozuk → geri alma sebebi DEĞİL.
     Bilinmiyor,
@@ -207,7 +208,12 @@ pub fn firmware_karari_govdeden(govde: &str) -> FirmwareKarari {
     if fw.get("istemciGeriAlinmali") == Some(&serde_json::Value::Bool(true)) {
         return FirmwareKarari::GeriAl;
     }
-    if fw.get("kontrol_edildi") == Some(&serde_json::Value::Bool(true)) {
+    // YH B2 · S-YLI.4: STM 20 sn'de bağlanmadığı için yapılan YEDEK ÖLÇÜM (`yedekOlcum` JSON `true`) son karar DEĞİL — gerçek karar
+    // ilk el sıkışmada gelir (geç takılan kart `istemciGeriAlinmali: true` getirebilir) → bütçe içinde beklenir. Alan yok (eski
+    // backend) / `false` / dizge → eskisi gibi `Devam`.
+    if fw.get("kontrol_edildi") == Some(&serde_json::Value::Bool(true))
+        && fw.get("yedekOlcum") != Some(&serde_json::Value::Bool(true))
+    {
         FirmwareKarari::Devam
     } else {
         FirmwareKarari::Bekliyor
@@ -215,8 +221,9 @@ pub fn firmware_karari_govdeden(govde: &str) -> FirmwareKarari {
 }
 
 /// Güncelleme sağlık kapısında firmware kararını BEKLE (bütçeli). Backend açılış kararını STM el sıkışmasından SONRA verir
-/// (D1.121; STM 20 sn'de bağlanmazsa yalnız ölçüm) → sağlık 200 olduğu anda karar çoğu zaman henüz yoktur. `Bekliyor` sürdükçe
-/// (ya da yoklama yanıtsızken) `aralik` ile yeniden yoklanır; alan yoksa / `null` ise HEMEN, bütçe dolarsa `Bilinmiyor` (geri alma YOK —
+/// (D1.121; STM 20 sn'de bağlanmazsa yalnız ölçüm — S-YLI.4'ten beri `yedekOlcum: true` ile, son karar SAYILMAZ: kart bütçe
+/// içinde geç takılırsa gerçek karar alınır, hiç takılmazsa bütçe sonunda `Bilinmiyor` → onay) → sağlık 200 olduğu anda karar
+/// çoğu zaman henüz yoktur. `Bekliyor` sürdükçe (ya da yoklama yanıtsızken) `aralik` ile yeniden yoklanır; alan yoksa / `null` ise HEMEN, bütçe dolarsa `Bilinmiyor` (geri alma YOK —
 /// fail-safe yön: bilinmeyene dayanarak çalışan bir güncelleme geri alınmaz; eski backend'ler alanı hiç yayınlamaz).
 pub fn firmware_kararini_bekle(port: u16, azami: Duration, aralik: Duration) -> FirmwareKarari {
     let son = Instant::now() + azami;
@@ -234,6 +241,7 @@ pub fn firmware_kararini_bekle(port: u16, azami: Duration, aralik: Duration) -> 
 }
 
 /// Firmware kararı bekleme bütçesi: backend yedek ölçümü 20 sn (`DONANIM_KARAR_YEDEK_S`) + uyum varlığı çekimi (≤15 sn) + pay.
+/// S-YLI.4: yedek ölçümden sonra kalan pay, geç takılan kartın el sıkışma kararını bekleme penceresidir (bütçe DEĞİŞMEDİ).
 pub const FIRMWARE_KARAR_BUTCESI: Duration = Duration::from_secs(45);
 
 /// `<install_root>/backend.port` içeriğini GÜVENLE oku. Rakam-dışı / aralık-dışı → `None`.
@@ -1899,6 +1907,59 @@ mod tests {
             "karar hiç gelmezse geri alma YOK (bilinmiyor)"
         );
         assert!(t1.elapsed() < Duration::from_secs(4), "bütçe aşıldı: {:?}", t1.elapsed());
+    }
+
+    /// YH B2 · S-YLI.4 (Tezgâh-2 13 Kasım #5): STM 20 sn'de bağlanmazsa backend YEDEK ÖLÇÜM yazar (`kontrol_edildi: true`,
+    /// `yedekOlcum: true` — gerçek karar ilk el sıkışmada GELECEK). Bekleyici bunu SON karar saymaz (`Bekliyor`); alan yok (eski
+    /// backend) / `false` / JSON `true` dışı değer → eskisi gibi `Devam`. Açık geri alma sinyali her zaman önce gelir.
+    #[test]
+    fn KRITIK_SYLI4_yedek_olcum_SON_KARAR_sayilmaz() {
+        use FirmwareKarari::*;
+        let k = |g: &str| firmware_karari_govdeden(g);
+        assert_eq!(
+            k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":null,"istemciGeriAlinmali":false,"yedekOlcum":true}}"#),
+            Bekliyor,
+            "yedek ölçüm (STM bağlı değil) son karar sayıldı — geç el sıkışmadaki geri alma kararı kaçırılır"
+        );
+        assert_eq!(
+            k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":true,"istemciGeriAlinmali":false,"yedekOlcum":false}}"#),
+            Devam
+        );
+        for (ad, g) in [
+            ("alan yok (eski backend)", r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":null,"istemciGeriAlinmali":false}}"#),
+            ("dizge true", r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"istemciGeriAlinmali":false,"yedekOlcum":"true"}}"#),
+            ("null", r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"istemciGeriAlinmali":false,"yedekOlcum":null}}"#),
+        ] {
+            assert_eq!(k(g), Devam, "{ad}: eski sözleşme bozuldu");
+        }
+        assert_eq!(
+            k(r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":false,"istemciGeriAlinmali":true,"yedekOlcum":true}}"#),
+            GeriAl,
+            "açık geri alma sinyali yedek işaretiyle gölgelendi"
+        );
+    }
+
+    /// YH B2 · S-YLI.4: yedek ölçümden SONRA kart takılır → backend gerçek kararı yazar; bekleyici yedeği geçip o kararı ALIR.
+    /// Kart bütçe içinde hiç bağlanmazsa `Bilinmiyor` (geri alma YOK — eski "onayla" sonucu; yalnız bütçe sonunda).
+    #[test]
+    fn KRITIK_SYLI4_bekleyici_yedekten_SONRA_gec_el_sikisma_kararini_ALIR() {
+        let bek = r#"{"firmwareGuncelleme":{"kontrol_edildi":false,"istemciGeriAlinmali":false,"yedekOlcum":false}}"#;
+        let yedek = r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":null,"istemciGeriAlinmali":false,"yedekOlcum":true}}"#;
+        let geri = r#"{"firmwareGuncelleme":{"kontrol_edildi":true,"uyum":false,"istemciGeriAlinmali":true,"yedekOlcum":false}}"#;
+        let (port, rx) =
+            sahte_backend(vec![Some((200, bek)), Some((200, yedek)), Some((200, yedek)), Some((200, geri))]);
+        let k = firmware_kararini_bekle(port, Duration::from_secs(10), Duration::from_millis(50));
+        assert_eq!(k, FirmwareKarari::GeriAl, "yedek ölçümde bekleme bitti — geç el sıkışmadaki geri alma kaçırıldı");
+        assert_eq!(istekler(&rx).len(), 4);
+
+        let (hep_yedek, _rx2) = sahte_backend(vec![Some((200, yedek)); 50]);
+        let t0 = Instant::now();
+        assert_eq!(
+            firmware_kararini_bekle(hep_yedek, Duration::from_millis(400), Duration::from_millis(50)),
+            FirmwareKarari::Bilinmiyor,
+            "kart hiç bağlanmazsa geri alma YOK (bilinmiyor → onay)"
+        );
+        assert!(t0.elapsed() < Duration::from_secs(4), "bütçe aşıldı: {:?}", t0.elapsed());
     }
 
     /// LN L3 · Y82: yakıcı (`STM32_Programmer_CLI`, backend'in çocuğu) kapanışta ÖLDÜRÜLMEZ — backend AĞAÇSIZ (`/T` yok), yakıcı
