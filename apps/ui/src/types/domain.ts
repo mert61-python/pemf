@@ -66,6 +66,8 @@ export interface CoilStatus {
   alanDogrulanamadi?: boolean;
   /** TD5: akım ölçümü güvenilmez (ADC tavanı / aralık dışı) — `currentA` GÖSTERİLMEZ (backend yazmaz). */
   akimGuvenilmez?: boolean;
+  /** Y285 · ODD B-6: MLX alan sensörü bu kanalda DÜŞTÜ (bekçi `B=` göremedi) — seans / sürüş varken bant görünür. */
+  alanKayip?: boolean;
   /**
    * Kartın ETKİN olarak uyguladığı sürüş kipi (ACK `K=` alanı). `true` = unipolar.
    *

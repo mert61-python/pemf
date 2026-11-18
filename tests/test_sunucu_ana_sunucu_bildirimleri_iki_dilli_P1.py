@@ -95,10 +95,15 @@ BILDIRIMLER = [
     (
         "bildirim.mlxDustu",
         {"coil": 6},
-        "⚠️ Bobin 6 manyetik alan sensörü veri göndermiyor — kart sensörü yeniden arıyor. Düzelmezse sensör kablosunu çıkarıp yeniden "
-        "takın ya da kartın gücünü kesip yeniden bağlayın.",
+        # ODD B-6 (ODK-B 18-11): "Bobin 6 manyetik alan sensörü" → "Alan sensörü (MLX, kartta kanal 6)" (TR DEĞİŞTİ — bulgunun kendisi)
+        "⚠️ Alan sensörü (MLX, kartta kanal 6) veri göndermiyor — kart sensörü yeniden arıyor. Düzelmezse sensör kablosunu çıkarıp "
+        "yeniden takın ya da kartın gücünü kesip yeniden bağlayın.",
     ),
-    ("bildirim.mlxGeriGeldi", {"coil": 6}, "Bobin 6 manyetik alan sensörü yeniden bağlandı — alan ölçümü sürüyor."),
+    (
+        "bildirim.mlxGeriGeldi",
+        {"coil": 6},
+        "Alan sensörü (MLX, kartta kanal 6) yeniden bağlandı — alan ölçümü sürüyor.",
+    ),
     (
         "bildirim.alanDogrulanamadi",
         {"coil": 2},

@@ -1,4 +1,8 @@
 {
+  "alanSensoru": {
+    "aciklama": "Kartta kanal {{kanal}}. Bobin alanı şu an ölçülemiyor; kart sensörü yeniden arıyor. Düzelmezse sensör kablosunu çıkarıp yeniden takın ya da seansı durdurup kartın gücünü kesip yeniden bağlayın.",
+    "baslik": "Alan sensörü (MLX) veri göndermiyor"
+  },
   "kayitDb": {
     "aciklama": "{{sebep}}\nACİL DURDUR ve bobin durdurma çalışır.",
     "baslik": "Tıbbi kayıt veritabanı hazır değil — yeni seans BAŞLATILAMAZ",

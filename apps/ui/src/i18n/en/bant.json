@@ -1,4 +1,8 @@
 {
+  "alanSensoru": {
+    "aciklama": "Board channel {{kanal}}. The coil field cannot be measured right now; the board is searching for the sensor again. If it does not recover, unplug and reconnect the sensor cable, or stop the session, power the board off and connect it again.",
+    "baslik": "Field sensor (MLX) is not sending data"
+  },
   "kayitDb": {
     "aciklama": "{{sebep}}\nEMERGENCY STOP and coil stopping still work.",
     "baslik": "The medical record database is not ready — a new session CANNOT BE STARTED",

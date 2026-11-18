@@ -27,6 +27,7 @@ import { MobileUpdateBanner } from "@/components/domain/MobileUpdateBanner";
 import { RecoveryCodeBanner } from "@/components/domain/RecoveryCodeBanner";
 import { SurumFarkiBanner } from "@/components/domain/SurumFarkiBanner";
 import { KayitDbBandi } from "@/components/domain/KayitDbBandi";
+import { AlanSensoruBandi } from "@/components/domain/AlanSensoruBandi";
 import { StmUyumBandi } from "@/components/domain/StmUyumBandi";
 import { VeriKokuAgBandi } from "@/components/domain/VeriKokuAgBandi";
 import { EstopMandalBandi } from "@/components/ui/EstopMandalBandi";
@@ -472,6 +473,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
         {/* D1.37: kayıt DB'si açılamadıysa (göç bekliyor / bozuk) seanstan ÖNCE söyle — 503'ü hasta masadayken
             öğrenmek yerine. Hiçbir şeyi kapılamaz; ACİL DURDUR çalışır. */}
         <KayitDbBandi />
+        {/* ODD B-6: seans / sürüş varken MLX alan sensörü düştüyse her ekranda görünür (zil listesine sessizce düşüyordu). */}
+        <AlanSensoruBandi />
         {/* TD1 (K1 / K2): cihaz kartının yazılımı uyumsuz / doğrulanamadı — her ekranda, kalıcı; hiçbir şeyi kapılamaz. */}
         <StmUyumBandi />
         {/* D1.81 · Y4: acil durdurma MANDALLIYKEN her ekranda neden + "Sıfırla" (sıfırlama BAŞLATMAZ). */}

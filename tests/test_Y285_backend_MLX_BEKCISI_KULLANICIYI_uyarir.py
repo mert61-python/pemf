@@ -198,10 +198,15 @@ def test_KRITIK_dusunce_KULLANICIYA_eylem_soyleyen_IKI_DILLI_uyari_TEK_sefer(api
     a._handle_backend_event(_Olay({"coil_id": 6, "alan_kayip": True}))
     a._handle_backend_event(_Olay({"coil_id": 6, "alan_kayip": True}))
     assert a._live_state["coils"][5]["alanKayip"] is True
-    uyari = [(m, s, ms) for m, s, ms in bildirim if "manyetik alan sensörü veri göndermiyor" in m]
+    # ODD B-6 (ODK-B 18-11): metin "alan sensörü (MLX)" — "Bobin 6 manyetik alan sensörü" bobine ait bir parça gibi okunuyordu.
+    uyari = [(m, s, ms) for m, s, ms in bildirim if "Alan sensörü (MLX, kartta kanal 6) veri göndermiyor" in m]
     assert len(uyari) == 1 and uyari[0][1] == "warning", bildirim
     m, _s, ms = uyari[0]
-    assert m.startswith("⚠️ Bobin 6 ") and "kablosunu çıkarıp yeniden takın" in m and "kartın gücünü kesip" in m, m
+    assert (
+        m.startswith("⚠️ Alan sensörü (MLX, kartta kanal 6) ")
+        and "kablosunu çıkarıp yeniden takın" in m
+        and "kartın gücünü kesip" in m
+    ), m
     assert "unplug and reconnect the sensor cable" in ms.get("en", "") and "power the board off" in ms["en"], ms
     assert any(x.get("type") == "coil_status" and x["data"].get("alanKayip") for x in yayin), yayin
 
@@ -212,7 +217,7 @@ def test_KRITIK_B_GELINCE_bayrak_iner_YENIDEN_BAGLANDI_bildirilir(api, yalin):
     a._handle_backend_event(_Olay(yalin._parse_stm_tele(TELE_B)))
     assert a._live_state["coils"][5]["alanKayip"] is False
     geri = [(m, s) for m, s, _ms in bildirim if "yeniden bağlandı" in m]
-    assert geri == [("Bobin 6 manyetik alan sensörü yeniden bağlandı — alan ölçümü sürüyor.", "info")], bildirim
+    assert geri == [("Alan sensörü (MLX, kartta kanal 6) yeniden bağlandı — alan ölçümü sürüyor.", "info")], bildirim
     a._handle_backend_event(_Olay(yalin._parse_stm_tele(TELE_B)))
     assert len([m for m, _s, _ms in bildirim if "yeniden bağlandı" in m]) == 1, (
         "her B= satırında 'yeniden bağlandı' dendi"
@@ -222,4 +227,4 @@ def test_KRITIK_B_GELINCE_bayrak_iner_YENIDEN_BAGLANDI_bildirilir(api, yalin):
 def test_KARSIT_hic_dusmemis_sensorde_B_satiri_BILDIRIM_uretmez(api, yalin):
     a, _yayin, bildirim = api
     a._handle_backend_event(_Olay(yalin._parse_stm_tele(TELE_B)))
-    assert not [m for m, _s, _ms in bildirim if "manyetik alan sensörü" in m], bildirim
+    assert not [m for m, _s, _ms in bildirim if "Alan sensörü (MLX" in m], bildirim

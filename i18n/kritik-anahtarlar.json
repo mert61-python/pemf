@@ -3335,6 +3335,20 @@
    "aciklama": "bobin sıcaklığı yüksek (erişilebilirlik etiketi)"
   },
   {
+   "yuzey": "arayuz",
+   "anahtar": "bant.alanSensoru.baslik",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AlanSensoruBandi.tsx",
+   "aciklama": "seans / sürüş varken MLX alan sensörü düştü bandı (ODD B-6)"
+  },
+  {
+   "yuzey": "arayuz",
+   "anahtar": "bant.alanSensoru.aciklama",
+   "tur": "bobin",
+   "kaynak": "apps/ui/src/components/domain/AlanSensoruBandi.tsx",
+   "aciklama": "alan sensörü düştü: kanal + eylem (ODD B-6)"
+  },
+  {
    "yuzey": "sunucu",
    "anahtar": "seans.durum.emergency_stopped",
    "tur": "estop",
