@@ -11,11 +11,11 @@
  ],
  "yerel_alan": "M (3×7, CST ekseni, kalibrasyonlu) + M / doz",
  "cikti": "doz başına genlik a / D",
- "sinir": 11.771132597984836,
- "n_egitim": 19845,
- "kalibrasyon_kimligi": "e6f0971a52f6d6a0@76Hz",
+ "sinir": 13.103237228042476,
+ "n_egitim": 19817,
+ "kalibrasyon_kimligi": "5a248f7d6cc34afb@76Hz",
  "f16": true,
  "frek_hz": 76.0,
- "kaynak": "DENETIM/odak/model/a4_disa_aktar.py · veri veri_k12_td_f76 · A3 kazananı KNN k=1 + yerel alan",
- "onnx_sklearn_esit_oran": 1.0
+ "kaynak": "DENETIM/odak/model/a4_disa_aktar.py · veri veri_odm_td_f76 · A3 kazananı KNN k=1 + yerel alan",
+ "onnx_sklearn_esit_oran": 0.999
 }
