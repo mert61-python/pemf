@@ -14,7 +14,7 @@
  *    süresi dolunca kendiliğinden geçersizleşir. Sessizce "reddedildi" saymak yanıltıcı olurdu.
  *  * Duty'ler yüzde olarak gösterilir (model 0-1 üretir) — hekim klinik birimde okur.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { ScrollableModalCard } from "@/components/ui/ScrollableModalCard";
 import { IconButton } from "@/components/ui/IconButton";
@@ -136,6 +136,11 @@ export function AiSpecApprovalModal({
   const { t } = useTranslation();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
+  /** ODD B-2: ODAK özetindeki doz / kip / kuyu seçimi bu önerinin planından farklı → onay PASİF (onaylanan = ekranda görünen). */
+  const [kirli, setKirli] = useState(false);
+  useEffect(() => {
+    setKirli(false);
+  }, [specs]);
 
   if (!specs) return null;
 
@@ -200,6 +205,9 @@ export function AiSpecApprovalModal({
             {`⚠️ ${hata}`}
           </Text>
         ) : null}
+        {kirli && !surusKapali ? (
+          <Text testID="ai-onay-kirli" style={s.hata}>{t("ai.pro.onay.kirliOnayPasif")}</Text>
+        ) : null}
         {rejecting ? (
           <View style={s.rejectBox}>
             <Text style={s.rejectLabel}>{t("ai.pro.onay.redGerekcesiKayit")}</Text>
@@ -253,11 +261,13 @@ export function AiSpecApprovalModal({
               </TouchableOpacity>
             ) : (
             <TouchableOpacity
-              style={[s.btn, s.btnPrimary, busy && s.btnDisabled]}
+              style={[s.btn, s.btnPrimary, (busy || kirli) && s.btnDisabled]}
               onPress={onApprove}
-              disabled={!!busy}
+              disabled={!!busy || kirli}
               accessibilityRole="button"
+              accessibilityState={{ disabled: !!busy || kirli }}
               accessibilityLabel={t("ai.pro.onay.onaylaEtiket")}
+              testID="ai-onay-onayla"
             >
               <CheckCircle2 size={rs(16)} color="#04121F" />
               <Text style={s.btnPrimaryText}>{busy ? t("ai.pro.onay.baslatiliyor") : t("ai.pro.onay.onaylaBaslat")}</Text>
@@ -305,7 +315,7 @@ export function AiSpecApprovalModal({
           {/* ODAK (istem 45): faz / duty ODAK planından → doz ± konum payı, tavan, çevre / oran, petride 24 kuyu haritası + doz seçici.
               Eski "hedefte · çevrede · oran" satırı (hoca modelinin birimsiz E'si) ODAK önerisinde GÖSTERİLMEZ. */}
           {specs.odak ? (
-            <OdakOzeti odak={specs.odak} busy={busy} onYenidenHesapla={onYenidenHesapla} />
+            <OdakOzeti odak={specs.odak} busy={busy} onYenidenHesapla={onYenidenHesapla} onKirli={setKirli} />
           ) : null}
 
           {/* GÖRELİ ALAN: model birimsiz bir göreli değer üretir; "V/m" yazmak uydurma olurdu.
@@ -375,7 +385,10 @@ export function AiSpecApprovalModal({
 
           {/* [S5 adım 10] İç ScrollView → View: iç içe kaydırıcı Android'de dokunuşu çalıyordu.
               Tablo artık tek kaydırıcının (kart gövdesi) parçası. */}
-          <View style={s.tableWrap}>
+          {kirli ? (
+            <Text testID="ai-onay-tablo-eski" style={s.uyari}>{t("ai.pro.onay.odak.eskiPlan")}</Text>
+          ) : null}
+          <View style={[s.tableWrap, kirli && s.eski]} testID="ai-onay-tablo">
             <View style={[s.tr, s.trHead]}>
               <Text style={[s.th, s.cCoil]}>{t("ai.pro.tablo.bobin")}</Text>
               <Text style={[s.th, s.cDuty]}>{t("kontrol.bobin.duty")}</Text>
@@ -428,6 +441,7 @@ const s = StyleSheet.create({
   xai: { color: colors.textMuted, fontSize: rf(11), marginTop: 2 },
   // maxHeight kaldırıldı: tablo artık kart gövdesiyle birlikte kayıyor (iç içe kaydırıcı yok).
   tableWrap: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  eski: { opacity: 0.4 }, // ODD B-2: önceki plan (yeniden hesaplanmadı)
   tr: { flexDirection: "row", paddingVertical: rs(6), paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   trHead: { backgroundColor: colors.bgAlt },
   th: { color: colors.textSubtle, fontSize: rf(11), fontWeight: "700" },

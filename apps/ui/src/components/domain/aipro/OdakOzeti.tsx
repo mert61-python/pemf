@@ -7,8 +7,12 @@
  *  - PETRİDE ZORUNLU 24 kuyu KÜÇÜK HARİTASI: plakanın KAMERADAKİ yönüyle (kuyular karedeki piksel konumlarına yerleşir), seçili kuyu
  *    işaretli, her kuyuda mT + renk ölçeği + "komşu kuyular da alan alır" (renk + sayı birlikte — renk körlüğü);
  *  - DOZ SEÇİCİ (üst sınır = tavan) + petri kipi (TÜM PETRİ / KUYUCUK) → "Yeniden hesapla" yeni öneri ister (mühür yeni öneride).
+ *  - ODD B-2 (ODK-B keşfi 18-11): doz / kip / kuyu değişip yeniden hesaplanmadıysa (KİRLİ) harita "önceki plan" olarak soluk, uyarı
+ *    görünür ve üst bileşen (`onKirli`) "Onayla ve Başlat"ı PASİF yapar — onaylanan = ekranda görünen. Tavan YALNIZ hesaplandığı kipte
+ *    geçerlidir: kip değişince "en çok" sayısı gösterilmez ("Yeniden hesapla'dan sonra"), doğrulama yalnız > 0 (sunucu tavanı denetler).
+ *    Yeni öneri gelince (yeni `odak`) yerel seçim onunla eşitlenir.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
@@ -83,12 +87,15 @@ export function KuyuHaritasi({
   kuyular,
   secilen,
   onSec,
+  eski = false,
 }: {
   kuyular: OdakKuyu[];
   /** AP-B3: kullanıcının haritada seçtiği kuyu (yoksa mühürdeki `secili`). */
   secilen?: string;
   /** AP-B3: verilirse DOLU kuyular dokunulabilir (boş kuyu hedef OLAMAZ — ODK11); seçim "Yeniden hesapla" ile yeni öneri ister. */
   onSec?: (etiket: string) => void;
+  /** ODD B-2: seçim değişti, harita hâlâ ÖNCEKİ planı gösteriyor → soluk + "önceki plan" etiketi. */
+  eski?: boolean;
 }) {
   const { t } = useTranslation();
   const degerler = kuyular.map((k) => k.mT).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
@@ -99,7 +106,8 @@ export function KuyuHaritasi({
   return (
     <View testID="odak-kuyu-haritasi" accessibilityLabel={t("ai.pro.onay.odak.haritaBaslik")}>
       <Text style={s.haritaBaslik}>{t("ai.pro.onay.odak.haritaBaslik")}</Text>
-      <View style={[s.kutu, { width: rs(KUTU_G), height: rs(KUTU_Y) }]}>
+      {eski ? <Text testID="odak-harita-eski" style={s.uyari}>{t("ai.pro.onay.odak.eskiPlan")}</Text> : null}
+      <View style={[s.kutu, { width: rs(KUTU_G), height: rs(KUTU_Y) }, eski && s.eski]}>
         {kuyular.map((k, i) => {
           const isaretli = secilen ? k.etiket === secilen : !!k.secili;
           const etiket = isaretli
@@ -154,12 +162,14 @@ export function KuyuHaritasi({
 }
 
 export function OdakOzeti({
-  odak, busy, onYenidenHesapla,
+  odak, busy, onYenidenHesapla, onKirli,
 }: {
   odak: OdakOzet;
   busy?: boolean;
   /** Doz / petri kipi / (AP-B3) haritadan seçilen kuyu değişince yeni öneri iste (yeni mühür). Verilmezse seçici gösterilmez. */
   onYenidenHesapla?: (doz: number, kip: string, kuyu?: string) => void;
+  /** ODD B-2: ekrandaki seçim ile önerinin (mühürün) planı ayrıştı mı — üst bileşen onayı buna göre PASİF yapar. */
+  onKirli?: (kirli: boolean) => void;
 }) {
   const { t } = useTranslation();
   const [dozMetni, setDozMetni] = useState(sayi(odak.doz_mT));
@@ -167,10 +177,23 @@ export function OdakOzeti({
   /** AP-B3: mühürdeki kuyu (öneri) ve kullanıcının haritada seçtiği kuyu. */
   const muhurKuyusu = (odak.kuyular || []).find((k) => k.secili)?.etiket || "";
   const [secilenKuyu, setSecilenKuyu] = useState(muhurKuyusu);
+  // ODD B-2: yeni öneri (yeni plan) gelince yerel seçim onunla eşitlenir — eski seçim yeni planı "kirli" göstermesin.
+  useEffect(() => {
+    setDozMetni(sayi(odak.doz_mT));
+    setKip(odak.kip);
+    setSecilenKuyu((odak.kuyular || []).find((k) => k.secili)?.etiket || "");
+  }, [odak]);
   const kuyuDegisti = !!secilenKuyu && secilenKuyu !== muhurKuyusu;
-  const tavan = typeof odak.tavan_mT === "number" ? odak.tavan_mT : NaN;
+  // ODD B-2: tavan YALNIZ hesaplandığı kipte geçerli (TÜM PETRİ ↔ KUYUCUK tavanı farklı) — kip değişince sayı söylenmez.
+  const tavanGecerli = kip === odak.kip && typeof odak.tavan_mT === "number";
+  const tavan = tavanGecerli ? (odak.tavan_mT as number) : NaN;
   const doz = dozCoz(dozMetni);
   const dozGecerli = Number.isFinite(doz) && doz > 0 && (!Number.isFinite(tavan) || doz <= tavan);
+  // ODD B-2: ekrandaki seçim önerinin planından farklı (ya da doz okunamıyor) → KİRLİ: harita / tablo önceki plan, onay pasif.
+  const kirli = !(Number.isFinite(doz) && Math.abs(doz - odak.doz_mT) < 0.005) || kip !== odak.kip || kuyuDegisti;
+  useEffect(() => {
+    onKirli?.(kirli);
+  }, [kirli, onKirli]);
   const petri = (PETRI_KIPLERI as readonly string[]).includes(odak.kip);
   const duzgunluk = odak.kip === "TUM_PETRI" || odak.kip === "KEDI_TV";
 
@@ -195,6 +218,7 @@ export function OdakOzeti({
       {Array.isArray(odak.kuyular) && odak.kuyular.length ? (
         <KuyuHaritasi
           kuyular={odak.kuyular}
+          eski={kirli}
           secilen={secilenKuyu || undefined}
           onSec={
             onYenidenHesapla
@@ -230,7 +254,9 @@ export function OdakOzeti({
               ))}
             </View>
           ) : null}
-          <Text style={s.satir}>{t("ai.pro.onay.odak.dozSec", { tavan: sayi(odak.tavan_mT) })}</Text>
+          <Text testID="odak-doz-etiket" style={s.satir}>
+            {tavanGecerli ? t("ai.pro.onay.odak.dozSec", { tavan: sayi(tavan) }) : t("ai.pro.onay.odak.dozSecKipDegisti")}
+          </Text>
           <View style={s.dozSatiri}>
             <TextInput
               testID="odak-doz-girdi"
@@ -238,7 +264,7 @@ export function OdakOzeti({
               value={dozMetni}
               onChangeText={setDozMetni}
               keyboardType="decimal-pad"
-              accessibilityLabel={t("ai.pro.onay.odak.dozSec", { tavan: sayi(odak.tavan_mT) })}
+              accessibilityLabel={tavanGecerli ? t("ai.pro.onay.odak.dozSec", { tavan: sayi(tavan) }) : t("ai.pro.onay.odak.dozSecKipDegisti")}
             />
             <TouchableOpacity
               testID="odak-yeniden-hesapla"
@@ -252,7 +278,12 @@ export function OdakOzeti({
             </TouchableOpacity>
           </View>
           {!dozGecerli ? (
-            <Text testID="odak-doz-hata" style={s.uyari}>{t("ai.pro.onay.odak.dozGecersiz", { tavan: sayi(odak.tavan_mT) })}</Text>
+            <Text testID="odak-doz-hata" style={s.uyari}>
+              {tavanGecerli ? t("ai.pro.onay.odak.dozGecersiz", { tavan: sayi(tavan) }) : t("ai.pro.onay.odak.dozGecersizTavansiz")}
+            </Text>
+          ) : null}
+          {kirli ? (
+            <Text testID="odak-kirli" style={s.uyari} accessibilityLiveRegion="polite">{t("ai.pro.onay.odak.kirliUyari")}</Text>
           ) : null}
         </View>
       ) : null}
@@ -278,6 +309,7 @@ const s = StyleSheet.create({
   },
   hucreSecili: { borderWidth: 3, borderColor: colors.text },
   hucreBos: { opacity: 0.35, borderWidth: 1, borderStyle: "dashed", borderColor: colors.textMuted },
+  eski: { opacity: 0.4 },
   // KP-5: punto kapısı (test_arayuz_yazi_olcegi_kapisi) — en küçük okunur punto typography.small (11); 40 px dairede iki satır sığar.
   hucreEtiket: { color: "#FFFFFF", fontSize: typography.small, fontWeight: "800" },
   hucreDeger: { color: "#FFFFFF", fontSize: typography.small, fontWeight: "700" },

@@ -113,6 +113,8 @@ it("KRİTİK ODK: doz seçici — geçerli doz + TÜM PETRİ ile yeniden hesap i
   fireEvent.press(u.getByTestId("odak-kip-TUM_PETRI"));
   fireEvent.press(u.getByTestId("odak-yeniden-hesapla"));
   expect(cagri).toEqual([[0.5, "TUM_PETRI"]]);
+  // ODD B-2: tavan YALNIZ hesaplandığı kipte denetlenir (TÜM PETRİ'nin tavanı yeniden hesaplanınca gelir) → tavan üstü red aynı kipte.
+  fireEvent.press(u.getByTestId("odak-kip-KUYUCUK"));
   fireEvent.changeText(u.getByTestId("odak-doz-girdi"), "9");
   expect(u.getByTestId("odak-yeniden-hesapla").props.accessibilityState.disabled).toBe(true);
   expect(metin(u)).toContain("0'dan büyük ve en çok 1,25 mT bir doz girin.");
