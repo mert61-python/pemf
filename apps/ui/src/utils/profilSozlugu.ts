@@ -49,11 +49,15 @@ export interface ProfilSozlugu {
   yeniKayit: string;
   seansGecmisiGiris: string;
   tumListeCipi: string;
+  /** ODD B-4 (ODK-B keşfi 18-11): adı olmayan (sahipsiz) seans kaydının geçmişteki adı — araştırmada "Sahipsiz örnek", klinikte
+   *  bugünkü "Bilinmeyen Hasta" (petri seansı geçmişte "Bilinmeyen Hasta" görünüyordu). */
+  sahipsizKayit: string;
 }
 
 /** SGI-4.1: veteriner ve ev sahibi profillerinde bugünkü (değişmeyen) ekran içi metinler. */
 const klinikEkranMetinleri = () =>
   ({
+    sahipsizKayit: i18n.t("seans.gecmis.bilinmeyenHasta"),
     veritabani: i18n.t("hasta.sozluk.klinikEkran.veritabani"),
     yeniKayit: i18n.t("hasta.sozluk.klinikEkran.yeniKayit"),
     seansGecmisiGiris: i18n.t("hasta.sozluk.klinikEkran.seansGecmisiGiris"),
@@ -86,6 +90,7 @@ export function profilSozlugu({
       yeniKayit: i18n.t("hasta.sozluk.arastirma.yeniKayit"),
       seansGecmisiGiris: i18n.t("hasta.sozluk.arastirma.seansGecmisiGiris"),
       tumListeCipi: i18n.t("hasta.sozluk.arastirma.tumListeCipi"),
+      sahipsizKayit: i18n.t("hasta.sozluk.arastirma.sahipsizKayit"),
     };
   }
   if (petOwner) {

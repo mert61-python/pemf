@@ -3175,6 +3175,12 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
                 "id": str((_onay.get("specs") or {}).get("patient_id") or ""),
                 "name": str((_onay.get("specs") or {}).get("patient_name") or ""),
             },
+            # ODD B-4: seans kaydına hedef (mühürdeki etiket / hedef adı), sürüş frekansı ve ODAK dozu (mT) — MÜHÜRDEN.
+            kayit={
+                "hedef": str(_spec.get("target_label") or _saglayici.hedef_adi(_organ_req) or ""),
+                "frek_hz": _ai_pro_frek_hz,
+                "doz_mT": (_spec.get("odak") or {}).get("doz_mT"),
+            },
         )
     except KayitAcilamadi as _kayitsiz:
         # ⚠️ Y65 (sahip, 1-F inceleme S-İF1): tedavi kaydının DB satırı açılamadı → otonom sürüş BAŞLAMAZ (döngü açılmaz,

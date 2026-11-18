@@ -4879,6 +4879,7 @@ def start_ai_session(
     model: str = "",
     onay_hedefi: int | None = None,
     hasta: dict | None = None,
+    kayit: dict | None = None,
 ):
     """AI biofeedback donanım sürerken seansı _active_session'a YAZAR → süre-watchdog onu da
     izler ve süresi dolunca DURDURUR; emergency_stop/STM-disconnect de AI'yı kapsar. Parametre
@@ -4947,9 +4948,11 @@ def start_ai_session(
                 # kaydediliyordu. Arayüzün kuralı "sahipsiz = benim" olduğu için otonom
                 # seanslar kliniğin HER hekimine "Benim Seanslarım"da görünüyordu; yani
                 # "Benim / Tüm Klinik" ayrımı AI tarafında fiilen YOKTU.
+                # ODD B-4 (ODK-B keşfi 18-11): AI Pro satırı hedefini taşır (petri: plaka etiketi "Kuyu C6", kedi: organ) — geçmiş
+                # kartı "Hedef -" gösteriyordu. Değer VERİ (Türkçe etiket; DB değerleri çevrilmez).
                 _ai_sid = _db.start_session(
                     treatment_mode=mode,
-                    target_condition=None,
+                    target_condition=(str((kayit or {}).get("hedef") or "").strip() or None),
                     patient_name=(_hasta_adi or None),
                     operator_email=(str(operator_email or "").strip().lower() or None),
                 )
@@ -5104,7 +5107,14 @@ def start_ai_session(
                 # (`_finalize_session_db` DEĞİL: o, süren seansın kısmi dakikasını bu satıra dökerdi).
                 _db.end_session(_ai_sid, duration_minutes=0, session_status="cancelled")
             elif _db is not None:
-                _db.set_session_meta(_ai_sid, started_epoch=_started_epoch_ai, patient_id=_ai_pid)
+                # ODD B-4: seansın sürüş frekansı (mühür) ve ODAK dozu (mT) — geçmiş kartı "0 Hz" / "Yoğunluk —" gösteriyordu.
+                _db.set_session_meta(
+                    _ai_sid,
+                    started_epoch=_started_epoch_ai,
+                    patient_id=_ai_pid,
+                    frequency_hz=(kayit or {}).get("frek_hz"),
+                    intensity_mt=(kayit or {}).get("doz_mT"),
+                )
                 if _sahip_epostasi:
                     _db.set_session_parameter(_ai_sid, "patient_owner_email", _sahip_epostasi, "")
         except Exception:
@@ -5214,6 +5224,10 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                 elif _sebep.startswith("iptal"):
                     # 1-C §9 #5: başlatma bobin sürülmeden İPTAL edildi (durdurma geldi) → "İptal Edildi".
                     _durum = "cancelled"
+                elif _sebep.startswith("ai-pro-durdurma"):
+                    # ODD B-4 (ODK-B keşfi 18-11): operatör AI Pro'yu ELLE durdurdu → "Durduruldu" (`stopped`; KPI "Dur./Hata"da
+                    # sayılır). Eskiden "completed" → Raporlar "Tamamlanma %100", planlanan süre verilmemişken tamamlanmış görünüyordu.
+                    _durum = "stopped"
                 elif _sebep.startswith("ai-pro-kesinti"):
                     # D2.E07 (YA-1): AI Pro döngüsü KENDİ kesildi (hedef kaybı / doz modeli hatası / kamera) → "Kesintiye Uğradı".
                     _durum = "interrupted"

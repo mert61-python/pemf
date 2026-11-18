@@ -9,7 +9,7 @@
     verilmiş bir AI Pro tedavisi geçmişte "elektrik kesintisiyle iptal, 0 dk".
 DÜZELTME İLKESİ: hasta ÖNERİ MÜHRÜNE yazılır (organ/süre/model ile aynı ilke — "A için onaylat, B'ye başlat" imkânsız);
 `/start` mühürden okuyup elle seans yoluyla AYNI bağı kurar. Kapanış STOP'tan SONRA (Ö.4-Y8): operatör durdurması
-"completed", döngünün kendi kesintisi (hedef kaybı / doz hatası / kamera) "interrupted". ACİL DURDUR'un "EMERGENCY_STOPPED"
+"stopped" (ODD B-4; eskiden "completed"), döngünün kendi kesintisi (hedef kaybı / doz hatası / kamera) "interrupted". ACİL DURDUR'un "EMERGENCY_STOPPED"
 mührü ezilmez. Tünelden AI Pro erişimi (sahip kararı D-2.2) DEĞİŞMEZ. Satırlar SQL ile okunur.
 """
 
@@ -137,10 +137,11 @@ def test_KRITIK_E07_durdurulan_AI_Pro_satiri_KAPANIR_yeniden_acilista_ELEKTRIK_K
     sid = _oner_onayla_baslat(o, {"patient_id": U1, "patient_name": "Boncuk"})
     assert o.c.post("/api/ai/pro/stop").status_code == 200
     s = _seans(o, sid)
-    assert s["durum"] == "completed" and s["bitis"] and s["bitis_epoch"], f"durdurulan AI Pro satırı kapanmadı: {s}"
+    # ODD B-4 (ODK-B 18-11): operatörün ELLE durdurması "stopped" (KPI tamamlanmış saymaz); eskiden "completed".
+    assert s["durum"] == "stopped" and s["bitis"] and s["bitis_epoch"], f"durdurulan AI Pro satırı kapanmadı: {s}"
     assert float(s["bitis_epoch"]) >= float(s["basla_epoch"])
     TreatmentHistoryDB(o.kok)  # yeniden açılış (kurtarma __init__'te koşar)
-    assert _seans(o, sid)["durum"] == "completed", "yeniden açılış durdurulmuş tedaviyi 'Elektrik Kesintisi' yaptı"
+    assert _seans(o, sid)["durum"] == "stopped", "yeniden açılış durdurulmuş tedaviyi 'Elektrik Kesintisi' yaptı"
 
 
 def test_KRITIK_E07_kapanis_STOPtan_SONRA_O4_Y8(o, monkeypatch):
@@ -160,7 +161,7 @@ def test_KRITIK_E07_kapanis_STOPtan_SONRA_O4_Y8(o, monkeypatch):
     monkeypatch.setattr(o.api, "_finalize_session_db", _kaydeden)
     o.c.post("/api/ai/pro/stop")
     assert anlik == [[]], f"satır STOP'tan ÖNCE kapatıldı (çalışan bobinler: {anlik})"
-    assert _seans(o, sid)["durum"] == "completed"
+    assert _seans(o, sid)["durum"] == "stopped"  # ODD B-4
 
 
 def test_KARSIT_E07_ACIL_DURDUR_muhru_EZILMEZ(o):
@@ -229,7 +230,7 @@ def test_KRITIK_E07_dongunun_KENDI_kesintisi_satiri_KESINTIYE_UGRADI_diye_kapati
 
 def test_KRITIK_E07_operator_durdurmasi_DONGU_teardownu_once_kossa_da_KESINTI_sayilmaz(monkeypatch, tmp_path):
     """Yarış BELİRLENİMCİ kurulur: `/ai/pro/stop` döngü bayrağını indirdikten SONRA, oturumu pasife almadan ÖNCE (önizleme
-    durdurma adımında) GERÇEK döngünün teardown'ının bitmesi beklenir. Operatör durdurması yine "completed" olmalı."""
+    durdurma adımında) GERÇEK döngünün teardown'ının bitmesi beklenir. Operatör durdurması yine "stopped" olmalı (ODD B-4)."""
     import ai_pro_aparati as ap
     from kayitci_donanim import gercek_hc
 
@@ -268,7 +269,9 @@ def test_KRITIK_E07_operator_durdurmasi_DONGU_teardownu_once_kossa_da_KESINTI_sa
             assert ns.c.post("/api/ai/pro/stop").status_code == 200
         with ns.db._get_connection() as c:
             durum = c.execute("SELECT session_status FROM treatment_sessions WHERE id = ?", (sid,)).fetchone()[0]
-        assert durum == "completed", f"operatör durdurması döngünün teardown'ında '{durum}' yazıldı"
+        assert durum == "stopped", (
+            f"operatör durdurması döngünün teardown'ında '{durum}' yazıldı"
+        )  # ODD B-4: elle durdurma
     finally:
         ns.air._ai_loop_active = False
         ns.geri()

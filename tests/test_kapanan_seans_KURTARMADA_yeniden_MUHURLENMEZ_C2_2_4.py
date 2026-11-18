@@ -31,7 +31,7 @@ BEKLENEN = {
     "ai-pro-kesinti": "interrupted",
     "ai-devralma": "interrupted",
     "kapanis": "interrupted",
-    "ai-pro-durdurma": "completed",
+    "ai-pro-durdurma": "stopped",  # ODD B-4 (ODK-B 18-11): operatörün elle durdurması — eskiden "completed"
     "sure-doldu": "completed",
 }
 

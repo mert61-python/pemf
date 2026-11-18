@@ -92,7 +92,7 @@ def test_KRITIK_uzun_kilitte_AI_Pro_durdurma_KAPANISI_dusmez_satir_completed(o):
     zm.join(10)
     gecen = time.monotonic() - t0
     durum = _durum(o, sid)
-    assert durum == "completed", (
+    assert durum == "stopped", (  # ODD B-4: elle durdurma "stopped" (eskiden "completed")
         f"kilit {KILIT_SN:.0f} sn sürdü (busy_timeout 5 sn) ve kalktı; {gecen:.1f} sn sonra satır hâlâ {durum!r} — operatörün "
         "durdurduğu seans sonraki açılışta 'Elektrik Kesintisi' mühürlenir"
     )

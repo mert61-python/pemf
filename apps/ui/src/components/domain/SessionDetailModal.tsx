@@ -198,10 +198,13 @@ export function SessionDetailModal({
   visible,
   sessionId,
   onClose,
+  adsizAd,
 }: {
   visible: boolean;
   sessionId: string | number | null;
   onClose: () => void;
+  /** ODD B-4: adı olmayan kaydın gösterim adı (araştırmada "Sahipsiz örnek"); verilmezse "Bilinmeyen Hasta". */
+  adsizAd?: string;
 }) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -263,7 +266,7 @@ export function SessionDetailModal({
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.scrollBody}>
-              <SummarySection session={session} />
+              <SummarySection session={session} adsizAd={adsizAd} />
               <CoilRunsSection coilRuns={coilRuns} />
               <TemperatureSection samples={sensorSamples} />
             </ScrollView>
@@ -275,7 +278,7 @@ export function SessionDetailModal({
 }
 
 // ─── Seans özeti ──────────────────────────────────────────────────────────────
-function SummarySection({ session }: { session: SessionInfo | null }) {
+function SummarySection({ session, adsizAd }: { session: SessionInfo | null; adsizAd?: string }) {
   const { t } = useTranslation();
   if (!session) {
     return <Text style={styles.mutedText}>{t("seans.detay.bilgiYok")}</Text>;
@@ -286,7 +289,7 @@ function SummarySection({ session }: { session: SessionInfo | null }) {
       : "—";
   return (
     <View style={styles.section}>
-      <Text style={styles.patientName}>{session.patient_name || t("seans.gecmis.bilinmeyenHasta")}</Text>
+      <Text style={styles.patientName}>{session.patient_name || adsizAd || t("seans.gecmis.bilinmeyenHasta")}</Text>
       <View style={styles.summaryGrid}>
         <SummaryItem label={t("seans.detay.tarih")} value={session.session_date || "—"} />
         <SummaryItem label={t("seans.detay.saat")} value={timeRange} />

@@ -104,4 +104,6 @@ def test_KARSIT_C2_1_3_kilit_yokken_satir_yanit_donmeden_KAPANIR(o):
     with o.db._get_connection() as c:
         durum = c.execute("SELECT session_status FROM treatment_sessions WHERE id=?", (sid,)).fetchone()[0]
     assert r.status_code == 200 and stop_sn is not None
-    assert durum == "completed", f"kilitsiz durdurmada satır yanıtla birlikte kapanmadı: {durum!r}"
+    assert durum == "stopped", (
+        f"kilitsiz durdurmada satır yanıtla birlikte kapanmadı: {durum!r}"
+    )  # ODD B-4: elle durdurma

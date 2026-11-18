@@ -410,6 +410,7 @@ export function TreatmentHistoryScreen() {
         visible={selectedSessionId !== null}
         sessionId={selectedSessionId}
         onClose={() => setSelectedSessionId(null)}
+        adsizAd={SK.sahipsizKayit}
       />
     </View>
   );
@@ -435,6 +436,9 @@ function SessionCard({
 }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  // ODD B-4: adı olmayan kayıt araştırmada "Sahipsiz örnek" (petri / fantom seansı "Bilinmeyen Hasta" görünüyordu).
+  const { isResearcher: arastirmaci } = useUserMode();
+  const adsiz = profilSozlugu({ researcher: !!arastirmaci }).sahipsizKayit;
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notes, setNotes] = useState(session.patient_notes || "");
   // VERİ KAYBI: `notes` yalnız İLK render'da başlatılıyordu. Liste yenilendiğinde (aynı `key`,
@@ -513,7 +517,7 @@ function SessionCard({
           onPress={secimModu ? onSecimDegistir : onOpenDetails}
           accessibilityLabel={secimModu ? t("seans.gecmis.kaydiSec") : t("seans.gecmis.detayiAc")}
         >
-          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{session.patient_name || t("seans.gecmis.bilinmeyenHasta")}</Text>
+          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{session.patient_name || adsiz}</Text>
           <Text style={styles.muted} numberOfLines={1} ellipsizeMode="tail">{session.session_date} {session.start_time}</Text>
           {secimModu ? null : <Text style={styles.detailsHint} numberOfLines={1}>{t("seans.gecmis.bobinDetayi")}</Text>}
         </TouchableOpacity>
@@ -534,7 +538,7 @@ function SessionCard({
             style={styles.iconBtn}
             onPress={handleDelete}
             accessibilityRole="button"
-            accessibilityLabel={t("seans.gecmis.kaydiSilEtiketi", { ad: session.patient_name || t("seans.gecmis.bilinmeyenHasta") })}
+            accessibilityLabel={t("seans.gecmis.kaydiSilEtiketi", { ad: session.patient_name || adsiz })}
           >
             <Trash2 color={colors.danger} size={18} />
           </TouchableOpacity>
