@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""ODAK alan modeli (istem 45 A1): CST birim alanları × 0. adım kalibrasyonu (eşleme, kazanç, işaret, çerçeve kayması, ölçülen duty eğrisi).
+"""ODAK alan modeli (istem 45 A1): CST birim alanları × 0. adım kalibrasyonu (eşleme, kazanç, işaret, çerçeve kayması, ölçülen duty eğrisi,
+ODM bobin başına öteleme).
 
 ÇERÇEVELER — dönüşüm YALNIZ burada (`backend_to_olcum`, `AlanModeli.olcum_to_cst`):
   backend kabin (ürün kuralı T2B, `ai_hub/cv_ortak/sabit_duzlem.py`): orijin cam içi merkez, +X önden bakanın SOLU, +Y yukarı, +Z ARKAYA (mm)
   ölçüm çerçevesi (0. adım, `DENETIM\\odak\\olcum`): +x SAĞ, +y yukarı, +z ÖNE  → (x, y, z) = (−X, Y, −Z)
   CST: X = yükseklik, Y = genişlik (+ sol), Z = derinlik (+ ön)  → X = taban_cst_x + (y − taban_y), Y = −x + merkez_cst_y, Z = z + merkez_cst_z
 Alan bileşenleri CST eksenindedir (yalnız |B| ve model özniteliği olarak kullanılır — eğitimle aynı).
+BOBİN ÖTELEMESİ (ODM, 18-11 tezgâh ölçümü): kalibrasyondaki isteğe bağlı `bobin_oteleme_mm` (gerçek bobin sırası, 7 × [dx, dy, dz], ölçüm
+çerçevesi) bobin r'nin CST alanını Δ_r kadar TAŞIR: M_r(P) = CST_r(P − Δ_r) (B ve E aynı). Yoksa / sıfırsa davranış ve kimlik eskisiyle AYNI.
 
 GENLİK BİRİMİ: a ∈ [−1, 1]; |a| = 1 ⇔ o bobin duty 0,5'teki tepe akımında. a(d) = ölçülen tepe(d) / tepe(0,5) (0. adım eğrisi).
 FAZ (Y280): faz_c = (d_maks − d_c) × 360° (+ 180° işaret negatifse), mod 360 → darbe SONLARI (tepe akımlar) aynı anda.
@@ -79,10 +82,21 @@ def olcum_to_backend(P) -> np.ndarray:
 
 
 _ZORUNLU = ("esleme_gercek_cst", "kazanc", "isaret", "cerceve", "duty_egrisi_olcum", "rl")
+#: ODM: bobin başına öteleme üst sınırı (mm, her bileşen). Tezgâh ölçüsü (18-11) CST'den en çok ~9 cm; daha büyüğü yazım hatasıdır → SÜRME.
+OTELEME_AZAMI_MM = 100.0
+
+
+def bobin_otelemesi(K: dict) -> np.ndarray:
+    """Kalibrasyonun bobin başına ötelemesi (7, 3) mm, ölçüm çerçevesi, gerçek bobin sırası; alan yoksa sıfır."""
+    ham = K.get("bobin_oteleme_mm")
+    if ham is None:
+        return np.zeros((N_BOBIN, 3))
+    return np.asarray(ham, dtype=float).reshape(N_BOBIN, 3)
 
 
 def kalibrasyon_kimligi(K: dict) -> str:
-    """Modeli eğiten alan ile sürüşteki alanın AYNI olduğunu bağlayan kimlik: eşleme, kazanç, işaret, çerçeve, duty eğrisi, RL dalga biçimi."""
+    """Modeli eğiten alan ile sürüşteki alanın AYNI olduğunu bağlayan kimlik: eşleme, kazanç, işaret, çerçeve, duty eğrisi, RL dalga biçimi,
+    bobin ötelemesi (yalnız sıfır değilse — ötelemesiz kalibrasyonların kimliği değişmez)."""
     cer = K.get("cerceve") or {}
     alt = {
         "esleme": {str(k): int(v) for k, v in sorted((K.get("esleme_gercek_cst") or {}).items())},
@@ -92,6 +106,9 @@ def kalibrasyon_kimligi(K: dict) -> str:
         "duty": (K.get("duty_egrisi_olcum") or {}).get("tepe_akim_A"),
         "rl": [round(float((K.get("rl") or {}).get(a, 0.0)), 3) for a in ("V", "R_ohm", "L_mH", "f_hz", "sonum_kati")],
     }
+    ote = [[round(float(v), 1) + 0.0 for v in s] for s in bobin_otelemesi(K)]
+    if any(v != 0.0 for s in ote for v in s):
+        alt["oteleme"] = ote
     return hashlib.sha256(json.dumps(alt, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
@@ -123,12 +140,18 @@ def kalibrasyon_oku(veri_koku) -> dict:
         kaz = [float(v) for v in K["kazanc"]]
         isr = [int(v) for v in K["isaret"]]
         egri = K["duty_egrisi_olcum"]
+        ote = K.get("bobin_oteleme_mm")
+        ote_ok = ote is None or (  # NaN / sonsuz `<=` karşılaştırmasında düşer
+            np.asarray(ote, dtype=float).shape == (N_BOBIN, 3)
+            and float(np.max(np.abs(np.asarray(ote, dtype=float)))) <= OTELEME_AZAMI_MM
+        )
         ok = (
             cst == list(range(1, N_BOBIN + 1))
             and len(kaz) == N_BOBIN
             and all(np.isfinite(kaz)) and all(v > 0 for v in kaz)
             and len(isr) == N_BOBIN and all(v in (-1, 1) for v in isr)
             and len(egri["duty"]) >= 2 and len(egri["tepe_akim_A"]) == N_BOBIN
+            and ote_ok
         )
     except (KeyError, TypeError, ValueError):
         ok = False
@@ -220,6 +243,7 @@ class AlanModeli:
         es = K["esleme_gercek_cst"]
         self.cst_sira = [int(es[str(r + 1)]) - 1 for r in range(N_BOBIN)]
         self.olcek = np.asarray(K["kazanc"], float) * np.asarray(K["isaret"], float)
+        self.oteleme = bobin_otelemesi(K)  # ODM (7, 3) mm ölçüm çerçevesi — bobin r'nin alanı P − Δ_r'deki CST değeri
         cer = K["cerceve"]
         self.taban_cst_x = float(cer["taban_cst_x"]) + float(cer.get("yukseklik_ofset_mm", 0.0))
         self.cam = np.asarray(cer["cam_ic_mm"], float)
@@ -289,10 +313,19 @@ class AlanModeli:
         return self._ara_deger(self._etablo, "E", backend_to_olcum(P_backend))
 
     def _ara_deger(self, T: dict, ad: str, Pm) -> np.ndarray:
-        """Tablo (B ya da E) üç doğrusal ara değerleme + GERÇEK bobin sırası + kazanç × işaret."""
+        """Tablo (B ya da E) üç doğrusal ara değerleme + GERÇEK bobin sırası + kazanç × işaret + ODM bobin ötelemesi."""
         Pm = np.asarray(Pm, dtype=float)
         sh = Pm.shape[:-1]
-        P = self.olcum_to_cst(Pm.reshape(-1, 3))
+        Pm = Pm.reshape(-1, 3)
+        out = self._ucdogrusal(T, ad, Pm, self.cst_sira)
+        for r in np.flatnonzero(np.any(self.oteleme != 0.0, axis=1)):
+            out[:, :, r] = self._ucdogrusal(T, ad, Pm - self.oteleme[r], [self.cst_sira[r]])[:, :, 0]
+        out *= self.olcek[None, None, :]
+        return out.reshape(sh + (3, N_BOBIN))
+
+    def _ucdogrusal(self, T: dict, ad: str, Pm, sira) -> np.ndarray:
+        """Ölçüm çerçevesi noktaları (n, 3) → tablonun `sira` CST bobinleri (n, 3, len(sira)), üç doğrusal ara değerleme."""
+        P = self.olcum_to_cst(Pm)
         idx, tt = [], []
         for ax in range(3):
             f = (P[:, ax] - T["kok"][ax]) / T["adim"]
@@ -301,13 +334,12 @@ class AlanModeli:
             tt.append(np.clip(f - i, 0.0, 1.0))
         (i, j, k), (tx, ty, tz) = idx, tt
         B = T[ad]
-        out = np.zeros((len(P), 3, N_BOBIN))
+        out = np.zeros((len(P), 3, len(sira)))
         for a, wa in ((0, 1 - tx), (1, tx)):
             for b, wb in ((0, 1 - ty), (1, ty)):
                 for c, wc in ((0, 1 - tz), (1, tz)):
-                    out += (wa * wb * wc)[:, None, None] * B[i + a, j + b, k + c][:, :, self.cst_sira]
-        out *= self.olcek[None, None, :]
-        return out.reshape(sh + (3, N_BOBIN))
+                    out += (wa * wb * wc)[:, None, None] * B[i + a, j + b, k + c][:, :, sira]
+        return out
 
     def alan(self, P_backend) -> np.ndarray:
         """Backend kabin noktaları (..., 3) → M (..., 3, 7)."""
