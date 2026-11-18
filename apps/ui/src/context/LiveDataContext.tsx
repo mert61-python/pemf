@@ -88,6 +88,10 @@ export interface AiVisionData {
   method?: string;
   /** KD-3a (yalnız-ek): kapı FİZİKSEL nedenle kestiyse sunucunun eylem metni (kesmediyse ""). */
   kapiEylem?: string;
+  /** Y300 (ODD B-1, yalnız-ek · sabit numune): ölçüm doğrulanamadı, son onaylı plan sürüyor — pencerede kalan sn (yoksa null). */
+  dogrulamaKalanSn?: number | null;
+  /** Y300 (ODD B-1, yalnız-ek): pencere doldu, bobinler durduruldu — sunucunun NEDEN metni (cihaz dili; yoksa ""). */
+  surusDurduNeden?: string;
   /** Kare üstünde seçilebilir hedef adayları. `pxn` = kare oranına göre merkez (0..1). */
   targets?: {
     id?: number;

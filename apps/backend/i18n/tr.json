@@ -410,6 +410,10 @@
           "plakaYok": "Plakanın yeri ve yönü bulunamadı: yalnız {{bulunan}} kuyu görüldü (en az {{beklenen}} kuyu, tek bir satır ya da sütunda olmayan) — sürülmedi. Plakayı kadraja tam alın, ışığı düzeltin; sıvılı kuyular en az iki satır ve iki sütunda olsun."
         }
       },
+      "sabitNumune": {
+        "durdu": "Plaka {{sn}} sn boyunca doğrulanamadı — bobinler durduruldu. Neden: {{neden}} Ölçüm sürüyor; plaka yeniden doğrulanınca sürüş kendiliğinden devam eder.",
+        "nedenBulunamadi": "Plaka ya da kuyular kamerada tanınmadı. Plakayı kabinin ortasına düz yerleştirin; kapağı ve ışığı kontrol edin."
+      },
       "sonuc": {
         "baslatilmadi": "AI Pro BAŞLATILMADI"
       }
@@ -530,6 +534,7 @@
       "aiProDurdurma": "AI Pro durdurma",
       "aiProHedefKaybi": "AI Pro hedef-kaybı durdurması",
       "aiProHedefKaybiMobil": "AI Pro hedef-kaybı durdurması (mobil kare)",
+      "aiProSabitNumuneDurdu": "AI Pro plaka doğrulama durdurması",
       "sahipsiz": "Sahipsiz bobin durdurması",
       "sifirHz": "0 Hz seans isteği (A-05) — mandallıyken",
       "sureDoldu": "Süre doldu — otomatik durdurma",

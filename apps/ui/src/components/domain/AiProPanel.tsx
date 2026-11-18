@@ -1520,6 +1520,20 @@ export function AiProPanel({
         </GenisletilebilirMetin>
       ) : null}
 
+      {/* Y300 (ODD B-1): sabit numune seansında ölçüm doğrulanamadı → son onaylı plan sürüyor (kalan sn) ya da pencere doldu,
+          bobinler durduruldu → sunucunun NEDENİ (eylem söyler). Yalnız seans sürerken; kedi hattında alanlar boş. */}
+      {running && IS_WEB && v?.surusDurduNeden ? (
+        <View style={[styles.hazirlikKutu, styles.hazirlikKutuUyari]} testID="aipro-surus-durdu-neden" accessibilityRole="alert">
+          <Text style={[styles.hazirlikMetin, styles.hazirlikMetinKap]}>{v.surusDurduNeden}</Text>
+        </View>
+      ) : running && IS_WEB && typeof v?.dogrulamaKalanSn === "number" ? (
+        <View style={styles.hazirlikKutu} testID="aipro-dogrulama-suruyor">
+          <Text style={[styles.hazirlikMetin, styles.hazirlikMetinKap]}>
+            {t("ai.pro.dogrulamaSuruyor", { sn: v.dogrulamaKalanSn })}
+          </Text>
+        </View>
+      ) : null}
+
       {/* 3B KONUM ROZETİ + HEDEF LİSTESİ (yalnız araştırma). Rozet, işaret görünmediğinde önerinin
           NEDEN gelmediğini peşinen söyler; liste halkaların ZORUNLU erişilebilir yedeğidir. */}
       {arastirmaKipi ? (

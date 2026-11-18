@@ -2972,6 +2972,20 @@
   },
   {
    "yuzey": "sunucu",
+   "anahtar": "bildirim.kaynak.aiProSabitNumuneDurdu",
+   "tur": "estop",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "teyitsiz STOP kaynağı: AI Pro sabit numune (petri) doğrulama penceresi doldu (Y300)"
+  },
+  {
+   "yuzey": "sunucu",
+   "anahtar": "ai.pro.sabitNumune.durdu",
+   "tur": "bobin",
+   "kaynak": "apps/backend/servers/ai_router.py",
+   "aciklama": "petri plakası 30 sn doğrulanamadı: bobinler durduruldu + neden (Y300)"
+  },
+  {
+   "yuzey": "sunucu",
    "anahtar": "ai.alan.denetimCalismadi",
    "tur": "seans",
    "kaynak": "apps/backend/servers/ai_router.py",

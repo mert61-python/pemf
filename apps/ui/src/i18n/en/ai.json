@@ -1043,6 +1043,7 @@
       "reddetEtiket": "Reject the AI result",
       "rediKaydet": "Save rejection"
     },
+    "dogrulamaSuruyor": "Re-verifying the plate — driving continues with the last approved plan (for at most {{sn}} s more).",
     "dugme": {
       "analizOneri": "🔎 Analysis and Recommendation (driving off)",
       "analizOneriEtiket": "AI Pro analysis and recommendation — cat driving is off",

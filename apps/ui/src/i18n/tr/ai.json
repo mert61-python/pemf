@@ -1043,6 +1043,7 @@
       "reddetEtiket": "AI sonucunu reddet",
       "rediKaydet": "Reddi kaydet"
     },
+    "dogrulamaSuruyor": "Plaka yeniden doğrulanıyor — son onaylı planla sürüş sürüyor (en çok {{sn}} sn daha).",
     "dugme": {
       "analizOneri": "🔎 Analiz ve Öneri (sürüş kapalı)",
       "analizOneriEtiket": "AI Pro analiz ve öneri — kedi sürüşü kapalı",

@@ -391,7 +391,10 @@ def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: in
 
         air.logger.warning("%s ODAK planı ENGELLİ (%s) → sürülmez", saglayici.ad, plan.get("engel"))
         saglayici.son_odak_e = None
+        # Y300 (ODD B-1): döngü sabit numunede tolerans STOP'unun NEDENİNİ buradan söyler (engel kodu + eki).
+        saglayici.son_odak_engel = {"engel": plan.get("engel"), "engel_ek": dict(plan.get("engel_ek") or {})}
         return [0.0] * 7, [0.0] * 7, 0.0
+    saglayici.son_odak_engel = None
     # ODK6: bu planın E'si (hedef / çevre, tepe V/m) — döngü sürüşten sonra canlı E çubuğuna yazar (`efield_live.odak_guncelle`);
     # ODK10: ortam "kuyu" (petri: kuyu sıvısı içinde) | "hava" (kedi: ortamsız CST) — arayüz etiketi buna göre
     saglayici.son_odak_e = {
@@ -402,10 +405,10 @@ def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: in
     return [float(d) for d in plan["duty"]], [float(p) for p in plan["faz"]], 0.0
 
 
-def odak_engel_metni(plan: dict) -> str:
-    """Engel kodu → eylem söyleyen metin (istek dili). Sayılar 2 basamak."""
+def odak_engel_metni(plan: dict, dil: str | None = None) -> str:
+    """Engel kodu → eylem söyleyen metin (`dil` yoksa istek dili). Sayılar 2 basamak."""
     ek = {k: (f"{float(v):.2f}" if isinstance(v, float) else v) for k, v in (plan.get("engel_ek") or {}).items()}
-    return ceviri.t(f"ai.pro.odak.engel.{plan.get('engel')}", **ek)
+    return ceviri.t(f"ai.pro.odak.engel.{plan.get('engel')}", dil=dil, **ek)
 
 
 def odak_ayarla(saglayici, odak, hedef_etiket: str = "") -> None:
@@ -1261,6 +1264,9 @@ class PetriSaglayici(_EmCvSaglayici):
     onbellek_anahtari = "em_petri_cv"
     hedef_etiketi = "Kuyu"
     hedef_etiketi_anahtari = "ai.pro.hedefOnek.kuyu"
+    #: Y300 (ODD B-1): SABİT NUMUNE — seans döngüsünde doğrulanamayan yeniden ölçüm son onaylı planı `_SABIT_NUMUNE_TOLERANS_S`
+    #: boyunca sürdürür (kedi: N turda STOP). Fantom bu işareti TAŞIMAZ (Y283: sürüşü fail-closed kapalı).
+    sabit_numune = True
     onizleme_paneli = "04_classify"  # AP-B7: kuyular kanserli / sağlıklı renkte, A1–D6 etiketli kare
     #: AI-2: v2 plaka kipi TÜM kuyucukları verir (24'lük: 24, 96'lık: 96) — eski 8'lik tavan kuyu 9–24'ü seçilemez
     #: kılardı (`hedef_idleri` dört doğrulama noktasının TEK kaynağı). En büyük standart plaka 96.

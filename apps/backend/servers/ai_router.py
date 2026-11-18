@@ -753,6 +753,11 @@ _ai_hazirlik_hata_kamera: dict = {}
 _ORGAN_LOCALIZE_INTERVAL_S = 10.0
 _AI_LOST_STOP_STREAK = 3  # DENETIM P2: bu kadar ARDISIK hedef-kaybindan sonra bobinleri durdur
 _MIN_RELIABILITY = 0.3  # organ güveni bu eşiğin altında → "bulunamadı" → coil SÜRÜLMEZ
+#: Y300 (ODD B-1): SABİT NUMUNE (sağlayıcıda `sabit_numune` — petri) seansında yeniden ölçüm hedefi doğrulayamazsa (ODAK ENGEL ör.
+#: `plakaUyumsuz` / kuyu bulunamadı) bobinler HEMEN durmaz: son DOĞRULANMIŞ turda sürülen plan bu süre boyunca sürmeye devam eder ve
+#: her turda yeniden ölçülür; süre dolunca STOP + panelde NEDEN. Seans başında ilk ölçüm beklenir (pencere başlangıçtan sayılır;
+#: doğrulanmadan sürüş YOK, kayıp SAYILMAZ). Kedi hattı (P2, N turda STOP) DEĞİŞMEZ. Sürüş kapıları (mandal / nesil / kayıp nesli) AYNEN.
+_SABIT_NUMUNE_TOLERANS_S = 30.0
 _ai_relocalize = True  # bir sonraki karede zorla yeniden-lokalize (start/organ-değişim/yeniden-konumla)
 _ai_organ_cache = {
     "x_mm": 0.0,
@@ -962,6 +967,46 @@ def _doz_hatasi_bildir() -> None:
         _apx._bildir(lambda d: ceviri.t("bildirim.aiProDozUretmedi", dil=d), "error")
     except Exception:
         logger.debug("doz hatası bildirimi gönderilemedi", exc_info=True)
+
+
+def _sabit_numune_neden_metni(odak_engeli, dil: str | None = None) -> str:
+    """Y300 (ODD B-1): sabit numune tolerans STOP'unun NEDENİ (eylem söyleyen; `dil` yoksa istek / cihaz dili). Bu ölçümde ODAK
+    planı engelliyse engelin kendi metni (ör. `plakaUyumsuz`), değilse "plaka / kuyular tanınmadı"."""
+    neden = ""
+    if isinstance(odak_engeli, dict) and odak_engeli.get("engel"):
+        try:
+            neden = ai_pro_hedef.odak_engel_metni(odak_engeli, dil=dil)
+        except Exception:  # eksik yer tutucu / bilinmeyen kod: neden genel metne düşer (STOP'u ve paneli bozmaz)
+            logger.debug("sabit numune: engel metni üretilemedi (%s)", odak_engeli.get("engel"), exc_info=True)
+    if not neden:
+        neden = ceviri.t("ai.pro.sabitNumune.nedenBulunamadi", dil=dil)
+    return ceviri.t("ai.pro.sabitNumune.durdu", dil=dil, sn=int(_SABIT_NUMUNE_TOLERANS_S), neden=neden)
+
+
+def _sabit_numune_stopu(odak_engeli, bildir: bool) -> str:
+    """Y300 (ODD B-1): sabit numunede tolerans penceresi doldu → kayıp nesli artar (uçuştaki "bulundu" gözlemi süremez) + STOP.
+    STOP doğrulanamayan HER turda yinelenir (idempotent; Ö.4-Y8: STOP yalnız artar); bildirim + günlük yalnız pencerenin İLK
+    STOP'unda (`bildir`). Seans bitmez: plaka yeniden doğrulanınca sürüş sürer (kedi kayıp STOP'uyla aynı ilke).
+    Döner: panelde gösterilen neden (cihaz dili; boş DEĞİL)."""
+    try:
+        estop_mandali.kayip_nesli_artir()
+    except Exception:
+        logger.exception("AI Pro (sabit numune): kayıp nesli artırılamadı (STOP yine gönderilir)")
+    try:
+        import servers.api_server as _apx
+
+        _teyitsiz = _apx._stop_session_coils(range(1, 8))
+        if bildir:
+            _apx._bildir_teyitsiz_stop(_teyitsiz, lambda d: ceviri.t("bildirim.kaynak.aiProSabitNumuneDurdu", dil=d))
+            _apx._bildir(lambda d: _sabit_numune_neden_metni(odak_engeli, dil=d), "warning")
+            logger.warning(
+                "AI Pro (sabit numune): hedef %d sn doğrulanamadı → bobinler DURDURULDU (engel: %s; plaka doğrulanınca sürüş sürer).",
+                int(_SABIT_NUMUNE_TOLERANS_S),
+                (odak_engeli or {}).get("engel") if isinstance(odak_engeli, dict) else None,
+            )
+    except Exception:
+        logger.exception("AI Pro (sabit numune): STOP hatası")
+    return _sabit_numune_neden_metni(odak_engeli)
 
 
 # E3-b (denetim 2026-08-24): cat_organ SEGMENTASYON aşaması başarısız olursa (kedi kadrajda YOK)
@@ -2105,6 +2150,11 @@ def _ai_pro_loop(dongu_muhru=None):
     _lost_streak = 0  # ardisik hedef-kaybi sayaci (bkz. _AI_LOST_STOP_STREAK)
     # C2-1.1: döngü KENDİ süre sayacıyla bittiyse kapanış "Tamamlandı" yazar (kesinti DEĞİL; süre bekçisiyle aynı sebep).
     _sure_doldu = False
+    # Y300 (ODD B-1): sabit numune toleransı — kedi hattında `_sabit_numune` False, aşağıdaki değişkenler KULLANILMAZ.
+    _sabit_numune = bool(getattr(_aktif_saglayici(), "sabit_numune", False))
+    _son_plan = None  # (D, P, kayıp damgası): son DOĞRULANMIŞ turda telde sürülen plan
+    _son_dogrulama = time.monotonic()  # seans başı = pencere başı (ilk ölçüm beklenir)
+    _tolerans_neden = ""  # pencere doldu → STOP gönderildi; panelde gösterilen neden ("" = yok)
     while _ai_loop_active and _dongu_gecerli():
         start_time = time.time()
         # Dış STOP (acil-durdur / süre-watchdog / STM-disconnect / /session/stop) AI loop'u da durdursun.
@@ -2233,6 +2283,8 @@ def _ai_pro_loop(dongu_muhru=None):
             # koordinatı "hedef yok" sayılır → sürülmez, N turda STOP. Mühürsüz eski çağıranlar (`dongu_muhru` None) aynen.
             _surulebilir_hedef = _bulundu and (dongu_muhru is None or _c_oid == dongu_muhru.get("hedef"))
             _surulen: list = []  # D1.84: bu turda telde GERÇEKTEN sürülen bobinler (perCoil `suruldu`)
+            _odak_engeli = None  # Y300: bu turda doz planı ENGELLİ ise sağlayıcının engeli (panel nedeni)
+            _dogrulama_kalan = None  # Y300: tolerans penceresinde kalan sn (yalnız doğrulanamayan turda; panel)
 
             # ── em_kedi → per-coil → sür (YALNIZCA organ bulunduysa; el yerine organ-tespiti koşulu) ──
             if _surulebilir_hedef:
@@ -2250,7 +2302,12 @@ def _ai_pro_loop(dongu_muhru=None):
                     # ⚠️ D1.E07 (İG-5.15, seans ortası): doz modeli hata verdi (zarf `[0]*7` döndürür) — eskiden bu "sürüş"
                     # olarak gönderiliyordu (bildirimsiz; panel "sürüldü"). SÜRÜLMEZ, operatöre söylenir ve hedef-kaybı
                     # gibi sayılır (N turda STOP — mevcut kural; yeni durdurma türü değil).
-                    _doz_hatasi_bildir()
+                    # Y300: sabit numunede sıfır plan = ODAK ENGEL (plaka bu ölçümde doğrulanamadı) → "doz modeli hatası"
+                    # bildirimi YOK; tolerans dalı son onaylı planı sürer, pencere dolarsa NEDENİ (engel metni) söyler.
+                    if _sabit_numune:
+                        _odak_engeli = getattr(_aktif_saglayici(), "son_odak_engel", None)
+                    else:
+                        _doz_hatasi_bildir()
                     _surulebilir_hedef = False
                 else:
                     # ⚠️ D1.81 (İG-5.3/5.29): yukarıdaki "seans hâlâ aktif mi" bakışı TAHMİNDEN ÖNCEDİR; tahmin (CPU 0,3–2,2
@@ -2267,7 +2324,32 @@ def _ai_pro_loop(dongu_muhru=None):
                         logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
                         break
                     _lost_streak = 0  # hedef yeniden bulundu
-            if not _surulebilir_hedef:
+                    if _sabit_numune and _surulen:
+                        # Y300: doğrulanmış + telde KABUL edilmiş plan = "son onaylı plan" (gözlemin kayıp damgasıyla).
+                        _son_plan = (list(D), list(P), kayip_damgasi)
+                        _son_dogrulama = time.monotonic()
+                        _tolerans_neden = ""
+            if not _surulebilir_hedef and _sabit_numune:
+                # ── Y300 (ODD B-1): sabit numune — doğrulanamayan tur KAYIP SAYILMAZ; hemen yeniden ölç ──
+                D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
+                _ai_relocalize = True
+                _gecen = time.monotonic() - _son_dogrulama
+                if _gecen < _SABIT_NUMUNE_TOLERANS_S:
+                    _dogrulama_kalan = max(0, int(_math.ceil(_SABIT_NUMUNE_TOLERANS_S - _gecen)))
+                    if _son_plan is not None:
+                        # Son onaylı plan AYNI kapılarla sürer: niyet nesli (acil durdurma / durdurma sonrası red) + son
+                        # doğrulanmış gözlemin kayıp damgası (arada bir kayıp STOP'u geldiyse `update_coil` reddeder).
+                        D, P, _plan_damgasi = _son_plan
+                        with estop_mandali.surus_baglami(_nesil), estop_mandali.gozlem_baglami(_plan_damgasi):
+                            _surulen = _drive_coils_ai_pro(D, P) or []
+                        if not _dongu_gecerli():
+                            logger.warning(
+                                "AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor."
+                            )
+                            break
+                else:
+                    _tolerans_neden = _sabit_numune_stopu(_odak_engeli, bildir=not _tolerans_neden)
+            elif not _surulebilir_hedef:
                 D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
                 # DENETIM P2: bu dalda YALNIZCA yeni komut gonderilmiyordu; halihazirda enerjili
                 # bobinlere STOP GITMIYORDU. STM keep-alive son duty paketini saniyede bir
@@ -2372,6 +2454,10 @@ def _ai_pro_loop(dongu_muhru=None):
                 "perCoil": per_coil,
                 "remainingSec": remaining,
                 "durationMin": _ai_duration_min,
+                # YALNIZ-EK (Y300 · ODD B-1, sabit numune): doğrulanamayan turda pencerede kalan sn (son onaylı plan sürüyor) ve
+                # pencere dolup bobinler durdurulduysa NEDEN (cihaz dili). Kedi hattında ikisi de boş.
+                "dogrulamaKalanSn": _dogrulama_kalan,
+                "surusDurduNeden": _tolerans_neden,
             }
             try:
                 _ws_broadcast_sync({"type": "ai_vision", "data": ws_data})

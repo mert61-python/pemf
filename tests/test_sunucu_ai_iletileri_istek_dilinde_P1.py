@@ -172,6 +172,18 @@ ESKI = [
     ("bildirim.kaynak.aiProHedefKaybi", {}, "AI Pro hedef-kaybı durdurması"),
     ("bildirim.kaynak.aiProDurdurma", {}, "AI Pro durdurma"),
     ("bildirim.kaynak.aiProHedefKaybiMobil", {}, "AI Pro hedef-kaybı durdurması (mobil kare)"),
+    # ODD B-1 · Y300 (sabit numune tolerans STOP'u — yeni metinler; TR kaynağı bu tablodur)
+    ("bildirim.kaynak.aiProSabitNumuneDurdu", {}, "AI Pro plaka doğrulama durdurması"),
+    (
+        "ai.pro.sabitNumune.nedenBulunamadi",
+        {},
+        "Plaka ya da kuyular kamerada tanınmadı. Plakayı kabinin ortasına düz yerleştirin; kapağı ve ışığı kontrol edin.",
+    ),
+    (
+        "ai.pro.sabitNumune.durdu",
+        {"sn": 30, "neden": "X."},
+        "Plaka 30 sn boyunca doğrulanamadı — bobinler durduruldu. Neden: X. Ölçüm sürüyor; plaka yeniden doğrulanınca sürüş kendiliğinden devam eder.",
+    ),
     ("ai.model.kedi", {}, "Kedi Organ"),
     ("ai.model.fantom", {}, "Fantom Tümör"),
     ("ai.model.petri", {}, "Petri Kuyu"),

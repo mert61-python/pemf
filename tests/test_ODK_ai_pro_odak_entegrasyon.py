@@ -240,8 +240,11 @@ def test_KRITIK_ODAK_seansta_kalibrasyon_KAYBOLURSA_predict_SIFIR(o):
     o.tekil.odak_ayari = {"doz_mT": 0.4, "kip": "FANTOM", "hedef_etiket": ""}
     D, P, e = o.tekil.predict(*M2, 1)
     assert any(d > 0 for d in D) and e == 0.0
+    assert o.tekil.son_odak_engel is None  # ODD B-1 (Y300): başarılı planda engel belleği BOŞ
     os.remove(os.path.join(o.kok, "kabin_kalibrasyonu", "alan_kalibrasyonu.json"))
     assert o.tekil.predict(*M2, 1) == ([0.0] * 7, [0.0] * 7, 0.0)
+    # ODD B-1 (Y300): döngü sabit numunede tolerans STOP'unun NEDENİNİ bu bellekten söyler (kod + ek)
+    assert o.tekil.son_odak_engel == {"engel": "kalibrasyonYok", "engel_ek": {}}, o.tekil.son_odak_engel
 
 
 # ── birim: kip / etiket / metin / ayar / petri ızgarası ───────────────────────────────────────────────────

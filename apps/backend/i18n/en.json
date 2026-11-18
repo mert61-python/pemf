@@ -410,6 +410,10 @@
           "plakaYok": "The plate position and orientation could not be found: only {{bulunan}} wells were seen (at least {{beklenen}} wells, not all in one row or column) — not driven. Bring the whole plate into view and adjust the lighting; filled wells must span at least two rows and two columns."
         }
       },
+      "sabitNumune": {
+        "durdu": "The plate could not be verified for {{sn}} s — the coils were stopped. Reason: {{neden}} Measurement continues; driving resumes automatically once the plate is verified again.",
+        "nedenBulunamadi": "The plate or its wells were not recognised by the camera. Place the plate flat in the centre of the cabin and check the lid and the lighting."
+      },
       "sonuc": {
         "baslatilmadi": "AI Pro was NOT STARTED"
       }
@@ -530,6 +534,7 @@
       "aiProDurdurma": "AI Pro stop",
       "aiProHedefKaybi": "AI Pro target-loss stop",
       "aiProHedefKaybiMobil": "AI Pro target-loss stop (mobile frame)",
+      "aiProSabitNumuneDurdu": "AI Pro plate-verification stop",
       "sahipsiz": "Orphan coil stop",
       "sifirHz": "0 Hz session request (A-05) — while latched",
       "sureDoldu": "Time is up — automatic stop",
