@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 26
+   "dosyaSayisi": 31
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -13426,6 +13426,69 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": "ODD B-6 (18-11): yeni dosya — metinler baştan katalogdan (bant.alanSensoru.*)"
+  },
+  "apps/ui/src/components/domain/AlanHaritasiKarti.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.alanHaritasi.*)"
+  },
+  "apps/ui/src/hooks/useAlanHaritasi.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.alanHaritasi.*)"
+  },
+  "apps/ui/src/services/alanHaritasi.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "rgb({{deger1}}, {{deger2}}, {{deger3}})",
+     "gerekce": "CSS renk değeri (renk ölçeği) — kullanıcı metni değil",
+     "turler": [
+      "donus"
+     ]
+    }
+   ],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.alanHaritasi.*)"
+  },
+  "apps/ui/src/hooks/useIkizKoprusu.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.alanHaritasi.*)"
+  },
+  "apps/ui/src/services/ikizKoprusu.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.alanHaritasi.*)"
   }
  }
 }

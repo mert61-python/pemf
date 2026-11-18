@@ -1,5 +1,5 @@
 // Author: mertaygn, cglrgrkn
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, Platform, Text, TouchableOpacity, useWindowDimensions, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { Card } from "@/components/ui/Card";
@@ -9,6 +9,7 @@ import { dilParametresiEkle } from "@/services/apiClient";
 import { RefreshCcw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { EFieldBar } from "@/components/domain/EFieldBar";
+import { useIkizKoprusu } from "@/hooks/useIkizKoprusu";
 
 export function DemaSimulatorScreen() {
   const { t } = useTranslation();
@@ -42,6 +43,39 @@ export function DemaSimulatorScreen() {
   const simulatorKaynak = dilParametresiEkle(simulatorUrl);
   const cerceveAnahtari = `${key}:${i18n.language}`;
 
+  // GA (istem 53) A4 — DİJİTAL İKİZ KÖPRÜSÜ (sözleşme v1): yüklenen çerçeveye SALT OKUR `pemf.ikiz.durum` (2 Hz) + ikiz `pemf.ikiz.hazir`
+  // deyince `pemf.ikiz.alan`. Çerçeveden YALNIZ `hazir` tanınır — komut yolu YOK. DEMA iletileri yok sayar (hazir demez → alan hesabı başlamaz).
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const webViewRef = useRef<{ postMessage: (m: string) => void } | null>(null);
+  const [yuklenen, setYuklenen] = useState<string | null>(null);
+  const koken = useMemo(() => {
+    try {
+      return new URL(simulatorUrl).origin;
+    } catch {
+      return null;
+    }
+  }, [simulatorUrl]);
+  const gonder = useMemo(() => {
+    if (yuklenen !== cerceveAnahtari) return null;
+    if (Platform.OS === "web") {
+      return (m: string) => {
+        const w = iframeRef.current?.contentWindow;
+        if (w && koken) w.postMessage(m, koken);
+      };
+    }
+    return (m: string) => webViewRef.current?.postMessage(m);
+  }, [yuklenen, cerceveAnahtari, koken]);
+  const { gelen } = useIkizKoprusu(gonder);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined;
+    const dinle = (e: MessageEvent) => {
+      if (!e.source || e.source !== iframeRef.current?.contentWindow || e.origin !== koken) return;
+      gelen(e.data);
+    };
+    window.addEventListener("message", dinle);
+    return () => window.removeEventListener("message", dinle);
+  }, [gelen, koken]);
+
   return (
     <View style={styles.container}>
       <Card style={styles.headerCard}>
@@ -71,23 +105,32 @@ export function DemaSimulatorScreen() {
             src={simulatorKaynak}
             style={{ width: "100%", height: "100%", border: "none", borderRadius: 8 }}
             title="DEMA Simulator"
-            onLoad={() => setLoading(false)}
+            ref={iframeRef}
+            onLoad={() => {
+              setLoading(false);
+              setYuklenen(cerceveAnahtari);
+            }}
           />
         ) : (
           <WebView
             key={cerceveAnahtari}
+            ref={webViewRef as never}
             source={{ uri: simulatorKaynak }}
             style={styles.webview}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             startInLoadingState={false}
             onLoadStart={() => setLoading(true)}
-            onLoadEnd={() => setLoading(false)}
+            onLoadEnd={() => {
+              setLoading(false);
+              setYuklenen(cerceveAnahtari);
+            }}
             scalesPageToFit={true}
             nestedScrollEnabled={true}
             onMessage={(e) => {
               const h = parseInt(e.nativeEvent.data, 10);
               if (!isNaN(h) && h > 240 && h < 12000) setWebHeight(h);
+              gelen(e.nativeEvent.data); // GA: yalnız `pemf.ikiz.hazir` tanınır
             }}
             injectedJavaScriptBeforeContentLoaded={`
               (function(){
