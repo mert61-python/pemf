@@ -339,7 +339,7 @@
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
    "durum": "tamam",
    "metin": 136,
-   "dosyaSayisi": 39
+   "dosyaSayisi": 42
   },
   {
    "ad": "launcher-11a-ui",
@@ -9966,6 +9966,76 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "apps/backend/servers/alt_surec.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); runpy.run_path(sys.argv.pop(1), run_name='__main__')",
+     "gerekce": "kod — kaynak kipinde alt süreç önyükleyicisinin Python komut satırı (kullanıcıya görünmez)",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
+     "metin": "nesne değil",
+     "gerekce": "iç istisna — aynı işlevde yakalanır, alt süreç yanıtı `bozukIstek` kodudur (kullanıcıya görünmez)",
+     "turler": [
+      "istisna"
+     ]
+    }
+   ],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (durum kodları arayüzde çevrilir)"
+  },
+  "apps/backend/servers/canli_alan.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "Canlı alan döngü hatası",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "Canlı alan gönderim hatası",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "Canlı alan: bobin durumu okunamadı",
+     "gerekce": "günlük / döngü hata etiketi — geliştirici içindir, Türkçe kalır",
+     "turler": [
+      "cagri"
+     ]
+    }
+   ],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (durum kodları arayüzde çevrilir)"
+  },
+  "apps/backend/servers/canli_alan_hesapci.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (durum kodları arayüzde çevrilir)"
   },
   "launcher/app/ui/index.html": {
    "yuzey": "launcher",

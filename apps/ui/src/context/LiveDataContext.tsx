@@ -19,6 +19,7 @@ import { Platform } from "react-native";
 import { serviceConfig, loadStoredApiToken } from "@/services/config";
 import { apiGet, apiPost } from "@/services/apiClient";
 import { connectPemfWebSocket, WsMessage, type WsKontrol } from "@/services/wsClient";
+import type { AlanHaritasiVerisi } from "@/services/alanHaritasi";
 import { discoverBackend } from "@/services/discovery";
 import { mockSnapshot } from "@/services/mockData";
 import { useNetworkReachability } from "@/hooks/useNetworkReachability";
@@ -200,6 +201,10 @@ export interface LiveDataContextValue {
   /** D1.E03 · A-59: bobin durumu BİLİNMİYOR (bir kez çalıştı, STM şimdi çevrimdışı) — "çalışıyor" sayılır.
    *  Kural `useStmBelirsiz`'de; kilit sağlayıcıda (uygulama boyu). Kabuk söküm kapısı bunu okur. */
   donanimBelirsiz?: boolean;
+  /** GA (istem 53): son canlı alan haritası (yalnız en az bir abone varken; abonelik bitince null). Kanca: `useAlanHaritasi`. */
+  alanHaritasi?: AlanHaritasiVerisi | null;
+  /** GA: alan haritası aboneliği — SAYAÇLI (Kontrol kartı + Simülasyon köprüsü birlikte); 0 → 1 sunucuya abone, 1 → 0 çık. */
+  alanAbone?: (acik: boolean) => void;
 }
 
 const LiveDataContext = createContext<LiveDataContextValue>({
@@ -227,6 +232,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [wsConnected, setWsConnected] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [aiVisionData, setAiVisionData] = useState<AiVisionData>();
+  // GA (istem 53): son canlı alan haritası + abone sayacı (`alanAbone`).
+  const [alanHaritasi, setAlanHaritasi] = useState<AlanHaritasiVerisi | null>(null);
+  const alanAboneSayisiRef = useRef(0);
   // Faz3 medikal-güvenlik: GERÇEK veri geldi mi + son veri zamanı → donmuş/örnek veriyi 'canlı' gösterme.
   const [haveRealData, setHaveRealData] = useState(false);
   const lastDataTsRef = useRef(0);
@@ -402,6 +410,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       // diyordu. Telemetri SAYILMAZ (türetilmiş değer — sensör akışı ölünce tazelik damgası atmamalı).
       case "efield_update": {
         updateSnapshot({ eField: (msg.data ?? null) as DashboardSnapshot["eField"] });
+        break;
+      }
+
+      // GA (istem 53): canlı 3B alan haritası — telemetri SAYILMAZ (türetilmiş, model tahmini); abonelik bittiyse geç gelen yok sayılır.
+      case "alan_haritasi": {
+        if (alanAboneSayisiRef.current > 0) setAlanHaritasi((msg.data ?? null) as AlanHaritasiVerisi | null);
         break;
       }
 
@@ -588,9 +602,24 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   //    kalıyordu. Artık token belleğe alınmadan soket açılmaz.
   // BE 1(d): soket denetimi (arka plandan dönüşte doğrulama) — wsClient kurulurken doldurur.
   const wsKontrolRef = useRef<WsKontrol>({});
+  // GA (istem 53): canlı alan haritası aboneliği SAYAÇLI; sunucudaki abonelik soket başına → her (yeniden) açılışta yenilenir.
+  const alanAbone = useCallback((acik: boolean) => {
+    const once = alanAboneSayisiRef.current;
+    const sonra = Math.max(0, once + (acik ? 1 : -1));
+    alanAboneSayisiRef.current = sonra;
+    if (once === 0 && sonra > 0) wsKontrolRef.current.gonder?.({ type: "alan_abone", acik: true });
+    if (once > 0 && sonra === 0) {
+      wsKontrolRef.current.gonder?.({ type: "alan_abone", acik: false });
+      setAlanHaritasi(null);
+    }
+  }, []);
   useEffect(() => {
     if (!tokenLoaded) return;
-    const kontrol: WsKontrol = {};
+    const kontrol: WsKontrol = {
+      acilinca: () => {
+        if (alanAboneSayisiRef.current > 0) kontrol.gonder?.({ type: "alan_abone", acik: true });
+      },
+    };
     wsKontrolRef.current = kontrol;
     const disconnect = connectPemfWebSocket(
       handleWsMessage,
@@ -737,10 +766,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       aiVisionData,
       aiVisionFresh,
       donanimBelirsiz,
+      alanHaritasi,
+      alanAbone,
     }),
     [snapshot, sensorHistory, wsConnected, unreadCount, markAllRead,
      clearNotifications, refresh, connectionQuality, telemetryStale, haveRealData, reconnect,
-     aiVisionData, aiVisionFresh, donanimBelirsiz]
+     aiVisionData, aiVisionFresh, donanimBelirsiz, alanHaritasi, alanAbone]
   );
 
   return <LiveDataContext.Provider value={value}>{children}</LiveDataContext.Provider>;

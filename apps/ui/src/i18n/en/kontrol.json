@@ -3,6 +3,46 @@
     "akimYok": "No current measurement",
     "dogrulanamadi": "Field sensor could not be verified — the measured value is not shown"
   },
+  "alanHaritasi": {
+    "acKapat": "Show / hide the field map",
+    "baslik": "Field map",
+    "bekleniyor": "Waiting for the map…",
+    "durum": {
+      "eslemeDogrulanmadi": "The coil mapping is not verified — verify the coil mapping in the field calibration.",
+      "hata": "The field map could not be computed — it will be retried in a few seconds.",
+      "kalibrasyonBozuk": "The field calibration could not be read — save the field calibration again.",
+      "kalibrasyonEski": "The field calibration is an old version — renew the field calibration.",
+      "kalibrasyonYok": "No field calibration — the map cannot be drawn. Measure the coil field with the MLX and save the field calibration.",
+      "modelBozuk": "The field table could not be verified — reinstall the AI model package.",
+      "modelYok": "The field table is not in the AI model package — install or update the AI model package.",
+      "sifir": "No coil is running — the field is zero."
+    },
+    "enYuksek": "Peak: {{deger}} mT (position {{x}}, {{y}}, {{z}} mm)",
+    "kapali": "Off — when on, the magnetic field the running coils create in the cabin (model estimate) updates every second.",
+    "katman": {
+      "orta": "Middle",
+      "taban": "Floor (plate)",
+      "tavan": "Top"
+    },
+    "katmanEnYuksek": "Peak in this section: {{deger}} mT",
+    "kesitYuksekligi": "Section: {{mm}} mm above the floor glass (top view)",
+    "mlx": "Sensor (MLX) reading: {{deger}} mT — not placed on the map because the sensor's position in the cabin is unknown.",
+    "modelTahmini": "Model estimate, not a measurement",
+    "nokta": "Selected point ({{x}}, {{z}} mm): {{deger}} mT",
+    "noktaIpucu": "Tap a point on the map to see its value.",
+    "noktaYok": "Selected point ({{x}}, {{z}} mm): outside the field table",
+    "olcekUst": "{{deger}} mT",
+    "uyari": {
+      "dutyKirpildi": "Coils with a duty above 50% were counted as 50% in the model (the measured duty curve goes up to 50%).",
+      "frekansKalibrasyonDisi": "Frequency outside 76–147 Hz — the model was verified in this range, values are less certain."
+    },
+    "yon": {
+      "arka": "Back",
+      "on": "Front",
+      "sag": "Right",
+      "sol": "Left"
+    }
+  },
   "bobin": {
     "alan": "Field",
     "baslik": "Coil {{id}}",

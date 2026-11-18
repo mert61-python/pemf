@@ -28,6 +28,7 @@ import { AiProPanel } from "@/components/domain/AiProPanel";
 import { modelleriAl } from "@/components/domain/aiProProfilleri";
 import { useUserMode } from "@/context/UserModeContext";
 import { EFieldBar } from "@/components/domain/EFieldBar";
+import { AlanHaritasiKarti } from "@/components/domain/AlanHaritasiKarti";
 import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -809,6 +810,10 @@ export function ControlScreen() {
           />
         </View>
       )}
+
+      {/* GA (istem 53): CANLI ALAN HARİTASI — varsayılan KAPALI, sekme içeriğinin ALTINDA (ACİL DURDUR'un yeri DEĞİŞMEZ); yalnız
+          gösterim, açıkken sunucuya abone olur. */}
+      <AlanHaritasiKarti />
 
       {/* Gözlem notu modalı seans BİTİNCE otomatik açılır ve tam ekranı kaplar → o sırada donanım
           hâlâ enerjiliyse (yerel sayaç bitti ama backend/bobin durmadıysa) ACİL DURDUR'a erişimi

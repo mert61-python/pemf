@@ -3,6 +3,46 @@
     "akimYok": "Akım ölçümü yok",
     "dogrulanamadi": "Alan sensörü doğrulanamadı — ölçülen değer gösterilmiyor"
   },
+  "alanHaritasi": {
+    "acKapat": "Alan haritasını aç / kapat",
+    "baslik": "Alan haritası",
+    "bekleniyor": "Harita bekleniyor…",
+    "durum": {
+      "eslemeDogrulanmadi": "Bobin eşlemesi doğrulanmadı — alan kalibrasyonunda bobin eşlemesini doğrulayın.",
+      "hata": "Alan haritası hesaplanamadı — birkaç saniye içinde yeniden denenecek.",
+      "kalibrasyonBozuk": "Alan kalibrasyonu okunamadı — alan kalibrasyonunu yeniden kaydedin.",
+      "kalibrasyonEski": "Alan kalibrasyonu eski sürümde — alan kalibrasyonunu yenileyin.",
+      "kalibrasyonYok": "Alan kalibrasyonu yok — harita çizilemez. Bobin alanını MLX ile ölçüp alan kalibrasyonunu kaydedin.",
+      "modelBozuk": "Alan tablosu doğrulanamadı — AI model paketini yeniden kurun.",
+      "modelYok": "Alan tablosu AI model paketinde yok — AI model paketini kurun ya da güncelleyin.",
+      "sifir": "Çalışan bobin yok — alan sıfır."
+    },
+    "enYuksek": "En yüksek: {{deger}} mT (konum {{x}}, {{y}}, {{z}} mm)",
+    "kapali": "Kapalı — açınca çalışan bobinlerin kabinde oluşturduğu manyetik alan (model tahmini) saniyede bir güncellenir.",
+    "katman": {
+      "orta": "Orta",
+      "taban": "Taban (plaka)",
+      "tavan": "Tavan"
+    },
+    "katmanEnYuksek": "Bu kesitte en yüksek: {{deger}} mT",
+    "kesitYuksekligi": "Kesit: taban camının {{mm}} mm üstü (üstten bakış)",
+    "mlx": "Sensör (MLX) ölçümü: {{deger}} mT — sensörün kabindeki yeri bilinmediği için haritaya işlenmez.",
+    "modelTahmini": "Model tahmini, ölçüm değil",
+    "nokta": "Seçilen nokta ({{x}}, {{z}} mm): {{deger}} mT",
+    "noktaIpucu": "Değerini görmek için haritada bir noktaya dokunun.",
+    "noktaYok": "Seçilen nokta ({{x}}, {{z}} mm): alan tablosunun dışında",
+    "olcekUst": "{{deger}} mT",
+    "uyari": {
+      "dutyKirpildi": "Duty'si %50'nin üstündeki bobinler modelde %50 sayıldı (ölçülen duty eğrisi %50'ye kadar).",
+      "frekansKalibrasyonDisi": "Frekans 76–147 Hz dışında — model bu aralıkta doğrulandı, değerler daha belirsiz."
+    },
+    "yon": {
+      "arka": "Arka",
+      "on": "Ön",
+      "sag": "Sağ",
+      "sol": "Sol"
+    }
+  },
   "bobin": {
     "alan": "Alan",
     "baslik": "Bobin {{id}}",

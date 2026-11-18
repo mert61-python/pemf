@@ -23,6 +23,7 @@ export type WsMessageType =
   | "estop_teyit" // D1.E04: son acil durdurmanın teyit durumu — data=EstopTeyit
   | "stm_uyum" // TD1: kart ↔ uygulama paket uyumu kararı — data=StmUyum
   | "efield_update" // Y212 · S-D67.13: canlı E-alanı (2 Hz; hesap bitince null) — data=EFieldLive | null
+  | "alan_haritasi" // GA (istem 53): canlı 3B alan haritası (1 Hz, YALNIZ abone istemciye) — data=AlanHaritasiVerisi
   | "pong";  // heartbeat yanıtı (backend ping'e döner)
 
 export interface WsMessage {
@@ -46,6 +47,10 @@ const DOGRULAMA_MS = 4000; // BE 1(d): arka plandan dönüşte ping'e bu sürede
 export interface WsKontrol {
   /** Arka plandan dönüş: soket bir ileti (pong dahil) ya da yeni `onopen` ile DOĞRULANANA dek bağlantı "yok" bildirilir. */
   dogrula?: () => void;
+  /** GA (istem 53): AÇIK sokete ileti (ör. `alan_abone`). Soket açık değilse / gönderim fırlatırsa false (çağıran açılışta yeniler). */
+  gonder?: (ileti: object) => boolean;
+  /** GA: her (yeniden) açılışta çağrılır — sunucudaki abonelikler SOKET başınadır, yeniden bağlanınca yenilenmelidir. Çağıran doldurur. */
+  acilinca?: () => void;
 }
 
 // ─── Connection ──────────────────────────────────────────────────────────────
@@ -211,6 +216,11 @@ export function connectPemfWebSocket(
         dogrulamayiBirak(); // yeni soketin açılması doğrulamadır
         onState?.(true);
         startHeartbeat();
+        try {
+          kontrol?.acilinca?.();
+        } catch {
+          /* çağıranın aboneliği yenileme hatası bağlantıyı düşürmez */
+        }
       };
       socket.onerror = () => onState?.(false);
       socket.onmessage = handleMessage;
@@ -240,6 +250,16 @@ export function connectPemfWebSocket(
   };
 
   if (kontrol) {
+    kontrol.gonder = (ileti) => {
+      const s = socket;
+      if (closedByCaller || !s || s.readyState !== 1 /* OPEN */) return false;
+      try {
+        s.send(JSON.stringify(ileti));
+        return true;
+      } catch {
+        return false;
+      }
+    };
     kontrol.dogrula = () => {
       if (closedByCaller) return;
       onState?.(false);
