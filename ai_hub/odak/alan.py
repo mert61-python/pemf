@@ -418,6 +418,20 @@ class AlanModeli:
         """Tepe akımlar aynı anda varsayımıyla |Σ a_c M_c| (nT,) — çözücü / model ölçeği."""
         return np.linalg.norm(np.einsum("tij,j->ti", np.asarray(M, dtype=float), np.asarray(a, dtype=float)), axis=1)
 
+    # ── GA (istem 53) canlı alan: Kontrol sekmesinin VERDİĞİ faz ─────────────────────────────────────
+    def td_dalga_faz(self, duty, faz) -> np.ndarray:
+        """Kontrol sekmesi sürüşü: duty (7,) oran + faz (7,) derece → bobin akım dalgaları W (7, Nt), BU modelin frekansında tek periyot.
+        Faz = GECİKME (firmware ortak tik: `adj = (tick − faz_ofseti) mod periyot`) → çift yönlüde 180° = ters yön, tek yönlüde yarım
+        periyot. Genlik / biçim `_td_dalga` ile AYNI (hizasız; duty [0, 0,5]'e kırpılır — model ölçülen eğrinin dışına çıkmaz)."""
+        W = self._td_dalga(np.clip(np.asarray(duty, dtype=float), 0.0, DUTY_AZAMI), hizala=False)
+        Nt = W.shape[1]
+        kay = np.rint(np.mod(np.asarray(faz, dtype=float), 360.0) / 360.0 * Nt).astype(int) % Nt
+        return np.stack([np.roll(W[c], kay[c]) for c in range(N_BOBIN)])
+
+    def td_tepe_faz(self, M, duty, faz) -> np.ndarray:
+        """M (nT, 3, 7) + duty (7,) + faz (7,) derece → tepe |B(t)| (nT,); bütün bobinler bu modelin frekansında (`td_tepe`'nin Y280'siz eşi)."""
+        return td_tepe_dalga(M, self.td_dalga_faz(duty, faz))
+
 
 #: 128 işaret deseni (tavan için köşe taraması).
 ISARETLER = np.array([[1.0 if (k >> c) & 1 else -1.0 for c in range(N_BOBIN)] for k in range(2 ** N_BOBIN)])
@@ -435,3 +449,64 @@ def tavan_td(A: "AlanModeli", M) -> float:
     farklı olabilir — ölçüldü 12-11.)"""
     M = np.asarray(M, dtype=float)
     return float(max(A.td_tepe(M, DUTY_AZAMI * s).min() for s in ISARETLER))
+
+
+# ── GA (istem 53) canlı alan: farklı frekanslar + hızlı tepe ─────────────────────────────────────────
+#: Bobinler FARKLI frekanstayken tepe |B| ORTAK PENCEREDE aranır: firmware bütün bobinleri ortak tikle sürer → fiziksel dalga 1 / ebob(f)
+#: içinde yinelenir; pencere bu kadar EŞİT adımla örneklenir. ASAL → hiçbir bobin periyoduyla hizalanmaz, örnekler her bobinin periyodunu
+#: ayrı ayrı tarar. Ölçüldü (18-11, gerçek tablo, 7 senaryo, GA.md "Ortak pencere"): ince örneklemeye göre en büyük fark ≤ %2,3; harmonik
+#: olmayan frekanslarda bağımsız fazlı uzun süreli zarfla ≤ %1,2 aynı. Üst sınır (Σ grup tepesi) %15–21 abartıyordu → seçilmedi.
+ORTAK_PENCERE_ORNEK = 2039
+#: Frekanslar bu çözünürlükte ele alınır → ortak pencere en çok 1 / 0,1 = 10 s.
+FREKANS_COZUNURLUK_HZ = 0.1
+_UST = np.triu_indices(N_BOBIN)
+
+
+def ortak_pencere_s(frekanslar) -> float:
+    """Frekanslar (Hz) → ortak pencere (s) = 1 / ebob (0,1 Hz çözünürlükte; en çok 10 s)."""
+    import math
+
+    n = [max(1, int(round(float(f) / FREKANS_COZUNURLUK_HZ))) for f in frekanslar]
+    return 1.0 / (math.gcd(*n) * FREKANS_COZUNURLUK_HZ)
+
+
+def ortak_dalga(parcalar) -> np.ndarray:
+    """[(f_hz, W (7, Nt)), ...] — her frekans grubunun KENDİ periyodundaki dalgaları (öbür grupların bobinleri 0) → W (7, S). Tek parça →
+    AYNEN (S = Nt, `td_tepe` çözünürlüğü). Birden çok → ortak pencere [0, 1 / ebob) `ORTAK_PENCERE_ORNEK` eşit adım; bobinin o andaki
+    değeri kendi periyodundaki (alttaki) örnek."""
+    if len(parcalar) == 1:
+        return np.asarray(parcalar[0][1], dtype=float)
+    pencere = ortak_pencere_s([f for f, _ in parcalar])
+    t = np.arange(ORTAK_PENCERE_ORNEK) * (pencere / ORTAK_PENCERE_ORNEK)
+    Wt = np.zeros((N_BOBIN, ORTAK_PENCERE_ORNEK))
+    for f, W in parcalar:
+        W = np.asarray(W, dtype=float)
+        Nt = W.shape[1]
+        Wt += W[:, np.floor(np.mod(t * float(f), 1.0) * Nt).astype(int) % Nt]
+    return Wt
+
+
+def td_tepe_dalga(M, W) -> np.ndarray:
+    """M (nT, 3, 7) + bobin dalgaları W (7, S) → her noktada tepe |Σ_c M_c W_c(t)| (nT,) (`td_tepe`'nin hesabı, dalga dışarıdan)."""
+    Bt = np.einsum("tij,jk->tik", np.asarray(M, dtype=float), np.asarray(W, dtype=float))
+    return np.linalg.norm(Bt, axis=1).max(axis=1)
+
+
+def gram(M) -> np.ndarray:
+    """M (nT, 3, 7) → G (nT, 28) float32 — |B(t)|² = Σ_{j≤k} G_jk W_j(t) W_k(t) (köşegen dışı ×2). Izgara başına BİR kez (frekanstan
+    bağımsız); her güncellemede yalnız G @ (W_j W_k) — canlı alanda `td_tepe`den ~12× hızlı (ölçüldü 18-11)."""
+    M = np.asarray(M, dtype=float)
+    G = np.einsum("tic,tid->tcd", M, M)[:, _UST[0], _UST[1]]
+    G[:, _UST[0] != _UST[1]] *= 2.0
+    return G.astype(np.float32)
+
+
+def gram_tepe(G, W, parca: int = 1024) -> np.ndarray:
+    """G (nT, 28) + W (7, S) → tepe |B| (nT,) — `td_tepe_dalga` ile aynı (float32: göreli < 1e-5). Bellek: parça başına parca × S × 4 bayt."""
+    W = np.asarray(W, dtype=float)
+    WW = (W[_UST[0]] * W[_UST[1]]).astype(np.float32)
+    G = np.asarray(G, dtype=np.float32)
+    kare = np.empty(len(G))
+    for i in range(0, len(G), parca):
+        kare[i:i + parca] = (G[i:i + parca] @ WW).max(axis=1)
+    return np.sqrt(np.maximum(kare, 0.0))
