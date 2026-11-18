@@ -129,3 +129,63 @@ def test_ucdan_uca_sahte_kamera_ile_main(betik, tmp_path, monkeypatch):
     assert betik.main(["--cikti", str(tmp_path / "c"), "--adet", "2", "--aralik", "0", "--tanisiz"]) == 0
     assert sorted(p.name for p in (tmp_path / "c").iterdir()) == ["kare_0001.png", "kare_0002.png", "tani.csv"]
     assert cap.birakildi
+
+
+# ── ODD madde 8 (ODK-B 18-11): depodan koşunca veri kökü ─────────────────────────────────────────────────────────────────
+# ÖLÇÜLEN: `PEMF_DATA_DIR`siz koşunca kök `%APPDATA%\PEMF_GUI` sanılıyor, kurulu uygulamanın seçimi (`%ProgramData%\PEMF_System\PEMF_GUI\
+# kabin_kamerasi.json`) görülmüyordu → "Kabin kamerası seçilmedi". Sahte ProgramData (tmp) — GERÇEK veri kökü AÇILMAZ.
+def test_KRITIK_ODD8_PEMF_DATA_DIR_yokken_KURULU_kokte_secim_varsa_ORADAN_okur(betik, tmp_path):
+    ortam = {"PROGRAMDATA": str(tmp_path / "PD")}
+    (tmp_path / "PD" / "PEMF_System" / "PEMF_GUI").mkdir(parents=True)
+    (tmp_path / "PD" / "PEMF_System" / "PEMF_GUI" / "kabin_kamerasi.json").write_text("{}", encoding="utf-8")
+    kok, kaynak = betik.veri_koku_sec(ortam)
+    assert (kok, kaynak) == (str(tmp_path / "PD" / "PEMF_System"), "kurulu")
+    assert ortam["PEMF_DATA_DIR"] == kok, "kurulu kök süreç ortamına (uygulamanınkiyle AYNI) kurulmadı"
+
+
+def test_KARSIT_ODD8_acik_PEMF_DATA_DIR_ONCELIKLI_secim_yoksa_HICBIR_SEY_kurulmaz(betik, tmp_path):
+    acik = {"PEMF_DATA_DIR": str(tmp_path / "x"), "PROGRAMDATA": str(tmp_path / "PD")}
+    assert betik.veri_koku_sec(acik) == (str(tmp_path / "x"), "PEMF_DATA_DIR")
+    (tmp_path / "PD" / "PEMF_System" / "PEMF_GUI").mkdir(parents=True)  # kurulu kök VAR ama seçim dosyası YOK
+    bos = {"PROGRAMDATA": str(tmp_path / "PD")}
+    assert betik.veri_koku_sec(bos) == ("", "appdata") and "PEMF_DATA_DIR" not in bos
+    assert betik.kurulu_veri_dizini({}) == Path(r"C:\ProgramData") / "PEMF_System"
+
+
+def test_KRITIK_ODD8_secim_yine_YOKSA_ileti_BAKILAN_koku_ve_ipucunu_soyler(betik, tmp_path, monkeypatch, capsys):
+    betik._yollari_kur()
+    import utils.path_utils as pu
+    from utils import kabin_kamerasi
+
+    monkeypatch.delenv("PEMF_DATA_DIR", raising=False)
+    monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "PD"))
+    monkeypatch.setattr(pu, "get_app_data_directory", lambda *a, **k: str(tmp_path / "AppData" / "PEMF_GUI"))
+
+    def _secilmedi(*a, **k):
+        raise kabin_kamerasi.KameraSecilmedi()
+
+    monkeypatch.setattr(kabin_kamerasi, "kamera_ac", _secilmedi)
+    assert betik.main(["--cikti", str(tmp_path / "c"), "--tanisiz"]) == 3
+    out = capsys.readouterr().out
+    assert f"bakılan veri kökü: {tmp_path / 'AppData' / 'PEMF_GUI'}" in out, out
+    assert f"PEMF_DATA_DIR={tmp_path / 'PD' / 'PEMF_System'}" in out, out
+
+
+def test_ODD8_kurulu_kok_kullanilinca_SOYLENIR(betik, tmp_path, monkeypatch, capsys):
+    betik._yollari_kur()
+    import utils.path_utils as pu
+    from utils import kabin_kamerasi
+
+    pd = tmp_path / "PD" / "PEMF_System" / "PEMF_GUI"
+    pd.mkdir(parents=True)
+    (pd / "kabin_kamerasi.json").write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("PEMF_DATA_DIR", raising=False)
+    monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "PD"))
+    monkeypatch.setattr(pu, "get_app_data_directory", lambda *a, **k: str(pd))
+
+    def _secilmedi(*a, **k):
+        raise kabin_kamerasi.KameraSecilmedi()
+
+    monkeypatch.setattr(kabin_kamerasi, "kamera_ac", _secilmedi)
+    betik.main(["--cikti", str(tmp_path / "c"), "--tanisiz"])
+    assert f"veri kökü: {tmp_path / 'PD' / 'PEMF_System'} (kurulu uygulamanınki" in capsys.readouterr().out

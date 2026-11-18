@@ -19,6 +19,11 @@ AYNI petri ızgara hattının tanısı: YOLO aday, doğrulanan kuyu, ECC, uyum s
 Kareler arasında plakayı / ışığı / kuyu dolumunu değiştir (liste: `DENETIM\\ODAK.md` "Tezgâhta yapılacak").
 Pencere AÇMAZ · ağa ÇIKMAZ (modeller yerel model katmanından; YOLO yoksa tanı Hough + ECC ile) · veri köküne (`ProgramData\\PEMF_System\\PEMF_GUI`)
 YAZMAZ — çıktı orada istenirse reddeder.
+
+VERİ KÖKÜ (ODD madde 8, ODK-B 18-11): kabin kamerası seçimi (`kabin_kamerasi.json`) kurulu uygulamanın veri kökündedir — launcher backend'e
+`PEMF_DATA_DIR=%ProgramData%\\PEMF_System` verir. Depodan `PEMF_DATA_DIR`siz koşunca kök `%APPDATA%\\PEMF_GUI` sanılıyor, seçim orada
+olmadığı için "Kabin kamerası seçilmedi" deniyordu. Sıra: açık `PEMF_DATA_DIR` → kurulu kök (seçim dosyası VARSA; kullanılan kök
+yazılır) → `%APPDATA%`; seçim yine bulunamazsa ileti BAKILAN kökü ve `PEMF_DATA_DIR` ipucunu söyler. Veri köküne yine YAZILMAZ.
 """
 
 from __future__ import annotations
@@ -59,6 +64,26 @@ def _depo_koku(bas: Path) -> Path:
 
 def _kok() -> Path:
     return _depo_koku(Path(__file__).resolve())
+
+
+def kurulu_veri_dizini(ortam=None) -> Path:
+    """Kurulu uygulamanın makine-geneli veri dizini (launcher'ın verdiği `PEMF_DATA_DIR`): `%ProgramData%\\PEMF_System`."""
+    ortam = os.environ if ortam is None else ortam
+    return Path(ortam.get("PROGRAMDATA") or ortam.get("ProgramData") or r"C:\ProgramData") / "PEMF_System"
+
+
+def veri_koku_sec(ortam=None) -> tuple[str, str]:
+    """ODD madde 8: kabin kamerası seçiminin okunacağı veri kökü → (kök, kaynak). `kaynak` ∈ {"PEMF_DATA_DIR", "kurulu", "appdata"}.
+    Kurulu kökte seçim dosyası varsa `PEMF_DATA_DIR` o köke kurulur (uygulamanın kendi ortamıyla AYNI) — dosya yoksa hiçbir şey kurulmaz."""
+    ortam = os.environ if ortam is None else ortam
+    acik = str(ortam.get("PEMF_DATA_DIR") or "").strip()
+    if acik:
+        return acik, "PEMF_DATA_DIR"
+    kurulu = kurulu_veri_dizini(ortam)
+    if (kurulu / "PEMF_GUI" / "kabin_kamerasi.json").is_file():
+        ortam["PEMF_DATA_DIR"] = str(kurulu)
+        return str(kurulu), "kurulu"
+    return "", "appdata"
 
 
 def _yollari_kur() -> None:
@@ -195,6 +220,9 @@ def main(argv=None) -> int:
     ap.add_argument("--tanisiz", action="store_true", help="ızgara tanısı yapma (yalnız kare)")
     a = ap.parse_args(argv)
     _yollari_kur()
+    kok, kaynak = veri_koku_sec()
+    if kaynak == "kurulu":
+        print(f"{ONEK} veri kökü: {kok} (kurulu uygulamanınki — kabin kamerası seçimi oradan okunur)")
     import cv2
     from utils import kabin_kamerasi
     from utils.path_utils import get_app_data_directory
@@ -207,6 +235,11 @@ def main(argv=None) -> int:
         cap, indeks = kabin_kamerasi.kamera_ac(cv2)
     except kabin_kamerasi.KameraSecilmedi as e:
         print(f"{ONEK} !!! {kabin_kamerasi.secim_hatasi_metni(e)}")
+        # ODD madde 8: BAKILAN kök + kurulu uygulamanın köküne yönlendirme (depodan PEMF_DATA_DIR'siz koşunca %APPDATA%'ya bakılır).
+        print(
+            f"{ONEK} bakılan veri kökü: {get_app_data_directory()} — kurulu uygulamanın seçimi farklı kökteyse PEMF_DATA_DIR verin "
+            f"(ör. set PEMF_DATA_DIR={kurulu_veri_dizini()}) ya da uygulamada AI Pro / analiz panelindeki «Kabin kamerası» bölümünden seçin."
+        )
         return 3
     try:
         if not cap.isOpened():
