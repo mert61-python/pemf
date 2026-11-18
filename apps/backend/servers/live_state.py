@@ -276,6 +276,10 @@ _live_state = {
         # duty'si). Eskiden `intensityMt`e yazılıyordu → arayüz "%37 duty"yi "37 mT" diye gösteriyordu. mT DEĞİLDİR;
         # None = bu seans duty temsil değeri taşımıyor (elle seans: reçete `intensityMt`).
         "dutyTemsilYuzde": None,
+        # ODD K-11 (yalnız-ek): AI Pro ODAK seansının seçilen dozu (mT, mühür) + planın sürdüğü bobin sayısı; None = yok. Başlangıçta da
+        # VAR — canlı durumun şekli seans türünden / sıradan bağımsız kalsın (D189 arayüz fikstürü kapısı).
+        "odakDozMt": None,
+        "odakBobinSayisi": None,
         # ÖLÇÜLEN yoğunluk: STM'e bağlı MLX90393'ün seans boyunca gördüğü TEPE |B| (mT).
         # ⚠️ None = HİÇ ÖLÇÜM YOK (sensör bağlı değil / seans yok). 0.0 KOYULMAZ: aşağı
         # akış 0.0'ı "ölçüldü" sayar — bu deponun tekrarlayan arızası. Arayüz None iken
@@ -807,6 +811,8 @@ def update_live_session_state(
     duration_sec: int = 0,
     surus_nesli: int | None = None,
     duty_temsil: float | None = None,
+    odak_doz: float | None = None,
+    odak_bobin: int | None = None,
 ) -> bool:
     """React/WebSocket tarafındaki aktif tedavi özetini günceller. @return yazıldı mı (False = "aktif" yazımı ATLANDI).
 
@@ -832,6 +838,9 @@ def update_live_session_state(
                 "frequencyHz": freq,
                 "intensityMt": intensity,
                 "dutyTemsilYuzde": duty_temsil,  # D1.89: duty mT alanına YAZILMAZ (bkz. ilk durum)
+                # ODD K-11 (YALNIZ-EK): AI Pro ODAK seansında seçilen doz (mT, mühür) + planın sürdüğü bobin sayısı; yoksa None.
+                "odakDozMt": odak_doz,
+                "odakBobinSayisi": odak_bobin,
                 "remainingMin": remaining_min,
                 "elapsedSec": elapsed_sec,
                 "durationSec": duration_sec,

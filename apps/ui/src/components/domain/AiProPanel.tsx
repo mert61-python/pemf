@@ -1326,7 +1326,9 @@ export function AiProPanel({
   const gecikmeIpucu =
     hazirlik && hazirlikGecen >= HAZIRLIK_UYARI_MS
       ? arastirmaKipi
-        ? t("ai.pro.gecikmeIpucuArastirma")
+        ? hedefModeli === "petri"
+          ? t("ai.pro.gecikmeIpucuPetri")
+          : t("ai.pro.gecikmeIpucuArastirma")
         : IS_WEB
           ? t("ai.pro.gecikmeIpucuKabin")
           : t("ai.pro.gecikmeIpucu")
@@ -1595,7 +1597,13 @@ export function AiProPanel({
           NEDEN gelmediğini peşinen söyler; liste halkaların ZORUNLU erişilebilir yedeğidir. */}
       {arastirmaKipi ? (
         <>
-          <KalibrasyonRozeti yontem={yontemAktif} gorunur={hazirlik || running} localized={detected} kapiEylem={kapiEylemAktif} />
+          <KalibrasyonRozeti
+            yontem={yontemAktif}
+            gorunur={hazirlik || running}
+            kameraAcik={hazirlik || running}
+            localized={detected}
+            kapiEylem={kapiEylemAktif}
+          />
           {ood ? (
             <Text style={styles.note}>
               {t("ai.pro.konumEgitimDisi")}
@@ -1692,7 +1700,7 @@ export function AiProPanel({
           accessibilityRole="button"
           accessibilityLabel={localized ? t("ai.pro.yenidenKonumla.konumlandiEtiket") : t("ai.pro.yenidenKonumla.etiket")}
         >
-            <Text style={styles.calBtnText} numberOfLines={1} adjustsFontSizeToFit>{localized ? t("ai.pro.yenidenKonumla.konumlandi") : t("ai.pro.yenidenKonumla.dugme")}</Text>
+            <Text style={styles.calBtnText} numberOfLines={1} adjustsFontSizeToFit>{localized && (hazirlik || running) ? t("ai.pro.yenidenKonumla.konumlandi") : t("ai.pro.yenidenKonumla.dugme")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1729,6 +1737,19 @@ export function AiProPanel({
       >
         <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? t("ai.pro.dugme.durdur") : hazirlik ? t("ai.pro.dugme.hazirlaniyor") : arastirmaKipi ? t("ai.pro.dugme.hazirligiBaslat") : kediSurusKapali ? t("ai.pro.dugme.analizOneri") : t("ai.pro.dugme.baslat", { f: frek })}</Text>
       </TouchableOpacity>
+      {/* ODD K-3 (ODK-B keşfi 18-11, sahip 14.png): hazırlık sürerken ana düğme pasif görünümlü "Hazırlanıyor…" ve iptal yalnız şeritteki
+          küçük "Vazgeç"ti → hazırlıkta GÖRÜNÜR, büyük "Hazırlığı durdur" (aynı `vazgec`: önizleme durur, kamera bırakılır). */}
+      {hazirlik && !running ? (
+        <TouchableOpacity
+          style={[styles.hazirlikDurdur, { minHeight: touch.min }]}
+          onPress={vazgec}
+          accessibilityRole="button"
+          accessibilityLabel={t("ai.pro.dugme.hazirligiDurdurEtiket")}
+          testID="ai-pro-hazirlik-durdur"
+        >
+          <Text style={styles.hazirlikDurdurMetin}>{t("ai.pro.dugme.hazirligiDurdur")}</Text>
+        </TouchableOpacity>
+      ) : null}
       {/* Y142: neden + eylem GÖRÜNÜR (yalnız erişilebilirlik ipucuna yazmak "düğme bozuk" izlenimi verirdi). */}
       {kediSurusKapali && !running ? (
         <Text style={styles.note} testID="ai-pro-kedi-surus-kapali">{kediSurusKapaliMetni()}</Text>
@@ -1833,6 +1854,10 @@ const styles = StyleSheet.create({
   hazirlikMetin: { color: "#dbeafe", fontWeight: "700", fontSize: typography.small },
   hazirlikIptal: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 6, backgroundColor: "#334155", flexShrink: 0 },
   hazirlikIptalMetin: { color: "#e2e8f0", fontWeight: "700", fontSize: typography.small },
+  // ODD K-3: hazırlıkta görünür durdurma düğmesi (nötr — ACİL DURDUR ile karışmasın)
+  hazirlikDurdur: { marginTop: spacing.xs, borderRadius: 10, borderWidth: 1, borderColor: "#64748b", backgroundColor: "#1e293b",
+    alignItems: "center", justifyContent: "center", paddingVertical: spacing.xs },
+  hazirlikDurdurMetin: { color: "#e2e8f0", fontWeight: "800", fontSize: typography.small },
   calBtn: { backgroundColor: "#334155", borderRadius: 8, padding: spacing.sm, alignItems: "center" },
   calBtnDone: { backgroundColor: "#15803d" },
   calBtnText: { color: "#fff", fontWeight: "700", fontSize: typography.small },

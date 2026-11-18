@@ -1055,7 +1055,9 @@
       "durdurEtiket": "AI Pro otonom seansı durdur",
       "durdurIpucu": "Bobinleri durdurur",
       "hazirlaniyor": "🔎 Hazırlanıyor…",
-      "hazirligiBaslat": "🚀 Hazırlığı Başlat"
+      "hazirligiBaslat": "🚀 Hazırlığı Başlat",
+      "hazirligiDurdur": "⏹ Hazırlığı durdur",
+      "hazirligiDurdurEtiket": "Hazırlığı durdur — kamera önizlemesi kapanır"
     },
     "frekans": {
       "etiket": "AI Pro frekansı",
@@ -1064,6 +1066,7 @@
     "gecikmeIpucu": " · Bulunamıyor: ortamın ışığını artırın, 1-2 metre mesafeye gelin, hayvanı kadraja tam alın.",
     "gecikmeIpucuArastirma": " · Hâlâ bulunamadı: numuneyi kabinin ortasına düz yerleştirin ve kabin ışığını kontrol edin.",
     "gecikmeIpucuKabin": " · Bulunamıyor: hayvanı kabinin ortasına alın ve kabin ışığını kontrol edin.",
+    "gecikmeIpucuPetri": " · Hâlâ bulunamadı: plakayı kabinin ortasına düz yerleştirin ve kabin ışığını kontrol edin.",
     "guven": {
       "anatomikGecti": " · anatomik kontrol geçti",
       "anatomikTutarsiz": " · ⚠️ anatomik tutarsızlık — organ yerleşimi doğrulanamadı; açıyı değiştirip yeniden konumlayın",
@@ -1099,7 +1102,8 @@
       "duzlemBekliyor": "3B konum: kabin kalibrasyonuyla ölçülecek — numune aranıyor.",
       "duzlemOlculdu": "3B konum: kabin kalibrasyonuyla ölçüldü ✓",
       "duzlemOlculemedi": "Konum ölçülemedi — {{eylem}}",
-      "olculemedi": "Konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın."
+      "olculemedi": "Konum ölçülemedi — kabin işareti (arka duvardaki kare kod) kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın.",
+      "olculuyor": "3B konum ölçülüyor — kamera açık, ilk ölçüm bekleniyor."
     },
     "kamera": {
       "cevirEtiketi": "Kamerayı çevir (ön/arka)",
@@ -1180,6 +1184,7 @@
         "eskiPlan": "Önceki plan — yeniden hesaplanmadı",
         "frekans": "Frekans: {{f}} Hz (öneri bu frekansın modeli ve kalibrasyonuyla)",
         "haritaBaslik": "24 kuyu — beklenen tepe alan (mT), plaka kameradaki yönüyle",
+        "haritaBaslikDoz": "Kuyular — seçilen dozda ({{doz}} mT) beklenen tepe alan (mT), plaka kameradaki yönüyle",
         "haritaSecIpucu": "Hedefi değiştirmek için dolu bir kuyuya dokunun, sonra Yeniden hesapla'ya basın.",
         "kaynak": "Faz / duty: ODAK modeli (en yakın komşu + yerel alan), fizikle denetlendi",
         "kip": {
@@ -1195,6 +1200,7 @@
         "kuyuEtiketBos": "{{etiket}}: boş kuyu, {{deger}} mT",
         "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
         "kuyuSecIpucu": "Bu kuyuyu hedef seçer; öneri Yeniden hesapla ile alınır",
+        "odakYok": "Bu dozda odak yok: hedef komşularından güçlü değil (oran {{oran}}×) — komşu kuyular da benzer alan alır.",
         "olcek": "Renk: {{min}} – {{maks}} mT (mavi düşük, kırmızı yüksek)",
         "secilenKuyu": "Seçilen kuyu: {{etiket}} — öneriyi bu kuyu için almak üzere Yeniden hesapla'ya basın.",
         "secili": "seçili kuyu",

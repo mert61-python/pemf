@@ -423,8 +423,8 @@ export function PatientScreen() {
         <Search color={colors.textMuted} size={20} />
         <TextInput
           style={styles.searchInput}
-          accessibilityLabel={t("hasta.liste.araEtiketi")}
-          placeholder={t("hasta.liste.araYer")}
+          accessibilityLabel={SK.araEtiketi}
+          placeholder={SK.araYer}
           placeholderTextColor={colors.textMuted}
           value={search}
           onChangeText={setSearch}
@@ -448,7 +448,7 @@ export function PatientScreen() {
           </View>
         ) : filteredPatients.length === 0 ? (
           <Text style={styles.emptyText}>
-            {!myEmail ? kimlikIstemi(kimlikIstemiMetni(), kimlikDbOkunamiyor) : search ? t("hasta.liste.aramaBos") : t("hasta.liste.bos")}
+            {!myEmail ? kimlikIstemi(kimlikIstemiMetni(), kimlikDbOkunamiyor) : search ? t("hasta.liste.aramaBos") : SK.bosListe}
           </Text>
         ) : (
           <>

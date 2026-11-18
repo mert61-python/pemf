@@ -49,11 +49,14 @@ export interface ObsSession {
 }
 
 export function ObservationNotesModal({
-  visible, session, onClose,
+  visible, session, onClose, numune = false,
 }: {
   visible: boolean;
   session: ObsSession | null;
   onClose: () => void;
+  /** ODD K-1 (ODK-B keşfi 18-11): araştırma profili — seans bir NUMUNE üzerinde (petri / fantom). "Hasta tepkisi: Sakinleşti /
+   *  Uyudu…" çipleri anlamsız → gösterilmez; başlık ve not alanı numune gözlemi der. Notun gittiği uç / biçim AYNEN. */
+  numune?: boolean;
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -185,12 +188,13 @@ export function ObservationNotesModal({
             showsVerticalScrollIndicator={false}
             style={styles.govde}
           >
-          <Text style={styles.title}>{t("hasta.gozlem.baslik")}</Text>
+          <Text style={styles.title}>{numune ? t("hasta.gozlem.baslikNumune") : t("hasta.gozlem.baslik")}</Text>
           {session?.patientName ? <Text style={styles.sub}>{session.patientName}</Text> : null}
 
-          <Text style={styles.label}>{t("hasta.gozlem.hastaTepkisi")}</Text>
+          {numune ? null : <Text style={styles.label}>{t("hasta.gozlem.hastaTepkisi")}</Text>}
           {/* [S3 adım 5] Ortak çip: eski gövde paddingVertical spacing.xs ile 320 px'te 26 px
               yükseklikteydi ve aralık 4 px'ti — hekim komşu tepkiyi işaretliyordu. */}
+          {numune ? null : (
           <ChipRow>
             {REACTIONS.map((r) => (
               <Chip
@@ -205,6 +209,7 @@ export function ObservationNotesModal({
               />
             ))}
           </ChipRow>
+          )}
 
           <Text style={styles.label}>{t("hasta.gozlem.notlar")}</Text>
           <TextInput
@@ -212,7 +217,7 @@ export function ObservationNotesModal({
             accessibilityLabel={t("hasta.gozlem.notlarEtiketi")}
             value={notes}
             onChangeText={setNotes}
-            placeholder={t("hasta.gozlem.ekGozlem")}
+            placeholder={numune ? t("hasta.gozlem.ekGozlemNumune") : t("hasta.gozlem.ekGozlem")}
             placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={3}

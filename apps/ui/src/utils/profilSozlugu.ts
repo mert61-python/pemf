@@ -52,12 +52,26 @@ export interface ProfilSozlugu {
   /** ODD B-4 (ODK-B keşfi 18-11): adı olmayan (sahipsiz) seans kaydının geçmişteki adı — araştırmada "Sahipsiz örnek", klinikte
    *  bugünkü "Bilinmeyen Hasta" (petri seansı geçmişte "Bilinmeyen Hasta" görünüyordu). */
   sahipsizKayit: string;
+  /** ODD K-2 (ODK-B keşfi 18-11): araştırmada menü "Hastalar", arama "Hasta veya Sahip Ara…", boş liste "Henüz hasta kaydı yok.",
+   *  Ana Ekran "Hasta Özeti", geçmiş araması "Hasta, Not veya Tarih ara…" — sayfa ise "Örnek / Denek Kayıtları". Klinik / ev sahibi AYNEN. */
+  menuAd: string;
+  araYer: string;
+  araEtiketi: string;
+  bosListe: string;
+  ozetBaslik: string;
+  gecmisAraYer: string;
 }
 
 /** SGI-4.1: veteriner ve ev sahibi profillerinde bugünkü (değişmeyen) ekran içi metinler. */
 const klinikEkranMetinleri = () =>
   ({
     sahipsizKayit: i18n.t("seans.gecmis.bilinmeyenHasta"),
+    menuAd: i18n.t("kabuk.menu.hastalar"),
+    araYer: i18n.t("hasta.liste.araYer"),
+    araEtiketi: i18n.t("hasta.liste.araEtiketi"),
+    bosListe: i18n.t("hasta.liste.bos"),
+    ozetBaslik: i18n.t("ana.hastaOzeti"),
+    gecmisAraYer: i18n.t("seans.gecmis.araPlaceholder"),
     veritabani: i18n.t("hasta.sozluk.klinikEkran.veritabani"),
     yeniKayit: i18n.t("hasta.sozluk.klinikEkran.yeniKayit"),
     seansGecmisiGiris: i18n.t("hasta.sozluk.klinikEkran.seansGecmisiGiris"),
@@ -91,6 +105,12 @@ export function profilSozlugu({
       seansGecmisiGiris: i18n.t("hasta.sozluk.arastirma.seansGecmisiGiris"),
       tumListeCipi: i18n.t("hasta.sozluk.arastirma.tumListeCipi"),
       sahipsizKayit: i18n.t("hasta.sozluk.arastirma.sahipsizKayit"),
+      menuAd: i18n.t("hasta.sozluk.arastirma.menuAd"),
+      araYer: i18n.t("hasta.sozluk.arastirma.araYer"),
+      araEtiketi: i18n.t("hasta.sozluk.arastirma.araEtiketi"),
+      bosListe: i18n.t("hasta.sozluk.arastirma.bosListe"),
+      ozetBaslik: i18n.t("hasta.sozluk.arastirma.ozetBaslik"),
+      gecmisAraYer: i18n.t("hasta.sozluk.arastirma.gecmisAraYer"),
     };
   }
   if (petOwner) {

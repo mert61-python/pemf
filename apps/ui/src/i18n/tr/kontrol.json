@@ -187,6 +187,10 @@
     "dutyBuyuk": "DUTY (AI planı, bobin 1)",
     "kayit": "Yoğunluk (kayıt)",
     "kayitBuyuk": "YOĞUNLUK (kayıt)",
+    "odak": "ODAK dozu (hedef)",
+    "odakBuyuk": "ODAK DOZU (hedef)",
+    "odakDeger_one": "{{doz}} mT · {{count}} bobin",
+    "odakDeger_other": "{{doz}} mT · {{count}} bobin",
     "olculen": "Yoğunluk (ölçülen)",
     "olculenBuyuk": "YOĞUNLUK (ölçülen)"
   }

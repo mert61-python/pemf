@@ -316,7 +316,7 @@
     "pemf": {
       "canliUyari": {
         "eccFailed": "Plaka ızgarası ince hizalanamadı — kabin ışığını ve plakanın düz durduğunu kontrol edin; kuyuları örten bir şey olmasın.",
-        "fewCandidates": "Kuyu ızgarası doğrulanamadı — kuyular görünür olsun (sensör ya da kablo üstlerini örtmesin), plaka düz dursun ve kabin ışığı açık olsun.",
+        "fewCandidates": "Kuyu ızgarası doğrulanamadı — kuyular kamerada tanınmadı. Önce kuyuların açıkta (sensör ya da kablo örtmüyor), plakanın düz ve kabin ışığının açık olduğunu kontrol edin; bunlar yerindeyse bu kabinde kuyu tanıma şu an yetersiz (yeniden eğitim bekleniyor) — durumu teknik desteğe bildirin.",
         "guvenilirDegil": "Tümör tespiti güvenilir değil — fantomu kabinin ortasına düz yerleştirin ve kabin ışığını kontrol edin.",
         "kontrolKuyusu": "Kontrol kuyucuğu beklenen sınıfta değil — bu plakada eşikler güvenilmez; kontrol kuyucuklarını ve ışığı denetleyin.",
         "layoutMismatch": "Tümör yerleşimi referansla uyuşmuyor — doğru fantomu kabine koyun.",

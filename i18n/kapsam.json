@@ -13338,6 +13338,17 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "apps/ui/src/components/domain/AlanSensoruBandi.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-05b-guvenlik-kritik",
+   "sira": 5,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": true,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "ODD B-6 (18-11): yeni dosya — metinler baştan katalogdan (bant.alanSensoru.*)"
   }
  }
 }

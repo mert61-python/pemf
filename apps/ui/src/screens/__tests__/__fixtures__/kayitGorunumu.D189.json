@@ -74,6 +74,8 @@
   "measuredIntensityMt": null,
   "measuredPeakMt": null,
   "mode": "AI Pro · Kedi Organ · Tüm Vücut",
+  "odakBobinSayisi": null,
+  "odakDozMt": null,
   "remainingMin": 0
  },
  "canliElle": {
@@ -87,6 +89,8 @@
   "measuredIntensityMt": 0.8,
   "measuredPeakMt": 0.8,
   "mode": "Manuel",
+  "odakBobinSayisi": null,
+  "odakDozMt": null,
   "remainingMin": 0
  },
  "detay": {

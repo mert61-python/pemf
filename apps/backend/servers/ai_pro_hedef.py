@@ -906,7 +906,9 @@ class _EmCvSaglayici:
         if hid == 0:
             return f"{self.hedef_etiketi} (otomatik)"
         with self._kilit:
-            for k in self._kimlikler:
+            # ODD K-10: o karede görülmeyen (kaybolan) kimliğin adı da korunur — canlı seans kartı iç numarayı ("Kuyu 12") değil
+            # plaka etiketini ("Kuyu C6") göstersin.
+            for k in [*self._kimlikler, *self._kayip_kimlikler.values()]:
                 if k.get("id") == hid:
                     return str(k.get("ad") or f"{self.hedef_etiketi} {hid}")
         return f"{self.hedef_etiketi} {hid}"

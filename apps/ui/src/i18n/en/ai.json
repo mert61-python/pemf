@@ -1055,7 +1055,9 @@
       "durdurEtiket": "Stop the AI Pro autonomous session",
       "durdurIpucu": "Stops the coils",
       "hazirlaniyor": "🔎 Preparing…",
-      "hazirligiBaslat": "🚀 Start Preparation"
+      "hazirligiBaslat": "🚀 Start Preparation",
+      "hazirligiDurdur": "⏹ Stop preparation",
+      "hazirligiDurdurEtiket": "Stop preparation — the camera preview closes"
     },
     "frekans": {
       "etiket": "AI Pro frequency",
@@ -1064,6 +1066,7 @@
     "gecikmeIpucu": " · Not found: increase the ambient light, move 1-2 meters away, and get the animal fully in the frame.",
     "gecikmeIpucuArastirma": " · Still not found: place the sample flat in the middle of the cabin and check the cabin light.",
     "gecikmeIpucuKabin": " · Not found: place the animal in the middle of the cabin and check the cabin light.",
+    "gecikmeIpucuPetri": " · Still not found: place the plate flat in the middle of the cabin and check the cabin light.",
     "guven": {
       "anatomikGecti": " · anatomical check passed",
       "anatomikTutarsiz": " · ⚠️ anatomical inconsistency — the organ placement could not be verified; change the angle and re-locate",
@@ -1099,7 +1102,8 @@
       "duzlemBekliyor": "3D position: will be measured with the cabin calibration — looking for the sample.",
       "duzlemOlculdu": "3D position: measured with the cabin calibration ✓",
       "duzlemOlculemedi": "Position not measured — {{eylem}}",
-      "olculemedi": "The position could not be measured — the cabin marker (the square code on the back wall) is not visible in the frame. Adjust the camera so that the marker and the target stay in the same frame."
+      "olculemedi": "The position could not be measured — the cabin marker (the square code on the back wall) is not visible in the frame. Adjust the camera so that the marker and the target stay in the same frame.",
+      "olculuyor": "3D position being measured — the camera is on, waiting for the first measurement."
     },
     "kamera": {
       "cevirEtiketi": "Flip the camera (front/back)",
@@ -1180,6 +1184,7 @@
         "eskiPlan": "Previous plan — not recalculated",
         "frekans": "Frequency: {{f}} Hz (proposal from this frequency's model and calibration)",
         "haritaBaslik": "24 wells — expected peak field (mT), plate as seen by the camera",
+        "haritaBaslikDoz": "Wells — expected peak field (mT) at the selected dose ({{doz}} mT), plate as seen by the camera",
         "haritaSecIpucu": "To change the target, tap a filled well, then press Recalculate.",
         "kaynak": "Phase / duty: ODAK model (nearest neighbour + local field), checked by physics",
         "kip": {
@@ -1195,6 +1200,7 @@
         "kuyuEtiketBos": "{{etiket}}: empty well, {{deger}} mT",
         "kuyuEtiketSecili": "{{etiket}}: {{deger}} mT ({{secili}})",
         "kuyuSecIpucu": "Selects this well as the target; the recommendation is obtained with Recalculate",
+        "odakYok": "No focus at this dose: the target is not stronger than its neighbours (ratio {{oran}}×) — neighbouring wells receive a similar field.",
         "olcek": "Colour: {{min}} – {{maks}} mT (blue low, red high)",
         "secilenKuyu": "Selected well: {{etiket}} — press Recalculate to get the recommendation for this well.",
         "secili": "selected well",

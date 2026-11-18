@@ -23,6 +23,7 @@ export function KalibrasyonRozeti({
   gorunur = true,
   localized = false,
   kapiEylem = "",
+  kameraAcik = false,
 }: {
   yontem?: string;
   gorunur?: boolean;
@@ -30,6 +31,8 @@ export function KalibrasyonRozeti({
   localized?: boolean;
   /** KD-3a: kapının FİZİKSEL eylem metni (sunucu `kapiEylem`; kesmediyse boş). */
   kapiEylem?: string;
+  /** ODD K-4: kamera açık (önizleme / seans) — yöntem henüz gelmediyse "kamera açılınca ölçülür" DEĞİL "ölçülüyor". */
+  kameraAcik?: boolean;
 }) {
   const { t } = useTranslation();
   if (!gorunur) return null;
@@ -53,7 +56,7 @@ export function KalibrasyonRozeti({
   if (!y) {
     return (
       <View style={[styles.rozet, styles.bekliyor]}>
-        <Text style={styles.metin}>{t("ai.pro.kalibrasyon.bekliyor")}</Text>
+        <Text style={styles.metin}>{kameraAcik ? t("ai.pro.kalibrasyon.olculuyor") : t("ai.pro.kalibrasyon.bekliyor")}</Text>
       </View>
     );
   }

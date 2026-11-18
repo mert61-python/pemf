@@ -588,6 +588,8 @@ export function ControlScreen() {
         measuredIntensityMt={treatment?.measuredIntensityMt ?? (wsSeans ? wsSeans.measuredIntensityMt ?? null : null)}
         measuredPeakMt={treatment?.measuredPeakMt ?? (wsSeans ? wsSeans.measuredPeakMt ?? null : null)}
         dutyTemsilYuzde={wsSeans ? wsSeans.dutyTemsilYuzde ?? null : null}
+        odakDozMt={wsSeans ? wsSeans.odakDozMt ?? null : null}
+        odakBobinSayisi={wsSeans ? wsSeans.odakBobinSayisi ?? null : null}
         onStop={stopSession}
         onEmergencyStop={emergencyStop}
         loading={sessionStopping}
@@ -815,6 +817,7 @@ export function ControlScreen() {
         visible={obsSession !== null && !hardwareRunningOutOfSession}
         session={obsSession}
         onClose={() => setObsSession(null)}
+        numune={userMode === "researcher"}
       />
       </PatientGate>
     </View>

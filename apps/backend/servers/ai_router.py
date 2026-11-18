@@ -2101,7 +2101,14 @@ def _ai_pro_loop(dongu_muhru=None):
     gelen acil durdurmadan sonra tur bobini yeniden enerjileyemez, (b) `/stop`→`/start` ms içinde gelse de eski döngü
     çıkar (birikmez). `None` = eski çağıranlar (yalnız mandal denetlenir)."""
     global _ai_loop_active, _ai_relocalize
-    logger.info("AI Pro Closed-Loop (cat_organ organ-lokalizasyon + em_kedi) arkaplan görevi BAŞLADI.")
+    # ODD K-9: günlük metni MODELE göre (petri / fantom seansında "cat_organ + em_kedi" yazıyordu — yanıltıcı tanı).
+    logger.info(
+        "AI Pro kapalı döngü arkaplan görevi BAŞLADI (model: %s — %s).",
+        getattr(_aktif_saglayici(), "ad", "?"),
+        "cat_organ organ-lokalizasyon + ODAK doz planı"
+        if _kedi_modeli_mi(_aktif_saglayici())
+        else "kabin CV hedef bulma + ODAK doz planı",
+    )
     _nesil = dongu_muhru.get("nesil") if dongu_muhru else None
 
     def _dongu_gecerli() -> bool:
@@ -2409,6 +2416,9 @@ def _ai_pro_loop(dongu_muhru=None):
                 remaining_min=remaining // 60,
                 duration_sec=_ai_duration_min * 60,
                 surus_nesli=_nesil,  # D1.81 (İG-5.36): bayat tur acil durdurmadan sonra "aktif" yazamaz
+                # ODD K-11: canlı kart "DUTY (AI planı, bobin 1)" yerine seçilen ODAK dozu (mT, mühür) + planın sürdüğü bobin sayısı.
+                odak_doz=(getattr(_aktif_saglayici(), "odak_ayari", None) or {}).get("doz_mT"),
+                odak_bobin=sum(1 for d in D if d > 0),
             )
 
             # ── Telemetri yayını: cache'li organ overlay + per-coil (React buradan dinler) ──

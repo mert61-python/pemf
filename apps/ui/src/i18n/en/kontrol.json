@@ -187,6 +187,10 @@
     "dutyBuyuk": "DUTY (AI plan, coil 1)",
     "kayit": "Intensity (record)",
     "kayitBuyuk": "INTENSITY (record)",
+    "odak": "ODAK dose (target)",
+    "odakBuyuk": "ODAK DOSE (target)",
+    "odakDeger_one": "{{doz}} mT · {{count}} coil",
+    "odakDeger_other": "{{doz}} mT · {{count}} coils",
     "olculen": "Intensity (measured)",
     "olculenBuyuk": "INTENSITY (measured)"
   }

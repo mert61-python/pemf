@@ -297,7 +297,7 @@ export function KpiDashboardScreen() {
         />
         <MetricCard
           label={t("ana.kpi.tamamlanmaOrani")}
-          value={loading ? "…" : completionRate !== null ? `${completionRate}%` : "—"}
+          value={loading ? "…" : completionRate !== null ? t("ai.ortak.yuzde", { deger: completionRate }) : "—"}
           tone={colors.success}
         />
         <MetricCard
@@ -325,7 +325,7 @@ export function KpiDashboardScreen() {
           ) : null}
           <MetricCard label={t("ana.bagliBobin")} value={`${connectedCoils.length} / ${coilCount}`} tone={colors.primary} />
           <MetricCard label={t("ana.kpi.calisanBobin")} value={`${runningCoils.length} / ${coilCount}`} tone={colors.success} />
-          <MetricCard label={t("ana.kpi.cihazOrani")} value={`${uptimePct}%`} tone={colors.violet} />
+          <MetricCard label={t("ana.kpi.cihazOrani")} value={t("ai.ortak.yuzde", { deger: uptimePct })} tone={colors.violet} />
           {/* ⚠️ DENETİM 2026-08-17: ortalama `connectedCoils.length`'e bölünüyordu ve STM bobinleri
               (1-5) sıcaklık ÖLÇMEDİĞİ için `objectTemp: 0` ile ortalamayı seyreltiyordu — 3 bobin
               50 °C iken kart 18,8 °C, yalnız-STM kabinde 0,0 °C ("serin" diye okunur) gösteriyordu.

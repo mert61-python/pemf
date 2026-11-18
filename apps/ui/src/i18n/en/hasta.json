@@ -31,7 +31,9 @@
   },
   "gozlem": {
     "baslik": "📝 Session Observation Note",
+    "baslikNumune": "📝 Sample Observation Note",
     "ekGozlem": "Additional observations…",
+    "ekGozlemNumune": "Sample observation (colour, turbidity, liquid level, contamination…)",
     "gerekceYok": "No reason was given.",
     "hastaTepkisi": "Patient reaction",
     "kaydedilemedi": "Could not save the note",
@@ -119,12 +121,18 @@
   },
   "sozluk": {
     "arastirma": {
+      "araEtiketi": "Search samples",
+      "araYer": "Search samples...",
       "belirtme": "sample",
       "benimListe": "My Samples",
       "bos": "No samples registered.",
+      "bosListe": "No sample records yet.",
       "ekle": "Add Sample",
+      "gecmisAraYer": "Search sample, note or date...",
       "kayitlarAd": "samples",
       "kpiBaslik": "📊 Research Indicators & Analytics",
+      "menuAd": "Samples",
+      "ozetBaslik": "Sample Summary",
       "sahipsizKayit": "Unowned sample",
       "seansGecmisiGiris": "Past session records and reports for your samples.",
       "secKisa": "Select a sample",

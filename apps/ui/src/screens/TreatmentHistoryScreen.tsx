@@ -26,6 +26,7 @@ import {
 } from "@/utils/patientScope";
 import { useUserMode } from "@/context/UserModeContext";
 import { profilSozlugu } from "@/utils/profilSozlugu";
+import { etkinBicimYereli } from "@/i18n/dil";
 import i18n from "i18next";
 
 /** D2.43: tekil silmede seans sunucuda yoksa (başka cihaz/hekim az önce silmiş) gösterilen metin. */
@@ -65,6 +66,19 @@ const STATUS_ANAHTARLARI: Record<string, string> = {
   // Y207 (S-D5.3): kanıtı 3 açılış boyunca okunamayan seans — süre / doz bilinmiyor (uydurulmadı).
   aborted_duration_unknown: "seans.durum.aborted_duration_unknown"
 };
+
+/** ODD K-8 · Y295: kart tarihi etkin dilin biçiminde — `started_epoch` varsa ondan, yoksa `session_date` + `start_time` (yerel saat). */
+export function seansTarihi(s: { started_epoch?: number | null; session_date?: string; start_time?: string }): string {
+  const ham = `${s.session_date ?? ""} ${s.start_time ?? ""}`.trim();
+  const d =
+    typeof s.started_epoch === "number" && Number.isFinite(s.started_epoch)
+      ? new Date(s.started_epoch * 1000)
+      : /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/.test(ham)
+        ? new Date(ham.replace(" ", "T"))
+        : null;
+  if (!d || Number.isNaN(d.getTime())) return ham;
+  return d.toLocaleString(etkinBicimYereli(), { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 function statusEtiketi(status?: string): string {
   if (!status) return i18n.t("ai.deger.unknown");
@@ -330,7 +344,7 @@ export function TreatmentHistoryScreen() {
       <View style={styles.searchBox}>
         <TextInput
           style={styles.searchInput}
-          placeholder={t("seans.gecmis.araPlaceholder")}
+          placeholder={SK.gecmisAraYer}
           placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -518,7 +532,7 @@ function SessionCard({
           accessibilityLabel={secimModu ? t("seans.gecmis.kaydiSec") : t("seans.gecmis.detayiAc")}
         >
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{session.patient_name || adsiz}</Text>
-          <Text style={styles.muted} numberOfLines={1} ellipsizeMode="tail">{session.session_date} {session.start_time}</Text>
+          <Text style={styles.muted} numberOfLines={1} ellipsizeMode="tail">{seansTarihi(session)}</Text>
           {secimModu ? null : <Text style={styles.detailsHint} numberOfLines={1}>{t("seans.gecmis.bobinDetayi")}</Text>}
         </TouchableOpacity>
         <View style={{flexShrink: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm}}>

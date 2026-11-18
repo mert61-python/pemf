@@ -56,7 +56,7 @@ it("özet yoksa geçmiş istatistiğine düşülür; eski alan adı (average_dur
   await act(async () => {});
   await act(async () => {});
   expect(u.getByLabelText(`${T("ayarlar.sistemBilgi.toplamSeans")}: 12`)).toBeTruthy();
-  expect(u.getByLabelText(`${T("ana.kpi.tamamlanmaOrani")}: 75%`)).toBeTruthy();
+  expect(u.getByLabelText(`${T("ana.kpi.tamamlanmaOrani")}: %75`)).toBeTruthy(); // ODD K-8: TR yüzde "%75"
   expect(u.getByLabelText(`${T("ana.kpi.ortSure")}: ${T("ana.kpi.sureDk", { sure: 18 })}`)).toBeTruthy();
 });
 

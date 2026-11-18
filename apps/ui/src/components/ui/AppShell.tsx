@@ -75,11 +75,12 @@ const logoutOgesi = (t: TFunction): Extract<NavEntry, { kind: "action" }> => ({
 
 // Görünürlük profile göre config/access (canAccess) ile filtrelenir. İlk 4 erişilebilir öğe
 // bottom-nav'da; gerisi "Daha Fazla" menüsünde (keşfedilebilirlik fix).
-const navOgeleri = (t: TFunction): NavItem[] => [
+const navOgeleri = (t: TFunction, arastirma = false): NavItem[] => [
   { key: "ai", label: t("kabuk.menu.akilliTeshis"), icon: BrainCircuit },
   { key: "dashboard", label: t("kabuk.menu.anaEkran"), icon: LayoutDashboard },
   { key: "control", label: t("kabuk.menu.kontrol"), icon: SlidersHorizontal },
-  { key: "patients", label: t("kabuk.menu.hastalar"), icon: Users },
+  // ODD K-2: araştırmada menü "Örnekler" (sayfa başlığı zaten "Örnek / Denek Kayıtları").
+  { key: "patients", label: arastirma ? t("kabuk.menu.ornekler") : t("kabuk.menu.hastalar"), icon: Users },
   { key: "sensors", label: t("kabuk.menu.sensorler"), icon: Activity },
   { key: "history", label: t("kabuk.menu.seansGecmisi"), icon: History },
   { key: "kpi", label: t("kabuk.menu.raporlar"), icon: BarChart3 },
@@ -122,12 +123,12 @@ interface AppShellProps {
 export function AppShell({ activeRoute, title, subtitle, onRouteChange, children }: AppShellProps) {
   const { t } = useTranslation();
   const LOGOUT_ITEM = logoutOgesi(t);
-  const allNavItems = navOgeleri(t);
+  const { userMode, setUserMode } = useUserMode();
+  const allNavItems = navOgeleri(t, userMode === "researcher");
   const KISA_ETIKET = kisaEtiketler(t);
   const PROFILE_LIST = profilListesi(t);
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
-  const { userMode, setUserMode } = useUserMode();
   const { logout, session, hesaplar } = useAuth();
   // CH1 · Y151: bu cihazda açık e-posta hesapları (etkin dahil). >1 iken "Çıkış Yap" TÜM hesaplardan çıkar → etiket bunu söyler.
   const hesapSayisi = hesaplar?.length ?? (session ? 1 : 0);

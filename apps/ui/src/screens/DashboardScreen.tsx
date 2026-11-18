@@ -19,11 +19,15 @@ import { KendiDurdurmaIsareti } from "@/components/ui/KendiDurdurmaKontrolu";
 import { donanimRozetDurumu } from "@/components/domain/StmUyumBandi";
 import { useTranslation } from "react-i18next";
 import { kritikMetin, useKritikDil } from "@/i18n/kritik";
+import { useUserMode } from "@/context/UserModeContext";
+import { profilSozlugu } from "@/utils/profilSozlugu";
 
 export function DashboardScreen() {
   const { t } = useTranslation();
   useKritikDil(); // ACİL DURDUR yazıları (kritikMetin) dil değişince yeniden çizilir
   const { snapshot, wsConnected } = useLiveData();
+  const { userMode } = useUserMode();
+  const arastirmaProfili = userMode === "researcher"; // ODD K-2: «Hasta Özeti» → araştırmada «Örnek Özeti»
   const { emergencyStop } = useSessionControl();
 
   // CRASH-GUARD: `snapshot` bir WS `snapshot` mesajı ya da HTTP fallback ile TÜMÜYLE değiştirilir
@@ -98,7 +102,7 @@ export function DashboardScreen() {
         <Card style={styles.patientCard}>
           <View style={styles.cardHeader}>
             <HeartPulse color={colors.magenta} size={22} />
-            <Text style={styles.cardTitle}>{t("ana.hastaOzeti")}</Text>
+            <Text style={styles.cardTitle}>{profilSozlugu({ researcher: arastirmaProfili }).ozetBaslik}</Text>
           </View>
           {snapshot.patient?.name ? (
             <>

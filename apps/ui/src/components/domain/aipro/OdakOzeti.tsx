@@ -36,6 +36,8 @@ export type OdakOzet = {
 };
 
 export const PETRI_KIPLERI = ["KUYUCUK", "TUM_PETRI"] as const;
+/** ODD K-6: hedef / çevre oranı bunun altındaysa (≈ 1) hedef komşularından ayrılmıyor — "bu dozda odak yok" açıkça söylenir. */
+export const ODAK_YOK_ORANI = 1.1;
 
 /** Dile uyan ondalık (TR "1,25", EN "1.25"). */
 export function sayi(n: number | null | undefined, basamak = 2): string {
@@ -87,6 +89,7 @@ export function KuyuHaritasi({
   kuyular,
   secilen,
   onSec,
+  doz,
   eski = false,
 }: {
   kuyular: OdakKuyu[];
@@ -96,6 +99,8 @@ export function KuyuHaritasi({
   onSec?: (etiket: string) => void;
   /** ODD B-2: seçim değişti, harita hâlâ ÖNCEKİ planı gösteriyor → soluk + "önceki plan" etiketi. */
   eski?: boolean;
+  /** ODD K-6: haritanın hesaplandığı doz (mT) — başlık "seçilen dozda beklenen" der (tavanla karıştırılıyordu). */
+  doz?: number;
 }) {
   const { t } = useTranslation();
   const degerler = kuyular.map((k) => k.mT).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
@@ -105,7 +110,9 @@ export function KuyuHaritasi({
   const bosSayi = kuyular.filter((k) => k.bos).length;
   return (
     <View testID="odak-kuyu-haritasi" accessibilityLabel={t("ai.pro.onay.odak.haritaBaslik")}>
-      <Text style={s.haritaBaslik}>{t("ai.pro.onay.odak.haritaBaslik")}</Text>
+      <Text style={s.haritaBaslik} testID="odak-harita-baslik">
+        {typeof doz === "number" ? t("ai.pro.onay.odak.haritaBaslikDoz", { doz: sayi(doz) }) : t("ai.pro.onay.odak.haritaBaslik")}
+      </Text>
       {eski ? <Text testID="odak-harita-eski" style={s.uyari}>{t("ai.pro.onay.odak.eskiPlan")}</Text> : null}
       <View style={[s.kutu, { width: rs(KUTU_G), height: rs(KUTU_Y) }, eski && s.eski]}>
         {kuyular.map((k, i) => {
@@ -217,11 +224,15 @@ export function OdakOzeti({
       ) : (
         <Text style={s.satir}>{t("ai.pro.onay.odak.cevre", { cevre: sayi(odak.cevre_mT), oran: sayi(odak.oran, 1) })}</Text>
       )}
+      {!duzgunluk && typeof odak.oran === "number" && odak.oran < ODAK_YOK_ORANI ? (
+        <Text testID="odak-odak-yok" style={s.uyari}>{t("ai.pro.onay.odak.odakYok", { oran: sayi(odak.oran, 1) })}</Text>
+      ) : null}
       <Text style={s.kaynak}>{t("ai.pro.onay.odak.kaynak")}</Text>
 
       {Array.isArray(odak.kuyular) && odak.kuyular.length ? (
         <KuyuHaritasi
           kuyular={odak.kuyular}
+          doz={odak.doz_mT}
           eski={kirli}
           secilen={secilenKuyu || undefined}
           onSec={

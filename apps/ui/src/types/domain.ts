@@ -138,6 +138,9 @@ export interface ActiveTreatment {
    * eskiden `intensityMt`e yazılıp "37 mT" görünüyordu. null/yok = elle seans (reçete `intensityMt`).
    */
   dutyTemsilYuzde?: number | null;
+  /** ODD K-11 (yalnız-ek): AI Pro ODAK seansında seçilen doz (mT, mühür) + planın sürdüğü bobin sayısı. */
+  odakDozMt?: number | null;
+  odakBobinSayisi?: number | null;
   remainingMin: number;
   elapsedSec: number;
   durationSec: number;

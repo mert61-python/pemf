@@ -34,6 +34,9 @@ interface Props {
   measuredPeakMt?: number | null;
   /** D1.89: AI Pro'nun bobin 1 plan duty'si (%) — mT DEĞİL; reçete ve ölçüm yokken "DUTY" etiketiyle gösterilir. */
   dutyTemsilYuzde?: number | null;
+  /** ODD K-11: AI Pro ODAK seansında seçilen doz (mT) ve planın sürdüğü bobin sayısı — "DUTY (AI planı, bobin 1)" yerine. */
+  odakDozMt?: number | null;
+  odakBobinSayisi?: number | null;
   onStop: () => void;
   onEmergencyStop: () => void;
   loading?: boolean;
@@ -77,6 +80,8 @@ export function SessionProgressCard({
   measuredIntensityMt = null,
   measuredPeakMt = null,
   dutyTemsilYuzde = null,
+  odakDozMt = null,
+  odakBobinSayisi = null,
   onStop,
   onEmergencyStop,
   loading = false,
@@ -88,7 +93,7 @@ export function SessionProgressCard({
   const progress = durationSec > 0 ? Math.min(1, elapsedSec / durationSec) : 0;
   const indefinite = durationSec <= 0; // #72: süresiz seans → 00:00/%0 yerine "Süresiz"
   const pulseAnim = useR(new RNAnimated.Value(1)).current;
-  const yogunluk = canliYogunluk({ intensityMt, measuredIntensityMt, dutyTemsilYuzde });
+  const yogunluk = canliYogunluk({ intensityMt, measuredIntensityMt, dutyTemsilYuzde, odakDozMt, odakBobinSayisi });
 
   useEff(() => {
     // Bayat veride nabız animasyonunu DURDUR: "canlı çalışıyor" izlenimi verme.
@@ -148,7 +153,7 @@ export function SessionProgressCard({
           <Text style={styles.timeValue} {...SURE_METNI}>{formatTime(elapsedSec)}</Text>
         </View>
         <View style={styles.timeBlockCenter}>
-          <Text style={styles.progressPct}>{indefinite ? "∞" : `${Math.round(progress * 100)}%`}</Text>
+          <Text style={styles.progressPct}>{indefinite ? "∞" : t("ai.ortak.yuzde", { deger: Math.round(progress * 100) })}</Text>
         </View>
         <View style={[styles.timeBlock, { alignItems: "flex-end" }]}>
           <Text style={styles.timeLabel}>{t("seans.kart.kalan")}</Text>

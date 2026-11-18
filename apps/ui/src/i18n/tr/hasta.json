@@ -31,7 +31,9 @@
   },
   "gozlem": {
     "baslik": "📝 Seans Gözlem Notu",
+    "baslikNumune": "📝 Numune Gözlem Notu",
     "ekGozlem": "Ek gözlemler…",
+    "ekGozlemNumune": "Numune gözlemi (renk, bulanıklık, sıvı seviyesi, kontaminasyon…)",
     "gerekceYok": "Gerekçe bildirilmedi.",
     "hastaTepkisi": "Hasta tepkisi",
     "kaydedilemedi": "Not kaydedilemedi",
@@ -119,12 +121,18 @@
   },
   "sozluk": {
     "arastirma": {
+      "araEtiketi": "Örnek ara",
+      "araYer": "Örnek ara...",
       "belirtme": "örneğe",
       "benimListe": "Benim Örneklerim",
       "bos": "Kayıtlı örnek yok.",
+      "bosListe": "Henüz örnek kaydı yok.",
       "ekle": "Örnek Ekle",
+      "gecmisAraYer": "Örnek, not veya tarih ara...",
       "kayitlarAd": "örnekleri",
       "kpiBaslik": "📊 Araştırma Göstergeleri & Analitik",
+      "menuAd": "Örnekler",
+      "ozetBaslik": "Örnek Özeti",
       "sahipsizKayit": "Sahipsiz örnek",
       "seansGecmisiGiris": "Örneklerinize ait geçmiş seans kayıtları ve raporlamalar.",
       "secKisa": "Örnek seçin",

@@ -13,7 +13,7 @@ import i18n from "i18next";
  * reçetesiz kayıt "0 mT" yazıyordu. ⚠️ Ölçüm/reçete yoksa sayı UYDURULMAZ: "—".
  */
 
-export type YogunlukTuru = "olculen" | "kayit" | "duty" | "yok";
+export type YogunlukTuru = "olculen" | "kayit" | "odak" | "duty" | "yok";
 
 export interface YogunlukGosterimi {
   tur: YogunlukTuru;
@@ -24,6 +24,9 @@ interface CanliSeans {
   intensityMt?: number | null;
   measuredIntensityMt?: number | null;
   dutyTemsilYuzde?: number | null;
+  /** ODD K-11: AI Pro ODAK seansında seçilen doz (mT, mühür) ve planın sürdüğü bobin sayısı (backend `odakDozMt` / `odakBobinSayisi`). */
+  odakDozMt?: number | null;
+  odakBobinSayisi?: number | null;
 }
 
 const sayi = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -34,6 +37,11 @@ export function canliYogunluk(at: CanliSeans | null | undefined): YogunlukGoster
   if (sayi(olculen)) return { tur: "olculen", deger: `${olculen.toFixed(2)} mT` };
   const recete = at?.intensityMt;
   if (sayi(recete) && recete > 0) return { tur: "kayit", deger: `${recete} mT` };
+  const odak = at?.odakDozMt;
+  if (sayi(odak) && odak > 0) {
+    const n = sayi(at?.odakBobinSayisi) ? at!.odakBobinSayisi! : 0;
+    return { tur: "odak", deger: i18n.t("kontrol.yogunluk.odakDeger", { doz: odak.toFixed(2), count: n }) };
+  }
   const duty = at?.dutyTemsilYuzde;
   if (sayi(duty)) return { tur: "duty", deger: `%${duty}` };
   return { tur: "yok", deger: "—" };
@@ -52,6 +60,7 @@ export function olculenAlanOrt(mt: number | null | undefined): string {
 export const YOGUNLUK_ETIKETI: Record<YogunlukTuru, string> = {
   get olculen() { return i18n.t("kontrol.yogunluk.olculen"); },
   get kayit() { return i18n.t("kontrol.yogunluk.kayit"); },
+  get odak() { return i18n.t("kontrol.yogunluk.odak"); },
   get duty() { return i18n.t("kontrol.yogunluk.duty"); },
   get yok() { return i18n.t("kontrol.yogunluk.kayit"); },
 };
@@ -60,6 +69,7 @@ export const YOGUNLUK_ETIKETI: Record<YogunlukTuru, string> = {
 export const YOGUNLUK_ETIKETI_BUYUK: Record<YogunlukTuru, string> = {
   get olculen() { return i18n.t("kontrol.yogunluk.olculenBuyuk"); },
   get kayit() { return i18n.t("kontrol.yogunluk.kayitBuyuk"); },
+  get odak() { return i18n.t("kontrol.yogunluk.odakBuyuk"); },
   get duty() { return i18n.t("kontrol.yogunluk.dutyBuyuk"); },
   get yok() { return i18n.t("kontrol.yogunluk.kayitBuyuk"); },
 };
