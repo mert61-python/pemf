@@ -1285,7 +1285,24 @@ def _destek_paketi_mi(argv: list[str] | None) -> list[str] | None:
     return av
 
 
+def _alt_surec_mi(argv: list[str] | None) -> list[str] | None:
+    """`--alt-surec <ad> …` verilmişse KALAN argümanları (ad dahil) döndür, yoksa None (GA · istem 53).
+
+    Ana sunucunun yardımcı alt süreçleri (canlı alan hesabı — `servers.alt_surec`): sahada Python YOK, alt süreç aynı EXE'nin alt komutudur.
+    Sunucu / port / donanım / veritabanı AÇILMAZ; ebeveyn stdin'i kapatınca çıkar."""
+    av = list(sys.argv[1:] if argv is None else argv)
+    if not av or av[0] != "--alt-surec":
+        return None
+    return av[1:]
+
+
 def main(argv: list[str] | None = None) -> int:
+    alt_surec_argv = _alt_surec_mi(argv)
+    if alt_surec_argv is not None:
+        from servers.alt_surec import calistir as _alt_surec_calistir
+
+        return _alt_surec_calistir(alt_surec_argv)
+
     kurtarma_argv = _kurtarma_mi(argv)
     if kurtarma_argv is not None:
         # Sunucuyu BAŞLATMADAN kurtarma aracını çalıştır: kurtarma anında backend'in çalışması

@@ -69,8 +69,9 @@ _WS_MAX_PENDING_BROADCASTS = 64
 #: `set_live_patient`); dusen anlik goruntunun yerine yenisi gelmez (olculdu: Hasta Ozeti biten seansin hastasinda kaldi).
 #: Y212 · S-D67.13: `efield_update` 2 Hz akar → periyodik (baskıda ilk o düşer; bitişteki tek `null` düşerse bar 5 sn sonra
 #: "duraklandı" der — ACİL DURDUR / geçiş iletileri düşürülemez kalır).
+#: GA (istem 53): `alan_haritasi` (canlı 3B alan, 1 Hz, yalnız abonelere) da periyodik — her ileti o anın TAM haritasıdır.
 _WS_PERIYODIK_TURLER = frozenset(
-    {"sensor_data", "coil_status", "stm_coil_update", "ai_vision", "gateway_status", "efield_update"}
+    {"sensor_data", "coil_status", "stm_coil_update", "ai_vision", "gateway_status", "efield_update", "alan_haritasi"}
 )
 _ws_pending = 0
 _ws_pending_lock = threading.Lock()
@@ -93,8 +94,9 @@ def _ws_dusurme_kaydi(neden: str) -> None:
         )
 
 
-def _ws_broadcast_sync(message: dict) -> None:
-    """Thread-safe senkron broadcast (MQTT callback'lerinden çağrılır)."""
+def _ws_broadcast_sync(message: dict, alicilar: list | None = None) -> None:
+    """Thread-safe senkron broadcast (MQTT callback'lerinden çağrılır). `alicilar` verilirse YALNIZ onlara (GA: canlı alan haritası
+    yalnız abone istemcilere — abone olmayan mobil istemci 1 Hz ~14 KB taşımasın); verilmezse bütün istemcilere (değişmedi)."""
     import asyncio
 
     global _ws_pending
@@ -128,7 +130,9 @@ def _ws_broadcast_sync(message: dict) -> None:
         _ws_pending += 1
         _ws_bekleyenler.append(kayit)
     with _ws_lock:
-        clients = list(_ws_clients)
+        clients = (
+            list(_ws_clients) if alicilar is None else [ws for ws in _ws_clients if any(ws is a for a in alicilar)]
+        )
 
     async def _send_all():
         global _ws_pending

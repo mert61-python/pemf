@@ -59,6 +59,22 @@ def _bildir(uret, level: str = "info") -> None:
 
 
 _build_ws_snapshot = live_state._build_ws_snapshot
+
+
+# ── GA (istem 53) CANLI 3B ALAN — Kontrol sekmesi "Alan haritası" + dijital ikiz (`servers/canli_alan.py`) ─────────────────────
+# YALNIZ GÖSTERİM; ACİL DURDUR / sürüşle ortak kilit YOK (bobin durumu anlık görüntü, hesap kendi iş parçacığında, yalnız abone varken).
+def _canli_alan_bobinleri() -> dict:
+    hw = state.hardware
+    return hw.calisan_bobin_durumu() if hw is not None else {}
+
+
+def _canli_alan_gonder(ileti: dict, alicilar: list) -> None:
+    _ws_broadcast_sync(ileti, alicilar=alicilar)
+
+
+from servers import canli_alan as _canli_alan_modulu  # noqa: E402
+
+_canli_alan = _canli_alan_modulu.CanliAlan(_canli_alan_bobinleri, _canli_alan_gonder)
 update_live_stm_status = live_state.update_live_stm_status
 update_live_coil_from_stm = live_state.update_live_coil_from_stm
 update_live_coil_kip = live_state.update_live_coil_kip
@@ -2364,6 +2380,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 msg = json.loads(data)
                 if msg.get("type") == "ping":
                     await websocket.send_text(json.dumps({"type": "pong"}))
+                elif msg.get("type") == "alan_abone":
+                    # GA (istem 53): canlı alan haritası aboneliği (kart açıkken) — hesap yalnız abone varken koşar.
+                    _canli_alan.abone(websocket, bool(msg.get("acik")))
             except Exception:
                 pass
     except WebSocketDisconnect:
@@ -2374,6 +2393,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 _ws_clients.remove(websocket)
             except ValueError:
                 pass
+        _canli_alan.abone(websocket, False)
 
 
 # --- REACT NATIVE (EXPO) ENDPOINT'LERİ ---
