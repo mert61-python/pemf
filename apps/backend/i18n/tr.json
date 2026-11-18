@@ -321,6 +321,7 @@
         "kontrolKuyusu": "Kontrol kuyucuğu beklenen sınıfta değil — bu plakada eşikler güvenilmez; kontrol kuyucuklarını ve ışığı denetleyin.",
         "layoutMismatch": "Tümör yerleşimi referansla uyuşmuyor — doğru fantomu kabine koyun.",
         "obliqueView": "Plaka kameraya dik görünmüyor — plakayı tepsiye düz yerleştirin.",
+        "plakaDogrulanmadi": "Plaka doğrulanmadı: görülen kuyular 24'lük plaka düzenine oturmadı (boş kabinde ya da plaka eğikken hedef gösterilmez). Plakayı kabinin ortasına düz yerleştirin ve tüm kuyuların kamerada göründüğünden emin olun.",
         "plateCropped": "Plakanın bir kısmı görüntünün dışında — plakayı kabin kamerasının görüş alanının ortasına kaydırın."
       },
       "gecerlilikHesaplanamadi": "PEMF geçerliliği hesaplanamadı — D/P/E değerleri kullanılmamalı; analizi yineleyin.",

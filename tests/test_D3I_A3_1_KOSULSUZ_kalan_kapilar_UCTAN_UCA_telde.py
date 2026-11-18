@@ -18,6 +18,7 @@ import pytest
 from kd_kalibrasyon_yardimci import (
     kd_gecerli_kalibrasyon,  # noqa: F401,E402  KD · Y259: kalibrasyon ön koşulu sağlanmış (bu dosya başka kuralı ölçer)
 )
+from petri_plaka_aparati import plaka_adaylari
 
 
 def _sonuc(*, pemf_valid=True, warnings=(), method="scale", success=True, reliable=False):
@@ -64,6 +65,9 @@ def _sahte_sinif(taban):
             raise RuntimeError("sonda: aralık yok")
 
         def _adaylar(self, result):
+            # ODD B-5: koşulsuz kipte petri plakası ODAK ızgarasıyla doğrulanır — tek sahte kuyu değil, OTURAN plaka (A1 = hedef).
+            if self.ad == "petri":
+                return plaka_adaylari(self.hedef)
             x, y, z = self.hedef
             return [
                 {

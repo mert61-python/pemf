@@ -91,8 +91,11 @@ _ATLANABILIR = [d for d in DURUMLAR if d[2] != "pemf_gecersiz"]
 
 
 @pytest.mark.parametrize("model,boz,neden", _ATLANABILIR, ids=[f"{m}-{n}" for m, _, n in _ATLANABILIR])
-def test_KRITIK_saglayici_KOSULSUZ_kipte_LOKALIZE_sayar_KOSULLUDA_saymaz(sag, model, boz, neden):
+def test_KRITIK_saglayici_KOSULSUZ_kipte_LOKALIZE_sayar_KOSULLUDA_saymaz(sag, model, boz, neden, monkeypatch):
     hedef, fantom, petri, _ong = sag
+    # ODD B-5: koşulsuz petri karesi ayrıca ODAK plaka ızgarasıyla doğrulanır — bu kapının konusu hocanın kapısını ATLAMAK;
+    # plaka doğrulaması kendi kapısında (test_ODD_B5_*). Tek sahte kuyu burada "plaka doğrulandı" sayılır.
+    monkeypatch.setattr(petri, "_plaka_engeli", lambda _a: "")
     s = fantom if model == "fantom" else petri
     _Hat.kuyruk = [_Sonuc(**boz)]
     assert hedef.kosulsuz_ayarla(s, True) is True
@@ -103,8 +106,11 @@ def test_KRITIK_saglayici_KOSULSUZ_kipte_LOKALIZE_sayar_KOSULLUDA_saymaz(sag, mo
     assert lz2 is False, "KARŞIT: koşullu kipte aynı kare lokalize SAYILMAZ"
 
 
-def test_KRITIK_saglayici_KOSULSUZ_yontem_tavanini_ve_esigi_ATLAR_konum_YOKSA_atlamaz(sag):
+def test_KRITIK_saglayici_KOSULSUZ_yontem_tavanini_ve_esigi_ATLAR_konum_YOKSA_atlamaz(sag, monkeypatch):
     hedef, _fantom, petri, _ong = sag
+    monkeypatch.setattr(
+        petri, "_plaka_engeli", lambda _a: ""
+    )  # ODD B-5: plaka doğrulaması kendi kapısında (test_ODD_B5_*)
     _Hat.kuyruk = [_Sonuc(method="plate_grid", coord_frame="cabin_placement")]  # tavan 0,25 → güven 0,2 < 0,3
     lz0, *_ = petri.localize(np.zeros((8, 8, 3), np.uint8), 0)
     assert lz0 is False, "KARŞIT: koşulluda ArUco dışı yöntem sürülmez (karar #4)"

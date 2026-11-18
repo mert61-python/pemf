@@ -679,6 +679,8 @@ def kapi_uyari_metni(kapi, hata: str = "") -> str:
             return ceviri.t("ai.pemf.canliUyari.guvenilirDegil")
         if n in ("control_cancer_missed", "control_healthy_flagged"):
             return ceviri.t("ai.pemf.canliUyari.kontrolKuyusu")
+        if n == "plaka_dogrulanmadi":
+            return ceviri.t("ai.pemf.canliUyari.plakaDogrulanmadi")  # ODD B-5: koşulsuz kipte ODAK ızgarası oturmadı
     return ""
 
 
@@ -824,6 +826,8 @@ class _EmCvSaglayici:
     varsayilan_hedef = 0
     #: Kabul edilen EN FAZLA hedef (0 = otomatik seçim, 1..N = kare üstünde elle seçim).
     azami_hedef = 8
+    #: ODD B-5: koşulsuz kipte plaka ODAK ızgarasıyla doğrulanır mı (yalnız petri; fantomda ızgara yok).
+    plaka_dogrulamasi = False
     #: AP-B7 (S-AP.3): önizlemede gösterilen render paneli (hedef halkaları bunun üstünde); alt sınıf verir, boşsa ham kare.
     onizleme_paneli = ""
 
@@ -1095,6 +1099,33 @@ class _EmCvSaglayici:
                 with self._kilit:
                     self._meta = meta
                 return (False, 0.0, 0.0, 0.0, 0.0, overlay, True, None)
+        # ⚠️ ODD B-5 (ODK-B keşfi 18-11, sahip 12–14.png): KOŞULSUZ kipte hocanın tüketim kapısı (yerleşim / kontrol kuyusu) kesmez →
+        # BOŞ kabinde iki bobin halkası "kuyu" sanılıyordu (2 hedef %92–94 güven, "Kuyu ✓ Bulundu", "Konumlandı ✓", "Kanser: 2"); öneri
+        # ise ODAK kapısında duruyor, 2 dk sonra "Konumlandırma tamamlanamadı" (aynı ekranda çelişki). Bu kipte plaka, sürüşün de
+        # kullandığı ODAK ızgara oturtmasıyla DOĞRULANIR (`petri_izgarasi` — tek kaynak): oturmayan karede hedef YOK (Y259 ilkesi:
+        # boş kabinde 0 hedef), kare lokalize sayılmaz ve şerit NEDENİ söyler. Koşullu kip AYNEN (hocanın kapısı).
+        if basarili and self.kosulsuz and self.plaka_dogrulamasi:
+            _plaka_engeli = self._plaka_engeli(meta["odak_adaylar"])
+            if _plaka_engeli:
+                air.logger.warning("%s koşulsuz karede plaka DOĞRULANMADI (%s) → hedef yok", self.ad, _plaka_engeli)
+                meta.update(
+                    {
+                        "targets": [],
+                        "odak_adaylar": [],
+                        "plaka_dogrulanmadi": _plaka_engeli,
+                        "pemf_kapisi": {
+                            "surulebilir": False,
+                            "pemf_gecerli": False,
+                            "nedenler": ["plaka_dogrulanmadi"],
+                            "eylem": ceviri.t("ai.pemf.canliUyari.plakaDogrulanmadi"),
+                            "mesajlar": [],
+                            "varsayimlar": [],
+                        },
+                    }
+                )
+                with self._kilit:
+                    self._meta = meta
+                return (False, 0.0, 0.0, 0.0, 0.0, overlay, True, None)
         if secili is None:
             with self._kilit:
                 self._meta = meta
@@ -1134,6 +1165,21 @@ class _EmCvSaglayici:
             dokum["kosulsuz"] = True
             return (True, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
         return (guven >= MIN_GUVEN, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
+
+    def _plaka_engeli(self, odak_adaylar) -> str:
+        """ODD B-5: görülen kuyular ODAK plaka ızgarasına oturmuyorsa engel kodu (`plakaYok` / `plakaUyumsuz`), oturuyorsa "".
+        Oturtma hesaplanamazsa (numune verisi yok / bozuk) FAIL-CLOSED `plakaYok` (ODAK planı da zaten sürmez)."""
+        from ai_hub.odak import oneri as odak_oneri
+        from servers import ai_router as air
+
+        try:
+            odak_oneri.petri_izgarasi(odak_adaylar)
+        except odak_oneri.Engel as e:
+            return str(e.kod)
+        except Exception:
+            air.logger.warning("%s plaka ızgarası hesaplanamadı → doğrulanmadı sayıldı", self.ad, exc_info=True)
+            return "plakaYok"
+        return ""
 
     def _overlay(self, pl, ctx, result):
         from servers import ai_router as air
@@ -1267,6 +1313,8 @@ class PetriSaglayici(_EmCvSaglayici):
     #: Y300 (ODD B-1): SABİT NUMUNE — seans döngüsünde doğrulanamayan yeniden ölçüm son onaylı planı `_SABIT_NUMUNE_TOLERANS_S`
     #: boyunca sürdürür (kedi: N turda STOP). Fantom bu işareti TAŞIMAZ (Y283: sürüşü fail-closed kapalı).
     sabit_numune = True
+    #: ODD B-5: koşulsuz kipte plaka ODAK ızgara oturtmasıyla doğrulanır (boş kabinde sahte kuyu → hedef YOK).
+    plaka_dogrulamasi = True
     onizleme_paneli = "04_classify"  # AP-B7: kuyular kanserli / sağlıklı renkte, A1–D6 etiketli kare
     #: AI-2: v2 plaka kipi TÜM kuyucukları verir (24'lük: 24, 96'lık: 96) — eski 8'lik tavan kuyu 9–24'ü seçilemez
     #: kılardı (`hedef_idleri` dört doğrulama noktasının TEK kaynağı). En büyük standart plaka 96.

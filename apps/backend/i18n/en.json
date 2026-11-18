@@ -321,6 +321,7 @@
         "kontrolKuyusu": "A control well is not in the expected class — the thresholds are not reliable on this plate; check the control wells and the light.",
         "layoutMismatch": "The tumor layout does not match the reference — place the correct phantom in the cabin.",
         "obliqueView": "The plate does not appear square to the camera — place the plate flat on the tray.",
+        "plakaDogrulanmadi": "Plate not verified: the visible wells do not fit the 24-well plate layout (no targets are shown in an empty cabin or with a tilted plate). Place the plate flat in the centre of the cabin and make sure all wells are visible to the camera.",
         "plateCropped": "Part of the plate is outside the image — move the plate to the middle of the cabin camera's view."
       },
       "gecerlilikHesaplanamadi": "PEMF validity could not be calculated — D/P/E values must not be used; repeat the analysis.",
