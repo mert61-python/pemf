@@ -95,6 +95,9 @@ const HAZIRLIK_TAVAN_MS = 120000;
 const DUSUK_GUVEN = 0.5;
 /** AP-B4: sunucu öneri için 120 sn'den eski konumu reddeder (`/propose` tazelik); pencere bundan biraz önce "konum eskidi" der. */
 const KONUM_ESKI_MS = 110000;
+/** ODD B-3: "Konumu tazele" — önizleme en çok bu kadar açık kalır (taze konum gelmezse pencere hatası); durum bu aralıkla okunur. */
+const KONUM_TAZELE_MS = 30000;
+const KONUM_TAZELE_ARALIK_MS = 1500;
 
 /** AP-B4: onay penceresindeki isteğin hata metni — sunucunun eylem söyleyen gerekçesi; yoksa durum kodu; yanıt hiç gelmediyse bağlantı. */
 function pencereHataMetni(red: { durum: number; detay?: string } | null): string {
@@ -520,6 +523,8 @@ export function AiProPanel({
   /** AP-B4 (tezgâh 13-11): onay penceresindeki istek hatası (yeniden hesapla / onay / başlat) — pencerenin İÇİNDE gösterilir. Genel hata
    *  balonu uygulama kökünde çizilir ve RN Modal'ın ARKASINDA kalıyordu (`dozSapmasi` görünmedi). */
   const [pencereHatasi, setPencereHatasi] = useState("");
+  /** ODD B-3: açık önerinin konum ölçümü eskidi (> KONUM_ESKI_MS) — pencerede "Konumu tazele ve yeniden hesapla" görünür. */
+  const [konumEski, setKonumEski] = useState(false);
   /** AP-B4: önerinin dayandığı konum ölçümünün (hazırlıkta alınan öneri) panele geliş anı — yeniden hesap aynı ölçümü kullanır; sunucu
    *  2 dk'dan eski ölçümü reddeder (önizleme durmuş olduğundan kendiliğinden tazelenmez). */
   const oneriOlcumAniRef = useRef(0);
@@ -1026,13 +1031,63 @@ export function AiProPanel({
         // AP-B3: haritadan seçilen kuyu artık hedef — liste / halkalar onu seçili gösterir (mühürdeki kalıcı kimlik).
         if (kuyu && typeof prop.specs?.organ_id === "number") setOrganId(prop.specs.organ_id);
       } else {
-        const eski = oneriOlcumAniRef.current > 0 && Date.now() - oneriOlcumAniRef.current > KONUM_ESKI_MS;
-        setPencereHatasi(pencereHataMetni(red) + (eski ? " " + i18n.t("ai.pro.onay.konumEskidi") : ""));
+        // ODD B-3: konumun eskidiği artık SUNUCU iletisinin başında (`konumBayat`, seçilen kuyunun adıyla) — istemci saatiyle sona
+        // eklenen "pencereyi kapatıp hazırlığı yeniden başlatın" cümlesi kalktı; pencerede "Konumu tazele ve yeniden hesapla" var.
+        setPencereHatasi(pencereHataMetni(red));
+        if (oneriOlcumAniRef.current > 0 && Date.now() - oneriOlcumAniRef.current > KONUM_ESKI_MS) setKonumEski(true);
       }
     } finally {
       setApprovalBusy(false);
     }
   }, [proposal, organId, duration]);
+
+  /** ODD B-3: pencere açıkken konum ölçümünün yaşı izlenir (önizleme durduğu için ölçüm yaşlanır; sunucu 120 sn'den eskiyle öneri vermez). */
+  useEffect(() => {
+    if (!proposal?.proposalId) { setKonumEski(false); return; }
+    const denetle = () => setKonumEski(oneriOlcumAniRef.current > 0 && Date.now() - oneriOlcumAniRef.current > KONUM_ESKI_MS);
+    denetle();
+    const id = setInterval(denetle, 5000);
+    return () => clearInterval(id);
+  }, [proposal]);
+
+  /** ODD B-3 (ODK-B keşfi 18-11): "Konumu tazele ve yeniden hesapla" — önizleme AYNI hedef / model / kiple kısa açılır, taze konum gelince
+   *  bırakılır ve kullanıcının seçtiği doz / kip / kuyuyla yeniden öneri istenir (pencere kapanmaz, seçim kaybolmaz). Yalnız web. */
+  const konumTazele = useCallback(async (doz: number, kip: string, kuyu?: string) => {
+    if (!proposal?.proposalId || onayAkisiRef.current) return;
+    setApprovalBusy(true);
+    setPencereHatasi("");
+    let taze = false;
+    try {
+      const hz = await apiPost<AiProAction | null>(
+        "/ai/pro/hazirlik/baslat",
+        {
+          organ_id: oneriIstekHedefRef.current,
+          client_id: clientIdRef.current,
+          model: proposal.specs?.model ?? hedefModeliRef.current,
+          kosulsuz: kosulsuzRef.current,
+        },
+        null
+      );
+      if (hz) {
+        const bitis = Date.now() + KONUM_TAZELE_MS;
+        while (!taze && Date.now() < bitis) {
+          await new Promise((r) => setTimeout(r, KONUM_TAZELE_ARALIK_MS));
+          const st = await apiGet<AiProStatus | null>("/ai/pro/status", null, { silent: true });
+          taze = Boolean(st?.localized);
+        }
+        await apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null);
+      }
+    } finally {
+      setApprovalBusy(false);
+    }
+    if (!taze) {
+      setPencereHatasi(i18n.t("ai.pro.onay.konumTazelenemedi"));
+      return;
+    }
+    oneriOlcumAniRef.current = Date.now();
+    setKonumEski(false);
+    await yenidenHesapla(doz, kip, kuyu);
+  }, [proposal, yenidenHesapla]);
 
   /** Hekim REDDETTİ → gerekçeyle kaydet; tedavi BAŞLAMAZ. */
   const rejectProposal = useCallback(async (reason: string) => {
@@ -1374,6 +1429,8 @@ export function AiProPanel({
         onReject={rejectProposal}
         onDismiss={() => { setProposal(null); setPencereHatasi(""); }}
         onYenidenHesapla={yenidenHesapla}
+        konumEski={IS_WEB && konumEski}
+        onKonumTazele={IS_WEB ? konumTazele : undefined}
         hata={pencereHatasi}
       />
       {/* SİHİRBAZ (yalnız araştırma): neredeyim + geri nasıl dönerim. Veterinerde RENDER EDİLMEZ →

@@ -352,6 +352,7 @@
         "guncellemeSuruyor": "An update is being applied; AI Pro cannot be started until it finishes.",
         "hedefDesteklenmiyor": "Target {{oid}} is not supported for '{{model}}' (valid: {{gecerli}}).",
         "kediSurusKapali": "Cat AI Pro driving is turned off until the cabin position is verified. You can review the analysis and the recommendation; start the session by hand from the Control screen.",
+        "konumBayat": "The position measurement for {{ad}} is out of date (taken more than 2 minutes ago) — the proposal cannot be recalculated with it. Press «Refresh position and recalculate» in this window (the camera opens briefly and the plan is recalculated with the same dose and mode), or close the window and start the preparation again.",
         "konumlandirilmadi": "{{ad}} has not been positioned yet. {{ipucu}} While the camera image is streaming, positioning completes by itself and the recommendation is prepared automatically.",
         "kosulsuzUyusmuyor": "The position was found in the mode that is not selected now (Conditional / Unconditional). If you switched the mode, restart the preview and request the proposal again.",
         "modelTanimsiz": "Model '{{model}}' is not recognized (valid: {{gecerli}})",

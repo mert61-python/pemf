@@ -162,7 +162,7 @@ export function KuyuHaritasi({
 }
 
 export function OdakOzeti({
-  odak, busy, onYenidenHesapla, onKirli,
+  odak, busy, onYenidenHesapla, onKirli, konumEski, onKonumTazele,
 }: {
   odak: OdakOzet;
   busy?: boolean;
@@ -170,6 +170,10 @@ export function OdakOzeti({
   onYenidenHesapla?: (doz: number, kip: string, kuyu?: string) => void;
   /** ODD B-2: ekrandaki seçim ile önerinin (mühürün) planı ayrıştı mı — üst bileşen onayı buna göre PASİF yapar. */
   onKirli?: (kirli: boolean) => void;
+  /** ODD B-3: konum ölçümü 2 dk'ya yaklaştı / geçti — "Konumu tazele ve yeniden hesapla" görünür (yalnız işleyici verildiyse). */
+  konumEski?: boolean;
+  /** ODD B-3: önizlemeyi kısa açıp taze konumla AYNI doz / kip / kuyuyla yeniden öneri iste (web — sunucu kamerası). */
+  onKonumTazele?: (doz: number, kip: string, kuyu?: string) => void;
 }) {
   const { t } = useTranslation();
   const [dozMetni, setDozMetni] = useState(sayi(odak.doz_mT));
@@ -285,6 +289,21 @@ export function OdakOzeti({
           {kirli ? (
             <Text testID="odak-kirli" style={s.uyari} accessibilityLiveRegion="polite">{t("ai.pro.onay.odak.kirliUyari")}</Text>
           ) : null}
+          {konumEski && onKonumTazele ? (
+            <>
+              <Text testID="odak-konum-eski" style={s.uyari}>{t("ai.pro.onay.odak.konumEskiUyari")}</Text>
+              <TouchableOpacity
+                testID="odak-konum-tazele"
+                style={[s.dugme, s.dugmeGenis, (!dozGecerli || busy) && s.dugmePasif, { minHeight: touch.min }]}
+                disabled={!dozGecerli || !!busy}
+                onPress={() => onKonumTazele(doz, kip, kuyuDegisti ? secilenKuyu : undefined)}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !dozGecerli || !!busy }}
+              >
+                <Text style={s.dugmeYazi}>{t("ai.pro.onay.odak.konumTazele")}</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -332,5 +351,6 @@ const s = StyleSheet.create({
   },
   dugme: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, justifyContent: "center" },
   dugmePasif: { opacity: 0.5 },
+  dugmeGenis: { alignItems: "center", paddingVertical: spacing.xs },
   dugmeYazi: { color: "#04121F", fontSize: rf(12), fontWeight: "800" },
 });

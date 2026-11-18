@@ -2666,6 +2666,19 @@ def _odak_ozet(plan: dict) -> dict:
     return {k: plan.get(k) for k in _ODAK_OZET_ALANLARI if plan.get(k) is not None}
 
 
+def _eski_konum_hedef_adi(saglayici, oid: int, kuyu, c: dict) -> str:
+    """ODD B-3: eski konum iletisinde SEÇİLEN hedefin adı (istek dili): haritadan seçilen kuyu > önizlemenin seçtiği hedefin etiketi >
+    hedefin gösterim adı (kedi organı / "Kuyu (otomatik)")."""
+    _gosterim = getattr(saglayici, "etiket_gosterim", None)
+    _kuyu = str(kuyu or "").strip().upper()
+    if _kuyu and callable(_gosterim):
+        return _gosterim(f"{saglayici.hedef_etiketi} {_kuyu}")
+    _etiket = str(c.get("target_label") or "")
+    if _etiket and callable(_gosterim):
+        return _gosterim(_etiket)
+    return ai_pro_hedef.hedef_gosterim_adi(saglayici, oid) or ceviri.t("ai.pro.hedefOrgan")
+
+
 @ai_router.post("/api/ai/pro/propose")
 def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProProposePayload()):
     """AI'ın önerdiği tedavi parametrelerini ÜRET — DONANIMA DOKUNMADAN.
@@ -2701,6 +2714,19 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
         and str(c.get("model") or ai_pro_hedef.VARSAYILAN_MODEL) == _saglayici.ad
         and (time.time() - float(c.get("at") or 0)) < 120.0
     )
+    if (
+        not taze
+        and bool(c.get("localized"))
+        and int(c.get("organ_id", -1)) == oid
+        and str(c.get("model") or ai_pro_hedef.VARSAYILAN_MODEL) == _saglayici.ad
+    ):
+        # ⚠️ ODD B-3 (ODK-B keşfi 18-11): konum BULUNDU ama ESKİ (> 120 sn — onay penceresi açıkken önizleme durur, kamera bırakılır).
+        # Eskiden "henüz konumlandırılmadı · (otomatik) seçilemedi — hedefi ortaya alın" diyordu (asıl neden sonda, istemci saatiyle).
+        # Asıl neden BAŞTA, SEÇİLEN hedefin adıyla, eylem "Konumu tazele ve yeniden hesapla".
+        raise HTTPException(
+            status_code=409,
+            detail=ceviri.t("ai.pro.hata.konumBayat", ad=_eski_konum_hedef_adi(_saglayici, oid, payload.kuyu, c)),
+        )
     if not taze:
         # ⚠️ MESAJ GERÇEĞE ÇEKİLDİ (saha bildirimi 2026-08-24): eski metin kullanıcıya
         # "'Yeniden konumla' ile lokalizasyonu tamamlayın" diyordu. Mobilde o düğme yalnız

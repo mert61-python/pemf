@@ -352,6 +352,7 @@
         "guncellemeSuruyor": "Güncelleme uygulanıyor; işlem bitene kadar AI Pro başlatılamaz.",
         "hedefDesteklenmiyor": "Hedef {{oid}} '{{model}}' için desteklenmiyor (geçerli: {{gecerli}}).",
         "kediSurusKapali": "Kedi AI Pro sürüşü, kabin konumu doğrulanana kadar kapalı. Analizi ve öneriyi inceleyebilirsiniz; seansı Kontrol ekranından elle başlatın.",
+        "konumBayat": "{{ad}} için konum ölçümü eski (2 dakikadan önce) — öneri bu konumla yeniden hesaplanamaz. Pencerede «Konumu tazele ve yeniden hesapla»ya basın (kamera kısa süre açılır, aynı doz ve kiple yeniden hesaplanır) ya da pencereyi kapatıp hazırlığı yeniden başlatın.",
         "konumlandirilmadi": "{{ad}} henüz konumlandırılmadı. {{ipucu}} Kamera görüntüsü akarken konumlandırma kendiliğinden tamamlanır ve öneri otomatik hazırlanır.",
         "kosulsuzUyusmuyor": "Konum, şu an seçili olmayan kipte (Koşullu / Koşulsuz) bulundu. Kipi değiştirdiyseniz önizlemeyi yeniden başlatıp öneriyi yeniden isteyin.",
         "modelTanimsiz": "Model '{{model}}' tanınmıyor (geçerli: {{gecerli}})",

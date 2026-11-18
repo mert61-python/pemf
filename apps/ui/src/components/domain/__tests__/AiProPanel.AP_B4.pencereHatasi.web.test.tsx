@@ -101,12 +101,17 @@ it("KRİTİK B4: 'Yeniden hesapla' reddi (dozSapmasi) pencerenin İÇİNDE, eyle
   expect(u.getByTestId("odak-ozeti")).toBeTruthy(); // pencere AÇIK, önceki öneri duruyor
 });
 
-it("B4: konum ölçümü 2 dk'dan eskiyse yeniden hesap hatasına 'pencereyi kapatıp hazırlığı yeniden başlatın' eklenir", async () => {
-  mockHesapRet = { durum: 409, detay: "Kuyu henüz konumlandırılmadı." };
+it("B4 → ODD B-3: konum 2 dk'dan eskiyse pencerede 'Konumu tazele ve yeniden hesapla'; sunucu iletisine istemci cümlesi EKLENMEZ", async () => {
+  // ODD B-3: neden artık sunucu iletisinin BAŞINDA (`konumBayat`, seçilen kuyunun adıyla); istemci saatiyle sona eklenen
+  // "pencereyi kapatıp hazırlığı yeniden başlatın" cümlesinin yerini pencere içindeki tazeleme eylemi aldı.
+  mockHesapRet = { durum: 409, detay: "Kuyu C6 için konum ölçümü eski (2 dakikadan önce) — X." };
   const u = await oneriPenceresi();
   await act(async () => { jest.advanceTimersByTime(115000); });
   await act(async () => { fireEvent.press(u.getByTestId("odak-yeniden-hesapla")); });
-  expect(String(u.getByTestId("ai-onay-hata").props.children)).toContain("pencereyi kapatıp hazırlığı yeniden başlatın");
+  const m = String(u.getByTestId("ai-onay-hata").props.children);
+  expect(m).toContain("Kuyu C6 için konum ölçümü eski");
+  expect(m).not.toContain("pencereyi kapatıp hazırlığı yeniden başlatın");
+  expect(u.getByTestId("odak-konum-tazele")).toBeTruthy();
 });
 
 it("B4: başlatma reddi de pencerenin İÇİNDE; pencere kapatılınca hata temizlenir", async () => {

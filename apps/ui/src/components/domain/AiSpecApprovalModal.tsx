@@ -114,6 +114,7 @@ function tr(n: number, basamak = 2): string {
 
 export function AiSpecApprovalModal({
   visible, specs, meta, organName, busy, onApprove, onReject, onDismiss, surusKapali, onYenidenHesapla, hata, hedefGosterim,
+  konumEski, onKonumTazele,
 }: {
   visible: boolean;
   specs: AiProposalSpecs | null;
@@ -132,6 +133,9 @@ export function AiSpecApprovalModal({
   hata?: string;
   /** AP-22: hedefin İSTEK dilindeki gösterim adı (öneri yanıtı `hedefGosterim`). Boş / yoksa ham `specs.target_label` (eski backend, kedi). */
   hedefGosterim?: string;
+  /** ODD B-3: konum ölçümü eskidi → ODAK özetinde "Konumu tazele ve yeniden hesapla". */
+  konumEski?: boolean;
+  onKonumTazele?: (doz: number, kip: string, kuyu?: string) => void;
 }) {
   const { t } = useTranslation();
   const [rejecting, setRejecting] = useState(false);
@@ -315,7 +319,14 @@ export function AiSpecApprovalModal({
           {/* ODAK (istem 45): faz / duty ODAK planından → doz ± konum payı, tavan, çevre / oran, petride 24 kuyu haritası + doz seçici.
               Eski "hedefte · çevrede · oran" satırı (hoca modelinin birimsiz E'si) ODAK önerisinde GÖSTERİLMEZ. */}
           {specs.odak ? (
-            <OdakOzeti odak={specs.odak} busy={busy} onYenidenHesapla={onYenidenHesapla} onKirli={setKirli} />
+            <OdakOzeti
+              odak={specs.odak}
+              busy={busy}
+              onYenidenHesapla={onYenidenHesapla}
+              onKirli={setKirli}
+              konumEski={konumEski}
+              onKonumTazele={onKonumTazele}
+            />
           ) : null}
 
           {/* GÖRELİ ALAN: model birimsiz bir göreli değer üretir; "V/m" yazmak uydurma olurdu.
