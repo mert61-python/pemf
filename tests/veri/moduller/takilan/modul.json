@@ -1,0 +1,9 @@
+{
+  "sema": 1,
+  "kimlik": "takilan",
+  "ad": {"tr": "Takılan sürücü (test)", "en": "Hanging driver (test)"},
+  "surum": "0.0.1",
+  "baglanti": "sahte",
+  "sinirlar": {"frekans_hz": [1, 500]},
+  "bekci_ms": 1500
+}

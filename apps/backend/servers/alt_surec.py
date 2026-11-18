@@ -60,6 +60,10 @@ def calistir(argv: list[str]) -> int:
         from servers.canli_alan_hesapci import main as _main
 
         return _main(kalan)
+    if ad == "modul-surucu":
+        from servers.modul_surucu import main as _modul_main
+
+        return _modul_main(kalan)
     return 2
 
 

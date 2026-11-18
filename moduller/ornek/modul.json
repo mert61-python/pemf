@@ -1,0 +1,19 @@
+{
+  "sema": 1,
+  "kimlik": "ornek",
+  "ad": {"tr": "Örnek modül (sahte kart)", "en": "Example module (fake board)"},
+  "gelistirici": "PEMF çekirdek ekibi (şablon)",
+  "surum": "0.1.0",
+  "baglanti": "sahte",
+  "baglanti_ayrinti": {"boru": "pemf-ornek-kart"},
+  "sinirlar": {"frekans_hz": [1, 500], "duty_yuzde": [0, 50], "sure_dk": [0, 60]},
+  "bekci_ms": 1500,
+  "kart": {
+    "mikroislemci": "yok (sahte_kart.py — bilgisayarda ayrı süreç)",
+    "surme_karti": "yok",
+    "baglanti": "yerel adlandırılmış boru",
+    "bobin": "yok (benzetim)",
+    "akim_siniri_a": 0,
+    "bekci_ms": 1500
+  }
+}

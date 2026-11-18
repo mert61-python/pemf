@@ -276,7 +276,7 @@
    "aciklama": "yönlendirici hata iletileri (hasta, geçmiş, seans, kimlik, sistem, güncelleme, jeton)",
    "durum": "tamam",
    "metin": 160,
-   "dosyaSayisi": 14
+   "dosyaSayisi": 15
   },
   {
    "ad": "sunucu-10b-ana-sunucu",
@@ -339,7 +339,7 @@
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
    "durum": "tamam",
    "metin": 136,
-   "dosyaSayisi": 42
+   "dosyaSayisi": 46
   },
   {
    "ad": "launcher-11a-ui",
@@ -4064,6 +4064,17 @@
    ],
    "birlesikIstisna": [],
    "not": "I18N altyapısı — kullanıcı metni katalogda; buradaki dizgiler geliştirici iletisi / dil kodu (KATI kipte test hatası)"
+  },
+  "apps/backend/servers/modul_router.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10a-yonlendirici",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (hata kodları arayüzde çevrilir)"
   },
   "apps/backend/servers/api_server.py": {
    "yuzey": "sunucu",
@@ -10036,6 +10047,65 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (durum kodları arayüzde çevrilir)"
+  },
+  "apps/backend/servers/modul_denetleyici.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "class Surucu(BobinSurucusu)",
+     "gerekce": "geliştirici aracı (sürücü denetleyicisi) bulgu ayrıntısı — kod / kural adı, son kullanıcıya görünmez",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "retain (konumsal)",
+     "gerekce": "geliştirici aracı (sürücü denetleyicisi) bulgu ayrıntısı — kod / kural adı, son kullanıcıya görünmez",
+     "turler": [
+      "dizi"
+     ]
+    }
+   ],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (hata kodları arayüzde çevrilir)"
+  },
+  "apps/backend/servers/modul_kayit.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (hata kodları arayüzde çevrilir)"
+  },
+  "apps/backend/servers/modul_surucu.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (hata kodları arayüzde çevrilir)"
+  },
+  "apps/backend/servers/modul_yonetici.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — kullanıcı metni YOK (hata kodları arayüzde çevrilir)"
   },
   "launcher/app/ui/index.html": {
    "yuzey": "launcher",

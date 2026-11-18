@@ -770,6 +770,10 @@ app.include_router(patient_router)
 app.include_router(system_router)
 app.include_router(session_router)
 app.include_router(auth_router)
+# GA (istem 53) B1: geliştirici modülleri (varsayılan GİZLİ — Y299; ACİL DURDUR yayılımı `_emergency_stop_all`).
+from servers.modul_router import router as modul_router  # noqa: E402
+
+app.include_router(modul_router)
 
 
 # (audit B-2.2) /api/update/* uçları servers/update_router.py'ye taşındı (modüler ayrım).
@@ -7436,6 +7440,18 @@ def _stm_stop_kart_yaniti(stop_sirasi):
     return yanit if yanit in ("kabul", "red", "yanitsiz") else None
 
 
+def _modullere_acil_durdur() -> None:
+    """GA B2: canlı geliştirici modüllerine ACİL DURDUR — kendi iş parçacığında, çağıranı (STM ACİL DURDUR) BEKLETMEZ, fırlatmaz."""
+    try:
+        from servers import modul_yonetici
+
+        y = modul_yonetici.varsa()
+        if y is not None:
+            threading.Thread(target=y.acil_durdur_hepsi, daemon=True, name="estop-moduller").start()
+    except Exception:
+        logging.getLogger(__name__).exception("E-stop: modüllere iletilemedi (STM / ESP durdurması SÜRÜYOR)")
+
+
 def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kalici: bool = True):
     """Tüm transport'lardan (STM 1-5 + ESP 6-8) DONANIM STOP + seans kapat + WS bildir.
     Manuel acil-durdurma + ESP firmware ALARM'ı + STM bağlantı kaybı ortak bunu çağırır.
@@ -7473,6 +7489,9 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma", kal
         except Exception:
             logging.exception("STM emergency stop failed")
         _stm_stop_sirasi = _stm_son_stop_sirasi_al()  # i5-F-2: teyit bu STOP'a bağlanır
+    # GA (istem 53) B2: geliştirici modüllerine ACİL DURDUR — STM STOP'undan SONRA, ARKA PLANDA (BEKLENMEZ; her modül ≤ 50 ms, takılan
+    # sürücü süreci öldürülür). Modül hiç kullanılmadıysa iş yok. Hiçbir koşula / görünürlüğe bağlı DEĞİL.
+    _modullere_acil_durdur()
 
     # P0 audit 2026-06-28: ESP stop publish'lerini PARALEL gonder (eskiden bobin basina 2 senkron
     # publish sirayla → acil-durdurma N-bobin x ~7sn gecikiyordu). _emergency_stop_all DAIMA bir
