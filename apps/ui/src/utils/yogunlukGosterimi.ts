@@ -44,7 +44,7 @@ export function canliYogunluk(at: CanliSeans | null | undefined): YogunlukGoster
     return { tur: "odak", deger: i18n.t("kontrol.yogunluk.odakDeger", { doz: ondalikMetni(odak, 2), count: n }) };
   }
   const duty = at?.dutyTemsilYuzde;
-  if (sayi(duty)) return { tur: "duty", deger: `%${duty}` };
+  if (sayi(duty)) return { tur: "duty", deger: i18n.t("ai.ortak.yuzde", { deger: duty }) }; // Y306: EN "36%", TR "%36"
   return { tur: "yok", deger: "—" };
 }
 

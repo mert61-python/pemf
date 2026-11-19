@@ -385,7 +385,8 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                     {run.frequency_hz != null ? `${run.frequency_hz} Hz` : "—"}
                   </Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
-                    {run.duty_percent != null ? `%${run.duty_percent}` : "—"}
+                    {/* Y306 (OTB [SAHİBE] 3): yüzde işaretinin yeri dile göre — TR "%50", EN "50%" (katalog `ai.ortak.yuzde`). */}
+                    {run.duty_percent != null ? t("ai.ortak.yuzde", { deger: run.duty_percent }) : "—"}
                   </Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
                     {kayitYogunlugu(run.intensity_mt)}
