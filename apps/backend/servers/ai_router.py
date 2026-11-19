@@ -3331,8 +3331,9 @@ def stop_ai_pro():
         # bu uc "success" donerken bobinlerin durmadigi sessiz kaliyordu.
         # D1.81 (İG-5.3 "/ai/pro/stop kolu"): yetki KESİLİR (nesil++) → tahmindeki uçuştaki `/frame`/döngü turu bu
         # STOP'tan sonra bobini yeniden enerjileyemez (ölçüldü: 20'de 2, zorlanmış zamanlamada 30'da 30).
+        # OYZ (C2-1.3): bobin çalışma kayıtları (OTB T-10) burada değil, aşağıda kayıt kuyruğunda kapanır.
         _api._bildir_teyitsiz_stop(
-            _api._stop_session_coils(range(1, 9), yetkiyi_kes=True),
+            _api._stop_session_coils(range(1, 9), yetkiyi_kes=True, kosulari_kapat=False),
             lambda d: ceviri.t("bildirim.kaynak.aiProDurdurma", dil=d),
         )
     except Exception:
@@ -3366,11 +3367,20 @@ def stop_ai_pro():
     # ⚠️ C2-1.3 (2-C inceleme · Ö.4-Y8): kapanış KAYIT kuyruğunda (sıra korunur — ACİL DURDUR kapanışıyla aynı işçi: "durum
     # hâlâ active mi?" denetimi ile finalize arasına öteki kapanış giremez); yanıt en çok `DURDURMA_KAYIT_BEKLEME_SN` bekler.
     # Tedavi DB'si kilitliyken yanıt 21 sn bekliyordu (arayüz zaman aşımı 8 sn → bobinler durmuşken "Durdurulamadı").
+    # ⚠️ OYZ (zincir 56 AŞAMA 3 · C2-1.3): OTB T-10'dan beri AI Pro sürüşü bobin ÇALIŞMA KAYDI (coil run) açar; kapanışları eskiden
+    # `_stop_session_coils` içinde bu iş parçacığında EŞZAMANLI yazılıyordu → kilitli tedavi DB'sinde yanıt 67 sn bekledi (ölçüldü).
+    # Artık satır kapanışıyla AYNI kayıt kuyruğunda, satırdan ÖNCE (elle durdurmadaki sıra) — STOP yukarıda gitti.
     from utils import dongu_disi_yazim as _kayit_kuyrugu
 
-    _kayit_kuyrugu.sirada_calistir(
-        _ai_pro_satirini_kapat, _kapanacak, "ai-pro-durdurma", ad="AI Pro durdurma seans kaydi kapanisi"
-    )
+    def _durdurma_kayitlari() -> None:
+        for _cid in range(1, 9):
+            try:
+                _api._finish_coil_run(_cid)
+            except Exception:
+                logger.debug("stop_ai_pro: bobin %s çalışma kaydı kapatılamadı", _cid, exc_info=True)
+        _ai_pro_satirini_kapat(_kapanacak, "ai-pro-durdurma")
+
+    _kayit_kuyrugu.sirada_calistir(_durdurma_kayitlari, ad="AI Pro durdurma seans kaydi kapanisi")
     return {"status": "success", "message": "AI Pro Closed-Loop Stopped"}
 
 

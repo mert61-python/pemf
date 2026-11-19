@@ -4736,9 +4736,12 @@ async def start_session(payload: SessionStartPayload, request: Request):
     return resp
 
 
-def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
+def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False, kosulari_kapat: bool = True):
     """Verilen bobinlere donanım STOP gönderir (önce STM→update_coil start=False, sonra ESP→MQTT).
     is_running=False yapar → HWKeepAlive tazelemeyi keser → bobinler fiziksel olarak durur.
+
+    `kosulari_kapat=False` (OYZ · C2-1.3): açık bobin çalışma kayıtları (coil run) burada KAPATILMAZ — çağıran onları STOP'tan
+    SONRA kayıt kuyruğunda kapatır (`/api/ai/pro/stop`: tedavi DB'si kilitliyken durdurma yanıtı kayıt yazımını beklemesin).
 
     `yetkiyi_kes` (D1.81 · B-5.3): SEANSI BİTİREN durdurmalar (`/api/session/stop`, `/api/ai/pro/stop`, süre bekçisi)
     STOP'tan ÖNCE sürüş neslini artırır → uçuştaki START niyetleri (tahmin/lokalizasyondaki `/frame`, döngü turu)
@@ -4798,8 +4801,8 @@ def _stop_session_coils(coil_ids, yetkiyi_kes: bool = False):
     # kablo çıkıkken (porta 0 bayt) seans / AI Pro / süre bekçisi durdurması "teyitli" sayılıyordu. Yalnız RAPOR.
     if _kuyrukta and not _stm_stop_porta_yazildi_mi(_isaret, _sira_once):
         teyitsiz.extend(_kuyrukta)
-    # Asama-2: durdurulan tum bobinlerin acik run'larini kapat (acik kalmasin).
-    for coil_id in coil_ids:
+    # Asama-2: durdurulan tum bobinlerin acik run'larini kapat (acik kalmasin) — `kosulari_kapat=False` ise çağıran kapatır.
+    for coil_id in coil_ids if kosulari_kapat else ():
         try:
             _finish_coil_run(coil_id)
         except Exception:

@@ -108,19 +108,22 @@ def test_KRITIK_estop_sonrasi_MANDALLIYKEN_dongu_teardown_STOP_GONDERIR(d, monke
         stop_once = d.hc.stop_all_cagri
         y0 = len(d.yayin)
         d.api._emergency_stop_all("manual")
-        stop_estop = d.hc.stop_all_cagri - stop_once
-        y_estop = len(d.yayin)
         assert ap.bekle(lambda: d.canli["n"] == 0, 8), "döngü E-stop'tan sonra bitmedi"
-        stop_teardown = d.hc.stop_all_cagri - stop_once - stop_estop
+        # OYZ (zincir 56 AŞAMA 3, 19-11): SIRA değil TOPLAM ölçülür — teardown `_emergency_stop_all` DÖNMEDEN de koşabilir (OTB
+        # T-10'dan beri E-stop açık bobin çalışma kaydını da kapatır; günlükte teardown STOP'u E-stop'un seans kapanışından ÖNCE).
+        # Eskiden teardown'ın STOP'u E-stop penceresine düşünce "teardown 0" sayılıyordu (ölçüldü: T-10 öncesi 26 / 26 yeşil,
+        # sonrası ~%70 kırmızı — ürün iki STOP'u da gönderiyordu). `ai_stop_` komut kimliği YALNIZ teardown'ındır ve onun STOP
+        # dalında gönderilir; STM: E-stop 1 + teardown 1.
+        stop_toplam = d.hc.stop_all_cagri - stop_once
         ai_stop = [
             p
-            for _t, p in d.yayin[y_estop:]
+            for _t, p in d.yayin[y0:]
             if p.get("command") == "stop" and str(p.get("command_id", "")).startswith("ai_stop_")
         ]
         assert m.mandalli_mi(), "aparat: mandal test içinde kalktı (sıfırlanmamalıydı)"
-        assert stop_teardown >= 1 and ai_stop, (
-            f"MANDAL KURULUYKEN (yeni seans imkânsız) döngü teardown'ı STOP GÖNDERMEDİ: teardown stop_all="
-            f"{stop_teardown}, ai_stop ESP={len(ai_stop)} (E-stop: stop_all={stop_estop}, yayın={y_estop - y0}) — "
+        assert stop_toplam >= 2 and ai_stop, (
+            f"MANDAL KURULUYKEN (yeni seans imkânsız) döngü teardown'ı STOP GÖNDERMEDİ: E-stop + teardown stop_all="
+            f"{stop_toplam} (≥ 2 beklenir), ai_stop ESP={len(ai_stop)} (toplam yayın={len(d.yayin) - y0}) — "
             "yedek gönderim azaldı (A-63 / Ö.4-Y8)"
         )
 

@@ -8,6 +8,10 @@ kendisi gecikmez) ama arayüz (`apiPost` 8 sn zaman aşımı) yanıtı alamaz: "
 paneli "çalışıyor" bırakır; satır da kapanmaz. E07'den önce bu uç DB'ye dokunmuyordu.
 GERÇEK: tedavi DB dosyası İKİNCİ bir SQLite bağlantısıyla kilitlenir; istek TEK paylaşılan olay döngüsünden gider.
 KARŞIT: kilit yokken satır yanıt dönmeden `completed` kapanır (E07 davranışı korunur).
+OYZ (zincir 56 AŞAMA 3, 19-11): OTB T-10'dan beri AI Pro sürüşü bobin ÇALIŞMA KAYDI (coil run) açar; `_stop_session_coils` onları
+STOP iş parçacığında EŞZAMANLI kapatıyordu → kilitli DB'de yanıt 67,5 sn (T-10 öncesi `c3267319` yeşil, T-10 `89713409` kırmızı).
+Kapanış artık satırla aynı kayıt kuyruğunda: kilitliyken yanıt beklemez, kilit kalkınca kayıtlar KAYBOLMADAN kapanır; kilitsizken
+yanıt dönmeden kapanmış olur.
 """
 
 from __future__ import annotations
@@ -20,6 +24,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 ARAYUZ_ZAMAN_ASIMI_SN = 8.0  # apps/ui/src/services/apiClient.ts REQUEST_TIMEOUT_MS
+
+
+def _acik_kosu_kayitlari(o, sid) -> tuple[int, int]:
+    """(toplam, kapanmamış) bobin çalışma kaydı sayısı — seansın."""
+    with o.db._get_connection() as c:
+        toplam = c.execute("SELECT COUNT(*) FROM session_coil_runs WHERE session_id=?", (sid,)).fetchone()[0]
+        acik = c.execute(
+            "SELECT COUNT(*) FROM session_coil_runs WHERE session_id=? AND ended_epoch IS NULL", (sid,)
+        ).fetchone()[0]
+    return toplam, acik
 
 
 @pytest.fixture
@@ -96,6 +110,11 @@ def test_KRITIK_C2_1_3_tedavi_DB_KILITLIYKEN_AI_Pro_STOP_yaniti_arayuz_zaman_asi
         f"tedavi DB kilitliyken /ai/pro/stop yanıtı {yanit_sn:.1f} sn bekledi — arayüz {ARAYUZ_ZAMAN_ASIMI_SN:.0f} sn'de "
         "'Durdurulamadı … ACİL DURDUR kullanın' der (bobinler durmuşken)"
     )
+    from utils import dongu_disi_yazim
+
+    assert dongu_disi_yazim.bosalt(60), "kayıt kuyruğu kilit kalktıktan sonra boşalmadı"
+    toplam, acik = _acik_kosu_kayitlari(o, sid)
+    assert toplam >= 1 and acik == 0, f"kilit kalkınca bobin çalışma kayıtları kapanmadı: {acik} / {toplam} açık"
 
 
 def test_KARSIT_C2_1_3_kilit_yokken_satir_yanit_donmeden_KAPANIR(o):
@@ -107,3 +126,7 @@ def test_KARSIT_C2_1_3_kilit_yokken_satir_yanit_donmeden_KAPANIR(o):
     assert durum == "stopped", (
         f"kilitsiz durdurmada satır yanıtla birlikte kapanmadı: {durum!r}"
     )  # ODD B-4: elle durdurma
+    toplam, acik = _acik_kosu_kayitlari(o, sid)
+    assert toplam >= 1 and acik == 0, (
+        f"kilitsiz durdurmada bobin çalışma kayıtları yanıtla kapanmadı: {acik} / {toplam} açık"
+    )
