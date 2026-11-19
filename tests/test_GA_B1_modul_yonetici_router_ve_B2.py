@@ -364,7 +364,7 @@ def test_KRITIK_GA_B1_uclar_GIZLI_varsayilan_KODLU_hatalar(c, y, monkeypatch):
         "hata": None,
     }
     for yol in ("/api/moduller/ornek/sec", "/api/moduller/baslat"):
-        r = c.post(yol)
+        r = c.post(yol, json={})  # arayüz `apiPost(…, {})` gibi JSON (D5 kapısı aşağıda)
         assert (r.status_code, r.json()["detail"]) == (403, {"kod": "gizli", "alan": ""})
     r = c.post("/api/moduller/uygula", json={"ayar": {"frekans_hz": 1}})
     assert r.status_code == 403
@@ -372,21 +372,23 @@ def test_KRITIK_GA_B1_uclar_GIZLI_varsayilan_KODLU_hatalar(c, y, monkeypatch):
     assert (r.status_code, r.json()["detail"]["kod"]) == (409, "etkinModulYok")
     assert c.post("/api/moduller/gorunurluk", json={"gorunur": True}).json() == {"gorunur": True}
     assert c.get("/api/moduller").json()["moduller"] == [{"kimlik": "ornek"}]
-    assert c.post("/api/moduller/ornek/sec").json()["etkin"] == "ornek"
+    assert c.post("/api/moduller/ornek/sec", json={}).json()["etkin"] == "ornek"
     assert c.post("/api/moduller/uygula", json={"ayar": {"frekans_hz": 100}}).json() == {
         "uygulandi": {"frekans_hz": 100}
     }
     r = c.post("/api/moduller/uygula", json={"ayar": {"frekans_hz": 9999}})
     assert (r.status_code, r.json()["detail"]) == (400, {"kod": "ayarSinirDisi", "alan": "frekans_hz"})
-    assert c.post("/api/moduller/baslat").status_code == 200 and c.post("/api/moduller/durdur").status_code == 200
+    assert (
+        c.post("/api/moduller/baslat", json={}).status_code == 200 and c.post("/api/moduller/durdur").status_code == 200
+    )
     assert c.get("/api/moduller/durum").json()["surucu"] == {"bobin": True}
     assert c.post("/api/moduller/birak").json()["etkin"] is None
-    c.post("/api/moduller/ornek/sec")
+    c.post("/api/moduller/ornek/sec", json={})
     assert c.post("/api/moduller/gorunurluk", json={"gorunur": False}).json() == {"gorunur": False}
     assert y.etkin_kimlik() is None  # gizleyince BIRAKILDI
     monkeypatch.setattr(modul_kayit, "bul", lambda k: (_ for _ in ()).throw(modul_kayit.ModulHatasi("modulYok")))
     y._gorunur["v"] = True
-    assert c.post("/api/moduller/yok/sec").status_code == 404
+    assert c.post("/api/moduller/yok/sec", json={}).status_code == 404
     monkeypatch.setattr(modul_yonetici, "_yonetici", None)
     assert c.post("/api/moduller/gorunurluk", json={"gorunur": False}).status_code == 200  # yönetici yokken kurulmaz
     assert modul_yonetici.varsa() is None
@@ -397,6 +399,31 @@ def test_KRITIK_GA_B1_uclar_GIZLI_varsayilan_KODLU_hatalar(c, y, monkeypatch):
     monkeypatch.setattr(modul_kayit, "gorunur_yaz", _yazilamaz)
     r = c.post("/api/moduller/gorunurluk", json={"gorunur": True})
     assert (r.status_code, r.json()["detail"]["kod"]) == (503, "ayarYazilamadi")
+
+
+@pytest.mark.parametrize(
+    "basliklar,govde",
+    [({}, None), ({"Content-Type": "text/plain"}, "x"), ({"Content-Type": "application/x-www-form-urlencoded"}, "a=1")],
+)
+def test_KRITIK_OYZ_D5_modul_SECME_BASLATMA_basit_POSTla_YAPILAMAZ_durdurma_YAPILIR(c, y, basliklar, govde):
+    """D5 envanteri (OYZ): çapraz kökenli basit POST (gövdesiz / text/plain / form) modülü SEÇEMEZ, BAŞLATAMAZ — 415 `jsonGerekli`,
+    yöneticiye HİÇ gidilmez; JSON isteği aynı uçta sürer. `durdur` / `birak` basit POST'la da çalışır (STOP yalnız güvenliği artırır)."""
+    for yol in ("/api/moduller/ornek/sec", "/api/moduller/baslat"):
+        r = c.post(yol, headers={"Origin": "http://kotu.example", **basliklar}, content=govde)
+        assert (r.status_code, r.json()["detail"]) == (415, {"kod": "jsonGerekli", "alan": ""}), yol
+    assert y.etkin_kimlik() is None and _SahteSurec.ornekler == []  # süreç bile açılmadı
+    assert c.post("/api/moduller/ornek/sec", json={}).json()["etkin"] == "ornek"
+    assert c.post("/api/moduller/baslat", json={}).status_code == 200
+    s = _SahteSurec.ornekler[-1]
+    assert (
+        c.post(
+            "/api/moduller/durdur", headers={"Origin": "http://kotu.example", **basliklar}, content=govde
+        ).status_code
+        == 200
+    )
+    assert "durdur" in s.cagri
+    r = c.post("/api/moduller/birak", headers={"Origin": "http://kotu.example", **basliklar}, content=govde)
+    assert r.status_code == 200 and r.json()["etkin"] is None and s.kapandi
 
 
 # ── B2: ACİL DURDUR yayılımı ────────────────────────────────────────────────────────────────────────

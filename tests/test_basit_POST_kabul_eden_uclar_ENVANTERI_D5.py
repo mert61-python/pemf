@@ -272,6 +272,20 @@ ENVANTER = {
         "YOK",
         f"Canlı kabin kamerası oturumunu kapatır (yalnız bırakır) — durdurma yönü, {_STOP}.",
     ),
+    "POST /api/moduller/durdur": _e(
+        "b_GOVDESIZ",
+        False,
+        "STOP",
+        "YOK",
+        f"GA geliştirici modülü DURDUR — görünürlükten bağımsız, {_STOP} (Ö.4-Y8). Modülü seçen / başlatan uçlar JSON ŞARTLI (OYZ).",
+    ),
+    "POST /api/moduller/birak": _e(
+        "b_GOVDESIZ",
+        False,
+        "STOP",
+        "YOK",
+        f"GA modülünü BIRAKIR (sürücüye durdur + kes, süreç kapanır) — durdurma yönü, {_STOP}.",
+    ),
     # ── kabul eder ama handler basit POST'u ETKİSİZ kılar ──
     "POST /api/ai/pro/start": _e(
         "b_GOVDESIZ_VARSAYILANLI",
@@ -456,6 +470,8 @@ _DURDURMA_UCLARI = (
     "POST /api/hardware/reset_pwm",
     "POST /api/ai/pro/hazirlik/durdur",
     "POST /api/settings/kabin-kamerasi/canli/durdur",
+    "POST /api/moduller/durdur",
+    "POST /api/moduller/birak",
 )
 _DUZELTME = (
     "JSON zorunlu yap (Sıfırla emsali `estop_mandalini_sifirla`: `Content-Type: application/json` denetimi → 415 + açık onay "

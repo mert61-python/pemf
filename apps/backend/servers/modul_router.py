@@ -6,11 +6,14 @@ Yetki `/api/hardware/*` ile AYNI (auth MUAF DEĞİL). Modüller varsayılan GİZ
 (liste boş döner); ACİL DURDUR yayılımı görünürlükten BAĞIMSIZDIR (`api_server._emergency_stop_all`). Hata gövdesi `{"kod", "alan"}` —
 arayüz `kontrol.modul.hata.<kod>` ile iki dilde eylem söyler. Senkron uçlar FastAPI iş parçacığı havuzunda koşar (olay döngüsünü
 bloklamaz); her sürücü çağrısı zaman aşımlıdır.
+D5 basit-POST envanteri (OYZ, zincir 56 AŞAMA 3): modülü SEÇEN / BAŞLATAN uçlar yalnız `application/json` isteği yürütür (Sıfırla emsali;
+415 `jsonGerekli`) — LAN'da / cihazda açılan çapraz kökenli bir sayfa basit POST'la modül kartını sürdüremez. Arayüz `apiPost(…, {})` ile
+JSON gönderir. `durdur` / `birak` (modülü DURDURUR) basit POST'la da çalışır: STOP yalnız güvenliği artırır (Ö.4-Y8).
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from servers import modul_kayit, modul_yonetici
@@ -84,7 +87,9 @@ def uygula(govde: AyarModel):
 
 
 @router.post("/baslat")
-def baslat():
+def baslat(request: Request):
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail={"kod": "jsonGerekli", "alan": ""})
     if not modul_kayit.gorunur_mu():
         raise _hata(ModulHatasi("gizli"))
     return _calistir(modul_yonetici.yonetici().baslat)
@@ -102,5 +107,7 @@ def durum():
 
 
 @router.post("/{kimlik}/sec")
-def sec(kimlik: str):
+def sec(kimlik: str, request: Request):
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail={"kod": "jsonGerekli", "alan": ""})
     return _calistir(modul_yonetici.yonetici().sec, kimlik)
