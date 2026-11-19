@@ -11,7 +11,10 @@
   },
   "detay": {
     "alanDuzeltmeNotu": "* Field (measured): {{alan_notu}}. The old device firmware measured the field about 5 times too large; the original value is kept in the record.",
+    "alanGrafigi": "Magnetic Field Chart (MLX)",
+    "alanGrafigiNotu": "Per-minute average peak field of the board sensor (MLX90393), mT. The sensor zero offset measured with the coils off (~0.3–0.4 mT) is subtracted before recording; if the offset could not be measured yet, the value is raw and higher by that amount. It is the field at the sensor position, not the dose at the sample.",
     "alanOlculen": "Field (measured)",
+    "alanVerisiYok": "There is no magnetic field measurement for this session (the field is measured only while the board sensor is attached and a coil is running).",
     "baslangic": "Start",
     "baslik": "Session Details",
     "bilgiYok": "No session information.",

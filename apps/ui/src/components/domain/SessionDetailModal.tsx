@@ -269,6 +269,7 @@ export function SessionDetailModal({
               <SummarySection session={session} adsizAd={adsizAd} />
               <CoilRunsSection coilRuns={coilRuns} />
               <TemperatureSection samples={sensorSamples} />
+              <MagneticFieldSection samples={sensorSamples} />
             </ScrollView>
           )}
         </View>
@@ -483,14 +484,68 @@ function TemperatureSection({ samples }: { samples: SensorSample[] }) {
   );
 }
 
+// ─── Manyetik alan (MLX) grafiği — OTB T-11 (sahip 19-11 "bu yayına girsin") ────────────────────────────────────
+/** Seans boyunca kart sensörünün (MLX90393) dakika ortalaması tepe |B| (mT), bobin kanalına göre — sıcaklık grafiğiyle AYNI desen.
+ *  Yalnız EKRAN (PDF'te bobin koşusu özeti zaten ortalama alanı taşır). Ölçülmeyen dakika (NULL) çizilmez — 0 diye UYDURULMAZ. */
+function MagneticFieldSection({ samples }: { samples: SensorSample[] }) {
+  const { t } = useTranslation();
+  const byCoil = new Map<number, { ts: number; temp: number }[]>();
+  let minTs = Infinity;
+  for (const s of samples) {
+    const { coil_id: coilId, sample_ts: ts, magnetic_field_mt: b } = s;
+    if (coilId === undefined || ts === undefined || !Number.isFinite(ts) || b === undefined || b === null || !Number.isFinite(b)) {
+      continue;
+    }
+    if (ts < minTs) minTs = ts;
+    const arr = byCoil.get(Number(coilId)) ?? [];
+    arr.push({ ts, temp: b });
+    byCoil.set(Number(coilId), arr);
+  }
+  const coilIds = Array.from(byCoil.keys()).sort((a, b) => a - b);
+  const hasData = coilIds.length > 0;
+  return (
+    <View style={styles.section} testID="seans-alan-bolumu">
+      <Text style={styles.sectionTitle}>{t("seans.detay.alanGrafigi")}</Text>
+      {!hasData ? (
+        <Text style={styles.mutedText}>{t("seans.detay.alanVerisiYok")}</Text>
+      ) : (
+        <>
+          <TempChart byCoil={byCoil} coilIds={coilIds} minTs={minTs} birim="mT" ondalik={2} testID="seans-alan-grafigi" eksenRengi="#38bdf8" />
+          <View style={styles.legendRow}>
+            {coilIds.map((id) => {
+              const color = COIL_COLORS[(id - 1) % COIL_COLORS.length] || colors.textMuted;
+              return (
+                <View key={id} style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: color }]} />
+                  <Text style={styles.legendText}>{t("seans.detay.bobinNo", { no: id })}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={styles.mutedText} testID="seans-alan-notu">{t("seans.detay.alanGrafigiNotu")}</Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+/** Ölçüm grafiği (sıcaklık °C; OTB T-11: manyetik alan mT) — `birim` / `ondalik` / `testID` / `eksenRengi` verilmezse sıcaklık AYNEN. */
 function TempChart({
   byCoil,
   coilIds,
   minTs,
+  birim = "°C",
+  ondalik = 1,
+  testID = "seans-sicaklik-grafigi",
+  eksenRengi = "#fb923c",
 }: {
   byCoil: Map<number, { ts: number; temp: number }[]>;
   coilIds: number[];
   minTs: number;
+  birim?: string;
+  ondalik?: number;
+  testID?: string;
+  eksenRengi?: string;
 }) {
   const { t } = useTranslation();
   /**
@@ -538,7 +593,7 @@ function TempChart({
   return (
     <View
       style={styles.chartWrap}
-      testID="seans-sicaklik-grafigi"
+      testID={testID}
       onLayout={(e) => {
         const w = Math.round(e.nativeEvent.layout.width);
         setOlculenW((eski) => (Math.abs(w - eski) < 1 ? eski : w));
@@ -570,16 +625,16 @@ function TempChart({
               key={`yl${i}`}
               x={PAD.left - 6}
               y={y + 4}
-              fill="#fb923c"
+              fill={eksenRengi}
               fontSize={11}
               textAnchor="end"
             >
-              {val.toFixed(1)}
+              {val.toFixed(ondalik)}
             </SvgText>
           );
         })}
-        <SvgText x={PAD.left - 6} y={PAD.top - 6} fill="#fb923c" fontSize={11} textAnchor="end">
-          °C
+        <SvgText x={PAD.left - 6} y={PAD.top - 6} fill={eksenRengi} fontSize={11} textAnchor="end">
+          {birim}
         </SvgText>
         {/* X ekseni etiketleri (dakika) */}
         {Array.from({ length: 5 }, (_, i) => {

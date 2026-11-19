@@ -11,7 +11,10 @@
   },
   "detay": {
     "alanDuzeltmeNotu": "* Alan (ölçülen): {{alan_notu}}. Eski cihaz yazılımı alanı yaklaşık 5 kat büyük ölçüyordu; özgün değer kayıtta saklıdır.",
+    "alanGrafigi": "Manyetik Alan Grafiği (MLX)",
+    "alanGrafigiNotu": "Kart sensörünün (MLX90393) dakika ortalaması tepe alanı, mT. Bobinler kapalıyken ölçülen sensör sıfır ofseti (~0,3–0,4 mT) çıkarılarak kaydedilir; ofset henüz ölçülemediyse değer ham ve bu kadar yüksektir. Sensörün bulunduğu noktadaki alandır, numunedeki doz değildir.",
     "alanOlculen": "Alan (ölçülen)",
+    "alanVerisiYok": "Bu seansta manyetik alan ölçümü yok (alan yalnız kart sensörü takılıyken ve bobin çalışırken ölçülür).",
     "baslangic": "Başlangıç",
     "baslik": "Seans Detayı",
     "bilgiYok": "Seans bilgisi yok.",
