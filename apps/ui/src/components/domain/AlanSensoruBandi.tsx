@@ -5,6 +5,8 @@
  * Bant, seans / sürüş varken HER ekranda görünür; sensör yeniden bağlanınca (`alanKayip` iner) ya da sürüş bitince kendiliğinden kalkar.
  * Metin "alan sensörü (MLX)" der (kartta TEK MLX var — "Bobin 6 manyetik alan sensörü" kullanıcıya bobine ait bir parça gibi okunuyordu).
  * Bant hiçbir şeyi KAPILAMAZ (Ö.4-Y8: ACİL DURDUR her koşulda erişilebilir) ve sürüşü durdurmaz (yalnız gösterim).
+ * D5.08 (kabuk bantları TEK ölçü, OYZ4): "sürüş var mı" `useDonanimCalisiyor`dan (seans ya da çalışan bobin) — bant kendi dar ölçüsünü
+ * kurmaz; saf işlev ölçüyü parametre olarak alır.
  */
 import { StyleSheet, Text, View } from "react-native";
 import { Magnet } from "lucide-react-native";
@@ -12,18 +14,19 @@ import i18n from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { useLiveData } from "@/context/LiveDataContext";
+import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 
-type BantCoil = { id?: number; running?: boolean; alanKayip?: boolean };
-type BantSnapshot = { coils?: BantCoil[] | null; activeTreatment?: { isActive?: boolean } | null } | null | undefined;
+type BantCoil = { id?: number; alanKayip?: boolean };
 
-/** Gösterilecek metin; bant gerekmiyorsa null. YALNIZ sürüş / seans varken ve en az bir bobinde `alanKayip === true` iken. */
-export function alanSensoruBandiMetni(snapshot: BantSnapshot): { baslik: string; aciklama: string } | null {
-  const coils = Array.isArray(snapshot?.coils) ? snapshot!.coils! : [];
-  const kayip = coils.filter((c) => c?.alanKayip === true);
-  if (!kayip.length) return null;
-  const surus = snapshot?.activeTreatment?.isActive === true || coils.some((c) => c?.running === true);
-  if (!surus) return null;
+/** Gösterilecek metin; bant gerekmiyorsa null. YALNIZ sürüş / seans varken (`surus` — `useDonanimCalisiyor`) ve en az bir bobinde
+ *  `alanKayip === true` iken. */
+export function alanSensoruBandiMetni(
+  coils: BantCoil[] | null | undefined,
+  surus: boolean,
+): { baslik: string; aciklama: string } | null {
+  const kayip = (Array.isArray(coils) ? coils : []).filter((c) => c?.alanKayip === true);
+  if (!kayip.length || !surus) return null;
   const kanal = kayip.map((c) => String(c.id ?? "?")).join(", ");
   return {
     baslik: i18n.t("bant.alanSensoru.baslik"),
@@ -34,7 +37,8 @@ export function alanSensoruBandiMetni(snapshot: BantSnapshot): { baslik: string;
 export function AlanSensoruBandi() {
   useTranslation(); // metin çağrı anında çevrilir → dil değişince yeniden çiz
   const { snapshot } = useLiveData();
-  const metin = alanSensoruBandiMetni(snapshot as BantSnapshot);
+  const surus = useDonanimCalisiyor();
+  const metin = alanSensoruBandiMetni(snapshot?.coils as BantCoil[] | undefined, surus);
   if (!metin) return null;
   return (
     <View style={styles.bant} accessibilityRole="alert" testID="alan-sensoru-bandi">

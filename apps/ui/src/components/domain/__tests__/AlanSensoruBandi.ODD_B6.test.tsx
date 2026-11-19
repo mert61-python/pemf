@@ -16,6 +16,9 @@ import React from "react";
 import { AlanSensoruBandi, alanSensoruBandiMetni } from "@/components/domain/AlanSensoruBandi";
 
 const bobin = (id: number, ek: Record<string, unknown> = {}) => ({ id, running: false, ...ek });
+// D5.08 (OYZ4): saf işlev sürüş ölçüsünü parametre alır — bileşen `useDonanimCalisiyor`la (aynı tanım) hesaplar.
+type Snap = { coils?: { running?: boolean }[]; activeTreatment?: { isActive?: boolean } } | null;
+const surus = (s: Snap) => s?.activeTreatment?.isActive === true || (s?.coils ?? []).some((c) => c?.running === true);
 
 afterEach(async () => {
   await act(async () => {
@@ -55,10 +58,10 @@ it.each([
 ])("KARŞIT B-6: %s → bant YOK", (_ad, snap) => {
   mockSnapshot = snap;
   expect(render(<AlanSensoruBandi />).queryByTestId("alan-sensoru-bandi")).toBeNull();
-  expect(alanSensoruBandiMetni(snap as never)).toBeNull();
+  expect(alanSensoruBandiMetni((snap as Snap)?.coils as never, surus(snap as Snap))).toBeNull();
 });
 
 it("B-6: birden çok kanal virgülle; kimliği olmayan bobin '?'", () => {
-  const m = alanSensoruBandiMetni({ activeTreatment: { isActive: true }, coils: [bobin(6, { alanKayip: true }), { alanKayip: true }] });
+  const m = alanSensoruBandiMetni([bobin(6, { alanKayip: true }), { alanKayip: true }], true);
   expect(m?.aciklama.startsWith("Kartta kanal 6, ?.")).toBe(true);
 });
