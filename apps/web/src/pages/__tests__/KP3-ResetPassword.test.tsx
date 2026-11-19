@@ -574,7 +574,10 @@ describe('KP-3 · ResetPassword — kurtarma oturumu', () => {
   })
 
   it('KRİTİK (TA T2): gönderim anında oturum kurtarma kullanıcısı DEĞİLSE (arada başka hesapla giriş / çıkış) sunucuya GİDİLMEZ, form kilitlenir', async () => {
+    // OYZ (zincir 56 AŞAMA 3): açılış kararı (`setTimeout(0)`) gönderimden ÖNCE verilir — gerçekte ms içinde; yükte zamanlayıcı
+    // gönderimden SONRA tetiklenip formu yeniden açıyor, kilit iddiası ~1 / 8 kırmızı oluyordu (TA ucunda da). Karar beklenir.
     await kurtarmaGelir()
+    await kararBekle()
     sb.d.oturum = { user: { id: 'u-baska' } }
     await doldurGonder(GECERLI, GECERLI)
     expect(sb.d.cagri).toHaveLength(0)
@@ -584,6 +587,7 @@ describe('KP-3 · ResetPassword — kurtarma oturumu', () => {
     c.sokHepsi()
     await ciz()
     await kurtarmaGelir()
+    await kararBekle()
     sb.d.oturum = null
     await doldurGonder(GECERLI, GECERLI)
     sb.d.kurtarma = null
@@ -591,6 +595,7 @@ describe('KP-3 · ResetPassword — kurtarma oturumu', () => {
     c.sokHepsi()
     await ciz()
     await kurtarmaGelir()
+    await kararBekle()
     sb.d.kurtarma = null
     await doldurGonder(GECERLI, GECERLI)
     expect(sb.d.cagri).toHaveLength(0)
