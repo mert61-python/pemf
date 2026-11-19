@@ -7,7 +7,7 @@
    IYZICO_WEBHOOK_STRICT=1 → imza tutmazsa 401. */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { upsertSubscription, mapIyzicoStatus, getUserBySubscriptionRef, jetonDonemYenile, JETON_HAKLARI } from './_lib/util.js'
-import { subRetrieveByRef, planMeta, verifyWebhookSignature } from './_lib/iyzico.js'
+import { subRetrieveByRef, planMeta, verifyWebhookSignature, abonelikVerisi, donemSonu } from './_lib/iyzico.js'
 
 // HIZ SINIRI (kabaca): uç kimliksizdir ve her istek DIŞ bir iyzico API çağrısı + service_role
 // Supabase sorgusu tetikler → sınırsız istek doğrudan maliyet ve kota tüketimi demektir.
@@ -51,6 +51,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // AUTHORITATIVE: subscription'ı iyzico'dan yeniden çek (sahte payload'a güvenme)
     const sub = await subRetrieveByRef(subRef)
+    // TA T1: iyzico v2 abonelik detayı `data.items[0]` içindedir (düz şekil de kabul) — bkz. abonelikVerisi.
+    const a = abonelikVerisi(sub)
     // KURTARMA: kullanıcı eskiden YALNIZ callback'in yazdığı satırdan bulunabiliyordu. Callback
     // kaçarsa (tarayıcı kapandı / o an 500 alındı) satır hiç oluşmuyor, webhook userId bulamıyor
     // ve SESSİZCE 200 dönüyordu → iyzico "başarılı" sayıp bir daha DENEMİYOR. Sonuç: para tahsil
@@ -58,16 +60,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // edemiyor. Artık ikinci bir eşleme yolu var: initialize'da conversationId = user.id yazılıyor.
     const userId =
       (await getUserBySubscriptionRef(subRef)) || String((sub as { conversationId?: string }).conversationId ?? '')
-    const meta = planMeta(String(sub.pricingPlanReferenceCode ?? ''))
+    const meta = planMeta(String(a.pricingPlanReferenceCode ?? ''))
     if (userId && meta) {
-      const durum = mapIyzicoStatus(String(sub.subscriptionStatus ?? ''))
+      const durum = mapIyzicoStatus(String(a.subscriptionStatus ?? ''))
+      // TA T1 (Y292-1): son ÖDENMİŞ dönemin sonu (iptal / past_due bildiriminde de) — bilinemezse alan YAZILMAZ,
+      // satırdaki önceki değer korunur (upsert merge-duplicates).
+      const donem = donemSonu(a)
       await upsertSubscription({
         user_id: userId,
         tier: meta.tier,
         status: durum,
         addons: meta.research ? ['research'] : [],
         stripe_subscription_id: subRef,
-        stripe_customer_id: String(sub.customerReferenceCode ?? ''),
+        stripe_customer_id: String(a.customerReferenceCode ?? ''),
+        ...(donem ? { current_period_end: donem } : {}),
         updated_at: new Date().toISOString(),
       })
       // JETON-SISTEMI Adım 3.3 (2026-08-22): yenileme olayında da jeton yüklenir — aksi hâlde
@@ -93,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // elle müdahale için iz bırak (sır loglama yok, yalnız eşleme alanları).
     console.error('iyzico webhook: abonelik kullanıcıya eşlenemedi', {
       subRef,
-      planRef: String(sub.pricingPlanReferenceCode ?? ''),
+      planRef: String(a.pricingPlanReferenceCode ?? ''),
       planResolved: !!meta,
       hasUserId: !!userId,
       event: body.iyziEventType,

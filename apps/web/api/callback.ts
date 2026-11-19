@@ -4,7 +4,7 @@
    user_id: YALNIZ retrieve.conversationId (initialize'da set edildi) — D3.21: `?uid` tek başına KABUL EDİLMEZ. */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { upsertSubscription, mapIyzicoStatus, jetonDonemYenile, JETON_HAKLARI } from './_lib/util.js'
-import { subRetrieveByToken, planMeta } from './_lib/iyzico.js'
+import { subRetrieveByToken, planMeta, abonelikVerisi, donemSonu } from './_lib/iyzico.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (req.body ?? {}) as Record<string, string>
@@ -32,12 +32,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.redirect(302, '/pricing?checkout=error')
     }
     const userId = conversationId
-    const meta = planMeta(String(r.pricingPlanReferenceCode ?? ''))
-    const subRef = String(r.referenceCode ?? '')
-    const custRef = String(r.customerReferenceCode ?? '')
-    const status = mapIyzicoStatus(String(r.subscriptionStatus ?? ''))
+    // TA T1: iyzico v2 checkout sonucu abonelik alanlarını `data` içinde taşır (conversationId üst düzeyde) — bkz. abonelikVerisi.
+    const a = abonelikVerisi(r)
+    const meta = planMeta(String(a.pricingPlanReferenceCode ?? ''))
+    const subRef = String(a.referenceCode ?? '')
+    const custRef = String(a.customerReferenceCode ?? '')
+    const status = mapIyzicoStatus(String(a.subscriptionStatus ?? ''))
 
     if (userId && meta && subRef && (status === 'active' || status === 'trialing')) {
+      const donem = donemSonu(a)
       await upsertSubscription({
         user_id: userId,
         tier: meta.tier,
@@ -45,6 +48,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         addons: meta.research ? ['research'] : [],
         stripe_subscription_id: subRef, // iyzico subscriptionReferenceCode (sütun yeniden kullanıldı)
         stripe_customer_id: custRef, // iyzico customerReferenceCode
+        // TA T1 (Y292-1): ödenmiş dönemin sonu — iptal / gecikmede erişim bu ana dek sürer. Bilinemezse alan YAZILMAZ.
+        ...(donem ? { current_period_end: donem } : {}),
         updated_at: new Date().toISOString(),
       })
       // JETON-SISTEMI Adım 3 (2026-08-22): jeton hakkı plandan gelir. ⚠️ Yükleme PATLARSA

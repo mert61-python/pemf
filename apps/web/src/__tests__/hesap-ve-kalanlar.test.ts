@@ -57,7 +57,8 @@ describe('1) hesap alanı', () => {
   })
 
   it('KARŞIT-KANIT: UYDURMA abonelik verisi gösterilmez (yenileme tarihi/fatura)', () => {
-    // `current_period_end` hiçbir yol tarafından yazılmıyor → tarih göstermek yanlış bilgi olurdu.
+    // (TA T1 öncesi) `current_period_end` hiçbir yol tarafından yazılmıyordu; artık yazılıyor ama bileşen onu göstermez —
+    // tarih / fatura gösterimi satış açılınca ayrı "Hesabım" işi.
     const s = soy(ACCOUNT_SRC)
     expect(s).not.toMatch(/current_period_end|yenileme tarihi|fatura no/i)
   })

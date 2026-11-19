@@ -12,6 +12,8 @@
  *  2. Abonelik iptalinde "ödediğiniz dönemin sonuna kadar erişim" vaadi: `api/cancel.ts` bunu
  *     ÖLÇÜP ÇÜRÜTÜYOR (`current_period_end` hiçbir yol tarafından yazılmıyor; hak katmanları
  *     yalnız `status`e bakıyor). Tutulamayacak vaat metinden çıkar.
+ *     [TA T1 · Y292-1 sonrası: dönem sonu artık YAZILIYOR ve hak katmanları iptalde ona dek erişim veriyor; sitedeki
+ *     iptal onayı metni yine de DEĞİŞMEDİ — sözleşme / vaat metni sahibin avukat paketinde, bu kapı aynen kalır.]
  *  3. Desteklenen platform listesi: `macosReady/linuxReady = false` → indirilemeyen platform
  *     "destekleniyor" gibi sunulamaz; indirilebilen Android ise listeden düşmez.
  *  4. Ücretsiz dönemde fiyat gösterilmez (kural ana sayfada uygulanmıştı, fiyat sayfasında değil).

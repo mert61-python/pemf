@@ -66,6 +66,84 @@ export function planMeta(refCode: string): { tier: Tier; research: boolean } | n
   return null
 }
 
+/** Plan referans kodu → ödeme dönemi ('monthly' | 'yearly'); tanınmayan kod → null. */
+export function planDonemi(refCode: string): 'monthly' | 'yearly' | null {
+  if (!refCode) return null
+  for (const [key, name] of Object.entries(PLAN_ENV)) {
+    if ((process.env[name] || '') === refCode) return key.endsWith('|yearly') ? 'yearly' : 'monthly'
+  }
+  return null
+}
+
+/** TA T1 · iyzico yanıtındaki ABONELİK nesnesi. Belgelenen v2 şekilleri (docs.iyzico.com, 2026-11-19):
+ *  checkout form sonucu `{ status, conversationId, token, data: { referenceCode, subscriptionStatus, … } }`;
+ *  abonelik detayı `{ status, data: { totalCount, items: [ { …, orders: [ { startPeriod, endPeriod, orderStatus } ] } ] } }`.
+ *  Eski düz (sarmalsız) şekil de kabul edilir (testler / SDK sürüm farkı) — alan bulunamazsa yanıtın kendisi döner. */
+export function abonelikVerisi(r: Record<string, unknown>): Record<string, unknown> {
+  const d = r.data
+  if (!d || typeof d !== 'object') return r
+  const items = (d as { items?: unknown }).items
+  if (Array.isArray(items)) return items[0] && typeof items[0] === 'object' ? (items[0] as Record<string, unknown>) : {}
+  return d as Record<string, unknown>
+}
+
+/** iyzico tarih alanı (epoch ms sayı / sayı dizesi / ISO) → epoch ms; okunamazsa NaN. */
+function zamanMs(v: unknown): number {
+  let t = NaN
+  if (typeof v === 'number') t = v
+  else if (typeof v === 'string' && v.trim()) t = /^\d+$/.test(v.trim()) ? Number(v.trim()) : Date.parse(v.trim())
+  // Date'in geçerli aralığı (±8.64e15 ms) dışı / sıfır / negatif → okunamaz (toISOString RangeError atmasın)
+  return Number.isFinite(t) && t > 0 && t <= 8.64e15 ? t : NaN
+}
+
+/** `ms`e k dönem ekle (UTC takvim ayı; ayın son günü taşmaz: 31 Ocak + 1 ay = 28/29 Şubat). */
+function donemEkle(ms: number, donem: 'monthly' | 'yearly', k: number): number {
+  const d = new Date(ms)
+  const gun = d.getUTCDate()
+  d.setUTCDate(1)
+  d.setUTCMonth(d.getUTCMonth() + (donem === 'yearly' ? 12 : 1) * k)
+  const sonGun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
+  d.setUTCDate(Math.min(gun, sonGun))
+  return d.getTime()
+}
+
+/** TA T1 (Y292-1) · ÖDENMİŞ dönemin sonu (ISO) → `subscriptions.current_period_end`; bilinemiyorsa null (yazılmaz,
+ *  satırdaki önceki değer KORUNUR — upsert `merge-duplicates`).
+ *  KAYNAK sırası:
+ *   1. iyzico'nun kendi dönem bilgisi: `orders[]` içinde `orderStatus = SUCCESS` (ÖDENMİŞ) siparişlerin EN GEÇ `endPeriod`u.
+ *      Bekleyen / başarısız sipariş (WAITING / FAILED) dönem SAYILMAZ — ödenmemiş dönem hak vermez. Durumdan bağımsızdır:
+ *      iptal / UNPAID abonelikte de son ödenmiş dönemin sonu budur.
+ *   2. Sipariş bilgisi yoksa YALNIZ canlı abonelikte (iyzico ACTIVE = son tahsilat başarılı) "başlangıç + plan süresi":
+ *      `startDate` + k × (1 ay | 1 yıl), k ≥ 1 ve "şimdi"yi içeren dönemin sonu (yenilenmiş abonelikte ilk dönem geçmişte kalır).
+ *      PENDING (deneme) → `trialEndDate`. İptal / ödenmemiş abonelikte tahmin YAPILMAZ (null) — fazladan dönem verilmez. */
+export function donemSonu(abonelik: Record<string, unknown>, simdi: number = Date.now()): string | null {
+  const orders = Array.isArray(abonelik.orders) ? (abonelik.orders as unknown[]) : []
+  let enGec = NaN
+  for (const o of orders) {
+    if (!o || typeof o !== 'object') continue
+    const sip = o as Record<string, unknown>
+    if (String(sip.orderStatus ?? '').toUpperCase() !== 'SUCCESS') continue
+    const t = zamanMs(sip.endPeriod)
+    if (Number.isNaN(t)) continue
+    if (Number.isNaN(enGec) || t > enGec) enGec = t
+  }
+  if (!Number.isNaN(enGec)) return new Date(enGec).toISOString()
+  const durum = String(abonelik.subscriptionStatus ?? '').toUpperCase()
+  if (durum === 'PENDING') {
+    const deneme = zamanMs(abonelik.trialEndDate)
+    return Number.isNaN(deneme) ? null : new Date(deneme).toISOString()
+  }
+  if (durum !== 'ACTIVE') return null
+  const donem = planDonemi(String(abonelik.pricingPlanReferenceCode ?? ''))
+  const bas = zamanMs(abonelik.startDate)
+  if (!donem || Number.isNaN(bas)) return null
+  for (let k = 1; k <= 1200; k++) {
+    const son = donemEkle(bas, donem, k)
+    if (son > simdi) return new Date(son).toISOString()
+  }
+  return null // 100 yıldan eski başlangıç = bozuk veri → tahmin yok
+}
+
 // ── Promisified SDK çağrıları ───────────────────────────────────────────────
 export function subInitialize(request: Record<string, unknown>): Promise<Result> {
   return new Promise((resolve, reject) => {

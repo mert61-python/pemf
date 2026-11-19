@@ -19,9 +19,9 @@ import { useTranslation } from 'react-i18next'
      2. Giriş yapan kullanıcı hesabıyla ilgili HİÇBİR ŞEY göremiyordu — hangi e-postayla
         girdiği bile yalnız `title` ipucundaydı (dokunmatik cihazda görünmez).
 
-   ⚠️ BİLEREK YOK: plan adı / yenileme tarihi / fatura. `subscriptions.current_period_end`
-   alanına bu depoda HİÇBİR yol değer yazmıyor (bkz. api/cancel.ts içindeki ölçüm notu) →
-   tarih göstermek uydurma veri olurdu. Satış açılınca gerçek "Hesabım" sayfası ayrı iş. */
+   ⚠️ BİLEREK YOK: plan adı / yenileme tarihi / fatura. `subscriptions.current_period_end` TA T1'den (Y292-1) beri
+   callback / webhook / cancel tarafından yazılıyor (ödenmiş dönemin sonu — hak katmanları iptalde bu ana dek erişim
+   verir); ama bu bileşen onu OKUMAZ ve tarih göstermez. Satış açılınca gerçek "Hesabım" sayfası ayrı iş. */
 export default function AccountButton({ onNavigate, inline }: { onNavigate?: () => void; inline?: boolean }) {
   const { t } = useTranslation()
   const { session, email, signOut, ready } = useAuth()

@@ -3,7 +3,7 @@
    Body: { token:<supabase_jwt> }. Kullanıcının subscriptionReferenceCode'u Supabase'ten alınır. */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { verifyUser, getSubscriptionRefByUser, upsertSubscription } from './_lib/util.js'
-import { subCancel } from './_lib/iyzico.js'
+import { subCancel, subRetrieveByRef, abonelikVerisi, donemSonu } from './_lib/iyzico.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' })
@@ -20,28 +20,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'iyzico', message: result.errorMessage || 'İptal edilemedi.' })
     }
 
-    // SÖZLEŞMEYE UYUM (KISMİ — bkz. uyarı): yayınlanan Mesafeli Satış / İptal-İade metinleri
-    // "iptal, içinde bulunulan (bedeli tahsil edilmiş) dönemin SONUNDA geçerli olur; bu dönem
-    // sonuna kadar erişim devam eder" diyor (Legal.tsx). Kod ise tier'ı ANINDA 'baslangic'e
-    // düşürüp satıra yazıyordu; artık tier KORUNUR, yalnız yenileme durdurulur (status='canceled').
-    //
-    // ⚠️ DÜZELTİLMİŞ İDDİA (denetim 2026-08-18): bu yorumun eski hâli "erişim
-    // `current_period_end`e kadar sürer" diyordu. ÖLÇÜLDÜ — SÜRMÜYOR, ve `current_period_end`
-    // sütununa BU DEPODA HİÇBİR YOL değer YAZMIYOR (callback/webhook/cancel: hiçbiri;
-    // `apps/ui/supabase/subscriptions.sql`teki sütun NULL kalıyor). Hakkı okuyan iki katman da yalnız
-    // `status`e bakıyor ve `canceled`ı pasif sayıyor: `guii/servers/entitlement.py`
-    // (_INACTIVE_STATUS → tier 'baslangic', eklentiler boş) ve `apps/ui/src/config/entitlement.ts`
-    // (`isActive` yalnız active/trialing). Yani tier'ı satırda korumak GÖZLENEBİLİR davranışı
-    // DEĞİŞTİRMİYOR; ödenmiş dönemin ortasında erişim yine kesilir.
-    // Bugün canlıda zarar YOK: `FREE_MODE=true` (satış kapalı) ve iki tarafta da enforcement
-    // kapalı (`PEMF_TIER_ENFORCED=0`, `ENTITLEMENT_ENFORCED=false`). Satış açılmadan ÖNCE iki
-    // seçenekten biri seçilmeli — ikisi de SAHİP KARARIDIR, kod tek başına veremez:
-    //   (a) sözleşmeye uy: `current_period_end` yazılsın + iki tüketici de onu okusun, ya da
-    //   (b) metni koda uydur: yayınlanan sözleşme "iptal anında erişim biter" desin.
+    // SÖZLEŞMEYE UYUM (TA T1 · Y292-1 — sahip (a)'yı seçti): yayınlanan Mesafeli Satış / İptal-İade metinleri "iptal,
+    // içinde bulunulan (bedeli tahsil edilmiş) dönemin SONUNDA geçerli olur; bu dönem sonuna kadar erişim devam eder" der
+    // (Legal.tsx). tier KORUNUR, yenileme durur (status='canceled') ve ödenmiş dönemin sonu `current_period_end`e yazılır;
+    // hakkı okuyan iki katman (`servers/entitlement.py`, `apps/ui/src/config/entitlement.ts`) `canceled` / `past_due`
+    // satırında `şimdi < current_period_end` iken erişimi SÜRDÜRÜR, sonra keser (NULL → keser). Dönem sonu iptal SONRASI
+    // abonelik yeniden okunarak bulunur (son ödenmiş siparişin endPeriod'u); okunamazsa alan YAZILMAZ — callback /
+    // webhook'un daha önce yazdığı değer korunur (upsert merge-duplicates). Okuma hatası iptali BOZMAZ (iyzico'da iptal oldu).
+    let donem: string | null = null
+    try {
+      donem = donemSonu(abonelikVerisi(await subRetrieveByRef(subRef)))
+    } catch (e) {
+      console.error('cancel: dönem sonu okunamadı (iptal BAŞARILI; önceki dönem sonu korunur)', e)
+    }
     try {
       await upsertSubscription({
         user_id: user.id,
         status: 'canceled',
+        ...(donem ? { current_period_end: donem } : {}),
         updated_at: new Date().toISOString(),
       })
     } catch (e) {

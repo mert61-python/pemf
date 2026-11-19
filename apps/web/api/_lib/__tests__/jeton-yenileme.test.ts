@@ -21,7 +21,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 const OLD = { ...process.env }
 
-vi.mock('../iyzico.js', () => ({
+// TA T1: yanıt açma + dönem sonu GERÇEK (saf işlevler; SDK çağrısı yok)
+vi.mock('../iyzico.js', async (gercek) => ({
+  abonelikVerisi: (await gercek<typeof import('../iyzico.js')>()).abonelikVerisi,
+  donemSonu: (await gercek<typeof import('../iyzico.js')>()).donemSonu,
   subRetrieveByToken: vi.fn(),
   subRetrieveByRef: vi.fn(),
   planMeta: vi.fn(),
