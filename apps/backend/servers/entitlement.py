@@ -129,7 +129,7 @@ class Entitlement:
         return "research" in self.addons
 
 
-def _donem_suruyor(ham: object, simdi: "datetime | None" = None) -> bool:
+def _donem_suruyor(ham: object, simdi: datetime | None = None) -> bool:
     """TA T1 (Y292-1): iptal / ödeme gecikmesi (past_due) / pasif durumda ÖDENMİŞ dönemin sonuna kadar erişim.
 
     `ham` = `subscriptions.current_period_end` (ödeme yolları yazar: api/callback · webhook · cancel). True YALNIZ
