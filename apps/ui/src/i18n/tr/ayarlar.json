@@ -108,6 +108,12 @@
     "kodOrnek": "ÖRN: A3F9K2",
     "yenidenDene": "Yeniden Dene"
   },
+  "gelistiriciModulleri": {
+    "aciklama": "Açıkken Kontrol sekmesinde geliştiricilerin kontrol modülleri seçilebilir. Satılan üründe kapalı kalmalıdır. ACİL DURDUR her durumda çalışan modülleri de durdurur.",
+    "anahtar": "Geliştirici modüllerini göster",
+    "baslik": "Geliştirici modülleri",
+    "hata": "Ayar kaydedilemedi — yeniden deneyin."
+  },
   "hakkinda": {
     "baslik": "Hakkında",
     "mersis": "MERSİS: ",

@@ -31,9 +31,8 @@ import {
   type KesitHucresi,
 } from "@/services/alanHaritasi";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
+import { stmBobiniMi } from "@/services/bobinGorunurlugu";
 import { colors, rf, rs, spacing, touch } from "@/theme/tokens";
-
-const STM_BOBINLERI = [1, 2, 3, 4, 5, 6, 7];
 
 function durumMetni(t: TFunction, durum: string): string {
   switch (durum) {
@@ -73,7 +72,7 @@ export function sensorOlcumu(coils: unknown): number | null {
   let m: number | null = null;
   for (const c of Array.isArray(coils) ? coils : []) {
     const k = c as { id?: number; magneticMt?: number; measuredFields?: string[]; alanDogrulanamadi?: boolean };
-    if (!STM_BOBINLERI.includes(Number(k?.id))) continue;
+    if (!stmBobiniMi(Number(k?.id))) continue; // bobin sayısı TEK KAYNAK (D5.42)
     if (k.alanDogrulanamadi || !Array.isArray(k.measuredFields) || !alanGosterilebilir(k, "magneticMt")) continue;
     const v = Number(k.magneticMt);
     if (Number.isFinite(v) && (m === null || v > m)) m = v;

@@ -147,6 +147,39 @@
     "odemAzaltma": "Ödem Azaltma",
     "sinirRejenerasyonu": "Sinir Rejenerasyonu"
   },
+  "modul": {
+    "hata": {
+      "ayarGecersiz": "{{alan}} değeri geçersiz — sayı girin.",
+      "ayarSinirDisi": "{{alan}} değeri modülün sınırları dışında — değeri sınırlar içine alın.",
+      "baglanamadi": "Modül kartına bağlanılamadı ({{neden}}) — kartın takılı ve açık olduğunu denetleyin.",
+      "baglanti": "Sunucuya ulaşılamadı — bağlantıyı denetleyip yeniden deneyin.",
+      "etkinModulYok": "Seçili modül yok — önce bir modül seçin.",
+      "gizli": "Geliştirici modülleri kapalı — Ayarlar → Geliştirici modülleri'nden açın.",
+      "modulYok": "Modül bulunamadı — modül klasörünü ve modul.json dosyasını denetleyin.",
+      "surucuHatasi": "Modül kartı komutu reddetti ({{neden}}).",
+      "surucuOldu": "Modül sürücüsü kapandı — modülü yeniden seçin.",
+      "surucuYanitsiz": "Modül sürücüsü yanıt vermiyor — modülü yeniden seçin; bobin sürülmeye devam ederse ACİL DURDUR'a basın."
+    },
+    "ornek": {
+      "baslik": "Örnek modül — sahte kart",
+      "bobinAcik": "Bobin açık",
+      "bobinKapali": "Bobin kapalı",
+      "durumYok": "Durum bekleniyor…",
+      "duty": "Duty (%)",
+      "frekans": "Frekans (Hz)",
+      "sure": "Süre (dk)",
+      "uygula": "Uygula"
+    },
+    "panel": {
+      "yok": "Bu modülün paneli bu sürümde yok — modülün birleştirilmesini bekleyin.",
+      "yukleniyor": "Modül paneli yükleniyor…"
+    },
+    "secici": {
+      "baslik": "Sürülen cihaz",
+      "bozuk": "{{kimlik}}: modül bilgisi hatalı ({{hata}}) — modul.json dosyasını düzeltin.",
+      "pemf": "PEMF cihazı (7 bobin)"
+    }
+  },
   "panel": {
     "ackBekleniyor": "⏳ Cihaz onayı bekleniyor…",
     "ackGelmedi": "⚠ Cihaz onayı gelmedi — bobin komutu almamış olabilir; Aktif rozetini ve bobin bağlantısını kontrol edin",

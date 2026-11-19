@@ -147,6 +147,39 @@
     "odemAzaltma": "Edema Reduction",
     "sinirRejenerasyonu": "Nerve Regeneration"
   },
+  "modul": {
+    "hata": {
+      "ayarGecersiz": "The {{alan}} value is invalid — enter a number.",
+      "ayarSinirDisi": "The {{alan}} value is outside the module's limits — bring the value within the limits.",
+      "baglanamadi": "Could not connect to the module board ({{neden}}) — check that the board is plugged in and switched on.",
+      "baglanti": "Could not reach the server — check the connection and try again.",
+      "etkinModulYok": "No module selected — select a module first.",
+      "gizli": "Developer modules are off — turn them on in Settings → Developer modules.",
+      "modulYok": "Module not found — check the module folder and its modul.json file.",
+      "surucuHatasi": "The module board rejected the command ({{neden}}).",
+      "surucuOldu": "The module driver has closed — select the module again.",
+      "surucuYanitsiz": "The module driver is not responding — select the module again; if the coil keeps being driven, press EMERGENCY STOP."
+    },
+    "ornek": {
+      "baslik": "Example module — fake board",
+      "bobinAcik": "Coil on",
+      "bobinKapali": "Coil off",
+      "durumYok": "Waiting for status…",
+      "duty": "Duty (%)",
+      "frekans": "Frequency (Hz)",
+      "sure": "Duration (min)",
+      "uygula": "Apply"
+    },
+    "panel": {
+      "yok": "This module's panel is not in this version — wait for the module to be merged.",
+      "yukleniyor": "Loading the module panel…"
+    },
+    "secici": {
+      "baslik": "Device being driven",
+      "bozuk": "{{kimlik}}: module information is invalid ({{hata}}) — fix the modul.json file.",
+      "pemf": "PEMF device (7 coils)"
+    }
+  },
   "panel": {
     "ackBekleniyor": "⏳ Waiting for device confirmation…",
     "ackGelmedi": "⚠ No device confirmation — the coil may not have received the command; check the Active badge and the coil connection",

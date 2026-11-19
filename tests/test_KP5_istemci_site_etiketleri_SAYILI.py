@@ -81,6 +81,8 @@ BEKLENEN: dict[str, list[tuple[str, str]]] = {
     "apps/ui/src/context/LiveDataContext.tsx": [("next", "SAVUNMA"), ("next", "SAVUNMA")],
     "apps/ui/src/services/updates.ts": [("next", "SAVUNMA")],
     "apps/ui/src/tembelEkranlar.ts": [("file", "PLATFORM")],
+    # GA (istem 53) B3: modül paneli yükleyicileri — `import()` jest'te koşmaz (tembelEkranlar ile aynı gerekçe); kayıt testi sahteler
+    "apps/ui/src/moduller/yukleyiciler.ts": [("file", "PLATFORM")],
     "apps/ui/src/theme/fonts.ts": [("next", "SAVUNMA")],
     # D10 site
     "apps/web/src/components/AppScreenshots.tsx": [("if", "ULASILAMAZ")],
@@ -154,9 +156,9 @@ def test_KRITIK_istemci_site_etiketleri_GEREKCELI_ve_SAYILI():
 def test_etiket_toplami_ve_sinif_dagilimi_SABIT():
     toplam = Counter(e for v in BEKLENEN.values() for _, e in v)
     # KP-5 kapanış: 27 = ULASILAMAZ 13 + SAVUNMA 13 + PLATFORM 1 (sayı yalnız BİLİNÇLİ değişir)
-    assert toplam == Counter({"ULASILAMAZ": 45, "SAVUNMA": 29, "PLATFORM": 1}), (
+    assert toplam == Counter({"ULASILAMAZ": 45, "SAVUNMA": 29, "PLATFORM": 2}), (
         toplam
-    )  # KP-7 B: SAVUNMA 13 → 21 · B2: ULASILAMAZ 13 → 31 · KP-8 D: ULASILAMAZ 31 → 45, SAVUNMA 21 → 29
+    )  # KP-7 B: SAVUNMA 13 → 21 · B2: ULASILAMAZ 13 → 31 · KP-8 D: ULASILAMAZ 31 → 45, SAVUNMA 21 → 29 · GA B3: PLATFORM 1 → 2
     assert set(toplam) <= set(ETIKETLER)
 
 

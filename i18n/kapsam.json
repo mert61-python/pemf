@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 31
+   "dosyaSayisi": 38
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -13559,6 +13559,91 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.alanHaritasi.*)"
+  },
+  "apps/ui/src/components/domain/GelistiriciModulleriKarti.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.modul.* / ayarlar.gelistiriciModulleri.*)"
+  },
+  "apps/ui/src/components/domain/ModulSecici.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.modul.* / ayarlar.gelistiriciModulleri.*)"
+  },
+  "apps/ui/src/moduller/arac.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.modul.* / ayarlar.gelistiriciModulleri.*)"
+  },
+  "apps/ui/src/moduller/kayit.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.modul.* / ayarlar.gelistiriciModulleri.*)"
+  },
+  "apps/ui/src/moduller/ornek/Panel.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.modul.* / ayarlar.gelistiriciModulleri.*)"
+  },
+  "apps/ui/src/moduller/yukleyiciler.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.modul.* / ayarlar.gelistiriciModulleri.*)"
+  },
+  "apps/ui/src/services/moduller.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "/moduller/{{deger1}}/sec",
+     "gerekce": "API yolu (URL) — kullanıcı metni değil",
+     "turler": [
+      "cagri"
+     ]
+    }
+   ],
+   "birlesikIstisna": [],
+   "not": "GA (istem 53): yeni dosya — bütün kullanıcı metni katalogdan (kontrol.modul.* / ayarlar.gelistiriciModulleri.*)"
   }
  }
 }

@@ -33,6 +33,7 @@ import {
   VERI_TASIMA_ZAMAN_ASIMI_MS,
 } from "@/services/veriTasima";
 import { useTranslation } from "react-i18next";
+import { GelistiriciModulleriKarti } from "@/components/domain/GelistiriciModulleriKarti";
 
 
 /** S-F2-1.1: denetim izinin UTC ISO zamanını yerel tarih-saate çevirir; okunamazsa ham metin; YOKSA `bilinmiyor` (çevrilmiş metin).
@@ -1036,6 +1037,9 @@ export function SettingsScreen() {
           </View>
         </Card>
       )}
+
+      {/* GA (istem 53) B3 · Y299: geliştirici modülleri anahtarı — varsayılan KAPALI (satılan üründe görünmez). */}
+      <GelistiriciModulleriKarti />
 
       {/* KÜNYE (2026-08-07): üretici/satıcı kimliği uygulamada da görünür olmalı — tıbbi
           cihaz yazılımında kullanıcı hangi tüzel kişiye ulaşacağını bilmeli (site künyesiyle

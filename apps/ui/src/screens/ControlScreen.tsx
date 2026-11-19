@@ -29,6 +29,7 @@ import { modelleriAl } from "@/components/domain/aiProProfilleri";
 import { useUserMode } from "@/context/UserModeContext";
 import { EFieldBar } from "@/components/domain/EFieldBar";
 import { AlanHaritasiKarti } from "@/components/domain/AlanHaritasiKarti";
+import { ModulPaneli, ModulSecici } from "@/components/domain/ModulSecici";
 import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -109,6 +110,8 @@ export function ControlScreen() {
   // AP-B1 (S-AP.1): son sekme Kontrol belleğinden — AI Pro seansı sürerken Sensörler'e gidip dönen kullanıcı AI Pro sekmesine döner
   // (eskiden ekran sökülüp "Manuel" ile açılıyordu). Bellek yoksa (sağlayıcısız çizim) eskisi gibi "Manuel".
   const [activeTab, setActiveTab] = useState<TabKey>(() => kontrolHafizasi?.current.sekme ?? "manual");
+  // GA (istem 53) B3: seçili geliştirici modülü (null = PEMF cihazı); bir anda TEK modül — seçiliyken sekmeler yerine modül paneli.
+  const [etkinModul, setEtkinModul] = useState<string | null>(null);
   useEffect(() => {
     if (kontrolHafizasi) kontrolHafizasi.current.sekme = activeTab;
   }, [activeTab, kontrolHafizasi]);
@@ -618,7 +621,13 @@ export function ControlScreen() {
       {/* D1.E02 · A-51: bu düğme ÇİZİLDİĞİ sürece kayan ACİL DURDUR gizlenir; ekran çökerse işaret de sökülür. */}
       <KendiDurdurmaIsareti />
 
+      {/* GA (istem 53) B3: geliştirici modülü seçicisi — ACİL DURDUR düğmesinin ARKASINDA (düğmenin yeri DEĞİŞMEZ); modüller gizliyken
+          (varsayılan, Y299) hiç çizilmez. Modül seçiliyken PEMF sekmeleri yerine modülün paneli. */}
+      <ModulSecici etkin={etkinModul} onSec={setEtkinModul} />
+      {etkinModul !== null && <ModulPaneli kimlik={etkinModul} />}
+
       {/* ── Tab bar ───────────────────────────────────────────── */}
+      {etkinModul === null && (
       <View style={styles.tabBar}>
         {TABS.map((tab) => (
           <TouchableOpacity
@@ -636,9 +645,10 @@ export function ControlScreen() {
           </TouchableOpacity>
         ))}
       </View>
+      )}
 
       {/* ── TAB: Otomatik ─────────────────────────────────────── */}
-      {activeTab === "automatic" && (
+      {etkinModul === null && activeTab === "automatic" && (
         <View style={styles.section}>
           <SectionTitle text={t("kontrol.ekran.otomatikBaslik")} />
           <Text style={styles.hint}>
@@ -695,7 +705,7 @@ export function ControlScreen() {
       )}
 
       {/* ── TAB: Manuel ───────────────────────────────────────── */}
-      {activeTab === "manual" && (
+      {etkinModul === null && activeTab === "manual" && (
         <View style={styles.section}>
           <SectionTitle text={t("kontrol.ekran.manuelBaslik")} />
 
@@ -800,7 +810,7 @@ export function ControlScreen() {
 
       {/* ── TAB: AI ───────────────────────────────────────────── */}
       {/* ── TAB: AI Pro ───────────────────────────────────────── */}
-      {activeTab === "aipro" && (
+      {etkinModul === null && activeTab === "aipro" && (
         <View style={styles.section}>
           <SectionTitle text={aiProBaslik} />
           <AiProPanel

@@ -12,11 +12,11 @@
  */
 import type { AlanHaritasiVerisi } from "@/services/alanHaritasi";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
+import { stmBobiniMi, tumSlotIdleri } from "@/services/bobinGorunurlugu";
 
 export const IKIZ_SURUM = 1;
 /** `pemf.ikiz.durum` aralığı (2 Hz — PLAN §1.2 "saniyede 2–5"). */
 export const DURUM_ARALIK_MS = 500;
-const STM_BOBINLERI = [1, 2, 3, 4, 5, 6, 7];
 
 type Bobin = {
   id?: number;
@@ -47,7 +47,9 @@ function olculenMt(c: Bobin): number | null {
 export function durumIletisi(anlik: unknown, zaman: number = Date.now() / 1000): Record<string, unknown> {
   const snapshot = anlik as Anlik;
   const coils = Array.isArray(snapshot?.coils) ? snapshot!.coils! : [];
-  const bobinler = STM_BOBINLERI.map((b) => {
+  const bobinler = tumSlotIdleri()
+    .filter(stmBobiniMi) // bobin sayısı TEK KAYNAK (D5.42) — slot 8 ESP'dir
+    .map((b) => {
     const c = coils.find((x) => Number(x?.id) === b) ?? {};
     return {
       bobin: b,

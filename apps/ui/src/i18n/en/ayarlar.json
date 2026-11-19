@@ -108,6 +108,12 @@
     "kodOrnek": "E.G.: A3F9K2",
     "yenidenDene": "Try Again"
   },
+  "gelistiriciModulleri": {
+    "aciklama": "When on, developers' control modules can be selected in the Control tab. Keep this off in the product as sold. EMERGENCY STOP always stops running modules too.",
+    "anahtar": "Show developer modules",
+    "baslik": "Developer modules",
+    "hata": "The setting could not be saved — try again."
+  },
   "hakkinda": {
     "baslik": "About",
     "mersis": "MERSIS: ",
