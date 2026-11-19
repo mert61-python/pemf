@@ -439,6 +439,16 @@ def _pk_fiziksel() -> tuple:
     return tuple(_pk.FIZIKSEL)
 
 
+def _kuyu_araligi_olculdu(result) -> bool:
+    """OTB T-14b (kum havuzu EN turu 19-11, kayıtlı gerçek kareler `3a_kayma_once`): kamera OYNAMADAN (sabit sahne kayması 1,6–1,9 px,
+    eşik 12 px) hareketsiz plakada Hough kuyu aralığı karelerin ~1/3'ünde %3,0–5,6 sapıyor → hat `kamera_oynamis` engeli → konumlu aday
+    0 → T-14 dalı "yalnız 0 kuyu görüldü" diyordu (plaka görüntüde duruyor). Plakanın kuyu MERKEZLERİ ölçüldüyse (kalibrasyon özetinde
+    `kuyu_araligi` var) plaka görülüyor: neden PLAKA YOK değil, kapının kendi nedeni (T-6 ilkesi — gerçek neden)."""
+    kal = getattr(result, "kalibrasyon", None)
+    olcum = kal.get("olcum") if isinstance(kal, dict) else None
+    return isinstance(olcum, dict) and "kuyu_araligi" in olcum
+
+
 def _plaka_en_az() -> int:
     from ai_hub.odak import oneri as odak_oneri
 
@@ -1174,6 +1184,9 @@ class _EmCvSaglayici:
                     and getattr(self, "plaka_dogrulamasi", False)
                     and len(meta["odak_adaylar"]) < _plaka_en_az()
                     and any(n in _pk_fiziksel() for n in kapi["nedenler"])
+                    and not _kuyu_araligi_olculdu(
+                        result
+                    )  # OTB T-14b: plaka görülüyorsa (aralık ölçüldü) gerçek neden AYNEN
                 ):
                     # OTB T-14 (boş kabin 19-11: "Kamera oynamış olabilir ya da taban yüksekliği yanlış"): plaka görülmüyorsa asıl
                     # neden PLAKA YOK — konum ölçüm hatasından (sahne eşleşmesi plakasız kabinde düşer) ÖNCE söylenir. T-15: ham kare.
