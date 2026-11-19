@@ -71,6 +71,10 @@ KUYU_PIKSEL_SIGMA = 0.7
 OLCU_SIGMA_MM = 6.0
 #: Sahip (istem 44 §1c): eşlenen kuyu aralığı 19,3 mm'den bundan fazla saparsa kamera oynamış sayılır.
 KUYU_ARALIGI_TOLERANSI = 0.03
+#: Y306 (sahip 19-11, OTB [SAHİBE] 1): Hough kuyu aralığı kamera oynamadan hareketsiz plakada kareden kareye %0,2–7,4 salınıyor →
+#: kamera / taban yüksekliği kararı son bu kadar ölçümün ORTANCASIYLA verilir (tolerans aynı); pencere sağlayıcıda, seans başında ve
+#: sabit numune referansı kurulurken boşalır.
+KUYU_ARALIGI_PENCERESI = 5
 #: OTB T-8 (ölçüldü 19-11): petri ızgara VARSAYIMININ kabin mm'deki satır / sütun aralığı plakanınkinden bu oranda fazla saparsa varsayım
 #: FİZİKSEL olarak imkânsızdır (doğru varsayımlar %0–9; üst sırası boş plakada ECC'nin sıkıştırdığı ızgara satırda %26) → seçilmez.
 IZGARA_OLCEK_TOLERANSI = 0.15
@@ -612,6 +616,22 @@ def kuyu_araligi(
         "gecti": bool(sapma <= tolerans),
     }
 
+
+def kuyu_araligi_ortancasi(ka: dict, pencere) -> dict:
+    """Y306: bu karenin `kuyu_araligi` ölçümünü `pencere`ye (sağlayıcının listesi; son `KUYU_ARALIGI_PENCERESI` ölçüm kalır) ekler ve kararı
+    penceredeki son ölçümlerin ORTANCA sapmasıyla verir — tek gürültülü ölçüm "kamera oynamış" demez; kalıcı sapma (kamera / taban
+    yüksekliği gerçekten değişti) pencerenin yarısını geçince yakalanır. Çift sayıda ölçümde ALT ortanca (iki ölçümden biri gürültülüyse
+    karar diğerinin). Tolerans ölçümün kendi toleransı (AYNI). Dönüş: `ka` kopyası; `sapma` = ortanca, `kare_sapma` = bu kare,
+    `pencere` = ölçüm sayısı, `gecti` = ortanca <= tolerans."""
+    pencere.append(float(ka["sapma"]))
+    del pencere[:-KUYU_ARALIGI_PENCERESI]
+    sirali = sorted(pencere)
+    orta = sirali[(len(sirali) - 1) // 2]
+    sonuc = dict(ka)
+    sonuc.update(
+        kare_sapma=ka["sapma"], sapma=round(orta, 4), pencere=len(sirali), gecti=bool(orta <= float(ka["tolerans"]))
+    )
+    return sonuc
 
 def komsu_kuyu_araligi(harita: DuzlemHaritasi, konum: dict, aralik_mm: float, y_mm: float, tolerans: float) -> dict:
     """`konum_hazirla` sözlüğünden (yönelimden bağımsız): plaka mm'de aralığı ≈ `aralik_mm` olan KOMŞU kuyu çiftlerinin düzlemdeki

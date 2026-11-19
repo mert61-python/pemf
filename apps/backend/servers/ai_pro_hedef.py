@@ -485,6 +485,8 @@ def odak_ayarla(saglayici, odak, hedef_etiket: str = "") -> None:
         return
     if hasattr(saglayici, "_sabit_izgara"):
         saglayici._sabit_izgara = None  # OTB T-8: her seans (ve durdurma) kendi sabit numune referansıyla
+    if hasattr(saglayici, "_aralik_penceresi"):
+        saglayici._aralik_penceresi.clear()  # Y306: seans başında ortanca penceresi boşalır
     if not odak or odak.get("doz_mT") is None:
         saglayici.odak_ayari = None
         return
@@ -921,6 +923,9 @@ class _EmCvSaglayici:
         self.odak_ayari: dict | None = None
         #: OTB T-8: seansın İLK doğrulanan petri ızgarası (ODAK aday listesi) — sabit numune REFERANSI; `odak_ayarla` sıfırlar.
         self._sabit_izgara: list | None = None
+        #: Y306: kuyu aralığı kararının ORTANCA penceresi (son `KUYU_ARALIGI_PENCERESI` ölçüm); seans başında / durdurmada
+        #: (`odak_ayarla`) ve sabit numune referansı kurulurken boşalır.
+        self._aralik_penceresi: list = []
 
     # ── alt sınıf sözleşmesi ────────────────────────────────────────────────────────────
     def _yukleyici(self):
@@ -1291,6 +1296,7 @@ class _EmCvSaglayici:
         if self._sabit_izgara is None:
             if not engel:
                 self._sabit_izgara = [dict(k) for k in meta["odak_adaylar"]]
+                self._aralik_penceresi.clear()  # Y306: referans kurulurken ortanca penceresi boşalır
             return engel
         k = odak_oneri.sabit_numune_ortusmesi(self._sabit_izgara, meta["odak_adaylar"], etiketli=not engel)
         meta["sabit_numune"] = k
@@ -1480,6 +1486,8 @@ class PetriSaglayici(_EmCvSaglayici):
         )
         # OTB T-7: seansta sabit numune referansı varken Hough kuyu aralığı sapması engel değil uyarı (referans örtüşmesi denetler).
         pl.kuyu_araligi_uyari = self._sabit_izgara is not None
+        # Y306: kuyu aralığı kararı son ölçümlerin ORTANCASIYLA (pencere sağlayıcıda — hat her karede yeniden kurulur).
+        pl.kuyu_araligi_penceresi = self._aralik_penceresi
         return pl
 
     def _ozne_yok_hatalari(self) -> tuple:

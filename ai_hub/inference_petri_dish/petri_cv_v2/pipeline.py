@@ -202,6 +202,8 @@ class PetriCvPipeline:
         self.kamera_indeksi = kamera_indeksi
         #: OTB T-7: seansta sabit numune referansi varken Hough kuyu araligi sapmasi ENGEL degil UYARI (saglayici acar; varsayilan AYNEN).
         self.kuyu_araligi_uyari = False
+        #: Y306: saglayicinin kuyu araligi ORTANCA penceresi (`sabit_duzlem.kuyu_araligi_ortancasi`); None = karar bu karenin olcumuyle (AYNEN).
+        self.kuyu_araligi_penceresi = None
         #: KD-2: karenin geldiği kabin kamerasının KİMLİĞİ (ad + VID/PID + aygıt yolu) — bilinirse indeks yerine bu karşılaştırılır.
         self.kamera_kimligi = None
         if isinstance(cfg, CabinConfig):
@@ -759,11 +761,16 @@ class PetriCvPipeline:
             ka = _sd.kuyu_araligi(kd.harita, S @ np.asarray(grid.H_ransac, dtype=np.float64),
                                   grid.spec.rows, grid.spec.cols, grid.spec.pitch_mm, kd.harita.numune_y_mm,
                                   tolerans=kd.kuyu_araligi_toleransi)
+            if self.kuyu_araligi_penceresi is not None:
+                # Y306: karar saglayicinin penceresindeki son olcumlerin ORTANCASIYLA (tek gurultulu olcum engel vermez).
+                ka = _sd.kuyu_araligi_ortancasi(ka, self.kuyu_araligi_penceresi)
             kd.olcum["kuyu_araligi"] = ka
             aralik_olculdu = True
             if not ka["gecti"]:
                 neden = (f"eslenen kuyu araligi {ka['sutun_mm']:.2f} / {ka['satir_mm']:.2f} mm, beklenen "
                          f"{ka['beklenen_mm']:g} mm (sapma %{100 * ka['sapma']:.1f} > %{100 * ka['tolerans']:g})")
+                if "pencere" in ka:
+                    neden += f" - son {ka['pencere']} olcumun ortancasi"
                 if self.kuyu_araligi_uyari:
                     # OTB T-7: seansta SABIT NUMUNE referansi varken kamera / plaka yerinde mi sorusunu referans ortusmesi (mm) yanitlar;
                     # Hough araligi bu kabinde plaka oynamadan %0,2-7,4 saliniyor (olculdu) -> engel degil uyari.
