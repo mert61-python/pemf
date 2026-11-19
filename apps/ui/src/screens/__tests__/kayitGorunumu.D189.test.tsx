@@ -97,7 +97,7 @@ describe("D1.89 — Ana Ekran (GERÇEK LiveDataProvider)", () => {
   it("KRİTİK: elle seansta ölçüm varken ÖLÇÜLEN gösterilir ve etiketi '(ölçülen)'", async () => {
     const u = await anaEkran(F.canliElle);
     // MetricCard'ın duyurulan metni "etiket: değer" (etiket düğümü erişilebilirlikten gizli) — ikisi BİRLİKTE aranır.
-    expect(u.queryByLabelText("Yoğunluk (ölçülen): 0.80 mT")).not.toBeNull();
+    expect(u.queryByLabelText("Yoğunluk (ölçülen): 0,80 mT")).not.toBeNull(); // Y306: TR virgül
   });
 
   it("KRİTİK: ölçüm henüz yokken reçete '(kayıt)' etiketiyle (etiketsiz 'Yoğunluk' YOK)", async () => {

@@ -269,8 +269,9 @@ def test_KRITIK_odak_kipi_ve_etiket_eki():
 def test_KRITIK_odak_engel_metni_SAYI_bicimi():
     import servers.ai_pro_hedef as hedef
 
-    m = hedef.odak_engel_metni({"engel": "dozTavanUstu", "engel_ek": {"tavan": 1.23456}})
-    assert "1.23" in m and "{{" not in m
+    m = hedef.odak_engel_metni({"engel": "dozTavanUstu", "engel_ek": {"tavan": 1.23456}}, dil="tr")
+    assert "1,23" in m and "{{" not in m  # Y306: TR ondalık virgül
+    assert "1.23" in hedef.odak_engel_metni({"engel": "dozTavanUstu", "engel_ek": {"tavan": 1.23456}}, dil="en")
 
 
 def test_KRITIK_odak_ayarla_KEDIDE_yok_sayilir_ve_dozsuz_TEMIZLER():

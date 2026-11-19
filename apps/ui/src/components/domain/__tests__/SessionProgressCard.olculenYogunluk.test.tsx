@@ -42,7 +42,7 @@ describe("yoğunluk çipi — reçete / ölçüm ayrımı", () => {
   it("KRİTİK: ölçüm varsa SENSÖR değeri ve '(ölçülen)' etiketi gösterilir", () => {
     const u = render(<SessionProgressCard {...temel} measuredIntensityMt={7.253} />);
     expect(u.queryByText("YOĞUNLUK (ölçülen)")).toBeTruthy();
-    expect(u.queryByText("7.25 mT")).toBeTruthy();
+    expect(u.queryByText("7,25 mT")).toBeTruthy();
     // Reçete sayısı çipte GÖRÜNMEMELİ — iki sayı yan yana operatörü yanıltır.
     expect(u.queryByText("1.5 mT")).toBeNull();
   });
@@ -66,7 +66,7 @@ describe("yoğunluk çipi — reçete / ölçüm ayrımı", () => {
     // operatör alan olmadığını göremez ve reçeteye bakıp "veriliyor" sanır.
     const u = render(<SessionProgressCard {...temel} measuredIntensityMt={0} />);
     expect(u.queryByText("YOĞUNLUK (ölçülen)")).toBeTruthy();
-    expect(u.queryByText("0.00 mT")).toBeTruthy();
+    expect(u.queryByText("0,00 mT")).toBeTruthy();
     expect(u.queryByText("1.5 mT")).toBeNull();
   });
 });
@@ -84,9 +84,9 @@ test("KRITIK: ANLIK ile SEANS TEPESI AYRI rozetlerde gosterilir", () => {
   // MUTASYON: `measuredPeakMt` rozetini sil → KIRMIZI.
   const u = render(<SessionProgressCard {...temel} measuredIntensityMt={1.84} measuredPeakMt={3.26} />);
   expect(u.getByText("YOĞUNLUK (ölçülen)")).toBeTruthy();
-  expect(u.getByText("1.84 mT")).toBeTruthy();
+  expect(u.getByText("1,84 mT")).toBeTruthy();
   expect(u.getByText("TEPE (seans)")).toBeTruthy();
-  expect(u.getByText("3.26 mT")).toBeTruthy();
+  expect(u.getByText("3,26 mT")).toBeTruthy();
 });
 
 test("KRITIK: tepe YOKKEN rozet HIC cizilmez (0 gosterilmez)", () => {
@@ -94,7 +94,7 @@ test("KRITIK: tepe YOKKEN rozet HIC cizilmez (0 gosterilmez)", () => {
   // MUTASYON: `measuredPeakMt != null &&` kapısını kaldır → KIRMIZI.
   const u = render(<SessionProgressCard {...temel} measuredIntensityMt={1.84} measuredPeakMt={null} />);
   expect(u.queryByText("TEPE (seans)")).toBeNull();
-  expect(u.queryByText("0.00 mT")).toBeNull();
+  expect(u.queryByText("0,00 mT")).toBeNull();
 });
 
 test("tepe 0.0 ise (gercekten olculmus sifir) rozet CIZILIR", () => {

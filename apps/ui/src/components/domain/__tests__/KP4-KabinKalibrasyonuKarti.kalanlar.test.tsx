@@ -190,7 +190,7 @@ it("KRİTİK: doğrulama KALDI — merkez farkı, ölçülen köşelerin farkı 
   olc(e, [0, 3], 10);
   await act(async () => { fireEvent.press(e.getByTestId("kabin-kalibrasyonu-dogrula")); });
   const s = await e.findByTestId("kabin-kalibrasyonu-dogrulama-sonuc");
-  expect(s.props.children).toBe(T("ai.kalibrasyon.dogrulamaKaldi", { merkez: "3.4", farklar: "1: 2.1 · 4: 4.0", esik: 1 }));
+  expect(s.props.children).toBe(T("ai.kalibrasyon.dogrulamaKaldi", { merkez: "3,4", farklar: "1: 2,1 · 4: 4,0", esik: 1 }));
 });
 
 it("KRİTİK: kalibrasyon sürerken kart kilitlenirse 'Yeniden kare' kamera isteği GÖNDERMEZ", async () => {

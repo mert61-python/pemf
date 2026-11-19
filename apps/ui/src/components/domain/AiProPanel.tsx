@@ -42,6 +42,7 @@ import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { degerAdi } from "@/utils/aiDetail";
 import { useTranslation } from "react-i18next";
 import i18n, { type TFunction } from "i18next";
+import { ondalikMetni } from "@/i18n/dil";
 
 const organListesi = (t: TFunction) => [
   { id: 0, name: t("ai.organ.ad.tumVucut") }, { id: 1, name: t("ai.organ.ad.mide") }, { id: 2, name: t("ai.organ.ad.bobrek") },
@@ -49,7 +50,8 @@ const organListesi = (t: TFunction) => [
 ];
 
 /** Ondalık ayırıcı dile uyar: TR "0,13", EN "0.13" (kodda nokta). */
-const ondalik = (n: number, basamak: number): string => n.toFixed(basamak).replace(".", i18n.language === "en" ? "." : ",");
+// Y306: ondalık ayırıcı TEK yardımcıdan (etkin dil: tr virgül, en nokta).
+const ondalik = (n: number, basamak: number): string => ondalikMetni(n, basamak);
 
 const IS_WEB = Platform.OS === "web";
 

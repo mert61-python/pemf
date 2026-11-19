@@ -72,11 +72,11 @@ it("KRİTİK K-8: geçmiş kartı tarihi etkin dilde (TR 18.11.2026 14:47 · EN 
 
 it("KRİTİK K-11: ODAK seansında canlı yoğunluk = ODAK dozu + bobin sayısı; öncelik ölçülen > kayıt > ODAK > duty", async () => {
   const y = canliYogunluk({ odakDozMt: 0.6, odakBobinSayisi: 7, dutyTemsilYuzde: 36.2 });
-  expect(y).toEqual({ tur: "odak", deger: "0.60 mT · 7 bobin" });
+  expect(y).toEqual({ tur: "odak", deger: "0,60 mT · 7 bobin" }); // Y306: TR virgül
   expect(YOGUNLUK_ETIKETI_BUYUK.odak).toBe("ODAK DOZU (hedef)");
   expect(canliYogunluk({ odakDozMt: 0.6, odakBobinSayisi: 7, measuredIntensityMt: 0.5 }).tur).toBe("olculen");
   expect(canliYogunluk({ odakDozMt: 0, dutyTemsilYuzde: 36.2 }).tur).toBe("duty");
-  expect(canliYogunluk({ odakDozMt: 0.6 }).deger).toBe("0.60 mT · 0 bobin");
+  expect(canliYogunluk({ odakDozMt: 0.6 }).deger).toBe("0,60 mT · 0 bobin");
   await dil("en");
   expect(canliYogunluk({ odakDozMt: 0.6, odakBobinSayisi: 1 }).deger).toBe("0.60 mT · 1 coil");
   expect(YOGUNLUK_ETIKETI_BUYUK.odak).toBe("ODAK DOSE (target)");
@@ -89,7 +89,7 @@ it("KRİTİK K-11: canlı kart ilerleme yüzdesi TR '%2' (EN '2%'); ODAK dozu ka
   };
   const u = render(<SessionProgressCard {...p} />);
   expect(metin(u)).toContain("%2");
-  expect(metin(u)).toContain("0.60 mT · 7 bobin");
+  expect(metin(u)).toContain("0,60 mT · 7 bobin");
   expect(metin(u)).not.toContain("DUTY (AI planı, bobin 1)");
   await dil("en");
   expect(metin(render(<SessionProgressCard {...p} />))).toContain("2%");

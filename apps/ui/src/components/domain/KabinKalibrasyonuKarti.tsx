@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Crosshair } from "lucide-react-native";
 import { colors, radius, spacing, touch, typography } from "@/theme/tokens";
 import { AI_TIMEOUT_MS, apiGet, apiPost, KAMERA_TIMEOUT_MS } from "@/services/apiClient";
+import { ondalikMetni } from "@/i18n/dil";
 
 type Kip = "kalibrasyon" | "dogrulama";
 interface Kare {
@@ -585,13 +586,13 @@ export function KabinKalibrasyonuKarti({ model, kilitli = false }: { model: "pet
         <Text style={[styles.durum, dogrulama.gecti ? styles.iyi : styles.uyari]} testID="kabin-kalibrasyonu-dogrulama-sonuc">
           {dogrulama.gecti
             ? t("ai.kalibrasyon.dogrulamaGecti", {
-                merkez: dogrulama.merkezFarkCm.toFixed(1),
-                farklar: dogrulama.farkCm.map((v, i) => (v == null ? null : `${i + 1}: ${v.toFixed(1)}`)).filter(Boolean).join(" · "),
+                merkez: ondalikMetni(dogrulama.merkezFarkCm, 1),
+                farklar: dogrulama.farkCm.map((v, i) => (v == null ? null : `${i + 1}: ${ondalikMetni(v, 1)}`)).filter(Boolean).join(" · "),
                 esik: dogrulama.esikCm,
               })
             : t("ai.kalibrasyon.dogrulamaKaldi", {
-                merkez: dogrulama.merkezFarkCm.toFixed(1),
-                farklar: dogrulama.farkCm.map((v, i) => (v == null ? null : `${i + 1}: ${v.toFixed(1)}`)).filter(Boolean).join(" · "),
+                merkez: ondalikMetni(dogrulama.merkezFarkCm, 1),
+                farklar: dogrulama.farkCm.map((v, i) => (v == null ? null : `${i + 1}: ${ondalikMetni(v, 1)}`)).filter(Boolean).join(" · "),
                 esik: dogrulama.esikCm,
               })}
         </Text>

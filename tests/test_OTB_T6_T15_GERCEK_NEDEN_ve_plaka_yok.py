@@ -142,7 +142,10 @@ def test_KRITIK_T12_serit_SAPMA_ve_GORULEN_kuyu_sayisini_SOYLER(dil):
         ceviri.istek_dili_var.reset(jeton)
     ek = meta["plaka_ayrinti"]
     assert meta["plaka_dogrulanmadi"] == "plakaUyumsuz" and ek["bulunan"] == 5 and ek["sapma"] > 5, ek
-    assert "5" in metin and f"{float(ek['sapma']):.2f}" in metin, metin
+    sapma = f"{float(ek['sapma']):.2f}"
+    assert "5" in metin and (sapma if dil == "en" else sapma.replace(".", ",")) in metin, (
+        metin
+    )  # Y306: TR ondalık virgül
     if dil == "en":
         assert not any(c in metin for c in "çğıöşüÇĞİÖŞÜ"), metin
 

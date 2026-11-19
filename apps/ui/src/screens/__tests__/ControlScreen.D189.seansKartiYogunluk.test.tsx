@@ -76,8 +76,8 @@ async function kart(aktif: unknown, at: unknown) {
 it("KRİTİK (İG-6.11 b): elle seansta WS'teki ÖLÇÜLEN yoğunluk kartta '(ölçülen)' olarak çizilir", async () => {
   const u = await kart(F.aktifElle, F.canliElle);
   expect(u.queryByText("YOĞUNLUK (ölçülen)")).not.toBeNull();
-  // Anlık ölçülen ve "TEPE (seans)" bu fikstürde aynı sayı (0.80) — ikisi de WS'ten gelir, iki çip.
-  expect(u.queryAllByText("0.80 mT")).toHaveLength(2);
+  // Anlık ölçülen ve "TEPE (seans)" bu fikstürde aynı sayı (0.80) — ikisi de WS'ten gelir, iki çip. Y306: TR ondalık virgül.
+  expect(u.queryAllByText("0,80 mT")).toHaveLength(2);
   expect(u.queryByText("TEPE (seans)")).not.toBeNull();
 });
 

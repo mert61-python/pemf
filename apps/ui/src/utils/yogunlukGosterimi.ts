@@ -1,4 +1,5 @@
 import i18n from "i18next";
+import { ondalikMetni } from "@/i18n/dil";
 // Author: mertaygn, cglrgrkn
 /**
  * D1.89 · B-6.27 (+ İNCELEME-2 §10 #5 · İG-6.47 sınıfı) — yoğunluk gösteriminin TEK KAYNAĞI.
@@ -34,13 +35,13 @@ const sayi = (v: unknown): v is number => typeof v === "number" && Number.isFini
 /** Canlı seans kartları (Ana Ekran, Kontrol): önce ölçülen, yoksa reçete, yoksa (AI Pro) duty temsili, yoksa "—". */
 export function canliYogunluk(at: CanliSeans | null | undefined): YogunlukGosterimi {
   const olculen = at?.measuredIntensityMt;
-  if (sayi(olculen)) return { tur: "olculen", deger: `${olculen.toFixed(2)} mT` };
+  if (sayi(olculen)) return { tur: "olculen", deger: `${ondalikMetni(olculen, 2)} mT` }; // Y306: ondalık ayırıcı dile göre
   const recete = at?.intensityMt;
   if (sayi(recete) && recete > 0) return { tur: "kayit", deger: `${recete} mT` };
   const odak = at?.odakDozMt;
   if (sayi(odak) && odak > 0) {
     const n = sayi(at?.odakBobinSayisi) ? at!.odakBobinSayisi! : 0;
-    return { tur: "odak", deger: i18n.t("kontrol.yogunluk.odakDeger", { doz: odak.toFixed(2), count: n }) };
+    return { tur: "odak", deger: i18n.t("kontrol.yogunluk.odakDeger", { doz: ondalikMetni(odak, 2), count: n }) };
   }
   const duty = at?.dutyTemsilYuzde;
   if (sayi(duty)) return { tur: "duty", deger: `%${duty}` };

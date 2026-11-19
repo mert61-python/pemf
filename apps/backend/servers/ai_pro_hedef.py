@@ -473,8 +473,11 @@ def plaka_engel_plani(meta) -> dict | None:
 
 
 def odak_engel_metni(plan: dict, dil: str | None = None) -> str:
-    """Engel kodu → eylem söyleyen metin (`dil` yoksa istek dili). Sayılar 2 basamak."""
-    ek = {k: (f"{float(v):.2f}" if isinstance(v, float) else v) for k, v in (plan.get("engel_ek") or {}).items()}
+    """Engel kodu → eylem söyleyen metin (`dil` yoksa istek dili). Sayılar 2 basamak, ondalık ayırıcı dile göre (Y306: TR virgül)."""
+    ek = {
+        k: (ceviri.sayi_metni(v, 2, dil=dil) if isinstance(v, float) else v)
+        for k, v in (plan.get("engel_ek") or {}).items()
+    }
     return ceviri.t(f"ai.pro.odak.engel.{plan.get('engel')}", dil=dil, **ek)
 
 

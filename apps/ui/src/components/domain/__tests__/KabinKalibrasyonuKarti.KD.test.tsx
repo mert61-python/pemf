@@ -212,7 +212,7 @@ it("Doğrula: numaralı köşelerden ölçülenler → MERKEZ farkı (geçti / k
   olc(ekran, [0, 2]);
   fireEvent.press(ekran.getByTestId("kabin-kalibrasyonu-dogrula"));
   const s = await ekran.findByTestId("kabin-kalibrasyonu-dogrulama-sonuc");
-  expect(s.props.children).toBe(i18n.t("ai.kalibrasyon.dogrulamaGecti", { merkez: "0.5", farklar: "1: 0.4 · 3: 0.7", esik: 1 }));
+  expect(s.props.children).toBe(i18n.t("ai.kalibrasyon.dogrulamaGecti", { merkez: "0,5", farklar: "1: 0,4 · 3: 0,7", esik: 1 }));
   expect(mockPost.mock.calls.find((c) => c[0] === "/ai/pro/kalibrasyon/dogrula")![1].olcumler).toEqual([
     { solCm: 10.5, onCm: 20 },
     null,

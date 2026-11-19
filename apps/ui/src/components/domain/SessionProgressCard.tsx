@@ -11,6 +11,7 @@ import { canliYogunluk, YOGUNLUK_ETIKETI_BUYUK } from "@/utils/yogunlukGosterimi
 import { modEtiketi } from "@/utils/seansDegerEtiketi";
 import { useTranslation } from "react-i18next";
 import { kritikMetin, useKritikDil } from "@/i18n/kritik";
+import { ondalikMetni } from "@/i18n/dil";
 
 interface Props {
   isActive: boolean;
@@ -186,7 +187,7 @@ export function SessionProgressCard({
             frekansı değiştirince düşmeyen bir "ölçüm" görürdü.
             ⚠️ Ölçüm yokken ÇİZİLMEZ: 0 göstermek "0 mT ölçtük" demektir. */}
         {measuredPeakMt != null && (
-          <ParamChip label={t("seans.kart.tepe")} value={`${measuredPeakMt.toFixed(2)} mT`} />
+          <ParamChip label={t("seans.kart.tepe")} value={`${ondalikMetni(measuredPeakMt, 2)} mT`} />
         )}
       </View>
 

@@ -103,3 +103,15 @@ export function bicimYereli(d: Dil): string {
 export function etkinBicimYereli(): string {
   return bicimYereli(etkinDilDegeri());
 }
+
+/**
+ * Y306 (sahip 19-11): ekrandaki ONDALIK sayı etkin dilin biçiminde — TEK yardımcı: tr → virgül ("14,40"), en → nokta ("14.40");
+ * binlik ayırıcı YOK. `basamak` sayı = sabit ondalık basamak; `{ anlamli }` = anlamlı basamak (çok küçük değerler, ör. 0,000123).
+ */
+export function ondalikMetni(deger: number, basamak: number | { anlamli: number }): string {
+  const secenek: Intl.NumberFormatOptions =
+    typeof basamak === "number"
+      ? { minimumFractionDigits: basamak, maximumFractionDigits: basamak, useGrouping: false }
+      : { minimumSignificantDigits: basamak.anlamli, maximumSignificantDigits: basamak.anlamli, useGrouping: false };
+  return deger.toLocaleString(etkinBicimYereli(), secenek);
+}

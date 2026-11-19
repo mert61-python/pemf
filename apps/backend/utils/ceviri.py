@@ -202,6 +202,14 @@ def t(anahtar: str, dil: str | None = None, **p) -> str:
     return _YER_TUTUCU.sub(doldur, metin)
 
 
+def sayi_metni(deger: float, basamak: int = 2, dil: str | None = None) -> str:
+    """Y306 (sahip 19-11): kullanıcıya giden ONDALIK sayı dile göre — TR virgül ("14,40"), EN nokta ("14.40"); binlik ayırıcı YOK.
+    Engel / neden metinlerinin sayıları bununla biçimlenir (metni üreten yerde, istek / cihaz dilinde)."""
+    d = gecerli_dil(dil) or etkin_dil()
+    metin = f"{float(deger):.{int(basamak)}f}"
+    return metin.replace(".", ",") if d == "tr" else metin
+
+
 def tarih_metni(an: datetime, dil: str | None = None, saat: bool = True) -> str:
     """Kullanıcıya tarih (24 saat): TR "13 Ekim 2026, 19:45" · EN "13 Oct 2026, 19:45"."""
     d = gecerli_dil(dil) or etkin_dil()
