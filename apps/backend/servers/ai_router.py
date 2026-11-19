@@ -1820,6 +1820,7 @@ def _drive_coils_ai_pro(D, P) -> list:
             continue
         if kabul:
             surulen.append(cid)
+            _ai_pro_kosu_ac(cid, duty_pct, phase_i)  # OTB T-10: bobin çalışma kaydı
         else:
             logger.warning("AI Pro bobin %d SÜRÜLMEDİ: donanım komutu reddetti (ya da sürüş yetkisi geçersiz).", cid)
     # ⚠️ 1-E incelemesi (i-6.1, Y54): plan-dışı kümesi döngüden ÖNCE okunur. Operatörün tekil STOP'u döngü ORTASINA düşerse
@@ -1841,6 +1842,24 @@ def _drive_coils_ai_pro(D, P) -> list:
                 logger.exception("AI Pro: plan dışı bobin %d STOP'u gönderilemedi", cid)
         surulen = [c for c in surulen if c not in _plan_disi_son]
     return surulen
+
+
+def _ai_pro_kosu_ac(cid: int, duty_pct: float, faz: float) -> None:
+    """OTB T-10 (ODM tezgâhı 19-11: AI Pro seansında bobinler ~2 dk sürüldü, seans detayı "bobin çalışma kaydı yok"): telde KABUL edilen
+    bobinin çalışma kaydı (coil run; elle yolla AYNI — frekans, duty %, faz, `stm`) — bobin başına bir kez açılır, her turda yeniden
+    açılmaz (AI Pro duty / fazı her karede değişir; koşu kaydı süreyi ve sensör özetini tutar). Kapanış: operatörün tekil STOP'u ve seans
+    kapanışı (`_artik_kosular`) — elle yolla AYNI. Best-effort: kayıt hatası sürüşü DURDURMAZ."""
+    try:
+        from servers import coil_run_tracker as _crt
+
+        with _crt._active_coil_runs_lock:
+            acik = int(cid) in _crt._active_coil_runs
+        if not acik:
+            _crt._begin_coil_run(
+                int(cid), _ai_pro_frek_hz, round(float(duty_pct), 1), round(float(faz), 1), None, "stm"
+            )
+    except Exception:
+        logger.debug("AI Pro bobin %s çalışma kaydı açılamadı (sürüş etkilenmedi)", cid, exc_info=True)
 
 
 def _teldeki_ai_pro_bobinleri() -> dict:
