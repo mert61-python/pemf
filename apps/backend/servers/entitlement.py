@@ -27,10 +27,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
 from dataclasses import replace as _replace
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request
 from utils import ceviri
@@ -93,7 +95,8 @@ _SUPABASE_TIMEOUT: float = max(1.0, _sayi("PEMF_ENTITLEMENT_TIMEOUT", 4.0, float
 # Kuyruk YALNIZ ağır tek-seferlik ANALİZ uçları içindir (FGS/hastalık/böbrek/histopat/petri…).
 _QUEUE_BYPASS_FRAGMENTS = ("/ai/pro/", "/ai/ai_pro/", "/landmark")
 
-# Aktif sayılmayan abonelik durumları → hak "baslangic"e düşer (eklenti de düşer).
+# Aktif sayılmayan abonelik durumları → hak "baslangic"e düşer (eklenti de düşer) — ANCAK ödenmiş dönem sürüyorsa
+# (`current_period_end` gelecekte) hak dönem sonuna dek KORUNUR (TA T1 · Y292-1; bkz. `_donem_suruyor`).
 _INACTIVE_STATUS = {
     "canceled",
     "cancelled",
@@ -124,6 +127,30 @@ class Entitlement:
     @property
     def research(self) -> bool:
         return "research" in self.addons
+
+
+def _donem_suruyor(ham: object, simdi: "datetime | None" = None) -> bool:
+    """TA T1 (Y292-1): iptal / ödeme gecikmesi (past_due) / pasif durumda ÖDENMİŞ dönemin sonuna kadar erişim.
+
+    `ham` = `subscriptions.current_period_end` (ödeme yolları yazar: api/callback · webhook · cancel). True YALNIZ
+    okunabilir bir zaman `simdi`den SONRAYSA; NULL / boş / okunamaz → False = bugünkü davranış (hak kesilir).
+    PostgREST timestamptz biçimleri: `2026-12-01T10:00:00+00:00`, kesirli saniye (1–6 hane), `Z`, `+00` — Python 3.10
+    `fromisoformat` kesir hanesi ve `Z` / `+00` konusunda seçici olduğundan önce normalleştirilir. Saat dilimsiz → UTC.
+    """
+    if not ham:
+        return False
+    s = re.sub(r"\.\d+", "", str(ham).strip()).replace(" ", "T", 1)
+    if s[-1:] in ("Z", "z"):
+        s = s[:-1] + "+00:00"
+    elif re.search(r"T\d{2}:\d{2}(:\d{2})?[+-]\d{2}$", s):
+        s += ":00"
+    try:
+        son = datetime.fromisoformat(s)
+    except ValueError:
+        return False
+    if son.tzinfo is None:
+        son = son.replace(tzinfo=timezone.utc)
+    return (simdi or datetime.now(timezone.utc)) < son
 
 
 def _bearer_token(request: Request) -> str:
@@ -189,7 +216,8 @@ def _supabase_entitlement(token: str) -> "Entitlement | None":
             return Entitlement(tier="baslangic")  # abonelik YOK = en düşük tier (kuyruk, eklenti-yok)
         row = rows[0] or {}
         status = str(row.get("status") or "").strip().lower()
-        inactive = status in _INACTIVE_STATUS
+        # TA T1 (Y292-1): iptal / past_due satırında ödenmiş dönem sürüyorsa erişim KORUNUR; dönem bitti / NULL → kesilir.
+        inactive = status in _INACTIVE_STATUS and not _donem_suruyor(row.get("current_period_end"))
         tier = str(row.get("tier") or "baslangic").strip().lower()
         if tier not in VALID_TIERS or inactive:
             tier = "baslangic"
