@@ -425,6 +425,35 @@ def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: in
     return [float(d) for d in plan["duty"]], [float(p) for p in plan["faz"]], 0.0
 
 
+def _pk_fiziksel() -> tuple:
+    from ai_hub.cv_ortak import pemf_kapisi as _pk
+
+    return tuple(_pk.FIZIKSEL)
+
+
+def _plaka_en_az() -> int:
+    from ai_hub.odak import oneri as odak_oneri
+
+    return int(odak_oneri.IZGARA_EN_AZ)
+
+
+#: OTB T-6 / T-12: plaka engel metinlerinin yer tutucuları — eksik sayı "?" (metin yine NEDENİ söyler, genel metne düşmez).
+_PLAKA_EK_ALANLARI = {
+    "plakaYok": ("bulunan", "beklenen"),
+    "plakaUyumsuz": ("bulunan", "sapma"),
+    "plakaKaydi": ("gorulen", "sapma"),
+}
+
+
+def plaka_engel_plani(meta) -> dict | None:
+    """OTB T-6 / T-12: son lokalizasyonun plaka engeli → `odak_engel_metni` girdisi ({"engel", "engel_ek"}); engel yoksa None."""
+    kod = str((meta or {}).get("plaka_dogrulanmadi") or "")
+    if kod not in _PLAKA_EK_ALANLARI:
+        return None
+    ek = dict((meta or {}).get("plaka_ayrinti") or {})
+    return {"engel": kod, "engel_ek": {a: ("?" if ek.get(a) is None else ek[a]) for a in _PLAKA_EK_ALANLARI[kod]}}
+
+
 def odak_engel_metni(plan: dict, dil: str | None = None) -> str:
     """Engel kodu → eylem söyleyen metin (`dil` yoksa istek dili). Sayılar 2 basamak."""
     ek = {k: (f"{float(v):.2f}" if isinstance(v, float) else v) for k, v in (plan.get("engel_ek") or {}).items()}
@@ -669,7 +698,7 @@ def kapi_cevir(kapi):
     return out
 
 
-def kapi_uyari_metni(kapi, hata: str = "") -> str:
+def kapi_uyari_metni(kapi, hata: str = "", meta=None) -> str:
     """AP-B6 (istem 48 · S-AP.6, sahip 14-11 "neden + eylem"): canlı hazırlıkta kare tüketim kapısının FİZİKSEL OLMAYAN (kalite /
     yerleşim) nedeni ya da plaka makullik reddi → istek dilinde NEDEN + EYLEM. Eskiden arayüze hiç gelmiyordu: şerit "kuyu / plaka aranıyor"
     deyip 120 sn sonra kedi + telefon iletisi veriyordu (13-11 tezgâh: koşullu kipte her kare `few_candidates` / `ecc_failed` / makullik
@@ -679,6 +708,10 @@ def kapi_uyari_metni(kapi, hata: str = "") -> str:
     from ai_hub.cv_ortak import pemf_kapisi as _pk
     from ai_hub.inference_petri_dish import plausibility as _pl
 
+    _plaka = plaka_engel_plani(meta)
+    if _plaka:
+        # OTB T-12 / T-14: plaka doğrulanmadıysa gerçek neden SAYILARIYLA (görülen kuyu, sapma mm) — "Tümünü gör" artık bunu açar
+        return odak_engel_metni(_plaka)
     if str(hata or "").startswith(_pl.PETRI_REJECT):
         return ceviri.t("ai.pemf.canliUyari.fewCandidates")  # plaka bölgesi var, ızgara (ECC + aday) doğrulanamadı
     if not isinstance(kapi, dict) or kapi.get("surulebilir") is not False:
@@ -1128,6 +1161,22 @@ class _EmCvSaglayici:
             meta["pemf_kapisi"] = kapi
             if not kapi["surulebilir"]:
                 air.logger.warning("%s karesi tüketim kapısında REDDEDİLDİ: %s", self.ad, kapi["nedenler"])
+                if (
+                    self.kosulsuz
+                    and getattr(self, "plaka_dogrulamasi", False)
+                    and len(meta["odak_adaylar"]) < _plaka_en_az()
+                    and any(n in _pk_fiziksel() for n in kapi["nedenler"])
+                ):
+                    # OTB T-14 (boş kabin 19-11: "Kamera oynamış olabilir ya da taban yüksekliği yanlış"): plaka görülmüyorsa asıl
+                    # neden PLAKA YOK — konum ölçüm hatasından (sahne eşleşmesi plakasız kabinde düşer) ÖNCE söylenir. T-15: ham kare.
+                    meta.update(
+                        {
+                            "targets": [],
+                            "plaka_dogrulanmadi": "plakaYok",
+                            "plaka_ayrinti": {"bulunan": len(meta["odak_adaylar"]), "beklenen": _plaka_en_az()},
+                        }
+                    )
+                    overlay = None
                 with self._kilit:
                     self._meta = meta
                 return (False, 0.0, 0.0, 0.0, 0.0, overlay, True, None)
@@ -1145,6 +1194,7 @@ class _EmCvSaglayici:
                         "targets": [],
                         "odak_adaylar": [],
                         "plaka_dogrulanmadi": _plaka_engeli,
+                        "plaka_ayrinti": self._plaka_ayrintisi(_plaka_engeli, meta),
                         "pemf_kapisi": {
                             "surulebilir": False,
                             "pemf_gecerli": False,
@@ -1157,7 +1207,8 @@ class _EmCvSaglayici:
                 )
                 with self._kilit:
                     self._meta = meta
-                return (False, 0.0, 0.0, 0.0, 0.0, overlay, True, None)
+                # OTB T-15: plaka doğrulanmadıkça önizlemede hocanın kuyu çemberleri / sayacı ("Kanser: 2") YOK → ham kare
+                return (False, 0.0, 0.0, 0.0, 0.0, None, True, None)
         if secili is None:
             with self._kilit:
                 self._meta = meta
@@ -1198,6 +1249,14 @@ class _EmCvSaglayici:
             return (True, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
         return (guven >= MIN_GUVEN, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
 
+    def _plaka_ayrintisi(self, engel: str, meta: dict) -> dict:
+        """OTB T-12: plaka engelinin SAYILARI — `plakaKaydi`: görülen / sapma (sabit numune), `plakaUyumsuz` / `plakaYok`: ızgara oturtmasının
+        eki (bulunan / sapma / beklenen)."""
+        if engel == "plakaKaydi":
+            k = meta.get("sabit_numune") or {}
+            return {"gorulen": k.get("gorulen"), "sapma": k.get("sapma_mm")}
+        return dict(getattr(self, "_plaka_ek", None) or {})
+
     def _sabit_numune_karari(self, meta: dict, engel: str) -> str:
         """OTB T-7 / T-8 (sahip 19-11: "kamera petriyi gördüğü sürece, kuyular bulunuyorsa devam"): SEANSTA (mühürlü ODAK ayarı) sabit
         numunenin İLK doğrulanan ızgarası referanstır. Sonraki karede görülen kuyular referansla `oneri.SABIT_NUMUNE_ESIGI_MM` içinde
@@ -1226,9 +1285,11 @@ class _EmCvSaglayici:
         from ai_hub.odak import oneri as odak_oneri
         from servers import ai_router as air
 
+        self._plaka_ek = {}
         try:
             odak_oneri.petri_izgarasi(odak_adaylar)
         except odak_oneri.Engel as e:
+            self._plaka_ek = dict(e.ek)  # OTB T-12: neden sapmayı (mm) ve görülen kuyu sayısını söyler
             return str(e.kod)
         except Exception:
             air.logger.warning("%s plaka ızgarası hesaplanamadı → doğrulanmadı sayıldı", self.ad, exc_info=True)

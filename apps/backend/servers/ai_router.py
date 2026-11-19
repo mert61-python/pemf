@@ -973,6 +973,13 @@ def _sabit_numune_neden_metni(odak_engeli, dil: str | None = None) -> str:
     """Y300 (ODD B-1): sabit numune tolerans STOP'unun NEDENİ (eylem söyleyen; `dil` yoksa istek / cihaz dili). Bu ölçümde ODAK
     planı engelliyse engelin kendi metni (ör. `plakaUyumsuz`), değilse "plaka / kuyular tanınmadı"."""
     neden = ""
+    if not (isinstance(odak_engeli, dict) and odak_engeli.get("engel")):
+        # OTB T-6: bu turda kare REDDEDİLDİYSE (plan hiç hesaplanmadı) gerçek neden son lokalizasyondan — plaka engeli SAYILARIYLA
+        # (`plakaKaydi` / `plakaUyumsuz` / `plakaYok`), yoksa fiziksel kapı nedeni (ör. `kamera_oynamis`); "tanınmadı" yalnız son çare.
+        _m = _saglayici_meta()
+        odak_engeli = ai_pro_hedef.plaka_engel_plani(_m)
+        if odak_engeli is None:
+            neden = _kapi_fiziksel_eylemi(_m.get("pemf_kapisi"))
     if isinstance(odak_engeli, dict) and odak_engeli.get("engel"):
         try:
             neden = ai_pro_hedef.odak_engel_metni(odak_engeli, dil=dil)
@@ -1378,9 +1385,10 @@ def _saglayici_cache_alanlari() -> dict:
         # T3 · Y189: bu konum KOŞULSUZ kipte mi bulundu (öneri tazelik denetimi ve mühür buna bakar; kedide hep False).
         "kosulsuz": bool(getattr(_aktif_saglayici(), "kosulsuz", False)),
         # KD-3a (B-KD3a.1): kapı FİZİKSEL nedenle (kalibrasyon / kamera oynamış / kör bölge …) kestiyse ilk eylem metni (dile çevrilmiş).
-        "kapi_eylem": _kapi_fiziksel_eylemi(m.get("pemf_kapisi")),
+        # OTB T-14: plaka görülmüyorsa (`plakaYok`) fiziksel konum nedeni GÖSTERİLMEZ — neden "plaka bulunamadı" (kapi_uyari)
+        "kapi_eylem": "" if m.get("plaka_dogrulanmadi") == "plakaYok" else _kapi_fiziksel_eylemi(m.get("pemf_kapisi")),
         # AP-B6 (S-AP.6): kapı FİZİKSEL OLMAYAN nedenle (kalite / yerleşim) ya da plaka makullik reddiyle kestiyse NEDEN + EYLEM (dile çevrilmiş).
-        "kapi_uyari": ai_pro_hedef.kapi_uyari_metni(m.get("pemf_kapisi"), m.get("hata") or ""),
+        "kapi_uyari": ai_pro_hedef.kapi_uyari_metni(m.get("pemf_kapisi"), m.get("hata") or "", m),
     }
 
 
