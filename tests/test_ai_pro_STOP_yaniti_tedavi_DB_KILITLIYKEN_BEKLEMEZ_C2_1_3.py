@@ -130,3 +130,35 @@ def test_KARSIT_C2_1_3_kilit_yokken_satir_yanit_donmeden_KAPANIR(o):
     assert toplam >= 1 and acik == 0, (
         f"kilitsiz durdurmada bobin çalışma kayıtları yanıtla kapanmadı: {acik} / {toplam} açık"
     )
+
+
+def test_KRITIK_OYZ_bir_bobinin_kaydi_KAPANAMAZSA_otekiler_ve_satir_YINE_kapanir(o, monkeypatch):
+    """Kayıt kuyruğundaki kapanış best-effort: bir bobinin çalışma kaydı kapanırken hata → kalan bobinlerin kayıtları ve seans
+    satırı yine kapanır (STOP'u zaten etkilemez; yanıt 200)."""
+    sid = _baslat_ve_sur(o)
+    with o.db._get_connection() as c:
+        bobinler = [
+            r[0] for r in c.execute("SELECT DISTINCT coil_id FROM session_coil_runs WHERE session_id=?", (sid,))
+        ]
+    assert len(bobinler) >= 2, f"aparat: en az iki bobin kaydı gerekir ({bobinler})"
+    bozuk = min(bobinler)
+    gercek = o.api._finish_coil_run
+
+    def _kayit_hatasi(cid, *a, **k):
+        if int(cid) == bozuk:
+            raise RuntimeError("sahte kayıt hatası")
+        return gercek(cid, *a, **k)
+
+    monkeypatch.setattr(o.api, "_finish_coil_run", _kayit_hatasi)
+    r, _yanit_sn, stop_sn = _durdur_paylasilan_dongu(o)
+    assert r.status_code == 200 and stop_sn is not None
+    with o.db._get_connection() as c:
+        durum = c.execute("SELECT session_status FROM treatment_sessions WHERE id=?", (sid,)).fetchone()[0]
+        acik = [
+            r[0]
+            for r in c.execute(
+                "SELECT coil_id FROM session_coil_runs WHERE session_id=? AND ended_epoch IS NULL", (sid,)
+            )
+        ]
+    assert durum == "stopped", f"bir kayıt hatası seans satırının kapanışını engelledi: {durum!r}"
+    assert acik == [bozuk], f"hatalı bobin dışındaki kayıtlar da açık kaldı: {acik}"
