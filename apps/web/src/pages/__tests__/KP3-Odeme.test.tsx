@@ -673,3 +673,109 @@ describe('KP-3 · Odeme — ücretsiz kip ve plan savunması', () => {
     }
   })
 })
+
+describe('TA T3 · oturumdaki kullanıcı değişince fatura formu temizlenir', () => {
+  const A = { user: { id: 'u-A', email: 'a@ornek.test' } }
+  const B = { user: { id: 'u-B', email: 'b@ornek.test' } }
+  const KUTULAR = ['odeme.ad', 'odeme.soyad', 'odeme.tc', 'odeme.telefon', 'hesap.alan.sehir', 'odeme.adres', 'odeme.posta']
+  const degerler = () => KUTULAR.map((k) => yerTutucu(k).props.value)
+  async function oturumDegis(yeni: unknown) {
+    durum.session = yeni
+    c.yenile()
+    await c.bosalt()
+  }
+  async function aIleDoldur() {
+    c.sokHepsi()
+    durum.session = A
+    await ciz()
+    await doldur()
+    await c.isaretleKutu(onay(), true)
+    expect(degerler()).toContain('12345678901')
+    expect(onay().props.checked).toBe(true)
+  }
+
+  it('KRİTİK: başka hesapla giriş (A → B) → TC kimlik dahil TÜM kutular boş, onay kalkar; B gönderirse A kullanıcısının bilgisi GİTMEZ', async () => {
+    await aIleDoldur()
+    await oturumDegis(B)
+    expect(degerler()).toEqual(['', '', '', '', '', '', ''])
+    expect(onay().props.checked).toBe(false)
+    await c.gonder(formlar()[0])
+    expect(istekler).toHaveLength(0) // onaysız gönderilemez
+    expect(metin(c.agac)).toContain(t('odeme.onayGerekli'))
+  })
+
+  it('KRİTİK: çıkış (A → oturum yok) → form boş, onay kalkar', async () => {
+    await aIleDoldur()
+    await oturumDegis(null)
+    expect(degerler()).toEqual(['', '', '', '', '', '', ''])
+    expect(onay().props.checked).toBe(false)
+  })
+
+  it('KARŞIT: AYNI kullanıcının oturumu tazelenirse (yeni nesne, aynı kimlik) form KORUNUR', async () => {
+    await aIleDoldur()
+    await oturumDegis({ user: { id: 'u-A', email: 'a@ornek.test' }, access_token: 'yeni' })
+    expect(degerler()).toContain('12345678901')
+    expect(onay().props.checked).toBe(true)
+  })
+
+  it('bekleyen ödeme (iyzico formu açık) kullanıcı değişince kalkar; form boş hâliyle geri gelir', async () => {
+    await aIleDoldur()
+    await c.gonder(formlar()[0])
+    await c.bosalt()
+    expect(formlar()).toHaveLength(0) // ödeme ekranı
+    expect(parcalar).toEqual([ICERIK])
+    await oturumDegis(B)
+    expect(formlar()).toHaveLength(1)
+    expect(degerler()).toEqual(['', '', '', '', '', '', ''])
+    expect(onay().props.checked).toBe(false)
+  })
+
+  it('KRİTİK: istek yoldayken hesap değişirse yanıt (iyzico formu / hata) yeni kullanıcıya GÖSTERİLMEZ, düğme kilitli kalmaz', async () => {
+    await aIleDoldur()
+    let ac!: () => void
+    kapi = new Promise<void>((r) => (ac = r))
+    const g = c.gonder(formlar()[0])
+    await c.bosalt()
+    expect(istekler).toHaveLength(1)
+    expect(gonderDugmesi().props.disabled).toBe(true)
+    await oturumDegis(B)
+    await c.isaretleKutu(onay(), true) // onay verilince düğme açılır = yoldaki istek yüzünden kilitli (busy) KALMADI
+    expect(gonderDugmesi().props.disabled).toBe(false)
+    ac()
+    await g
+    await c.bosalt()
+    expect(formlar()).toHaveLength(1)
+    expect(parcalar).toEqual([])
+    expect(degerler()).toEqual(['', '', '', '', '', '', ''])
+    // hata yanıtı da atılır
+    yanit = { ok: false, status: 409, govde: { error: 'zaten', kod: 'already_subscribed' } }
+    await oturumDegis(A)
+    await doldur()
+    await c.isaretleKutu(onay(), true)
+    kapi = new Promise<void>((r) => (ac = r))
+    const g2 = c.gonder(formlar()[0])
+    await c.bosalt()
+    await oturumDegis(B)
+    ac()
+    await g2
+    await c.bosalt()
+    expect(hepsi(c.agac, (d) => d.tip === 'p' && String(d.props.className ?? '').includes('red'))).toHaveLength(0)
+  })
+})
+
+it('plan listede yokken YILLIK + araştırma seçimi de çökmez (tutar hesaplarının savunma dalları) → "plan yok"', async () => {
+  const liste = PLANS as unknown as unknown[]
+  const i = PLANS.findIndex((p) => p.tier === 'pro_plus')
+  const [cikan] = liste.splice(i, 1)
+  try {
+    for (const arama of ['tier=pro_plus&yearly=1&research=1', 'tier=pro_plus&yearly=1', 'tier=pro_plus&research=1']) {
+      c.sokHepsi()
+      durum.arama = arama
+      await ciz()
+      expect(formlar()).toHaveLength(0)
+      expect(metin(c.agac)).toContain(t('odeme.planYok'))
+    }
+  } finally {
+    liste.splice(i, 0, cikan)
+  }
+})

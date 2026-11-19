@@ -32,6 +32,23 @@ export default function Odeme() {
   const [consent, setConsent] = useState(false)
   const scriptHost = useRef<HTMLDivElement>(null)
 
+  /* TA T3: oturumdaki KULLANICI değişince (çıkış / başka hesapla giriş) fatura formu (TC kimlik no dahil) BOŞALIR, onay kutusu
+     kalkar, bekleyen ödeme içeriği (iyzico formu) ve hata silinir. Eskiden form hesap değişiminde olduğu gibi kalıyordu → A'nın
+     kimlik / adres bilgisi B'nin aboneliğiyle iyzico'ya gidebiliyordu. Yolda olan başlatma isteğinin yanıtı da kullanıcı değiştiyse
+     ATILIR (aşağıda `submit`). */
+  const kullanici = session?.user?.id ?? null
+  const kullaniciRef = useRef(kullanici)
+  useEffect(() => {
+    if (kullaniciRef.current === kullanici) return
+    kullaniciRef.current = kullanici
+    setForm(EMPTY)
+    setConsent(false)
+    setCheckoutContent(null)
+    setPaying(false)
+    setBusy(false)
+    setErr(null)
+  }, [kullanici])
+
   // Giriş yoksa modal aç (ödeme hesaba tanımlanır).
   useEffect(() => {
     if (ready && !session) requireAuth()
@@ -75,7 +92,10 @@ export default function Odeme() {
     if (!consent) return setErr(t('odeme.onayGerekli'))
     setErr(null)
     setBusy(true)
+    const gonderen = kullaniciRef.current
     const { content, error, needAuth, kod, alan, sebep } = await initCheckout({ tier, yearly, research, customer: form })
+    // TA T3: istek yoldayken hesap değiştiyse yanıt (iyzico formu / hata) yeni kullanıcıya GÖSTERİLMEZ — form zaten boşaltıldı.
+    if (kullaniciRef.current !== gonderen) return
     setBusy(false)
     if (needAuth) return requireAuth()
     // Ham iyzico metni ekrana basılmaz (auth tarafındaki kuralın aynısı) — sağlayıcı mesajı
