@@ -460,7 +460,7 @@ def durum_ozeti() -> dict:
         "olculenLensTabanCm": lens.get("taban"),
         "gorusAlani": kal.get("gorus_alani"),
         "sahneDenetimi": bool((kal.get("referans") or {}).get("sahne_denetimi")),
-        "eski": bool(yen),
+        "eski": sd.eski_mi(kal),  # OTB T-0: yenilemeden sonra Doğrula geçtiyse ESKİ değil
         "eskiTarih": yen.get("tarih"),
         "tabanYukseltmesiCm": _cm(sd.taban_yukseltmesi_mm(kal)),
         "fantom": {

@@ -330,7 +330,7 @@
         "fantomBoyuFarkli": "Bulunan fantom boyu ayardakinden çok farklı (kabinde fantom yok ya da kalınlık / boy ayarı yanlış) — fantomu ve ayarı kontrol edin.",
         "fantomDegil": "Bulunan bölge fantom gibi görünmüyor (ışık yansıması ya da boş kabin) — fantomu kabine koyun; parlama varsa ışığı değiştirin.",
         "kalibrasyonBozuk": "Kabin kalibrasyonu okunamadı ya da bozuk — kabin kalibrasyonunu yeniden yapın.",
-        "kalibrasyonEski": "Kalibrasyon eski: kamera oynadıktan sonra kalibre etmeden devam edildi — konum ~1–2 cm sapabilir; fırsat bulunca yeniden kalibre edin.",
+        "kalibrasyonEski": "Kalibrasyon eski: kamera oynadıktan sonra kalibre etmeden devam edildi — konum ~1–2 cm sapabilir; Doğrula ya da yeniden kalibre edin.",
         "kalibrasyonYok": "Kabin kalibrasyonu yok — Kabin kalibrasyonu bölümünde plakayı iki konumda ölçerek kalibre edin.",
         "kameraFarkli": "Kamera ya da çözünürlük kalibrasyondakinden farklı — kalibrasyon yapılan kabin kamerasını seçin ya da yeniden kalibre edin.",
         "kameraOynamis": "Kamera oynamış olabilir ya da taban yüksekliği ayarı yanlış — yeniden kalibre edin ya da (kayma küçükse) kalibre etmeden devam edin.",

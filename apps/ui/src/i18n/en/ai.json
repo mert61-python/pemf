@@ -634,7 +634,7 @@
     "dogrulamaKaldi": "Verification FAILED — difference at the plate center {{merkez}} cm (limit {{esik}} cm); corners: {{farklar}} cm. Check the measurements or calibrate again.",
     "durumVar": "Calibration: {{tarih}} · {{n}} positions · reprojection {{px}} px · lens difference {{cm}} cm",
     "durumYok": "No calibration — Well Plate / phantom AI Pro coil driving does not start without a calibration.",
-    "eski": "OUTDATED calibration ({{tarih}}): work continued without calibrating after the camera moved — positions may be off by ~1–2 cm; calibrate again when you can.",
+    "eski": "OUTDATED calibration ({{tarih}}): work continued without calibrating after the camera moved — positions may be off by ~1–2 cm; run Verify or calibrate again.",
     "fantom": {
       "aciklama": "The phantom stands on the floor; the tumors are seen on its top surface. Measure and enter the thickness (floor to top surface) and the tumor depth (from the top surface); length / width are optional (for the empty-cabin check).",
       "baslik": "Phantom setting",

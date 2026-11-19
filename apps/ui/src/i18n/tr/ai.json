@@ -634,7 +634,7 @@
     "dogrulamaKaldi": "Doğrulama KALDI — plaka merkezinde fark {{merkez}} cm (sınır {{esik}} cm); köşeler: {{farklar}} cm. Ölçüleri kontrol edin ya da yeniden kalibre edin.",
     "durumVar": "Kalibrasyon: {{tarih}} · {{n}} konum · izdüşüm {{px}} px · lens farkı {{cm}} cm",
     "durumYok": "Kalibrasyon yok — petri / fantom AI Pro bobin sürüşü kalibrasyon olmadan başlamaz.",
-    "eski": "Kalibrasyon ESKİ ({{tarih}}): kamera oynadıktan sonra kalibre etmeden devam edildi — konumlar ~1–2 cm sapabilir; fırsat bulunca yeniden kalibre edin.",
+    "eski": "Kalibrasyon ESKİ ({{tarih}}): kamera oynadıktan sonra kalibre etmeden devam edildi — konumlar ~1–2 cm sapabilir; Doğrula ya da yeniden kalibre edin.",
     "fantom": {
       "aciklama": "Fantom tabanda durur; tümörler üst yüzeyde görünür. Kalınlığı (tabandan üst yüzeye) ve tümör derinliğini (üst yüzeyden) cetvelle ölçüp girin; boy / en isteğe bağlı (boş kabin denetimi için).",
       "baslik": "Fantom ayarı",

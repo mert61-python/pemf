@@ -330,7 +330,7 @@
         "fantomBoyuFarkli": "The detected phantom size is very different from the setting (no phantom in the cabin, or the thickness / size setting is wrong) — check the phantom and the setting.",
         "fantomDegil": "The detected region does not look like a phantom (light reflection or empty cabin) — place the phantom in the cabin; if there is glare, change the lighting.",
         "kalibrasyonBozuk": "The cabin calibration could not be read or is corrupt — calibrate the cabin again.",
-        "kalibrasyonEski": "Outdated calibration: work continued without calibrating after the camera moved — positions may be off by ~1–2 cm; calibrate again when you can.",
+        "kalibrasyonEski": "Outdated calibration: work continued without calibrating after the camera moved — positions may be off by ~1–2 cm; run Verify or calibrate again.",
         "kalibrasyonYok": "No cabin calibration — calibrate in the Cabin calibration section by measuring the plate at two positions.",
         "kameraFarkli": "The camera or resolution differs from the calibration — select the cabin camera used for the calibration or calibrate again.",
         "kameraOynamis": "The camera may have moved or the base height setting is wrong — calibrate again or (if the shift is small) continue without calibrating.",

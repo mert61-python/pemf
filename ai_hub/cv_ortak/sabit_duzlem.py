@@ -927,6 +927,35 @@ def zaman_damgasi() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
+def _yerel_zaman(metin):
+    """`zaman_damgasi()` metni → karşılaştırılabilir zaman (ilk 19 karakter: aynı makinenin yerel saati; `%z` eki olsun olmasın).
+    Okunamazsa None."""
+    try:
+        return time.strptime(str(metin)[:19], "%Y-%m-%dT%H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+
+
+def eski_mi(kal) -> bool:
+    """KD-1 "kalibre etmeden devam" (sahne yenileme) VAR ve ondan SONRA geçen bir doğrulama YOK → kalibrasyon ESKİ.
+    OTB T-0 (sahip 19-11): yenilemeden sonra "Doğrula" GEÇTİYSE kalibrasyon yeniden doğrulanmıştır → ESKİ değil (uyarı kalkar, kuyu
+    aralığı toleransı %3'e döner). Veri odaklı: dosyadaki doğrulama kaydı sayılır. Yenileme tarihi okunamazsa ESKİ kalır; kalan, önceki
+    ya da tarihi okunamayan doğrulama ESKİ'yi kaldırmaz (uyarı yutulmaz)."""
+    kal = kal or {}
+    yenileme = kal.get("sahne_yenileme")
+    if not yenileme:
+        return False
+    t_y = _yerel_zaman(yenileme.get("tarih") if isinstance(yenileme, dict) else None)
+    if t_y is None:
+        return True
+    for d in kal.get("dogrulamalar") or []:
+        if isinstance(d, dict) and d.get("gecti") is True:
+            t_d = _yerel_zaman(d.get("tarih"))
+            if t_d is not None and t_d > t_y:
+                return False
+    return True
+
+
 _npz_sha_onbellek: dict = {}
 
 
@@ -996,8 +1025,8 @@ class KareDurumu:
 
     @property
     def eski(self) -> bool:
-        """Sahip (KD-1) "kalibre etmeden devam" edildi mi (sahne yenilendi; konum ~1–2 cm sapabilir)."""
-        return bool((self.kal or {}).get("sahne_yenileme"))
+        """Sahip (KD-1) "kalibre etmeden devam" edildi ve sonra Doğrula GEÇMEDİ mi (OTB T-0 — `eski_mi`; konum ~1–2 cm sapabilir)."""
+        return eski_mi(self.kal)
 
     @property
     def kuyu_araligi_toleransi(self) -> float:
@@ -1074,7 +1103,7 @@ def kare_hazirla(durum, *, kare_boyutu, kamera_indeksi=None, npz_sha=None, kamer
         y = kal.get("sahne_yenileme") or {}
         kd.uyarilar.append(
             f"kalibrasyon_eski: kamera oynadiktan sonra kalibre etmeden devam edildi ({y.get('tarih', '?')}, sahne "
-            f"{y.get('kayma_px', '?')} px) - konum ~1-2 cm sapabilir; yeniden kalibre edin"
+            f"{y.get('kayma_px', '?')} px) - konum ~1-2 cm sapabilir; Dogrula ya da yeniden kalibre edin"
         )
     return kd
 
