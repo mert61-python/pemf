@@ -81,10 +81,19 @@ export function trialDaysLeft(e: Entitlement, now: Date = new Date()): number {
   return Math.max(0, Math.ceil((end - now.getTime()) / 864e5));
 }
 
-/** Aktif mi (ücretli-aktif veya deneme-içi)? Değilse hak kapalı (yükseltme gerekir). */
+/** TA T1 (Y292-1): ÖDENMİŞ dönem sürüyor mu? `currentPeriodEnd` (ödeme yolları yazar: site api/callback · webhook · cancel)
+ *  okunabilir ve `now`dan SONRAYSA true; NULL / bozuk tarih → false (hak kesilir — bugünkü davranış). */
+export function donemSuruyor(e: Entitlement, now: Date = new Date()): boolean {
+  if (!e.currentPeriodEnd) return false;
+  const son = new Date(e.currentPeriodEnd).getTime();
+  return !Number.isNaN(son) && now.getTime() < son;
+}
+
+/** Aktif mi (ücretli-aktif veya deneme-içi)? Değilse hak kapalı (yükseltme gerekir).
+ *  İptal / ödeme gecikmesi (canceled / past_due): ödenmiş dönemin sonuna kadar AKTİF, sonra kapalı (TA T1 · Y292-1). */
 export function isActive(e: Entitlement, now: Date = new Date()): boolean {
   if (e.tier === "pro" || e.tier === "pro_plus") {
-    return e.status === "active" || e.status === "trialing";
+    return e.status === "active" || e.status === "trialing" || donemSuruyor(e, now);
   }
   return isTrialActive(e, now); // baslangic
 }
