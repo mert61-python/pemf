@@ -161,4 +161,6 @@ def test_KRITIK_OYZ_bir_bobinin_kaydi_KAPANAMAZSA_otekiler_ve_satir_YINE_kapanir
             )
         ]
     assert durum == "stopped", f"bir kayıt hatası seans satırının kapanışını engelledi: {durum!r}"
-    assert acik == [bozuk], f"hatalı bobin dışındaki kayıtlar da açık kaldı: {acik}"
+    # OYZ4 (D5 kalıcı kilit düzeltmesi): satır kapanışı seansın AÇIK koşularını da kapatır (açılış kurtarmasıyla aynı kural) →
+    # kaydı tek başına yazılamayan bobinin koşusu da kapanır; hiçbir koşu açık kalmaz.
+    assert acik == [], f"seans kapandığı hâlde açık bobin kaydı kaldı: {acik}"

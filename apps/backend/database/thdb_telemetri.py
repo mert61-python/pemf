@@ -312,6 +312,23 @@ class TelemetriKarisimi:
         except Exception as e:
             self.logger.error(f"Coil run bitirme hatası: {e}")
 
+    def acik_kosulari_kapat(self, session_id: int, ended_epoch: float) -> int:
+        """OYZ4 (D5 kalıcı kilit · zincir 56 AŞAMA 4): seansın HÂLÂ AÇIK bobin çalışma kayıtlarını (`ended_epoch IS NULL`) tek
+        deyimde kapatır — açılış kurtarmasıyla AYNI kural (seansı kapatıp koşuları açık bırakmak "hangi bobin ne kadar sürdü"yü
+        cevapsız bırakır). Seans satırı kapanışından hemen sonra çağrılır. İstisna ÇAĞIRANA gider (kilit → yeniden deneme)."""
+        self._ensure_write_guardrail()
+        bitis = float(ended_epoch)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE session_coil_runs SET ended_epoch = ?, duration_seconds = MAX(0, ? - started_epoch) "
+                "WHERE session_id = ? AND ended_epoch IS NULL",
+                (bitis, bitis, int(session_id)),
+            )
+            n = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
+            conn.commit()
+            return n
+
     def add_sensor_run_summary(
         self,
         coil_run_id: int,

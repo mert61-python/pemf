@@ -3373,12 +3373,21 @@ def stop_ai_pro():
     from utils import dongu_disi_yazim as _kayit_kuyrugu
 
     def _durdurma_kayitlari() -> None:
+        # ⚠️ OYZ4 (zincir 56 AŞAMA 4 · D5 kalıcı kilit): ÖNCE seans satırı — `_finalize_session_db` kilitte SINIRLI yeniden dener ve
+        # satırla birlikte seansın açık bobin çalışma kayıtlarını da kapatır (`acik_kosulari_kapat`); SONRA bobin başına koşu kaydı +
+        # özet. Eskiden 8 koşu önce tek tek yazılıyordu: kalıcı kilitte her biri `busy_timeout` (5 sn) × 2 bekleyip kayıt kuyruğunu
+        # 35 sn'nin çok üstünde tutuyordu (`test_seans_KAPANISI_uzun_kilitte_DUSMEZ_D5` KARŞIT kırmızıydı). Kapanış bütçesi
+        # (`KAPANIS_KILIT_SURESI_SN`) tükendiyse kalan koşular DB'ye yazılmadan bellekten düşer (satırla kapandı / açılış kurtarması).
+        _bas = time.monotonic()
+        _ai_pro_satirini_kapat(_kapanacak, "ai-pro-durdurma")
         for _cid in range(1, 9):
             try:
+                if time.monotonic() - _bas > _api.KAPANIS_KILIT_SURESI_SN:
+                    _api.coil_run_tracker.kosuyu_unut(_cid)
+                    continue
                 _api._finish_coil_run(_cid)
             except Exception:
                 logger.debug("stop_ai_pro: bobin %s çalışma kaydı kapatılamadı", _cid, exc_info=True)
-        _ai_pro_satirini_kapat(_kapanacak, "ai-pro-durdurma")
 
     _kayit_kuyrugu.sirada_calistir(_durdurma_kayitlari, ad="AI Pro durdurma seans kaydi kapanisi")
     return {"status": "success", "message": "AI Pro Closed-Loop Stopped"}

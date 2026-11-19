@@ -150,6 +150,20 @@ def _finish_coil_run(coil_id, only_run_id=None):
     )
 
 
+def kosuyu_unut(coil_id) -> None:
+    """OYZ4 (D5 kalıcı kilit): açık koşuyu DB'ye YAZMADAN bellekten düş — kapanış kayıt bütçesi kilitte tükendiğinde. DB satırı seans
+    kapanışıyla (`acik_kosulari_kapat`) ya da açılış kurtarmasıyla kapanır; bellekte kalırsa sonraki seansa sızardı."""
+    try:
+        coil_id = int(coil_id)
+    except Exception:
+        return
+    with _active_coil_runs_lock:
+        run_id = _active_coil_runs.pop(coil_id, None)
+    if run_id is not None:
+        with _coil_run_stats_lock:
+            _coil_run_stats.pop(run_id, None)
+
+
 def _finish_coil_run_govde(coil_id, only_run_id=None, _bitis_an=None):
     try:
         coil_id = int(coil_id)

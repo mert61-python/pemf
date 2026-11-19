@@ -5270,12 +5270,20 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                 else:
                     _durum = "completed"
                 _son = time.monotonic() + KAPANIS_KILIT_SURESI_SN  # D5: kilitte sınırlı yeniden deneme (yukarıdaki not)
+                _satir_kapandi = False
                 # Sınırlı döngü (sonsuz `while True` DEĞİL — daemon döngüsü kapısı `test_dongu_hata_bildirimi_OLDURMEZ`).
                 _kapandi = False
                 while not _kapandi:
                     try:
-                        db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
-                        db.set_session_meta(db_session_id, ended_epoch=_now)
+                        if not _satir_kapandi:
+                            db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
+                            db.set_session_meta(db_session_id, ended_epoch=_now)
+                            _satir_kapandi = True
+                        # OYZ4 (D5 kalıcı kilit): satırla birlikte seansın HÂLÂ AÇIK bobin çalışma kayıtları da kapanır (açılış
+                        # kurtarmasıyla aynı kural) — kilitte bütçesi tükenen çağıran koşu kayıtlarını tek tek yazamadıysa açık kalmaz.
+                        _acik_kapat = getattr(db, "acik_kosulari_kapat", None)
+                        if callable(_acik_kapat):
+                            _acik_kapat(db_session_id, _now)
                         _kapandi = True
                     except Exception as _e:
                         if not _kilit_hatasi_mi(_e) or time.monotonic() >= _son:
