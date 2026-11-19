@@ -201,6 +201,8 @@ export interface EFieldLive {
   /** ODK10: `kaynak: "cst"` iken E'nin hesaplandığı ortam — "kuyu" = petri kuyusu SIVISI içinde (CST petri benzetimiyle doğrulandı),
    *  "hava" / yok = havada (ortamsız; doku içinde çok daha düşük). */
   ortam?: "kuyu" | "hava" | null;
+  /** Y306 (tezgâh 4c): ODAK kipi (`TUM_PETRI` → hedef satırı tüm kuyuların ortalaması, "Hedef kuyu" değil; `KUYUCUK` → seçili kuyu). */
+  kip?: string | null;
   /** D1.76 · İG-5.83: E neden hesaplanmadı (yalnız-ek alanlar; eski backend göndermez). */
   egitimAraligiDisi?: boolean;
   bOlculmuyor?: boolean;

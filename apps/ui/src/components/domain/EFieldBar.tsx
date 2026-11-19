@@ -22,6 +22,10 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { colors, rf, rs, spacing } from "@/theme/tokens";
 import type { EFieldLive } from "@/types/domain";
 import { useTranslation } from "react-i18next";
+import { ondalikMetni } from "@/i18n/dil";
+
+/** Y306: canlı E değerlerinin birimi (tepe |E|, V/m — `efield_live` ve ODAK planı) — dilden bağımsız SI simgesi. */
+const E_BIRIMI = "V/m";
 
 export function EFieldBar() {
   const { t } = useTranslation();
@@ -68,9 +72,13 @@ export function EFieldBar() {
   const peak = peakRef.current || 1;
   const pct = (v: number | null) => (v === null ? 0 : Math.max(0, Math.min(100, (v / peak) * 100)));
   // ODK10: kuyu sıvısı içindeki E mV/m düzeyinde → 0,001'in altında 3 anlamlı basamak ("0.0000" yuvarlaması "sıfır" diye okunurdu).
-  const fmt = (v: number | null) => (v === null ? "—" : v >= 1 ? v.toFixed(3) : v >= 0.001 || v === 0 ? v.toFixed(4) : v.toPrecision(3));
-  const bMetni = Number.isFinite(e.achievedB_T) ? ((e.achievedB_T as number) * 1000).toFixed(2) : "—";
-  const dutyMetni = Number.isFinite(e.dutySum) ? e.dutySum.toFixed(2) : "—";
+  // Y306: ondalık ayırıcı dile göre (TR virgül) — TEK yardımcı `ondalikMetni`.
+  const fmt = (v: number | null) =>
+    v === null ? "—" : v >= 1 ? ondalikMetni(v, 3) : v >= 0.001 || v === 0 ? ondalikMetni(v, 4) : ondalikMetni(v, { anlamli: 3 });
+  const bMetni = Number.isFinite(e.achievedB_T) ? ondalikMetni((e.achievedB_T as number) * 1000, 2) : "—";
+  const dutyMetni = Number.isFinite(e.dutySum) ? ondalikMetni(e.dutySum, 2) : "—";
+  // Y306 (tezgâh 4c): "Tüm petri"de hedef satırı TÜM kuyuların ortalaması ("Hedef kuyu" değil) ve çevre kuyu yoktur.
+  const tumPetri = e.ortam === "kuyu" && e.kip === "TUM_PETRI";
   const neden = e.egitimAraligiDisi
     ? t("kontrol.efield.egitimDisi")
     : e.bOlculmuyor
@@ -98,19 +106,21 @@ export function EFieldBar() {
 
       {/* AP-15: petri ODAK (ortam "kuyu") E'si HEDEF kuyu ve ÇEVRE kuyulardır — "Tümör / Sağlıklı" yanıltıcıydı. */}
       <Row
-        label={e.ortam === "kuyu" ? t("kontrol.efield.hedefKuyu") : t("kontrol.efield.tumor")}
+        label={tumPetri ? t("kontrol.efield.tumKuyular") : e.ortam === "kuyu" ? t("kontrol.efield.hedefKuyu") : t("kontrol.efield.tumor")}
         value={cancer}
         pct={pct(cancer)}
         tint={colors.danger}
         fmt={fmt}
       />
-      <Row
-        label={e.ortam === "kuyu" ? t("kontrol.efield.cevreKuyular") : t("kontrol.efield.saglikli")}
-        value={healthy}
-        pct={pct(healthy)}
-        tint={colors.success}
-        fmt={fmt}
-      />
+      {tumPetri && healthy === null ? null : (
+        <Row
+          label={e.ortam === "kuyu" ? t("kontrol.efield.cevreKuyular") : t("kontrol.efield.saglikli")}
+          value={healthy}
+          pct={pct(healthy)}
+          tint={colors.success}
+          fmt={fmt}
+        />
+      )}
 
       <Text style={styles.foot}>
         {t("kontrol.efield.ozet", { count: e.activeCoils, b: bMetni, duty: dutyMetni })}
@@ -118,7 +128,7 @@ export function EFieldBar() {
       {/* Y51 (sahip): Σduty modelin eğitim aralığı dışında → değer GÖSTERİLİR, yanında güvenilmezlik etiketi. */}
       {e.dutyEgitimAraligiDisi ? (
         <Text style={styles.uyari} testID="efield-duty-araligi-disi" accessibilityRole="text">
-          {e.dutyEgitimAraligi ? t("kontrol.efield.dutyDisiAralikli", { min: e.dutyEgitimAraligi[0].toFixed(2), max: e.dutyEgitimAraligi[1].toFixed(2) }) : t("kontrol.efield.dutyDisi")}
+          {e.dutyEgitimAraligi ? t("kontrol.efield.dutyDisiAralikli", { min: ondalikMetni(e.dutyEgitimAraligi[0], 2), max: ondalikMetni(e.dutyEgitimAraligi[1], 2) }) : t("kontrol.efield.dutyDisi")}
         </Text>
       ) : null}
       {neden ? <Text style={styles.foot}>{neden}</Text> : null}
@@ -134,12 +144,17 @@ function Row({ label, value, pct, tint, fmt }: {
 }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.row} accessibilityLabel={t("kontrol.efield.satirEtiketi", { label, deger: fmt(value) })}>
+    <View
+      style={styles.row}
+      accessibilityLabel={t("kontrol.efield.satirEtiketi", { label, deger: value === null ? fmt(value) : `${fmt(value)} ${E_BIRIMI}` })}
+    >
       <Text style={styles.label}>{label}</Text>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${pct}%`, backgroundColor: tint }]} />
       </View>
       <Text style={[styles.value, { color: tint }]}>{fmt(value)}</Text>
+      {/* Y306 (tezgâh 4c): değer BİRİMLİ (V/m, tepe |E|) — ölçüm / hesap yokken ('—') birim yazılmaz */}
+      {value === null ? <View style={styles.birim} /> : <Text style={styles.birim} testID="efield-birim">{E_BIRIMI}</Text>}
     </View>
   );
 }
@@ -168,6 +183,7 @@ const styles = StyleSheet.create({
   },
   fill: { height: "100%", borderRadius: rs(5) },
   value: { width: rs(66), textAlign: "right", fontSize: rf(12), fontWeight: "700" },
+  birim: { width: rs(28), color: colors.textMuted, fontSize: rf(10) },
   foot: { color: colors.textMuted, fontSize: rf(11) },
   uyari: { color: colors.warning, fontSize: rf(11), fontWeight: "700" },
 });

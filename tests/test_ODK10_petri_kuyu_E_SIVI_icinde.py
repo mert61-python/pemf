@@ -230,4 +230,9 @@ def test_KRITIK_saglayici_E_ORTAMINI_tasir(monkeypatch):
     }
     monkeypatch.setattr(hedef, "odak_plani", lambda *a, **k: dict(plan))
     p.predict(0.0, -160.0, 0.0, 1)
-    assert p.son_odak_e == {"cancer": 0.0012, "healthy": 0.0003, "ortam": "kuyu"}
+    assert p.son_odak_e == {
+        "cancer": 0.0012,
+        "healthy": 0.0003,
+        "ortam": "kuyu",
+        "kip": "KUYUCUK",
+    }  # Y306: kip de taşınır

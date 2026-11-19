@@ -76,6 +76,7 @@
     "ozet_other": "{{count}} coils · B={{b}} mT · Σduty={{duty}}",
     "saglikli": "Healthy",
     "satirEtiketi": "{{label}} E-field {{deger}}",
+    "tumKuyular": "All wells (avg.)",
     "tumor": "Tumor",
     "yaklasik": "Approximate value — from the AI analysis surrogate model (in an ODAK session E is computed from the CST simulation). For the dose, see the ODAK values on the approval screen."
   },

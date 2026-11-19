@@ -2,7 +2,7 @@
 /**
  * ODK10 (istem 45 · sahip 13 Kasım 2026: petri için CST'de petri kabı + kuyu sıvısı benzetimi): petri seansında canlı E çubuğu E'yi KUYU
  * SIVISI İÇİNDE gösterir (`ortam: "kuyu"`) ve bunu söyler; havadaki (ortamsız) değer kuyu içindekinin ~190 katıydı. Kedi (ortam benzetimi
- * yok) "havada" etiketiyle kalır. Kuyu E'si mV/m düzeyinde → "0.0000" ("sıfır" diye okunur) YOK, 3 anlamlı basamak.
+ * yok) "havada" etiketiyle kalır. Kuyu E'si mV/m düzeyinde → "0,0000" ("sıfır" diye okunur) YOK, 3 anlamlı basamak.
  */
 import React from "react";
 import { render } from "@testing-library/react-native";
@@ -28,7 +28,7 @@ it("KRİTİK ODK10: petri (ortam kuyu) → 'kuyu sıvısı içinde' etiketi, 'ha
   );
   expect(u.queryByTestId("efield-cst")).toBeNull();
   expect(u.queryByTestId("efield-yaklasik")).toBeNull();
-  expect(u.getByText("0.0034")).toBeTruthy();
+  expect(u.getByText("0,0034")).toBeTruthy();
 });
 
 it("KARŞIT ODK10: kedi (ortam hava / yok) → 'havada (ortamsız)' etiketi, kuyu etiketi YOK", () => {
@@ -46,8 +46,8 @@ it("KARŞIT ODK10: kedi (ortam hava / yok) → 'havada (ortamsız)' etiketi, kuy
 it("KRİTİK ODK10: 0,001 V/m altı kuyu E'si '0.0000' DEĞİL — 3 anlamlı basamak; sıfır yine '0.0000'", () => {
   mockLive.snapshot = { eField: { ...temel, healthy: 0, cancer: 0.000512, avg: 0.000256, ortam: "kuyu" } };
   const u = render(<EFieldBar />);
-  expect(u.getByText("0.000512")).toBeTruthy();
-  expect(u.getByText("0.0000")).toBeTruthy(); // gerçek sıfır (çevre) — hesaplanan sıfır
+  expect(u.getByText("0,000512")).toBeTruthy();
+  expect(u.getByText("0,0000")).toBeTruthy(); // gerçek sıfır (çevre) — hesaplanan sıfır
 });
 
 it("YAPISAL ODK10: vekil (analiz bağlamı) ortam alanından ETKİLENMEZ — 'yaklaşık' kalır", () => {

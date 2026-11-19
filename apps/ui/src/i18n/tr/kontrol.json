@@ -76,6 +76,7 @@
     "ozet_other": "{{count}} bobin · B={{b}} mT · Σduty={{duty}}",
     "saglikli": "Sağlıklı",
     "satirEtiketi": "{{label}} alan {{deger}}",
+    "tumKuyular": "Tüm kuyular (ort.)",
     "tumor": "Tümör",
     "yaklasik": "Yaklaşık değer — AI analizinin vekil modelinden (ODAK seansında E, CST benzetiminden hesaplanır). Doz için onay ekranındaki ODAK değerlerine bakın."
   },

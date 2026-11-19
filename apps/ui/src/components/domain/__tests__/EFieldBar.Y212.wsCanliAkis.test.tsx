@@ -88,7 +88,7 @@ it("KRİTİK: seans sürerken 2 Hz `efield_update` gelir → 30 sn sonra hâlâ 
   }
   expect(u.queryByText(CANLI)).not.toBeNull();
   expect(u.queryByText(DURAKLADI)).toBeNull();
-  expect(u.queryByText("0.0559")).not.toBeNull(); // son hesap (i = 59) — değer gerçekten iletiden geldi
+  expect(u.queryByText("0,0559")).not.toBeNull(); // son hesap (i = 59) — değer gerçekten iletiden geldi
 });
 
 it("KRİTİK: hesap bitince gelen `efield_update null` barı GİZLER (seans bitti — eski değer canlı gibi kalmaz)", async () => {

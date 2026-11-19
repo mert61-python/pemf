@@ -51,8 +51,8 @@ describe("EFieldBar", () => {
     const { getByText, queryByText } = render(<EFieldBar />);
     expect(getByText("Tümör")).toBeTruthy();
     expect(getByText("Sağlıklı")).toBeTruthy();
-    expect(getByText("0.0500")).toBeTruthy();   // cancer
-    expect(getByText("0.0200")).toBeTruthy();   // healthy
+    expect(getByText("0,0500")).toBeTruthy();   // cancer
+    expect(getByText("0,0200")).toBeTruthy();   // healthy
     expect(queryByText("duraklandı")).toBeNull();
   });
 
@@ -87,16 +87,16 @@ describe("EFieldBar", () => {
   it("canlı model girdilerini şeffaf gösterir (B ve Σduty)", () => {
     mockLive.snapshot = { eField: efield() };
     const { getByText } = render(<EFieldBar />);
-    expect(getByText("5 bobin · B=2.50 mT · Σduty=1.50")).toBeTruthy();
+    expect(getByText("5 bobin · B=2,50 mT · Σduty=1,50")).toBeTruthy();
   });
 
   it("bozuk sayıda ÇÖKMEZ (NaN/undefined → '—')", () => {
-    // ⚠️ D1.76 · Y6 (2026-10-02): eskiden bozuk değer "0.0000" çiziliyordu — "ölçüldü, sıfır" diye okunur. Artık '—'
+    // ⚠️ D1.76 · Y6 (2026-10-02): eskiden bozuk değer "0,0000" çiziliyordu — "ölçüldü, sıfır" diye okunur. Artık '—'
     // (sayı olmayan değer sayı gibi gösterilmez); bileşen yine çökmez. Ayrıntılı kapı: EFieldBar.durust.test.tsx.
     mockLive.snapshot = { eField: { ...efield(), cancer: NaN, healthy: undefined } };
     const { getAllByText, getByText, queryByText } = render(<EFieldBar />);
     expect(getAllByText("—")).toHaveLength(2);
-    expect(queryByText("0.0000")).toBeNull();
+    expect(queryByText("0,0000")).toBeNull();
     expect(getByText("Tümör")).toBeTruthy();   // bileşen ayakta, çökmedi
   });
 });

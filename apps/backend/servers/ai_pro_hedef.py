@@ -429,6 +429,8 @@ def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: in
         "cancer": plan.get("e_hedef_Vm"),
         "healthy": plan.get("e_cevre_Vm"),
         "ortam": plan.get("e_ortam"),
+        # Y306 (tezgâh 4c): hedef türü — "Tüm petri"de E tüm kuyuların ortalamasıdır, arayüz "Hedef kuyu" yazmaz
+        "kip": ayar.get("kip") or None,
     }
     return [float(d) for d in plan["duty"]], [float(p) for p in plan["faz"]], 0.0
 

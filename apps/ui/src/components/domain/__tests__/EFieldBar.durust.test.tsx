@@ -6,7 +6,7 @@
  *   * ölçülen B modelin EĞİTİM aralığı dışında (`egitimAraligiDisi`) — model orada anlamsız sayı üretir,
  *   * hiçbir çalışan bobinde alan ölçülmüyor (`bOlculmuyor`, `achievedB_T = null`),
  *   * aralık okunamadı (`egitimAraligiBilinmiyor`).
- * Eski bar sayı olmayan değeri `0` yapıp "0.0000" çiziyordu — "ölçüldü, sıfır" diye okunur (Y6 ihlali).
+ * Eski bar sayı olmayan değeri `0` yapıp "0,0000" çiziyordu — "ölçüldü, sıfır" diye okunur (Y6 ihlali).
  */
 import React from "react";
 import { render } from "@testing-library/react-native";
@@ -35,16 +35,16 @@ it("KRİTİK (İG-5.83): B eğitim aralığı DIŞINDA → E '—', '0.0000' YOK
   mockLive.snapshot = { eField: { ...temel, achievedB_T: 0.0246, egitimAraligiDisi: true } };
   const u = render(<EFieldBar />);
   expect(u.getAllByText("—")).toHaveLength(2);
-  expect(u.queryByText("0.0000")).toBeNull();
+  expect(u.queryByText("0,0000")).toBeNull();
   expect(u.getByText(/eğitim aralığı dışında/i)).toBeTruthy();
-  expect(u.getByText(/B=24\.60 mT/)).toBeTruthy(); // ölçülen B şeffaf kalır
+  expect(u.getByText(/B=24,60 mT/)).toBeTruthy(); // ölçülen B şeffaf kalır
 });
 
 it("KRİTİK (D1.76 · Y6): alan ölçülmüyorsa E ve B '—', nedeni yazılır", () => {
   mockLive.snapshot = { eField: { ...temel, achievedB_T: null, bOlculmuyor: true } };
   const u = render(<EFieldBar />);
   expect(u.getAllByText("—")).toHaveLength(2);
-  expect(u.queryByText("0.0000")).toBeNull();
+  expect(u.queryByText("0,0000")).toBeNull();
   expect(u.getByText(/B=— /)).toBeTruthy();
   expect(u.getByText(/alan \(B\) ölçülmüyor/i)).toBeTruthy();
 });
@@ -52,7 +52,7 @@ it("KRİTİK (D1.76 · Y6): alan ölçülmüyorsa E ve B '—', nedeni yazılır
 it("KARŞIT: hesaplanan E sayı olarak görünür, uyarı yok", () => {
   mockLive.snapshot = { eField: { ...temel, healthy: 0.02, cancer: 0.05, avg: 0.035, achievedB_T: 0.001 } };
   const u = render(<EFieldBar />);
-  expect(u.getByText("0.0500")).toBeTruthy();
+  expect(u.getByText("0,0500")).toBeTruthy();
   expect(u.queryByText("—")).toBeNull();
   expect(u.queryByText(/eğitim aralığı dışında/i)).toBeNull();
 });
@@ -73,12 +73,12 @@ it("KRİTİK ODK8 · ODK10: ODAK seansında E havada (ortamsız; kedi) → doku 
     "Havada (ortamsız) hesaplanan değer — doku / tümör içindeki E çok daha düşüktür. E doğrudan ölçülmedi.",
   );
   expect(u.queryByTestId("efield-yaklasik")).toBeNull();
-  expect(u.getByText("0.0340")).toBeTruthy();
+  expect(u.getByText("0,0340")).toBeTruthy();
 });
 
 it("KARŞIT ODK6: çevresi olmayan kipte (tüm vücut / tüm petri) sağlıklı satırı '—'", () => {
   mockLive.snapshot = { eField: { ...temel, healthy: null, cancer: 0.034, avg: 0.034, achievedB_T: 0.0008, kaynak: "cst" } };
   const u = render(<EFieldBar />);
   expect(u.getAllByText("—")).toHaveLength(1);
-  expect(u.queryByText("0.0000")).toBeNull();
+  expect(u.queryByText("0,0000")).toBeNull();
 });

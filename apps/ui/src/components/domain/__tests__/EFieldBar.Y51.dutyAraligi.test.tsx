@@ -21,16 +21,17 @@ const simdi = () => Date.now() / 1000;
 it("KRİTİK: Σduty eğitim aralığı DIŞINDA → E değeri gösterilir VE 'eğitim aralığı dışı — güvenilmez' yazar", () => {
   mockSnap = { eField: { ...F.disarida, ts: simdi() } };
   const u = render(<EFieldBar />);
-  expect(u.queryByLabelText("Tümör alan 0.0550")).not.toBeNull(); // değer GİZLENMEDİ
+  expect(u.queryByLabelText("Tümör alan 0,0550 V/m")).not.toBeNull(); // değer GİZLENMEDİ
   const uyari = u.getByTestId("efield-duty-araligi-disi");
   const metin = [uyari.props.children].flat().join("");
   expect(metin).toContain("eğitim aralığı dışı — güvenilmez");
-  expect(metin).toContain(`${F.disarida.dutyEgitimAraligi[0].toFixed(2)}–${F.disarida.dutyEgitimAraligi[1].toFixed(2)}`);
+  const v = (x: number) => x.toFixed(2).replace(".", ","); // Y306: TR ondalık virgül
+  expect(metin).toContain(`${v(F.disarida.dutyEgitimAraligi[0])}–${v(F.disarida.dutyEgitimAraligi[1])}`);
 });
 
 it("KARŞIT: Σduty eğitim aralığında → etiket YOK", () => {
   mockSnap = { eField: { ...F.icerde, ts: simdi() } };
   const u = render(<EFieldBar />);
-  expect(u.queryByLabelText("Tümör alan 0.0550")).not.toBeNull();
+  expect(u.queryByLabelText("Tümör alan 0,0550 V/m")).not.toBeNull();
   expect(u.queryByTestId("efield-duty-araligi-disi")).toBeNull();
 });

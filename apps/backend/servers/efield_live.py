@@ -62,6 +62,8 @@ def odak_guncelle(deger: dict | None) -> None:
                 "cancer": deger.get("cancer"),
                 "healthy": deger.get("healthy"),
                 "ortam": deger.get("ortam") if deger.get("ortam") in ("kuyu", "hava") else None,
+                # Y306: ODAK kipi (ör. TUM_PETRI / KUYUCUK) — arayüz hedef satırının etiketini buna göre seçer
+                "kip": deger.get("kip") if isinstance(deger.get("kip"), str) else None,
                 "set_at": time.time(),
             }
         )
@@ -315,6 +317,7 @@ def _odak_hesabi(od: dict, coils: list[dict]) -> dict:
             "dutySum": 0.0,
             "kaynak": "cst",
             "ortam": od.get("ortam"),
+            "kip": od.get("kip"),
             "ts": time.time(),
         }
     degerler = [v for v in (od.get("cancer"), od.get("healthy")) if isinstance(v, (int, float))]
@@ -327,6 +330,7 @@ def _odak_hesabi(od: dict, coils: list[dict]) -> dict:
         "dutySum": duty_sum,
         "kaynak": "cst",
         "ortam": od.get("ortam"),
+        "kip": od.get("kip"),
         "ts": time.time(),
     }
 
