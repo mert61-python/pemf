@@ -239,6 +239,14 @@ def model_adi(saglayici) -> str:
     return str(getattr(saglayici, "title", "") or ceviri.t("ai.model.arastirma"))
 
 
+def hedef_veri_adi(saglayici, hedef_id: int) -> str:
+    """OTB T-9b: seans MOD metninin hedef parçası (VERİ, Türkçe — `mode`; gösterim `seans_durum.mod_etiketi` / `modEtiketi`): TÜM PETRİ
+    seansında (mühür 0) "Tüm petri" — "Kuyu (otomatik)" değil (kum havuzu 19-11, canlı seans kartı)."""
+    if int(hedef_id) == 0 and (getattr(saglayici, "odak_ayari", None) or {}).get("kip") == "TUM_PETRI":
+        return TUM_PETRI_ETIKETI
+    return saglayici.hedef_adi(hedef_id)
+
+
 def hedef_gosterim_adi(saglayici, hedef_id: int) -> str:
     """Kullanıcıya gösterilen hedef adı (istek dili); sağlayıcı ayrı gösterim adı vermiyorsa `hedef_adi`."""
     # OTB T-9: TÜM PETRİ seansının hedefi BÜTÜN PLAKA (mühür 0) — canlı kart "Kuyu (otomatik)" demez.

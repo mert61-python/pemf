@@ -67,6 +67,7 @@ const aiProHedef = (t: TFunction, h: string): string => {
     case "Dalak": return t("ai.organ.ad.dalak");
     case "Akciğer (sağ)": return t("ai.organ.ad.akciger_sag");
     case "Akciğer (sol)": return t("ai.organ.ad.akciger_sol");
+    case "Tüm petri": return t("seans.aiProMod.tumPetri"); // OTB T-9b: TÜM PETRİ seansının mod hedefi
     default: break;
   }
   const oto = /^(.+) \(otomatik\)$/.exec(h);

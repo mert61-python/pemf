@@ -139,6 +139,21 @@ def test_KRITIK_T9_baslatma_KAYIT_hedefi_Tum_petri_dongu_BUTUN_PLAKAYI_izler(o, 
     c, _ = o
     pid = _oner(c, odak_kip="TUM_PETRI", doz_mT=1.4).json()["proposalId"]
     ai_approval.approve(pid, "arastirmaci@test.local")
+    # /start GERÇEK AI Pro globallerini yazar → test sonunda geri yüklenir (sızıntı: sonraki döngü testleri petri modeliyle koşuyordu)
+    for ad in (
+        "_ai_hedef_modeli",
+        "_ai_organ_id",
+        "_ai_owner_client",
+        "_ai_duration_min",
+        "_ai_started_at",
+        "_ai_relocalize",
+        "_ai_pro_frek_hz",
+        "_ai_dongu_no",
+        "_ai_thread",
+        "_ai_loop_active",
+    ):
+        monkeypatch.setattr(air, ad, getattr(air, ad))
+    monkeypatch.setattr(hedef.SAGLAYICILAR["petri"], "kosulsuz", hedef.SAGLAYICILAR["petri"].kosulsuz)
     kayitlar, donguler = [], []
     monkeypatch.setattr(kabin_kamerasi, "secili_kamera", lambda: 0)
     monkeypatch.setattr(apis, "_kayit_db_hazir", lambda: (True, ""))

@@ -2436,7 +2436,7 @@ def _ai_pro_loop(dongu_muhru=None):
             rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1) if localized else 0.0
             update_live_session_state(
                 is_active=True,
-                mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
+                mode=f"AI Pro · {_aktif_saglayici().title} · {ai_pro_hedef.hedef_veri_adi(_aktif_saglayici(), _gosterim_oid)}",
                 freq=_ai_pro_frek_hz,
                 intensity=0.0,
                 duty_temsil=rep_duty,
@@ -3877,7 +3877,7 @@ async def ai_pro_frame(
                     rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1)
                     update_live_session_state(
                         is_active=True,
-                        mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_gosterim_oid)}",
+                        mode=f"AI Pro · {_aktif_saglayici().title} · {ai_pro_hedef.hedef_veri_adi(_aktif_saglayici(), _gosterim_oid)}",
                         freq=_ai_pro_frek_hz,
                         intensity=0.0,  # D1.89: duty mT alanına yazılmaz
                         duty_temsil=rep_duty,

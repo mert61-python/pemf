@@ -108,6 +108,8 @@ def _ai_pro_hedef(h: str) -> str:
     organ_anahtari = AI_PRO_ORGAN.get(h)
     if organ_anahtari:
         return ceviri.t(organ_anahtari)
+    if h in AI_PRO_KAYIT_HEDEFI:  # OTB T-9b: TÜM PETRİ seansının mod hedefi
+        return _ai_pro_kayit_hedefi(h)
     m = _OTOMATIK.match(h)
     if m:
         return ceviri.t("seans.aiProMod.otomatikHedef", hedef=_hedef_etiketi(m[1]))
