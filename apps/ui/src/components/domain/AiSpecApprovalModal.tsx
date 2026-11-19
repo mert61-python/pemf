@@ -23,7 +23,7 @@ import { CheckCircle2, X, XCircle } from "lucide-react-native";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { modelProfili } from "@/components/domain/aiProProfilleri";
 import { KalibrasyonRozeti } from "@/components/domain/aipro/KalibrasyonRozeti";
-import { OdakOzeti, type OdakOzet } from "@/components/domain/aipro/OdakOzeti";
+import { OdakOzeti, type OdakOzet, type OdakSecim } from "@/components/domain/aipro/OdakOzeti";
 import { Trans, useTranslation } from "react-i18next";
 import i18n from "i18next";
 
@@ -142,8 +142,11 @@ export function AiSpecApprovalModal({
   const [reason, setReason] = useState("");
   /** ODD B-2: ODAK özetindeki doz / kip / kuyu seçimi bu önerinin planından farklı → onay PASİF (onaylanan = ekranda görünen). */
   const [kirli, setKirli] = useState(false);
+  /** OTB T-5: penceredeki seçim (kip + kuyu) — kirliyken başlık / hedef / mühür metni bunu söyler. */
+  const [secim, setSecim] = useState<OdakSecim | null>(null);
   useEffect(() => {
     setKirli(false);
+    setSecim(null);
   }, [specs]);
 
   if (!specs) return null;
@@ -164,6 +167,17 @@ export function AiSpecApprovalModal({
   const hedefEtiketi = arastirma ? modelProfili(model).hedefEtiketi : t("ai.pro.profil.kedi.hedefEtiketi");
   // AP-22: gösterim adı önce — ham VERİ etiketi ("Kuyu C6") EN arayüzde Türkçe kalıyordu (D ekran görüntüsü 14-11).
   const hedefAdi = hedefGosterim || specs.target_label || organName || `#${specs.organ_id}`;
+  // OTB T-5: kirliyken başlık ve hedef SEÇİLİ kip / kuyuyu söyler (mühürdeki eski hedefi değil; onay zaten pasif).
+  const secimHedefi =
+    kirli && secim
+      ? secim.kip === "TUM_PETRI"
+        ? t("seans.aiProMod.tumPetri")
+        : secim.kuyu
+          ? `${hedefEtiketi} ${secim.kuyu}`
+          : hedefAdi
+      : hedefAdi;
+  // OTB T-13: konum ölçümü 2 dk'dan eskiyken onay PASİF — onaylanan plan, ekrandaki (eski konumla hesaplanmış) plan olmalı.
+  const onayPasif = !!busy || kirli || !!konumEski;
   const eHedef = Number(specs.e_cancer ?? specs.e_field);
   const eCevre = Number(specs.e_healthy ?? 0);
   const konumVar =
@@ -191,7 +205,7 @@ export function AiSpecApprovalModal({
         <View style={s.head}>
           <View style={{ flex: 1 }}>
             <Text style={s.title} numberOfLines={2}>
-              {arastirma ? t("ai.pro.onay.baslikArastirma", { modelAdi, hedefAdi }) : t("ai.pro.onay.baslik")}
+              {arastirma ? t("ai.pro.onay.baslikArastirma", { modelAdi, hedefAdi: secimHedefi }) : t("ai.pro.onay.baslik")}
             </Text>
             {/* ⚠️ DÜRÜSTLÜK: fantom/petri klinik bir teşhis değil; onaylayan kişi bunu BAŞLIKTA
                 görmeli (küçük bir dipnot yeterli olmazdı). */}
@@ -211,6 +225,9 @@ export function AiSpecApprovalModal({
         ) : null}
         {kirli && !surusKapali ? (
           <Text testID="ai-onay-kirli" style={s.hata}>{t("ai.pro.onay.kirliOnayPasif")}</Text>
+        ) : null}
+        {konumEski && !kirli && !surusKapali ? (
+          <Text testID="ai-onay-konum-eski" style={s.hata}>{t("ai.pro.onay.konumEskiOnayPasif")}</Text>
         ) : null}
         {rejecting ? (
           <View style={s.rejectBox}>
@@ -265,11 +282,11 @@ export function AiSpecApprovalModal({
               </TouchableOpacity>
             ) : (
             <TouchableOpacity
-              style={[s.btn, s.btnPrimary, (busy || kirli) && s.btnDisabled]}
+              style={[s.btn, s.btnPrimary, onayPasif && s.btnDisabled]}
               onPress={onApprove}
-              disabled={!!busy || kirli}
+              disabled={onayPasif}
               accessibilityRole="button"
-              accessibilityState={{ disabled: !!busy || kirli }}
+              accessibilityState={{ disabled: onayPasif }}
               accessibilityLabel={t("ai.pro.onay.onaylaEtiket")}
               testID="ai-onay-onayla"
             >
@@ -302,7 +319,7 @@ export function AiSpecApprovalModal({
           <View style={s.summary}>
             {/* D2.E15: onaylanan seansın HASTASI (mühürden) — "A için onaylat, B'ye başlat" imkânsız; hekim kimi onayladığını görür. */}
             <Meta label={arastirma ? t("hasta.sozluk.arastirma.tekilKisa") : t("hasta.sozluk.klinik.tekil")} value={specs.patient_name || t("ai.pro.onay.hastaSecilmedi")} />
-            <Meta label={hedefEtiketi} value={hedefAdi} />
+            <Meta label={hedefEtiketi} value={secimHedefi} />
             <Meta label={t("kontrol.sinir.sure")} value={t("ai.pro.onay.sureDk", { duration_minutes: specs.duration_minutes })} />
             <Meta label={t("ai.pro.onay.surulenBobin")} value={`${surulen}/${rows.length}`} />
             {arastirma ? null : <Meta label={t("ai.pro.onay.eOngoru")} value={Number(specs.e_field).toFixed(4)} />}
@@ -326,6 +343,8 @@ export function AiSpecApprovalModal({
               onKirli={setKirli}
               konumEski={konumEski}
               onKonumTazele={onKonumTazele}
+              onSecim={setSecim}
+              oncekiHedef={hedefAdi}
             />
           ) : null}
 
@@ -344,7 +363,8 @@ export function AiSpecApprovalModal({
           {arastirma ? <KalibrasyonRozeti yontem={meta?.method} localized /> : null}
 
           {/* Y143: otomatik seçim onay anında MÜHÜRLENDİ — onaylanan hedef seans boyunca DEĞİŞMEZ (görülen = sürülen). */}
-          {arastirma && meta?.otomatik_secim ? (
+          {/* OTB T-5: kirliyken mühür metni gösterilmez (yeni seçim yeniden hesapla ile mühürlenir; başlık seçimi söyler). */}
+          {arastirma && meta?.otomatik_secim && !kirli ? (
             <Text style={s.uyari} testID="ai-onay-otomatik-muhur">
               {t("ai.pro.onay.otomatikMuhur", { hedefAdi })}
             </Text>

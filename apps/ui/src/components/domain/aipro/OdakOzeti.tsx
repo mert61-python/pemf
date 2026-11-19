@@ -33,7 +33,16 @@ export type OdakOzet = {
   kuyular?: OdakKuyu[];
   /** ODK8: sürüş frekansı (Hz) — mühürde; yoksa eski mühür (100 Hz). */
   frek_hz?: number;
+  /** OTB T-2: fizik tavanı (duty ≤ %50, en iyi yön) — `tavan_mT` MODELİN ulaşabildiği (≤ fizik). */
+  fizik_tavan_mT?: number;
+  /** OTB T-3: öneride fizik düzeltme adımı uygulandı (genlik × istenen / beklenen). */
+  duzeltme?: { ilk_beklenen_mT?: number; kat?: number };
+  /** OTB T-1: petride kip / kuyu başına ulaşılabilir tavan (sunucu) — seçim değişince "en çok" yeniden hesap beklemeden doğru. */
+  tavanlar?: { TUM_PETRI?: number; KUYUCUK?: Record<string, number> };
 };
+
+/** OTB T-5: penceredeki SEÇİM (kip + kuyu) — üst bileşen başlık / mühür metnini kirliyken buna göre yazar. */
+export type OdakSecim = { kip: string; kuyu: string };
 
 export const PETRI_KIPLERI = ["KUYUCUK", "TUM_PETRI"] as const;
 /** ODD K-6: hedef / çevre oranı bunun altındaysa (≈ 1) hedef komşularından ayrılmıyor — "bu dozda odak yok" açıkça söylenir. */
@@ -117,11 +126,13 @@ export function KuyuHaritasi({
       <View style={[s.kutu, { width: rs(KUTU_G), height: rs(KUTU_Y) }, eski && s.eski]}>
         {kuyular.map((k, i) => {
           const isaretli = secilen ? k.etiket === secilen : !!k.secili;
+          // OTB T-4: kirliyken erişilebilirlik etiketi de önceki planın sayısını SÖYLEMEZ
+          const deger = eski ? "—" : sayi(k.mT);
           const etiket = isaretli
-            ? t("ai.pro.onay.odak.kuyuEtiketSecili", { etiket: k.etiket, deger: sayi(k.mT), secili: t("ai.pro.onay.odak.secili") })
+            ? t("ai.pro.onay.odak.kuyuEtiketSecili", { etiket: k.etiket, deger, secili: t("ai.pro.onay.odak.secili") })
             : k.bos
-              ? t("ai.pro.onay.odak.kuyuEtiketBos", { etiket: k.etiket, deger: sayi(k.mT) })
-              : t("ai.pro.onay.odak.kuyuEtiket", { etiket: k.etiket, deger: sayi(k.mT) });
+              ? t("ai.pro.onay.odak.kuyuEtiketBos", { etiket: k.etiket, deger })
+              : t("ai.pro.onay.odak.kuyuEtiket", { etiket: k.etiket, deger });
           const stil = [
             s.hucre,
             {
@@ -135,7 +146,8 @@ export function KuyuHaritasi({
           const icerik = (
             <>
               <Text style={s.hucreEtiket}>{k.etiket}</Text>
-              <Text style={s.hucreDeger}>{sayi(k.mT)}</Text>
+              {/* OTB T-4: önceki planın sayısı GİZLİ (tezgâhta sahip haritadaki sayıyı doz diye girmişti) */}
+              {eski ? null : <Text style={s.hucreDeger}>{sayi(k.mT)}</Text>}
             </>
           );
           // AP-B3: dolu kuyu dokunulabilir; boş kuyu (ODK11) ve harita salt gösterimken (onSec yok) eskisi gibi düz kutu.
@@ -169,7 +181,7 @@ export function KuyuHaritasi({
 }
 
 export function OdakOzeti({
-  odak, busy, onYenidenHesapla, onKirli, konumEski, onKonumTazele,
+  odak, busy, onYenidenHesapla, onKirli, konumEski, onKonumTazele, onSecim, oncekiHedef,
 }: {
   odak: OdakOzet;
   busy?: boolean;
@@ -181,6 +193,10 @@ export function OdakOzeti({
   konumEski?: boolean;
   /** ODD B-3: önizlemeyi kısa açıp taze konumla AYNI doz / kip / kuyuyla yeniden öneri iste (web — sunucu kamerası). */
   onKonumTazele?: (doz: number, kip: string, kuyu?: string) => void;
+  /** OTB T-5: seçili kip / kuyu (başlık ve mühür metni kirliyken buna göre). */
+  onSecim?: (secim: OdakSecim) => void;
+  /** OTB T-4: kirliyken "Önceki plan: <hedef>" satırının hedefi (önerinin gösterim adı). */
+  oncekiHedef?: string;
 }) {
   const { t } = useTranslation();
   const [dozMetni, setDozMetni] = useState(sayi(odak.doz_mT));
@@ -195,9 +211,20 @@ export function OdakOzeti({
     setSecilenKuyu((odak.kuyular || []).find((k) => k.secili)?.etiket || "");
   }, [odak]);
   const kuyuDegisti = !!secilenKuyu && secilenKuyu !== muhurKuyusu;
-  // ODD B-2: tavan YALNIZ hesaplandığı kipte geçerli (TÜM PETRİ ↔ KUYUCUK tavanı farklı) — kip değişince sayı söylenmez.
-  const tavanGecerli = kip === odak.kip && typeof odak.tavan_mT === "number";
-  const tavan = tavanGecerli ? (odak.tavan_mT as number) : NaN;
+  const secimKuyusu = secilenKuyu || muhurKuyusu;
+  // OTB T-1 / T-2: "en çok" SEÇİLİ kip / kuyunun MODELCE ulaşılabilir tavanı — seçim mühürdeki plansa planınki, değilse önerinin
+  // `tavanlar`ı (sunucu, aynı hesap). Bilinmiyorsa sayı söylenmez (ODD B-2: tavan yalnız hesaplandığı seçimde geçerli).
+  const tavanSecim =
+    kip === odak.kip && !kuyuDegisti
+      ? odak.tavan_mT
+      : kip === "TUM_PETRI"
+        ? odak.tavanlar?.TUM_PETRI
+        : secimKuyusu
+          ? odak.tavanlar?.KUYUCUK?.[secimKuyusu]
+          : undefined;
+  const tavanGecerli = typeof tavanSecim === "number" && Number.isFinite(tavanSecim);
+  const tavan = tavanGecerli ? (tavanSecim as number) : NaN;
+  const kuyuSecilmeli = kip === "KUYUCUK" && !secimKuyusu;
   const doz = dozCoz(dozMetni);
   const dozGecerli = Number.isFinite(doz) && doz > 0 && (!Number.isFinite(tavan) || doz <= tavan);
   // ODD B-2: ekrandaki seçim önerinin planından farklı (ya da doz okunamıyor) → KİRLİ: harita / tablo önceki plan, onay pasif.
@@ -205,11 +232,18 @@ export function OdakOzeti({
   useEffect(() => {
     onKirli?.(kirli);
   }, [kirli, onKirli]);
+  useEffect(() => {
+    onSecim?.({ kip, kuyu: secimKuyusu });
+  }, [kip, secimKuyusu, onSecim]);
   const petri = (PETRI_KIPLERI as readonly string[]).includes(odak.kip);
   const duzgunluk = odak.kip === "TUM_PETRI" || odak.kip === "KEDI_TV";
 
   return (
     <View testID="odak-ozeti" style={s.wrap}>
+      {kirli ? (
+        <Text testID="odak-onceki-plan" style={s.uyari}>{t("ai.pro.onay.odak.oncekiPlan", { hedef: oncekiHedef || "—" })}</Text>
+      ) : (
+        <>
       <Text style={s.satirKalin}>
         {t("ai.pro.onay.odak.doz", { doz: sayi(odak.doz_mT), pay: sayi(odak.pay_yuzde, 0) })}
       </Text>
@@ -227,6 +261,18 @@ export function OdakOzeti({
       {!duzgunluk && typeof odak.oran === "number" && odak.oran < ODAK_YOK_ORANI ? (
         <Text testID="odak-odak-yok" style={s.uyari}>{t("ai.pro.onay.odak.odakYok", { oran: sayi(odak.oran, 1) })}</Text>
       ) : null}
+      {typeof odak.fizik_tavan_mT === "number" && typeof odak.tavan_mT === "number" && odak.fizik_tavan_mT > odak.tavan_mT * 1.01 ? (
+        <Text testID="odak-fizik-tavan" style={s.kaynak}>
+          {t("ai.pro.onay.odak.fizikTavan", { tavan: sayi(odak.tavan_mT), fizik: sayi(odak.fizik_tavan_mT) })}
+        </Text>
+      ) : null}
+      {odak.duzeltme && typeof odak.duzeltme.kat === "number" ? (
+        <Text testID="odak-duzeltme" style={s.kaynak}>
+          {t("ai.pro.onay.odak.duzeltme", { kat: sayi(odak.duzeltme.kat), ilk: sayi(odak.duzeltme.ilk_beklenen_mT) })}
+        </Text>
+      ) : null}
+        </>
+      )}
       <Text style={s.kaynak}>{t("ai.pro.onay.odak.kaynak")}</Text>
 
       {Array.isArray(odak.kuyular) && odak.kuyular.length ? (
@@ -270,7 +316,11 @@ export function OdakOzeti({
             </View>
           ) : null}
           <Text testID="odak-doz-etiket" style={s.satir}>
-            {tavanGecerli ? t("ai.pro.onay.odak.dozSec", { tavan: sayi(tavan) }) : t("ai.pro.onay.odak.dozSecKipDegisti")}
+            {tavanGecerli
+              ? t("ai.pro.onay.odak.dozSec", { tavan: sayi(tavan) })
+              : kuyuSecilmeli
+                ? t("ai.pro.onay.odak.dozSecKuyuSec")
+                : t("ai.pro.onay.odak.dozSecKipDegisti")}
           </Text>
           <View style={s.dozSatiri}>
             <TextInput
@@ -279,7 +329,13 @@ export function OdakOzeti({
               value={dozMetni}
               onChangeText={setDozMetni}
               keyboardType="decimal-pad"
-              accessibilityLabel={tavanGecerli ? t("ai.pro.onay.odak.dozSec", { tavan: sayi(tavan) }) : t("ai.pro.onay.odak.dozSecKipDegisti")}
+              accessibilityLabel={
+                tavanGecerli
+                  ? t("ai.pro.onay.odak.dozSec", { tavan: sayi(tavan) })
+                  : kuyuSecilmeli
+                    ? t("ai.pro.onay.odak.dozSecKuyuSec")
+                    : t("ai.pro.onay.odak.dozSecKipDegisti")
+              }
             />
             <TouchableOpacity
               testID="odak-yeniden-hesapla"
