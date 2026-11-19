@@ -408,6 +408,7 @@
           "kuyuYok": "Seçilen kuyu ({{hedef}}) plaka ızgarasında yok — sürülmedi. Kuyuyu kare üstünde yeniden seçin.",
           "modelEski": "ODAK modeli bu kabin kalibrasyonuyla eğitilmemiş — sürülmedi. Uygulamayı güncelleyin ya da alan ölçümünü (tezgâh) modelle aynı sürüme getirin.",
           "modelYok": "ODAK model dosyaları (alan tablosu / model) bu bilgisayarda bulunamadı — sürülmedi. Uygulamanın AI model paketini kurun ya da güncelleyin (başlatıcı → Güncellemeler).",
+          "plakaKaydi": "Plaka seansın başındaki yerinden kaydı (görülen {{gorulen}} kuyu, ortanca sapma {{sapma}} mm) — sürülmedi. Plakayı eski yerine koyun ya da seansı durdurup yeniden başlatın.",
           "plakaUyumsuz": "Görülen {{bulunan}} kuyu 24'lük plaka düzenine oturmadı (sapma {{sapma}} mm) — sürülmedi. Plakanın camda düz durduğunu ve kabin kamerasının oynamadığını kontrol edip konumu yeniden bulun.",
           "plakaYok": "Plakanın yeri ve yönü bulunamadı: yalnız {{bulunan}} kuyu görüldü (en az {{beklenen}} kuyu, tek bir satır ya da sütunda olmayan) — sürülmedi. Plakayı kadraja tam alın, ışığı düzeltin; sıvılı kuyular en az iki satır ve iki sütunda olsun."
         }

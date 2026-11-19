@@ -71,6 +71,9 @@ KUYU_PIKSEL_SIGMA = 0.7
 OLCU_SIGMA_MM = 6.0
 #: Sahip (istem 44 §1c): eşlenen kuyu aralığı 19,3 mm'den bundan fazla saparsa kamera oynamış sayılır.
 KUYU_ARALIGI_TOLERANSI = 0.03
+#: OTB T-8 (ölçüldü 19-11): petri ızgara VARSAYIMININ kabin mm'deki satır / sütun aralığı plakanınkinden bu oranda fazla saparsa varsayım
+#: FİZİKSEL olarak imkânsızdır (doğru varsayımlar %0–9; üst sırası boş plakada ECC'nin sıkıştırdığı ızgara satırda %26) → seçilmez.
+IZGARA_OLCEK_TOLERANSI = 0.15
 #: Sabit sahne kayması (tam çözünürlük pikseli) bunu aşarsa kamera oynamış sayılır.
 SAHNE_KAYMA_ESIGI_PX = 12.0
 #: Sahip kararı (KD-1, "kalibre etmeden devam"): kamera oynamışsa kullanıcı yeniden kalibre etmeden SÜRDÜREBİLİR — yalnız kayma ~≤ 2 cm

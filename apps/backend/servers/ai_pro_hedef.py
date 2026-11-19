@@ -421,6 +421,8 @@ def odak_ayarla(saglayici, odak, hedef_etiket: str = "") -> None:
     Kedi (ODK5): ayar tutulur; Y142 kapalıyken kedi seansı zaten BAŞLATILMAZ / SÜRÜLMEZ."""
     if not hasattr(saglayici, "odak_ayari"):
         return
+    if hasattr(saglayici, "_sabit_izgara"):
+        saglayici._sabit_izgara = None  # OTB T-8: her seans (ve durdurma) kendi sabit numune referansıyla
     if not odak or odak.get("doz_mT") is None:
         saglayici.odak_ayari = None
         return
@@ -851,6 +853,8 @@ class _EmCvSaglayici:
         self.kosulsuz = False
         #: ODAK (istem 45): seansın MÜHÜRLÜ doz / kip / hedef etiketi (`odak_ayarla`); None = sürüş yok.
         self.odak_ayari: dict | None = None
+        #: OTB T-8: seansın İLK doğrulanan petri ızgarası (ODAK aday listesi) — sabit numune REFERANSI; `odak_ayarla` sıfırlar.
+        self._sabit_izgara: list | None = None
 
     # ── alt sınıf sözleşmesi ────────────────────────────────────────────────────────────
     def _yukleyici(self):
@@ -980,6 +984,9 @@ class _EmCvSaglayici:
             if en_iyi is not None:
                 kullanilan.add(en_iyi["id"])
                 aday["id"] = en_iyi["id"]
+                # OTB T-8: CV'nin BU karedeki etiketi (petri v2 A1–D6) ODAK ızgarası için saklanır — takip etiketi önceki kareden
+                # taşınır ve ızgara kareden kareye değişince aynı karede YİNELENEN etiket üretiyordu (ölçüldü 19-11).
+                aday.setdefault("cv_label", aday.get("label"))
                 aday["label"] = en_iyi["ad"]
 
         for aday in adaylar:
@@ -1082,7 +1089,8 @@ class _EmCvSaglayici:
             # ODAK (istem 45): bütün adaylar kabin konumuyla — petride 24 kuyu (TÜM PETRİ hedefi / KUYUCUK çevresi + onay haritası).
             "odak_adaylar": [
                 {
-                    "etiket": _etiket_eki(self, a.get("label")),
+                    # OTB T-8: ızgara geometrisi karenin KENDİ CV etiketiyle (takip etiketi değil — yinelenen etiket ızgarayı bozuyordu)
+                    "etiket": _etiket_eki(self, a.get("cv_label") or a.get("label")),
                     "P": [float(a["x"]), float(a["y"]), float(a["z"])],
                     "px": a.get("px"),
                 }
@@ -1114,7 +1122,7 @@ class _EmCvSaglayici:
         # kullandığı ODAK ızgara oturtmasıyla DOĞRULANIR (`petri_izgarasi` — tek kaynak): oturmayan karede hedef YOK (Y259 ilkesi:
         # boş kabinde 0 hedef), kare lokalize sayılmaz ve şerit NEDENİ söyler. Koşullu kip AYNEN (hocanın kapısı).
         if basarili and self.kosulsuz and self.plaka_dogrulamasi:
-            _plaka_engeli = self._plaka_engeli(meta["odak_adaylar"])
+            _plaka_engeli = self._sabit_numune_karari(meta, self._plaka_engeli(meta["odak_adaylar"]))
             if _plaka_engeli:
                 air.logger.warning("%s koşulsuz karede plaka DOĞRULANMADI (%s) → hedef yok", self.ad, _plaka_engeli)
                 meta.update(
@@ -1174,6 +1182,28 @@ class _EmCvSaglayici:
             dokum["kosulsuz"] = True
             return (True, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
         return (guven >= MIN_GUVEN, x_mm, y_mm, z_mm, guven, overlay, ozne_var, dokum)
+
+    def _sabit_numune_karari(self, meta: dict, engel: str) -> str:
+        """OTB T-7 / T-8 (sahip 19-11: "kamera petriyi gördüğü sürece, kuyular bulunuyorsa devam"): SEANSTA (mühürlü ODAK ayarı) sabit
+        numunenin İLK doğrulanan ızgarası referanstır. Sonraki karede görülen kuyular referansla `oneri.SABIT_NUMUNE_ESIGI_MM` içinde
+        örtüşürse kare KABUL (ODAK planı REFERANSTAN — `meta["odak_adaylar"]`), değilse engel (`plakaKaydi`; plaka kalktıysa karenin
+        kendi engeli) → Y300 son plan + 30 sn + STOP AYNEN. Hazırlıkta (seans yok) ve sabit olmayan numunede bugünkü kare doğrulaması
+        AYNEN. → kalan engel kodu ("" = kabul)."""
+        if not (getattr(self, "sabit_numune", False) and self.odak_ayari):
+            return engel
+        from ai_hub.odak import oneri as odak_oneri
+
+        if self._sabit_izgara is None:
+            if not engel:
+                self._sabit_izgara = [dict(k) for k in meta["odak_adaylar"]]
+            return engel
+        k = odak_oneri.sabit_numune_ortusmesi(self._sabit_izgara, meta["odak_adaylar"], etiketli=not engel)
+        meta["sabit_numune"] = k
+        if k["ortusuyor"]:
+            meta["odak_adaylar"] = [dict(a) for a in self._sabit_izgara]
+            return ""
+        # plaka görülüyor ama referansın yerinde değil → KAYDI; hiç / 3'ten az kuyu → karenin kendi nedeni (plaka yok / kalktı)
+        return "plakaKaydi" if (not engel or k["gorulen"] >= odak_oneri.IZGARA_EN_AZ) else engel
 
     def _plaka_engeli(self, odak_adaylar) -> str:
         """ODD B-5: görülen kuyular ODAK plaka ızgarasına oturmuyorsa engel kodu (`plakaYok` / `plakaUyumsuz`), oturuyorsa "".
@@ -1351,6 +1381,8 @@ class PetriSaglayici(_EmCvSaglayici):
             secili_kamera_indeksi(),
             secili_kamera_kimligi(),
         )
+        # OTB T-7: seansta sabit numune referansı varken Hough kuyu aralığı sapması engel değil uyarı (referans örtüşmesi denetler).
+        pl.kuyu_araligi_uyari = self._sabit_izgara is not None
         return pl
 
     def _ozne_yok_hatalari(self) -> tuple:

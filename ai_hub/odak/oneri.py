@@ -132,6 +132,51 @@ def petri_izgarasi(kuyular: list) -> dict:
     return {"sira": sira, "Pm": Pm.reshape(-1, 3), "merkez": merkez, "theta": th, "sat": sat, "sut": sut, "bulunan": bulunan}
 
 
+#: OTB T-8 (sahip 19-11): seans içi SABİT NUMUNE — ızgarası DOĞRULANAN karenin kuyuları seansın ilk doğrulanan ızgarasıyla (aynı etiket)
+#: ortanca bu kadar (mm, ölçüm düzlemi x-z) içindeyse plaka yerinde sayılır. ÖLÇÜLDÜ (19-11 gerçek kayıt, plaka OYNAMADAN 132 kare): ızgara
+#: varsayımları kareden kareye kaydığı için ortanca sapma p90 4,6–6,5, en çok 9,8 mm; 6 mm eşik 14 / 132 karede yanlış "kaydı" diyordu,
+#: 10 mm'de 0. ~1 cm kayma (20 / 20 kare) ve bir kuyu kayma 10 mm ile de yakalanıyor (Y300 STOP aynı anda) — daha küçük kayma ızgara
+#: gürültüsünden ayırt EDİLEMEZ. Bir kuyu aralığı 19,3 mm.
+SABIT_NUMUNE_ESIGI_MM = 10.0
+#: OTB T-8: ızgarası DOĞRULANMAYAN karede (etiketler güvenilmez — ör. sıkışmış ızgara, sapma 7–11 mm ölçüldü) kaba eşik: kuyular plakanın
+#: yerinde mi (en yakın referans kuyusu). Kesin kayma tespiti doğrulanan karelerde (etiketle).
+SABIT_NUMUNE_KABA_ESIK_MM = 10.0
+
+
+def sabit_numune_ortusmesi(referans: list, kuyular: list, *, etiketli: bool, esik_mm: float | None = None) -> dict:
+    """OTB T-8: karede görülen kuyular (`kuyular`, ODAK aday biçimi) seansın referans ızgarasıyla (`referans` — ilk doğrulanan karenin
+    adayları; boş kuyular `petri_izgarasi` ile tamamlanır) örtüşüyor mu.
+    · `etiketli` (karenin ızgarası DOĞRULANDI): her kuyu AYNI etiketli referans kuyusuyla — ortanca sapma ≤ eşik (bir kuyu aralığı kayma
+      dahil plaka kayması yakalanır);
+    · değilse (ızgara oturmadı → etiketler güvenilmez): her kuyu EN YAKIN referans kuyusuyla — en az `IZGARA_EN_AZ` ve görülenlerin yarısı
+      KABA eşik (`SABIT_NUMUNE_KABA_ESIK_MM`) içinde.
+    → {"ortusuyor", "gorulen", "eslesen", "sapma_mm" (ortanca; görülen yoksa None)}. Referans oturtulamazsa örtüşmez (fail-closed)."""
+    if esik_mm is None:
+        esik_mm = SABIT_NUMUNE_ESIGI_MM if etiketli else SABIT_NUMUNE_KABA_ESIK_MM
+    try:
+        sira = petri_izgarasi(referans)["sira"]
+    except Engel:
+        return {"ortusuyor": False, "gorulen": 0, "eslesen": 0, "sapma_mm": None}
+    R = {k["etiket"]: backend_to_olcum(np.asarray(k["P"], dtype=float))[[0, 2]] for k in sira}
+    Rm = np.array(list(R.values()))
+    gorulen = []
+    for k in kuyular or []:
+        P = np.asarray(k.get("P"), dtype=float)
+        if P.shape == (3,) and np.all(np.isfinite(P)):
+            gorulen.append((str(k.get("etiket") or "").strip().upper(), backend_to_olcum(P)[[0, 2]]))
+    if etiketli:
+        d = np.array([float(np.linalg.norm(q - R[e])) for e, q in gorulen if e in R])
+    else:
+        d = np.array([float(np.linalg.norm(Rm - q, axis=1).min()) for _e, q in gorulen])
+    eslesen = int((d <= esik_mm).sum()) if d.size else 0
+    sapma = round(float(np.median(d)), 1) if d.size else None
+    if etiketli:
+        ortusuyor = d.size >= IZGARA_EN_AZ and sapma is not None and sapma <= esik_mm
+    else:
+        ortusuyor = eslesen >= IZGARA_EN_AZ and eslesen >= 0.5 * len(gorulen)
+    return {"ortusuyor": bool(ortusuyor), "gorulen": len(gorulen), "eslesen": eslesen, "sapma_mm": sapma}
+
+
 def _taban_y(A: AlanModeli) -> float:
     return float(A.taban_y)
 

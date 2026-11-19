@@ -45,7 +45,7 @@ from ...cv_ortak import sabit_duzlem as _sd
 from .petri_detector import PetriYoloDetector, PetriDetection
 from .color_segment import (segment_cancer_in_petri, classify_plate_wells,
                             Region, TUMOR, HEALTHY)
-from .plate_grid import detect_plate_wells
+from .plate_grid import PLATE_SPECS, detect_plate_wells
 from . import render as rd
 # MAKULLIK DENETIMI (2026-08-06, sahip bildirimi): fantom fotografi bu boru hattinda sessizce
 # "2 kuyucuk, 1 kanser" uretiyordu. Denetim ROUTER'da DEGIL burada durmali; cunku
@@ -200,6 +200,8 @@ class PetriCvPipeline:
         self.kuyu_skor_esigi = float(kuyu_skor_esigi)
         self.duzlem = duzlem
         self.kamera_indeksi = kamera_indeksi
+        #: OTB T-7: seansta sabit numune referansi varken Hough kuyu araligi sapmasi ENGEL degil UYARI (saglayici acar; varsayilan AYNEN).
+        self.kuyu_araligi_uyari = False
         #: KD-2: karenin geldiği kabin kamerasının KİMLİĞİ (ad + VID/PID + aygıt yolu) — bilinirse indeks yerine bu karşılaştırılır.
         self.kamera_kimligi = None
         if isinstance(cfg, CabinConfig):
@@ -431,7 +433,8 @@ class PetriCvPipeline:
         if self.plate_type:
             # Plaka modu: pembe bolge + YOLO/Hough adaylari + izgara homografisi
             grid = detect_plate_wells(img_und, self.plate_type, yolo=self.yolo,
-                                      a1_corner=self._a1_kosesi(kd))
+                                      a1_corner=self._a1_kosesi(kd),
+                                      izgara_denetimi=self._izgara_olcek_denetimi(kd, olcek))
             result.plate = grid.to_dict()
             dets = grid.detections
             timings["plate_grid"] = (time.perf_counter() - t1) * 1000
@@ -759,13 +762,41 @@ class PetriCvPipeline:
             kd.olcum["kuyu_araligi"] = ka
             aralik_olculdu = True
             if not ka["gecti"]:
-                kd.engel("kamera_oynamis", f"eslenen kuyu araligi {ka['sutun_mm']:.2f} / {ka['satir_mm']:.2f} mm, beklenen "
-                                           f"{ka['beklenen_mm']:g} mm (sapma %{100 * ka['sapma']:.1f} > %{100 * ka['tolerans']:g})")
+                neden = (f"eslenen kuyu araligi {ka['sutun_mm']:.2f} / {ka['satir_mm']:.2f} mm, beklenen "
+                         f"{ka['beklenen_mm']:g} mm (sapma %{100 * ka['sapma']:.1f} > %{100 * ka['tolerans']:g})")
+                if self.kuyu_araligi_uyari:
+                    # OTB T-7: seansta SABIT NUMUNE referansi varken kamera / plaka yerinde mi sorusunu referans ortusmesi (mm) yanitlar;
+                    # Hough araligi bu kabinde plaka oynamadan %0,2-7,4 saliniyor (olculdu) -> engel degil uyari.
+                    kd.uyarilar.append("kuyu_araligi_sapti: " + neden + " - sabit numune referansi denetliyor")
+                else:
+                    kd.engel("kamera_oynamis", neden)
         elif grid is not None:
             kd.uyarilar.append("kuyu_araligi_olculemedi: izgarada yeterli Hough kuyu merkezi yok - kamera kaymasi yalniz sabit sahneden")
         if not aralik_olculdu and "sahne" not in kd.olcum:
             # Ne sahne ne kuyu araligi olculebildi → kameranin yerinde oldugu DOGRULANAMAZ (fail-closed).
             kd.engel("kamera_oynamis", "kamera konumu dogrulanamadi (sabit sahne ve kuyu araligi olculemedi)")
+
+    def _izgara_olcek_denetimi(self, kd, olcek: float):
+        """OTB T-8: sabit duzlem kipinde izgara varsayiminin (plaka mm -> duzeltilmis kare px) kabin mm'deki ortalama sutun / satir araligi
+        plakanin araligindan `IZGARA_OLCEK_TOLERANSI`ndan fazla sapmiyor mu. Kalibrasyon yok / gecersiz -> None (denetim yok, AYNEN)."""
+        if kd is None or kd.harita is None or not kd.gecerli or self.plate_type not in PLATE_SPECS:
+            return None
+        spec = PLATE_SPECS[self.plate_type]
+        ideal = np.array([[c * spec.pitch_mm, r * spec.pitch_mm] for r in range(spec.rows) for c in range(spec.cols)], np.float64)
+
+        def denetle(H) -> bool:
+            try:
+                q = cv2.perspectiveTransform(ideal.reshape(1, -1, 2), np.asarray(H, np.float64))[0] / olcek
+                M = np.array([kd.harita.kabin_noktasi((float(u), float(v)), kd.harita.numune_y_mm, kabin_siniri=False)[[0, 2]]
+                              for u, v in q]).reshape(spec.rows, spec.cols, 2)
+            except (KesisimGecersiz, ValueError, cv2.error):
+                return False
+            sutun = float(np.linalg.norm(np.diff(M, axis=1), axis=2).mean())
+            satir = float(np.linalg.norm(np.diff(M, axis=0), axis=2).mean())
+            t = _sd.IZGARA_OLCEK_TOLERANSI * spec.pitch_mm
+            return abs(sutun - spec.pitch_mm) <= t and abs(satir - spec.pitch_mm) <= t
+
+        return denetle
 
     def _a1_kosesi(self, kd):
         """KD-2: A1'in goruntu kosesi — YAML `auto` iken sabit duzlem kalibrasyonundan (kabinin arka-sol yonu); acik YAML degeri ya da

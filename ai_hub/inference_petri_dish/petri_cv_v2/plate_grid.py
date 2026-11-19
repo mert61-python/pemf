@@ -74,6 +74,7 @@ class PlateGridResult:
     #: Secilen ECC hipotezi pembe BOLGEYE hizalanir ve izgarayi sistematik genisletir (sentetik, kusursuz kalibrasyon: secilen
     #: +%1,5 / +%3,5, RANSAC <= %0,8) — aralik OLCUMU buna dayanir; kuyu konumlari secilen hipotezden (hocanin kurali) DEGISMEDI.
     H_ransac: np.ndarray | None = None
+    olcek_elenen: list = field(default_factory=list)       # OTB T-8: fiziksel olcegi tutmadigi icin elenen varsayimlar
 
     def to_dict(self) -> dict:
         return {
@@ -476,12 +477,15 @@ def _match_sources(H, spec, cands, pitch_px) -> dict:
 def detect_plate_wells(image_bgr: np.ndarray, plate_type: int = 24, *,
                        yolo=None, mask_frac: float = 0.8,
                        use_ecc: bool = True,
-                       a1_corner: str = "auto") -> PlateGridResult:
+                       a1_corner: str = "auto",
+                       izgara_denetimi=None) -> PlateGridResult:
     """Goruntudeki cok kuyucuklu plakanin TUM kuyucuklarini dondur.
 
     Args:
         yolo: PetriYoloDetector (opsiyonel; aday kaynagi olarak kullanilir)
         mask_frac: kuyucuk maskesi yaricapi / kuyucuk yaricapi (kenar yansimasi disarida)
+        izgara_denetimi: (OTB T-8) opsiyonel `H -> bool` — sabit duzlem kipinde varsayimin kabin mm'de kuyu araligi fiziksel mi.
+            Gecmeyen varsayim SECILMEZ; hicbiri gecmezse bugunku secim AYNEN (verilmezse davranis AYNEN).
     """
     if plate_type not in PLATE_SPECS:
         return PlateGridResult(False, error=f"unknown_plate_type:{plate_type}")
@@ -540,6 +544,14 @@ def detect_plate_wells(image_bgr: np.ndarray, plate_type: int = 24, *,
                 hyps.append((name + "+ecc", He, True))
     scored = [(_grid_score(Hh, spec, pink, roi), n, Hh, e) for n, Hh, e in hyps
               if n == "init" or _plausible(Hh, spec, region, pitch_px)]
+    # OTB T-8 (olculdu 19-11): ust sirasi BOS plakada sivi puani ECC'nin 4 sirayi 3 sivili siraya SIKISTIRDIGI izgarayi seciyordu
+    # (kabin mm satir araligi 14,3 / 19,3) -> ODAK 24'luk duzene oturmuyordu. Fiziksel olcek tutmayan varsayim elenir.
+    elenen = []
+    if izgara_denetimi is not None:
+        gecen = [s for s in scored if izgara_denetimi(s[2])]
+        if gecen:
+            elenen = [s[1] for s in scored if all(s is not g for g in gecen)]
+            scored = gecen
     best_score, chosen, H, ecc_ok = max(scored, key=lambda t: t[0])
     if not chosen.startswith("ransac"):
         rms = float("nan")              # rms sadece RANSAC tabanli hipotezde anlamli
@@ -555,6 +567,7 @@ def detect_plate_wells(image_bgr: np.ndarray, plate_type: int = 24, *,
     res.a1_corner = a1
     res.fit_score = round(best_score, 3)
     res.hypotheses = {n: round(sc, 3) for sc, n, _, _ in scored}
+    res.olcek_elenen = elenen
     res.mm_per_px = 1.0 / _local_px_per_mm(H, center_mm)
 
     ang = np.linspace(0, 2 * np.pi, 48, endpoint=False)
