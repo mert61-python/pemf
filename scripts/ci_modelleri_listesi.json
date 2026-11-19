@@ -17,103 +17,103 @@
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_FANTOM.onnx",
-   "sha256": "69bc890fa886304a299bbb6744400e50dd1c906f914e003c1a812d35b7395478",
-   "bayt": 2579828
+   "sha256": "9d0c2b470f41ab0849267a3c10b02509c142d33599ac5e21a4ab7da72dec9406",
+   "bayt": 2578398
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_FANTOM_107Hz.onnx",
-   "sha256": "a384404458d68e737033849705b7b54056c44ad4e03dd2ee11186bba025c0257",
-   "bayt": 2277968
+   "sha256": "e96e1e36e42cf06d2c28c404a34fba5d2185aef2987ed8a4adee734e867e34ee",
+   "bayt": 2293178
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_FANTOM_147Hz.onnx",
-   "sha256": "ad29f24d5ba60f33c5061538cae388f3171ada5536d5f535fbf3a2e4b14ce52e",
-   "bayt": 1617564
+   "sha256": "aea16d95070b526520632d8ffa0c42df51ae07e0f1fad360f3145b977d933e7f",
+   "bayt": 1650974
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_FANTOM_76Hz.onnx",
-   "sha256": "f29798651a840c314be42f13694948262d02b24a947f8308fe9a0f592e00f42d",
-   "bayt": 2580738
+   "sha256": "32893d08945c5eb13098d7170d9c9d53b0da3c1d0c92ce2971fa3e369229a65b",
+   "bayt": 2577098
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN.onnx",
-   "sha256": "b60c23ddf4166f88058349f60f9d671020b16dd647100d27c9a120ff0e88bac8",
-   "bayt": 2637996
+   "sha256": "87ee3bb9b3de0f2fbec59a85d780594c38650af7fb1a8a6e204308d359887929",
+   "bayt": 2636280
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN_107Hz.onnx",
-   "sha256": "7ca1a83f61186fd9764a55576c60c09e91e97a1ae1adfe7ca06490acde2a7bcf",
-   "bayt": 2388384
+   "sha256": "ecdbaa6ea339e21faea2cb13764ab8b83ab71ecb2e74f5a37176ae33461d1d7c",
+   "bayt": 2365020
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN_147Hz.onnx",
-   "sha256": "18f201dea3d090e1ab3daba6798a83da895a06b7217fe084c08426cd9246f2ed",
-   "bayt": 1650632
+   "sha256": "b29928ab19c7627e8d80dc96a7a304ae94957995e5fcd7b711861c7eac381346",
+   "bayt": 1683104
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_ORGAN_76Hz.onnx",
-   "sha256": "30c64065e342abefe0533139f4e7627084cb2414b2e443cf8f936e741b577036",
-   "bayt": 2639316
+   "sha256": "1aaff5c60bf9759c09a25a21623c677b20858ddb8633fef744f55634905ebb99",
+   "bayt": 2639580
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV.onnx",
-   "sha256": "b2b2e9001ae3779800def04d7bcd67c36d37fe9446e1dc60a0a7d1e1b680d276",
-   "bayt": 990221
+   "sha256": "f22b99d5816cd323ad958175b2274b3dd449e2622e30761383b765ea4d5b885b",
+   "bayt": 987449
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV_107Hz.onnx",
-   "sha256": "95b919a9c1ed8c96335bb0a285dfdd230c7357608fa0e14bda8ab7910aab732c",
-   "bayt": 951413
+   "sha256": "4ab48d76d398f868996508225dfb94105330d2c80997c21d927858e6c6527727",
+   "bayt": 950027
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV_147Hz.onnx",
-   "sha256": "a4557c4429d2ff44265d886de3d27e529bd54ca63ff989504121794e6022345a",
-   "bayt": 644351
+   "sha256": "9f3b4bbb21a86ea9b9d4e4352d8b5f43a2fcc77b8ddff98991e467945ca6646c",
+   "bayt": 632759
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KEDI_TV_76Hz.onnx",
-   "sha256": "f8ac05c9120f0b382b51674274865e947536e527d639070750cc1ffcca14b1fd",
-   "bayt": 1008743
+   "sha256": "6cade5ae055c73fc6e3ae4f43ff1216bbc661c429a5cb689c85b9b537eb2a6b1",
+   "bayt": 1008617
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK.onnx",
-   "sha256": "de11bd938307d4a5b2edfdb8ffddf9e965400d75920b908a40e5bab03da61966",
-   "bayt": 3895031
+   "sha256": "2b65f3138ad3efea93798f502d36b7cf8e84d9ff4ae9900cddde75142c983d1f",
+   "bayt": 3889619
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK_107Hz.onnx",
-   "sha256": "ac214c5f2d69ef5d1cdd6615f1aba13302f3fdc533b7b39d64512bb525c9a725",
-   "bayt": 3343271
+   "sha256": "c6b78dc79b1e6c567f0d895730e0a154ffde11fa7c70c53c064cb70ca4c359fd",
+   "bayt": 3359243
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK_147Hz.onnx",
-   "sha256": "d29bc8c4dc50676123c18bb31919c50a9d5bb67515ba2e02620e2d7a440f6467",
-   "bayt": 2181669
+   "sha256": "bf99b3afeb15c6fce26b5dd0acc9a8ea66a04747b0f0f7518b7f4fb4bcb8282e",
+   "bayt": 2234205
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_KUYUCUK_76Hz.onnx",
-   "sha256": "a387b5b17bc2a97c0dfc2aaa379b7be8976d48105ad0c5caed80ec962d94e50a",
-   "bayt": 3925259
+   "sha256": "98fd20c8dcff23ccf2349a7ca83ea8c359e56c652ef45de02846fcdf06af0ddc",
+   "bayt": 3922355
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI.onnx",
-   "sha256": "e3fe881d440982bf2c7f5121d9f714df23f2f29dfa737472c92e5f17e16eb32e",
-   "bayt": 1501039
+   "sha256": "57ee91fa52920cf0dadc98f7bff102b387b2499065ed949fe21f71189b6b346a",
+   "bayt": 1487343
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI_107Hz.onnx",
-   "sha256": "8b0cfb58989d5706e0dfa803d151ca11a6a1a52f0cf49efeeaaa784466f7b92c",
-   "bayt": 1366255
+   "sha256": "308e68a13c6b719c0cef949be04676e02e6dee0b8484490fe50675157c159f61",
+   "bayt": 1355375
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI_147Hz.onnx",
-   "sha256": "1611742d40fb3d8c0cd9cbb25504196161b821c59ab8e1a601bdf7ad47af5c4f",
-   "bayt": 932207
+   "sha256": "97b852e72ffd4a28057f96b8257b447a557f4b0bf7699f6a91de87cce7646744",
+   "bayt": 928367
   },
   {
    "yol": "modeller/ai_hub/odak/veri/model_TUM_PETRI_76Hz.onnx",
-   "sha256": "ce84f8234e6187eda1e97312c50cc810f07341308f8f2da58352dbcc83c205bc",
-   "bayt": 1509999
+   "sha256": "5e28d9e4868394b4ecc77c2cd56e33325f574b3ab60b8119fbe6d8191579bf0a",
+   "bayt": 1510255
   },
   {
    "yol": "depo/ai_hub/inference_human_kidney_rna/mlp_medium_kirc.onnx",
