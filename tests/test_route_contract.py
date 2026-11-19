@@ -175,6 +175,17 @@ GOLDEN_ROUTES = {
     ("/api/system/recovery-status", "GET"),
     ("/api/system/recovery-code", "GET"),
     ("/api/system/recovery-ack", "POST"),
+    # GA (istem 53, 19-11 · Y298): geliştirici modülleri (dijital ikiz + kontrol) — `servers/modul_router.py`. Seçme / başlatma / uygulama
+    # yalnız JSON (D5), DURDUR / BIRAK her zaman açık (ACİL DURDUR modüllere de gider). Yığına AŞAMA 3'te girdi; sözleşme o gün
+    # güncellenmemişti (zincir 56 AŞAMA 4 kapısında ölçüldü).
+    ("/api/moduller", "GET"),
+    ("/api/moduller/baslat", "POST"),
+    ("/api/moduller/birak", "POST"),
+    ("/api/moduller/durdur", "POST"),
+    ("/api/moduller/durum", "GET"),
+    ("/api/moduller/gorunurluk", "POST"),
+    ("/api/moduller/uygula", "POST"),
+    ("/api/moduller/{kimlik}/sec", "POST"),
     ("/api/update/apply", "POST"),
     ("/api/update/rollback", "POST"),
     ("/api/update/status", "GET"),
@@ -252,4 +263,5 @@ def test_route_contract_unchanged():
     # → 117 (+3 canlı kabin kamerası: settings/kabin-kamerasi/canli/{baslat POST, kare GET, durdur POST} — T3 · Y190), 2026-10-24
     # → 123 (+6 KD · Y260 kabin kalibrasyonu: /api/ai/pro/kalibrasyon GET + kare / hesapla / kaydet / dogrula / fantom POST), 2026-11-10
     # → 125 (+2 KD-2: /api/ai/pro/kalibrasyon/taban + /sahne-yenile POST), 2026-11-10
-    assert len(current) == len(beklenen) == 125 - (0 if _simulator_mountlu() else 1)
+    # → 133 (+8 GA geliştirici modülleri: /api/moduller GET, durum GET, {kimlik}/sec, baslat, uygula, durdur, birak, gorunurluk POST), 2026-11-20
+    assert len(current) == len(beklenen) == 133 - (0 if _simulator_mountlu() else 1)
