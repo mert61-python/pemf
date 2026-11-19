@@ -10,9 +10,13 @@ import { useAlanHaritasi } from "@/hooks/useAlanHaritasi";
 import { DURUM_ARALIK_MS, alanIletisi, durumIletisi, hazirMi } from "@/services/ikizKoprusu";
 
 export function useIkizKoprusu(gonder: ((metin: string) => void) | null): { gelen: (veri: unknown) => void; hazir: boolean } {
-  const { snapshot } = useLiveData();
+  const { snapshot, wsConnected } = useLiveData();
   const anlikRef = useRef(snapshot);
   anlikRef.current = snapshot;
+  // Sunucu bağlantısı yokken (wsConnected false) anlık görüntü BAYATTIR → durum gönderilmez; sözleşme v1: 3 sn `pemf.ikiz.durum`
+  // gelmezse ikiz çevrimdışı simülasyona geçer. (Kit canlı denemesinde ölçüldü: sunucu kapanınca ikiz "Cihaz bağlı" kalıyordu.)
+  const bagliRef = useRef(wsConnected);
+  bagliRef.current = wsConnected;
   const [hazir, setHazir] = useState(false);
   const harita = useAlanHaritasi(hazir && gonder !== null);
 
@@ -35,8 +39,11 @@ export function useIkizKoprusu(gonder: ((metin: string) => void) | null): { gele
       setHazir(false);
       return undefined;
     }
-    guvenliGonder(durumIletisi(anlikRef.current));
-    const id = setInterval(() => guvenliGonder(durumIletisi(anlikRef.current)), DURUM_ARALIK_MS);
+    const durumGonder = () => {
+      if (bagliRef.current !== false) guvenliGonder(durumIletisi(anlikRef.current));
+    };
+    durumGonder();
+    const id = setInterval(durumGonder, DURUM_ARALIK_MS);
     return () => clearInterval(id);
   }, [gonder, guvenliGonder]);
 

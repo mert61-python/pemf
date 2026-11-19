@@ -5,7 +5,11 @@
  * `hazir` sıfırlanır (abonelik biter) — ama çerçeve yüklenmeden (gonder null iken) gelen `hazir` KORUNUR (ikiz onu load'dan önce
  * gönderir); gönderim hatası yutulur.
  */
-const mockCtx: { snapshot: unknown; alanHaritasi: unknown; alanAbone: jest.Mock } = { snapshot: {}, alanHaritasi: null, alanAbone: jest.fn() };
+const mockCtx: { snapshot: unknown; alanHaritasi: unknown; alanAbone: jest.Mock; wsConnected?: boolean } = {
+  snapshot: {},
+  alanHaritasi: null,
+  alanAbone: jest.fn(),
+};
 jest.mock("@/context/LiveDataContext", () => ({ useLiveData: () => mockCtx }));
 
 import { act, renderHook } from "@testing-library/react-native";
@@ -19,6 +23,7 @@ describe("GA useIkizKoprusu", () => {
     mockCtx.snapshot = { stm: "online", coils: [] };
     mockCtx.alanHaritasi = null;
     mockCtx.alanAbone = jest.fn();
+    mockCtx.wsConnected = true;
   });
   afterEach(() => jest.useRealTimers());
 
@@ -82,6 +87,33 @@ describe("GA useIkizKoprusu", () => {
     rerender({ gonder: g });
     expect(result.current.hazir).toBe(true);
     expect(mockCtx.alanAbone.mock.calls).toEqual([[true]]);
+  });
+
+  it("sunucu bağlantısı kopunca durum GÖNDERİLMEZ (bayat anlık görüntü canlı sanılmasın; ikiz 3 sn sonra çevrimdışı); dönünce sürer", () => {
+    // Kit canlı denemesinde ölçüldü (19-11): sahte sunucu kapatılınca uygulama "bağlı değil" derken köprü son anlık görüntüyü 2 Hz
+    // göndermeyi sürdürüyordu → ikiz "Cihaz bağlı" + aktif bobinler gösteriyor, çevrimdışına HİÇ geçmiyordu (sözleşme v1: 3 sn durum yok).
+    const g = jest.fn();
+    const { rerender } = renderHook(({ gonder }: { gonder: (m: string) => void }) => useIkizKoprusu(gonder), {
+      initialProps: { gonder: g },
+    });
+    expect(turler(g)).toEqual(["pemf.ikiz.durum"]);
+    mockCtx.wsConnected = false;
+    rerender({ gonder: g });
+    const n = g.mock.calls.length;
+    act(() => jest.advanceTimersByTime(4000));
+    expect(g.mock.calls.length).toBe(n);
+    mockCtx.wsConnected = true;
+    rerender({ gonder: g });
+    act(() => jest.advanceTimersByTime(500));
+    expect(g.mock.calls.length).toBeGreaterThan(n);
+  });
+
+  it("çerçeve sunucu bağlantısı yokken yüklenirse ilk durum da gitmez", () => {
+    mockCtx.wsConnected = false;
+    const g = jest.fn();
+    renderHook(() => useIkizKoprusu(g));
+    act(() => jest.advanceTimersByTime(1500));
+    expect(g).not.toHaveBeenCalled();
   });
 
   it("gönderim hatası yutulur", () => {
