@@ -89,6 +89,21 @@ describe("GA DEMA / ikiz köprüsü — web", () => {
     expect(dinleyiciler.length).toBe(0);
   });
 
+  it("ikiz hazir'ı ÇERÇEVE YÜKLENMEDEN gönderir (betiği load'dan önce koşar) → yüklenince abonelik açık KALIR ve alan gider", () => {
+    // Kit uçtan uca denemesinde ölçüldü (19-11): gerçek tarayıcıda ikizin `hazir`ı iframe `load` olayından ÖNCE gelir; `gonder` load'da
+    // dolarken `hazir` sıfırlanıyordu → ikize alan haritası HİÇ gitmiyordu.
+    const u = ciz();
+    const hazir = JSON.stringify({ tur: "pemf.ikiz.hazir", surum: 1 });
+    act(() => dinleyiciler[0]({ source: pencereler[0], origin: KOKEN, data: hazir }));
+    expect(mockCtx.alanAbone).not.toHaveBeenCalled(); // çerçeve yüklenmeden abonelik yok
+    act(() => cerceve(u).props.onLoad());
+    expect(mockCtx.alanAbone.mock.calls).toEqual([[true]]);
+    mockCtx.alanHaritasi = { surum: 1, durum: "sifir", zaman: 1, modelTahmini: true };
+    u.rerender(<DemaSimulatorScreen />);
+    expect(turler(pencereler[0])).toContain("pemf.ikiz.alan");
+    u.unmount();
+  });
+
   it("API adresi çözülemezse (köken yok) gönderim de kabul de YOK", () => {
     const cfg = jest.requireMock("@/services/config") as { serviceConfig: { apiBaseUrl: string } };
     const eski = cfg.serviceConfig.apiBaseUrl;

@@ -1,8 +1,9 @@
 // Author: mertaygn, cglrgrkn
 /**
  * GA (istem 53) A4 — `useIkizKoprusu`: çerçeve yüklenince 2 Hz `pemf.ikiz.durum`; `hazir` gelmeden alan aboneliği YOK (DEMA'da sunucu
- * hesabı başlamaz); `hazir` gelince abone + her yeni haritada `pemf.ikiz.alan`; çerçeve değişince `hazir` sıfırlanır (abonelik biter);
- * gönderim hatası yutulur.
+ * hesabı başlamaz); `hazir` gelince abone + her yeni haritada `pemf.ikiz.alan`; çerçeve GİDİNCE (gonder → null: yeniden yükleme / dil)
+ * `hazir` sıfırlanır (abonelik biter) — ama çerçeve yüklenmeden (gonder null iken) gelen `hazir` KORUNUR (ikiz onu load'dan önce
+ * gönderir); gönderim hatası yutulur.
  */
 const mockCtx: { snapshot: unknown; alanHaritasi: unknown; alanAbone: jest.Mock } = { snapshot: {}, alanHaritasi: null, alanAbone: jest.fn() };
 jest.mock("@/context/LiveDataContext", () => ({ useLiveData: () => mockCtx }));
@@ -61,10 +62,26 @@ describe("GA useIkizKoprusu", () => {
     expect(turler(g)).toContain("pemf.ikiz.alan");
     const alan = JSON.parse(g.mock.calls.find((c) => JSON.parse(c[0]).tur === "pemf.ikiz.alan")[0]);
     expect(alan).toMatchObject({ tur: "pemf.ikiz.alan", durum: "sifir", modelTahmini: true });
-    const g2 = jest.fn();
-    rerender({ gonder: g2 }); // yeniden yükleme → yeni çerçeve
+    rerender({ gonder: null as unknown as (m: string) => void }); // yeniden yükleme: eski çerçeve gider (ekranda gonder önce null olur)
     expect(result.current.hazir).toBe(false);
     expect(mockCtx.alanAbone.mock.calls).toEqual([[true], [false]]);
+    const g2 = jest.fn();
+    rerender({ gonder: g2 }); // yeni çerçeve yüklendi — yeniden hazir beklenir
+    expect(result.current.hazir).toBe(false);
+    expect(mockCtx.alanAbone.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("hazir çerçeve yüklenmeden (gonder null iken) gelirse korunur; gonder dolunca abone olunur", () => {
+    const g = jest.fn();
+    const { result, rerender } = renderHook(({ gonder }: { gonder: ((m: string) => void) | null }) => useIkizKoprusu(gonder), {
+      initialProps: { gonder: null as ((m: string) => void) | null },
+    });
+    act(() => result.current.gelen('{"tur":"pemf.ikiz.hazir","surum":1}'));
+    expect(result.current.hazir).toBe(true);
+    expect(mockCtx.alanAbone).not.toHaveBeenCalled(); // çerçeve yokken abonelik yok
+    rerender({ gonder: g });
+    expect(result.current.hazir).toBe(true);
+    expect(mockCtx.alanAbone.mock.calls).toEqual([[true]]);
   });
 
   it("gönderim hatası yutulur", () => {

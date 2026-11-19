@@ -28,8 +28,13 @@ export function useIkizKoprusu(gonder: ((metin: string) => void) | null): { gele
   );
 
   useEffect(() => {
-    setHazir(false);
-    if (!gonder) return undefined;
+    // ⚠️ `hazir` YALNIZ çerçeve giderken (gonder → null: yeniden yükleme / dil) sıfırlanır. İkiz `pemf.ikiz.hazir`i betiği koşarken,
+    // çerçevenin `load` olayından ÖNCE gönderir; `gonder` load'dan SONRA dolar → dolarken sıfırlamak el sıkışmayı siliyordu ve ikize
+    // alan haritası HİÇ gitmiyordu (kit uçtan uca denemesinde ölçüldü). Eski çerçeveden gelen ileti zaten kaynak denetiminde düşer.
+    if (!gonder) {
+      setHazir(false);
+      return undefined;
+    }
     guvenliGonder(durumIletisi(anlikRef.current));
     const id = setInterval(() => guvenliGonder(durumIletisi(anlikRef.current)), DURUM_ARALIK_MS);
     return () => clearInterval(id);
