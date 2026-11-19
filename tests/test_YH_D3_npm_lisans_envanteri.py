@@ -43,7 +43,9 @@ def _npm_bolumu_dosyada() -> str:
     metin = NOTICE.read_text(encoding="utf-8")
     m = re.search(r"^### [^\n]*\(npm\)[^\n]*$", metin, re.M)
     assert m, "THIRD_PARTY_LICENSES.md'de npm bölümü YOK"
-    return metin[m.start() :].strip()
+    bolum = metin[m.start() :]
+    son = re.search(r"^### ", bolum[1:], re.M)  # TA T6: npm bölümünün ardından Rust + LGPL bölümleri gelir
+    return (bolum[: son.start() + 1] if son else bolum).strip()
 
 
 def test_KRITIK_npm_bolumu_URETECIN_ciktisiyla_BIREBIR():

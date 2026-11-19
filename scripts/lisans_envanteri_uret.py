@@ -291,12 +291,14 @@ def envanter() -> list[tuple[str, str, str]]:
         surum, lisans = meta.get(ad, ("", ""))
         if not lisans:
             lisans = _BILINEN_LISANSLAR.get(ad, "")
+        lisans = _LISANS_ACIKLAMASI.get(ad, lisans)  # TA T6: iki lisanslı paketin hücresi açıklamalı
         satirlar.append((ad, surum or "—", lisans or "⚠️ doğrulanmadı"))
     # Pakette olup requirements'ta olmayanlar (dolayli bagimliliklar) da atif gerektirir.
     reqler = set(_req_paketleri())
     for ad, (surum, lisans) in sorted(meta.items()):
         if ad not in reqler:
-            satirlar.append((ad, surum or "—", lisans or _BILINEN_LISANSLAR.get(ad, "belirtilmemiş")))
+            lisans = _LISANS_ACIKLAMASI.get(ad, lisans or _BILINEN_LISANSLAR.get(ad, "belirtilmemiş"))
+            satirlar.append((ad, surum or "—", lisans))
     return sorted(satirlar, key=lambda t: t[0])
 
 
@@ -412,6 +414,120 @@ def npm_kopyleft() -> list[tuple[str, str, str]]:
     return [(a, s, li) for a, s, li in npm_envanteri() if spdx_kopyleft_mu(li)]
 
 
+#: TA T6 (S-I18N.7 + S-D67.9): BAŞLATICININ (Tauri / Rust) crate'leri. Sürüm `launcher/Cargo.lock`tan (kayıt defterinden gelen her
+#: paket; çalışma alanı üyeleri — `source` satırı olmayanlar — hariç); lisans her crate'in kendi `Cargo.toml` `license` alanından
+#: (`~/.cargo/registry/src/*/<ad>-<sürüm>/Cargo.toml`, ÇEVRİMDIŞI: `--rust-yenile`) → depodaki `scripts/rust_crate_lisanslari.json`
+#: (CI'da kayıt defteri yok; tablo bu dosyadan üretilir). Kapı: tests/test_TA_T6_rust_crate_ve_LGPL_lisanslari.py — Cargo.lock'ta olup
+#: envanterde / NOTICE'ta olmayan crate KIRMIZI.
+_CARGO_KILIDI = KOK / "launcher" / "Cargo.lock"
+_RUST_ENVANTERI = KOK / "scripts" / "rust_crate_lisanslari.json"
+_RUST_BASLIGI = "### Başlatıcı (Rust crate'leri)"
+_LGPL_BASLIGI = "### LGPL bileşenleri — lisans metinleri ve tam sürüm kaynakları"
+
+#: TA T6: lisans hücresi AÇIKLAMALI yazılan paketler (paket kendi içinde iki lisans bildirir; hangisinin neye uygulandığı açık olmalı).
+_LISANS_ACIKLAMASI = {
+    "pi-heif": "BSD-3-Clause (kaynak) · LGPL-3.0 (ikili: libheif 1.18.1 + libde265 1.0.15, ayrı DLL; kodlayıcı / GPL bileşen YOK)",
+}
+
+#: TA T6: LGPL bileşenleri — DEĞİŞTİRİLMEDEN, AYRI paylaşımlı kitaplık olarak (dinamik) dağıtılır. Tam sürüm kaynağı + tam metin.
+#: (bileşen, sürüm, lisans, kaynak bağlantıları, metin dosyaları)
+LGPL_BILESENLERI = (
+    ("pi-heif (Python bağlayıcısı)", "1.4.0", "BSD-3-Clause", "https://pypi.org/project/pi-heif/1.4.0/#files", ()),
+    (
+        "libheif (pi-heif içinde, ayrı DLL)",
+        "1.18.1",
+        "LGPL-3.0",
+        "https://github.com/strukturag/libheif/releases/tag/v1.18.1",
+        ("licenses/LGPL-3.0.txt", "licenses/GPL-3.0.txt"),
+    ),
+    (
+        "libde265 (pi-heif içinde, ayrı DLL; yalnız HEVC ÇÖZÜCÜ)",
+        "1.0.15",
+        "LGPL-3.0",
+        "https://github.com/strukturag/libde265/releases/tag/v1.0.15",
+        ("licenses/LGPL-3.0.txt", "licenses/GPL-3.0.txt"),
+    ),
+    (
+        "soxr (python-soxr + libsoxr)",
+        "1.1.0",
+        "LGPL-2.1-or-later",
+        "https://pypi.org/project/soxr/1.1.0/#files",
+        ("licenses/LGPL-2.1.txt",),
+    ),
+    (
+        "zeroconf",
+        "0.149.16",
+        "LGPL-2.1",
+        "https://pypi.org/project/zeroconf/0.149.16/#files",
+        ("licenses/LGPL-2.1.txt",),
+    ),
+)
+
+
+def cargo_paketleri(kilit: Path | None = None) -> list[tuple[str, str]]:
+    """Cargo.lock'taki kayıt defteri / git kaynaklı paketler (ad, sürüm) — çalışma alanı üyeleri (`source` yok) hariç, sıralı."""
+    metin = (kilit or _CARGO_KILIDI).read_text(encoding="utf-8")
+    cikti = set()
+    for blok in metin.split("[[package]]")[1:]:
+        ad = re.search(r'^name = "([^"]+)"', blok, re.M)
+        surum = re.search(r'^version = "([^"]+)"', blok, re.M)
+        if ad and surum and re.search(r"^source = ", blok, re.M):
+            cikti.add((ad.group(1), surum.group(1)))
+    return sorted(cikti)
+
+
+def rust_envanteri(dosya: Path | None = None) -> list[tuple[str, str, str]]:
+    """Depodaki Rust crate envanteri (ad, sürüm, lisans) — sıralı."""
+    veri = json.loads((dosya or _RUST_ENVANTERI).read_text(encoding="utf-8"))
+    return sorted((str(a), str(s), str(li)) for a, s, li in veri["crateler"])
+
+
+def rust_envanteri_yenile(kayit_kok: Path | None = None, kilit: Path | None = None) -> list[tuple[str, str, str]]:
+    """Cargo.lock + yerel kayıt defteri (`~/.cargo/registry/src`) → (ad, sürüm, lisans). Ağ YOK; bulunamayan "⚠️ doğrulanmadı"."""
+    kok = kayit_kok or Path.home() / ".cargo" / "registry" / "src"
+    satirlar = []
+    for ad, surum in cargo_paketleri(kilit):
+        lisans = ""
+        for toml in sorted(kok.glob(f"*/{ad}-{surum}/Cargo.toml")):
+            govde = toml.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r'^license\s*=\s*"([^"]+)"', govde, re.M)
+            lisans = (
+                m.group(1)
+                if m
+                else ("license-file (crate içi lisans dosyası)" if re.search(r"^license-file\s*=", govde, re.M) else "")
+            )
+            break
+        satirlar.append((ad, surum, lisans or "⚠️ doğrulanmadı"))
+    return satirlar
+
+
+def _rust_bolumu() -> str:
+    satirlar = rust_envanteri()
+    return (
+        f"\n{_RUST_BASLIGI}\n\n"
+        "Kaynak: `launcher/Cargo.lock` (sürüm; çalışma alanı üyeleri hariç) + her crate'in `Cargo.toml` `license` alanı\n"
+        "(`scripts/rust_crate_lisanslari.json`; `python scripts/lisans_envanteri_uret.py --rust-yenile` yerel kayıt defterinden\n"
+        "yeniden üretir). Çift lisanslı girdilerde (`A OR B`) izin veren seçenek kullanılır. `MPL-2.0` crate'ler dosya düzeyinde\n"
+        "kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sürümdür.\n\n" + _tablo(satirlar)
+    )
+
+
+def _lgpl_bolumu() -> str:
+    satirlar = "\n".join(
+        f"| `{ad}` | {surum} | {lisans} | {kaynak} | {' · '.join(f'[`{m}`]({m})' for m in metinler) or '—'} |"
+        for ad, surum, lisans, kaynak, metinler in LGPL_BILESENLERI
+    )
+    return (
+        f"\n{_LGPL_BASLIGI}\n\n"
+        "Aşağıdaki LGPL bileşenleri **değiştirilmeden**, uygulamadan **ayrı paylaşımlı kitaplık** (DLL / `.pyd`) olarak dağıtılır ve\n"
+        "dinamik bağlanır; kullanıcı bunları aynı arayüzle derlenmiş kendi sürümüyle değiştirebilir. Bağlantılar dağıtılan **tam\n"
+        "sürümün** kaynağıdır. Tam lisans metinleri depoda `licenses/` altındadır (LGPL-3.0, GPL-3.0'ın ek izinleri olarak yazıldığından\n"
+        "ikisi birlikte verilir). `pi-heif`in kendi kaynağı BSD-3-Clause'dur; LGPL yükümlülüğü içindeki libheif / libde265 ikililerinden\n"
+        "gelir (HEVC kodlayıcı ya da GPL bileşen içermez).\n\n"
+        "| Bileşen | Sürüm | Lisans | Tam sürüm kaynağı | Lisans metni |\n|---|---|---|---|---|\n" + satirlar + "\n"
+    )
+
+
 def _tablo(satirlar) -> str:
     bas = "| Paket | Sürüm | Lisans |\n|---|---|---|\n"
     return bas + "\n".join(f"| `{a}` | {s} | {li} |" for a, s, li in satirlar) + "\n"
@@ -439,7 +555,23 @@ def _npm_bolumu() -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--kontrol", action="store_true", help="yazma; yalniz fark varsa 1 don")
+    ap.add_argument(
+        "--rust-yenile",
+        action="store_true",
+        help="TA T6: launcher/Cargo.lock + yerel ~/.cargo/registry -> scripts/rust_crate_lisanslari.json (ag YOK)",
+    )
     a = ap.parse_args()
+
+    if a.rust_yenile:
+        satirlar = rust_envanteri_yenile()
+        veri = {
+            "aciklama": "TA T6: launcher/Cargo.lock (surum) + ~/.cargo/registry Cargo.toml `license` (uretec: --rust-yenile)",
+            "crateler": [list(s) for s in satirlar],
+        }
+        _RUST_ENVANTERI.write_text(json.dumps(veri, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        eksik = [s[0] for s in satirlar if "doğrulanmadı" in s[2]]
+        print(f"[OK] {_RUST_ENVANTERI.name}: {len(satirlar)} crate" + (f" · DOGRULANMAMIS: {eksik}" if eksik else ""))
+        return 1 if eksik else 0
 
     # ⚠️ D4.08 (B-10.94, 2026-10-10): paket YOKKEN `paket_lisanslari` boş sözlük döner ve tablo yalnız requirements'tan
     # kurulur — dolaylı bağımlılıkların atfı sessizce SİLİNİRDİ (ölçüldü: 113 → ~44 satır, "[OK]", çıkış 0). Paketsiz
@@ -461,7 +593,11 @@ def main() -> int:
         "düzenlemeyin. Kaynaklar: `requirements.txt` (sevk edilen çalışma-zamanı\n"
         "bağımlılıkları) + `pemf-app-packages/base-deps.zip` içindeki `dist-info/METADATA`.\n\n"
         "⚠️ PyInstaller çoğu paketin metadata'sını ayıkladığı için sürüm/lisans alanları\n"
-        "pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.\n\n" + _tablo(satirlar) + _npm_bolumu()
+        "pakette bulunamayan satırlarda doğrulanmış sabit tablodan gelir.\n\n"
+        + _tablo(satirlar)
+        + _npm_bolumu()
+        + _rust_bolumu()
+        + _lgpl_bolumu()
     )
     yeni = ust + yeni_govde
 
