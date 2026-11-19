@@ -2,8 +2,10 @@
 /**
  * KP-3 C · src/pages/ResetPassword.tsx · sözleşmeler (GERÇEK sayfa + GERÇEK şifre kuralı / hata çevirisi; sahte EN ALT katta — Supabase
  * `onAuthStateChange` / `getSession` / `updateUser`):
- *  - kurtarma oturumu gelmeden alanlar + düğme kilitli, "doğrulanıyor" + ana sayfa bağlantısı; PASSWORD_RECOVERY / SIGNED_IN ya da hazır
- *    oturum kilidi açar, ilgisiz olay açmaz; ayrılınca abonelik kalkar; Supabase yoksa dinleyici kurulmaz,
+ *  - kurtarma oturumu gelmeden alanlar + düğme kilitli, "doğrulanıyor" + ana sayfa bağlantısı; YALNIZ PASSWORD_RECOVERY (olay ya da
+ *    açılışta yakalanmış kurtarma kimliği) kilidi açar — TA T2 (Y292-3): düz SIGNED_IN / sekmede zaten girişli hesap AÇMAZ →
+ *    "bağlantı geçersiz / süresi doldu" + yeniden iste; gönderimde oturum kurtarma kullanıcısı değilse sunucuya GİDİLMEZ;
+ *    ayrılınca abonelik kalkar; Supabase yoksa dinleyici kurulmaz,
  *  - zayıf / eşleşmeyen şifre sunucuya GİTMEZ; geçerli → updateUser({password}), sürerken kilitli, başarı ekranı; ret Türkçe, yeni denemede silinir.
  * Düzenek: KP2 mini çizici (KP2-AuthModal.test.tsx'teki blok, AYNEN).
  */
@@ -401,6 +403,7 @@ const sb = vi.hoisted(() => {
   const d = {
     hazir: true,
     oturum: null as unknown,
+    kurtarma: null as string | null,
     dinleyiciler: [] as ((olay: string) => void)[],
     abonelikKalkti: 0,
     cagri: [] as unknown[],
@@ -426,6 +429,7 @@ vi.mock('../../lib/supabase', () => ({
     return sb.d.hazir
   },
   supabase: sb.istemci,
+  kurtarmaKullanicisi: () => sb.d.kurtarma,
 }))
 vi.mock('react-router-dom', () => ({
   Link: ({ to, className, children }: { to: string; className?: string; children: unknown }) =>
@@ -460,7 +464,14 @@ const sifre = (anahtar: string) => tek(c.agac, (d) => d.tip === 'input' && d.pro
 const formu = () => tek(c.agac, (d) => d.tip === 'form', 'form')
 const gonderDugmesi = () => tek(c.agac, (d) => d.tip === 'button' && d.props.type === 'submit', 'gönder')
 async function kurtarmaGelir() {
+  sb.d.kurtarma = 'u-kurtarma'
+  sb.d.oturum = { user: { id: 'u-kurtarma' } }
   sb.d.dinleyiciler[0]('PASSWORD_RECOVERY')
+  await c.bosalt()
+}
+/** Bileşen kararı `setTimeout(0)` ile verir (olay bir sonraki makro görevde yayılır) → zamanlayıcıyı GERÇEKTEN geçir. */
+async function kararBekle() {
+  await new Promise((r) => setTimeout(r, 5))
   await c.bosalt()
 }
 async function doldurGonder(a: string, b: string) {
@@ -473,6 +484,7 @@ async function doldurGonder(a: string, b: string) {
 beforeEach(async () => {
   sb.d.hazir = true
   sb.d.oturum = null
+  sb.d.kurtarma = null
   sb.d.dinleyiciler = []
   sb.d.abonelikKalkti = 0
   sb.d.cagri = []
@@ -487,35 +499,101 @@ afterEach(() => {
 })
 
 describe('KP-3 · ResetPassword — kurtarma oturumu', () => {
-  it('kurtarma oturumu GELMEDEN alanlar ve düğme kilitli, "doğrulanıyor" + ana sayfa bağlantısı', () => {
-    expect(sifre('hesap.sifirla.yeniSifre').props.disabled).toBe(true)
-    expect(sifre('hesap.sifirla.yeniSifreTekrar').props.disabled).toBe(true)
+  it('kurtarma oturumu GELMEDEN alanlar ve düğme kilitli, "doğrulanıyor" + ana sayfa bağlantısı; karar anında kurtarma yoksa "geçersiz"', async () => {
+    // Karar `setTimeout(0)` ile verilir → sahte zamanlayıcıyla iki aşama belirlenimci (yükte gerçek zamanlayıcı erken düşebilir).
+    c.sokHepsi()
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      await ciz()
+      expect(sifre('hesap.sifirla.yeniSifre').props.disabled).toBe(true)
+      expect(sifre('hesap.sifirla.yeniSifreTekrar').props.disabled).toBe(true)
+      expect(gonderDugmesi().props.disabled).toBe(true)
+      expect(metin(c.agac)).toContain(t('hesap.sifirla.dogrulaniyor'))
+      expect(hepsi(c.agac, (d) => d.tip === 'a' && d.props.href === '/')).toHaveLength(1)
+      vi.advanceTimersByTime(1)
+    } finally {
+      vi.useRealTimers()
+    }
+    await c.bosalt()
+    expect(metin(c.agac)).toContain(t('hesap.sifirla.gecersiz'))
+    expect(metin(c.agac)).not.toContain(t('hesap.sifirla.dogrulaniyor'))
     expect(gonderDugmesi().props.disabled).toBe(true)
-    expect(metin(c.agac)).toContain(t('hesap.sifirla.dogrulaniyor'))
-    expect(hepsi(c.agac, (d) => d.tip === 'a' && d.props.href === '/')).toHaveLength(1)
   })
 
-  it('PASSWORD_RECOVERY (ya da SIGNED_IN) olayı kilidi açar; ilgisiz olay AÇMAZ', async () => {
+  it('PASSWORD_RECOVERY olayı kilidi açar; ilgisiz olay ve — TA T2 — düz SIGNED_IN AÇMAZ', async () => {
     sb.d.dinleyiciler[0]('TOKEN_REFRESHED')
+    sb.d.dinleyiciler[0]('SIGNED_IN')
     await c.bosalt()
     expect(gonderDugmesi().props.disabled).toBe(true)
     await kurtarmaGelir()
     expect(gonderDugmesi().props.disabled).toBe(false)
     expect(metin(c.agac)).not.toContain(t('hesap.sifirla.dogrulaniyor'))
-    c.sokHepsi()
-    await ciz()
-    sb.d.dinleyiciler[sb.d.dinleyiciler.length - 1]('SIGNED_IN')
-    await c.bosalt()
-    expect(gonderDugmesi().props.disabled).toBe(false)
+    expect(metin(c.agac)).not.toContain(t('hesap.sifirla.gecersiz'))
   })
 
-  it('bağlantıyla zaten kurulmuş oturum varsa (getSession) olay beklenmeden kilit açılır; ayrılınca abonelik kalkar', async () => {
+  it('KRİTİK (TA T2 · Y292-3): sekmede ZATEN girişli hesap (getSession) kilidi AÇMAZ → "geçersiz / süresi doldu" + yeniden iste yolu', async () => {
     c.sokHepsi()
-    const once = sb.d.abonelikKalkti
-    expect(once).toBe(1)
-    sb.d.oturum = { user: { email: 'vet@ornek.test' } }
+    expect(sb.d.abonelikKalkti).toBe(1) // ayrılınca abonelik kalkar
+    sb.d.oturum = { user: { id: 'u-baska', email: 'vet@ornek.test' } }
+    await ciz()
+    sb.d.dinleyiciler[sb.d.dinleyiciler.length - 1]('SIGNED_IN')
+    await kararBekle()
+    expect(sifre('hesap.sifirla.yeniSifre').props.disabled).toBe(true)
+    expect(gonderDugmesi().props.disabled).toBe(true)
+    expect(metin(c.agac)).toContain(t('hesap.sifirla.gecersiz'))
+    expect(metin(c.agac)).not.toContain(t('hesap.sifirla.dogrulaniyor'))
+    expect(hepsi(c.agac, (d) => d.tip === 'a' && d.props.href === '/')).toHaveLength(1)
+    expect(metin(c.agac)).toContain(t('hesap.sifirla.tekrarlayin'))
+  })
+
+  it('kurtarma kimliği bileşenden ÖNCE yakalandıysa (olay URL işlenirken yayıldı) kilit hemen açılır, "geçersiz" görünmez', async () => {
+    c.sokHepsi()
+    sb.d.kurtarma = 'u-kurtarma'
+    sb.d.oturum = { user: { id: 'u-kurtarma' } }
     await ciz()
     expect(gonderDugmesi().props.disabled).toBe(false)
+    await kararBekle()
+    expect(gonderDugmesi().props.disabled).toBe(false)
+    expect(metin(c.agac)).not.toContain(t('hesap.sifirla.gecersiz'))
+  })
+
+  it('olay getSession çözüldükten sonra ama karar zamanlayıcısından ÖNCE kaydedildiyse de kilit açılır', async () => {
+    c.sokHepsi()
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      await ciz()
+      expect(gonderDugmesi().props.disabled).toBe(true)
+      sb.d.kurtarma = 'u-kurtarma'
+      vi.advanceTimersByTime(1)
+    } finally {
+      vi.useRealTimers()
+    }
+    await c.bosalt()
+    expect(gonderDugmesi().props.disabled).toBe(false)
+    expect(metin(c.agac)).not.toContain(t('hesap.sifirla.gecersiz'))
+  })
+
+  it('KRİTİK (TA T2): gönderim anında oturum kurtarma kullanıcısı DEĞİLSE (arada başka hesapla giriş / çıkış) sunucuya GİDİLMEZ, form kilitlenir', async () => {
+    await kurtarmaGelir()
+    sb.d.oturum = { user: { id: 'u-baska' } }
+    await doldurGonder(GECERLI, GECERLI)
+    expect(sb.d.cagri).toHaveLength(0)
+    expect(gonderDugmesi().props.disabled).toBe(true)
+    expect(metin(c.agac)).toContain(t('hesap.sifirla.gecersiz'))
+    // oturum hiç yoksa / kurtarma kimliği unutulduysa (SIGNED_OUT) da aynı
+    c.sokHepsi()
+    await ciz()
+    await kurtarmaGelir()
+    sb.d.oturum = null
+    await doldurGonder(GECERLI, GECERLI)
+    sb.d.kurtarma = null
+    expect(sb.d.cagri).toHaveLength(0)
+    c.sokHepsi()
+    await ciz()
+    await kurtarmaGelir()
+    sb.d.kurtarma = null
+    await doldurGonder(GECERLI, GECERLI)
+    expect(sb.d.cagri).toHaveLength(0)
   })
 
   it('Supabase yapılandırılmamışsa dinleyici KURULMAZ, sayfa kilitli kalır (çökme yok)', async () => {

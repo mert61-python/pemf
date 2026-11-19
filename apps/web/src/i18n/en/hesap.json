@@ -107,6 +107,7 @@
     "anaSayfaBaglanti": "open the sign-in window from the home page and",
     "baslik": "Set a new password",
     "dogrulaniyor": "Verifying the reset link… If this message stays, the link may have expired. To get a new link,",
+    "gecersiz": "This reset link is invalid or has expired. To get a new link,",
     "girisYapabilirsiniz": "You can now sign in with your new password.",
     "guncelle": "Update password",
     "guncellendi": "Your password has been updated",

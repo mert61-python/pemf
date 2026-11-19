@@ -107,6 +107,7 @@
     "anaSayfaBaglanti": "ana sayfadan giriş penceresini açıp",
     "baslik": "Yeni şifre belirle",
     "dogrulaniyor": "Sıfırlama bağlantısı doğrulanıyor… Bu mesaj kalıcıysa bağlantının süresi dolmuş olabilir. Yeni bir bağlantı almak için",
+    "gecersiz": "Bu sıfırlama bağlantısı geçersiz ya da süresi dolmuş. Yeni bir bağlantı almak için",
     "girisYapabilirsiniz": "Yeni şifrenizle giriş yapabilirsiniz.",
     "guncelle": "Şifreyi güncelle",
     "guncellendi": "Şifreniz güncellendi",

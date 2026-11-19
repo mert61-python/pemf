@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase, supabaseReady } from '../lib/supabase'
+import { kurtarmaKullanicisi, supabase, supabaseReady } from '../lib/supabase'
 import { authHatasiTurkce, SIFRE_KURALI, sifreGecerliMi } from '../lib/authHatalari'
 import { useTranslation } from 'react-i18next'
 
@@ -20,20 +20,29 @@ import { useTranslation } from 'react-i18next'
 export default function ResetPassword() {
   const { t } = useTranslation()
   const [ready, setReady] = useState(false)
+  const [gecersiz, setGecersiz] = useState(false)
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
+  /* TA T2 (Y292-3): form YALNIZ gerçek kurtarma oturumunda açılır — `PASSWORD_RECOVERY` olayı (bkz. lib/supabase.ts
+     `kurtarmaKullanicisi`). Düz `SIGNED_IN` ya da sekmede zaten girişli bir hesap AÇMAZ: eskiden geçersiz / süresi dolmuş
+     bağlantıyla gelen kişi o an girişli hesabın şifresini değiştirebiliyordu. İstemci URL'yi çözdükten sonra (getSession
+     başlatmayı bekler) kurtarma yoksa "bağlantı geçersiz / süresi doldu" + yeniden iste yolu gösterilir. */
   useEffect(() => {
     if (!supabaseReady) return
-    // Kurtarma oturumu URL'den çözülünce hazır ol.
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setReady(true)
+      if (event === 'PASSWORD_RECOVERY') setReady(true)
     })
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true)
+    if (kurtarmaKullanicisi()) setReady(true)
+    void supabase.auth.getSession().then(() => {
+      // Olay, URL işlenince bir sonraki makro görevde yayılır → karar ondan SONRA verilir (yanlış "geçersiz" parlaması olmasın).
+      setTimeout(() => {
+        if (kurtarmaKullanicisi()) setReady(true)
+        else setGecersiz(true)
+      }, 0)
     })
     return () => sub.subscription.unsubscribe()
   }, [])
@@ -46,6 +55,14 @@ export default function ResetPassword() {
     }
     if (pw !== pw2) return setErr(t('hesap.hata.sifrelerEslesmiyor'))
     setBusy(true)
+    // Gönderim anında oturum HÂLÂ kurtarma bağlantısının kullanıcısı mı? (arada başka sekmede başka hesapla giriş / çıkış olabilir)
+    const { data } = await supabase.auth.getSession()
+    const kimlik = kurtarmaKullanicisi()
+    if (!kimlik || data.session?.user?.id !== kimlik) {
+      setBusy(false)
+      setReady(false)
+      return setGecersiz(true)
+    }
     const { error } = await supabase.auth.updateUser({ password: pw })
     setBusy(false)
     if (error) return setErr(authHatasiTurkce(error.message))
@@ -70,7 +87,7 @@ export default function ResetPassword() {
           unuttum" adımını tekrarlayabileceği bir yol var. */}
       {!ready && (
         <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-warning">
-          {t('hesap.sifirla.dogrulaniyor')}{' '}
+          {gecersiz ? t('hesap.sifirla.gecersiz') : t('hesap.sifirla.dogrulaniyor')}{' '}
           <Link to="/" className="font-medium underline">{t('hesap.sifirla.anaSayfaBaglanti')}</Link>{' '}
           {t('hesap.sifirla.tekrarlayin')}
         </p>
