@@ -304,7 +304,8 @@ def test_uretec_bicimleri_eslesme_6_yonetici_8_karisik_harf_YOK_cihaz_kimligi_MA
 
     izinli = set("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
     kod = sm.get_secret("pairing_code")
-    assert len(kod) == 6 and set(kod) <= izinli and sm.get_secret("pairing_code") == kod
+    # TA T5 (çoklu klinik P2): YENİ eşleştirme kodu 8 karakter (test adındaki "6" tarihsel — düğüm kimliği korunur)
+    assert len(kod) == 8 and set(kod) <= izinli and sm.get_secret("pairing_code") == kod
     yk = sm.get_secret("admin_reset_code")
     assert len(yk) == 8 and set(yk) <= izinli and not set(yk) & set("0O1IL")
     monkeypatch.setattr(uuid, "getnode", lambda: 0x1A2B3C4D5E6F)
@@ -334,7 +335,7 @@ def test_eski_kaynak_okuyucusu_PATLARSA_yeni_deger_uretilir_acilis_kirilmaz(orta
         (bolum, dpapi, uretec, lambda: (_ for _ in ()).throw(OSError("eski dosya kilitli"))),
     )
     kod = sm.get_secret("pairing_code")
-    assert len(kod) == 6 and _dosya()["auto"]["pairing_code"] == kod
+    assert len(kod) == 8 and _dosya()["auto"]["pairing_code"] == kod  # TA T5: yeni kod 8 karakter
 
 
 def test_donmus_pakette_provizyon_MEIPASS_altindan_okunur_bozuksa_bos(ortam, monkeypatch, tmp_path):

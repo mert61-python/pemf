@@ -339,7 +339,9 @@ def _gen_fernet() -> str:
 
 def _gen_pairing() -> str:
     alpha = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 0,O,1,I,L hariç
-    return "".join(_secrets.choice(alpha) for _ in range(6))
+    # TA T5 (çoklu klinik P2): yeni eşleştirme kodu 8 karakter — `path_utils._PAIRING_CODE_LENGTH` ile AYNI (kapı:
+    # tests/test_TA_T5_cihaz_kodu_8_karakter.py); kayıtlı 6'lık kod okunmaya devam eder (`pairing_code.txt`).
+    return "".join(_secrets.choice(alpha) for _ in range(8))
 
 
 def _gen_admin_code() -> str:

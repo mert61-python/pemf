@@ -700,11 +700,16 @@ def get_unique_device_id():
 # Eşleştirme kodu için kullanılan karakter kümesi:
 # A-Z + 2-9 ama BELİRSİZ olanlar HARİÇ (0, O, 1, I, L → karışmasın).
 _PAIRING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-_PAIRING_CODE_LENGTH = 6
+# TA T5 (çoklu klinik P2, seçenek a — DoS-nötr): YENİ kodlar 8 karakter (31⁸ ≈ 852 milyar; 6'lık 31⁶ ≈ 887 milyon). Bulut
+# `resolve_device` sır almadan kodu çözer ve hız sınırı yok → kaba kuvvet uzayı büyütülür, kilit / sayaç EKLENMEZ.
+# GEÇİŞ: cihazda kayıtlı 6 karakterli kod GEÇERLİ kalır (yeniden üretilmez; telefonlar yeniden eşleşmez) —
+# `supabase/cihaz_kodu_8_karakter.sql` RPC'de 6 VE 8'i kabul eder. Kodu 8'e çevirmek: PEMF_RESET_PAIRING_CODE=1.
+_PAIRING_CODE_LENGTH = 8
+_PAIRING_CODE_ESKI_UZUNLUK = 6
 
 
 def get_pairing_code():
-    """Bu cihaza ait KALICI 6 haneli eşleştirme kodunu döndürür.
+    """Bu cihaza ait KALICI eşleştirme kodunu döndürür (yeni: 8 karakter; kayıtlı 6 karakterli kod geçerli kalır — TA T5).
 
     Mobil uygulama, cihazı bu kod ile eşleştirir. Kod ilk çağrıda BİR KEZ
     üretilir (secrets modülü → kriptografik) ve app_data/pairing_code.txt
@@ -728,7 +733,9 @@ def get_pairing_code():
         if code_path.exists():
             existing = code_path.read_text(encoding="utf-8").strip().upper()
             # Yalnızca geçerli (doğru uzunluk + alfabe) ise kabul et; bozuksa yeniden üret.
-            if len(existing) == _PAIRING_CODE_LENGTH and all(ch in _PAIRING_CODE_ALPHABET for ch in existing):
+            if len(existing) in (_PAIRING_CODE_LENGTH, _PAIRING_CODE_ESKI_UZUNLUK) and all(
+                ch in _PAIRING_CODE_ALPHABET for ch in existing
+            ):
                 return existing
     except Exception:
         pass

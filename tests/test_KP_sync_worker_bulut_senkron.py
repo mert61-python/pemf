@@ -377,7 +377,7 @@ def test_KAYIT_tunel_URL_TTL_icinde_KORUNUR_asilinca_NULL(ortam, caplog):
 def test_KAYIT_surum_alanlari_REDDEDILIRSE_BIR_kez_uyari_eski_imza(ortam, caplog):
     """`upsert_device` sürüm alanlı imzayı PGRST202 ile reddediyor, eski imzayı kabul ediyor → iki yayın da True, durum "ok";
     her yayında önce `p_app_version`lı sonra onsuz çağrı; "Filo envanteri" uyarısı YALNIZ bir kez; dört çağrının hepsinde
-    `p_pairing_code` veri kökündeki KALICI `pairing_code.txt` (6 karakter, ürün alfabesi; iki yayın arasında değişmez)."""
+    `p_pairing_code` veri kökündeki KALICI `pairing_code.txt` (yeni kurulumda 8 karakter — TA T5; ürün alfabesi; iki yayın arasında değişmez)."""
     from utils import path_utils
 
     def _davranis(ad, params):
@@ -392,7 +392,9 @@ def test_KAYIT_surum_alanlari_REDDEDILIRSE_BIR_kez_uyari_eski_imza(ortam, caplog
     assert w._registry_status == "ok"
     assert ["p_app_version" in p for p in _upsert(ist)] == [True, False, True, False]
     kod = (ortam.kok / "pairing_code.txt").read_text(encoding="utf-8")
-    assert len(kod) == 6 and all(ch in path_utils._PAIRING_CODE_ALPHABET for ch in kod)
+    assert len(kod) == path_utils._PAIRING_CODE_LENGTH == 8 and all(
+        ch in path_utils._PAIRING_CODE_ALPHABET for ch in kod
+    )
     assert [p["p_pairing_code"] for p in _upsert(ist)] == [kod] * 4
     assert _upsert(ist)[1]["p_secret"] == "kp-sir" and _upsert(ist)[1]["p_device_id"] == "kp-cihaz"
     assert sum("Filo envanteri: upsert_device SÜRÜM ALANLARINI kabul etmiyor" in m for m in _log(caplog)) == 1

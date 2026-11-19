@@ -84,7 +84,8 @@ revoke all on function public.upsert_device(text,text,text,text,integer,text,tex
 grant execute on function public.upsert_device(text,text,text,text,integer,text,text) to anon;
 
 -- NOT: resolve_device DEĞİŞMEDİ ve cihaz-sırrı (p_secret) İSTEMEZ. İKİ dalı var (`supabase_devices.sql`, canlıda
--- `supabase/resolve_device_bayat_gorunur.sql`): TAM 6 haneli PAIRING-KODU (operatörün paylaştığı) YA DA TAM device_id.
+-- `supabase/resolve_device_bayat_gorunur.sql`): TAM 8 (eski kurulumlarda 6) karakterli PAIRING-KODU (operatörün paylaştığı;
+-- TA T5 · `supabase/cihaz_kodu_8_karakter.sql`) YA DA TAM device_id.
 -- ⚠️ D6.14 (B-3.61): device_id dalı SIRSIZDIR — device_id'yi bilen herkes (yukarıda: device_id GİZLİ DEĞİL) kod OLMADAN
 -- son 30 günde görülmüş TEK cihazın tunnel_url / local_ip'sini okur; tünel-URL okuması pairing koduyla KAPILI DEĞİLDİR.
 -- Dal BİLEREK korunur: eşleşmiş mobil uygulama kayıtlı kimlikle yeniden bağlanır (`apps/ui/src/services/deviceRegistry.ts`

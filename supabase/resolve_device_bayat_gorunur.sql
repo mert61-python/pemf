@@ -33,7 +33,7 @@ language sql security definer set search_path = public as $$
     from public.devices d
     where d.last_seen > now() - interval '30 days'
       and ( (p_device_id is not null and d.device_id = p_device_id)
-            or (p_code is not null and length(p_code)=6 and upper(d.pairing_code)=upper(p_code)) )
+            or (p_code is not null and length(p_code) in (6, 8) and upper(d.pairing_code)=upper(p_code)) )
     order by d.last_seen desc limit 1;
 $$;
 
