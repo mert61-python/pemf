@@ -244,6 +244,28 @@ def _estop_mandali_sizmaz():
 
 
 @pytest.fixture(autouse=True)
+def _jeton_jwks_test_anahtari():
+    """TA T4 (Y137 · S-D3.9): jeton kapısı JWT imzasını YERELDE (önbellekli JWKS) doğrular. Yüklüyse `servers.jeton`un JWKS
+    taşıması (`_jwks_getir` — EN ALT kat, ağ GET'i) test anahtarına (`tests/jwt_test_anahtari.TEST_JWKS`) bağlanır ve önbellek her
+    testte sıfırlanır; test belirteçleri `imzali_jwt` ile GERÇEKTEN imzalanır (doğrulama kodu sahtelenmez). İmza / kid / exp / alg /
+    iss reddi kolları: tests/test_TA_T4_jwt_imza_JWKS.py. `monkeypatch` İSTENMEZ (aşağıdaki AIK notu): öznitelik elle geri yüklenir."""
+    m = sys.modules.get("servers.jeton")
+    if m is None or not hasattr(m, "_jwks_getir"):
+        yield
+        return
+    from jwt_test_anahtari import TEST_JWKS
+
+    eski = m._jwks_getir
+    m._jwks_getir = lambda: TEST_JWKS
+    m._jwks_onbellek.update(anahtarlar={}, zaman=None, son_zorla=None)
+    try:
+        yield
+    finally:
+        m._jwks_getir = eski
+        m._jwks_onbellek.update(anahtarlar={}, zaman=None, son_zorla=None)
+
+
+@pytest.fixture(autouse=True)
 def _kedi_aipro_surus_bugunku():
     """Y142 (sahip 2026-10-13): ürünün varsayılanı kedi AI Pro sürüşü KAPALI (`PEMF_KEDI_AIPRO_SURUS` yok = kapalı). Süitin
     kedi AI Pro kapıları (başlatma, döngü, `/frame`, mühür, Y54/Y25/D1.8x …) bayrak AÇIKKEN bugünkü davranışı ölçer —

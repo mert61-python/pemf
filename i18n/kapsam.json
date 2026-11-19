@@ -3862,6 +3862,13 @@
      ]
     },
     {
+     "metin": "jeton: supabase yapilandirmasi yok (JWKS)",
+     "gerekce": "iç hata iletisi (TA T4: JWKS taşıması; `_jwks_anahtarlari` yakalar, günlüğe gider) — kullanıcıya gösterilmez",
+     "turler": [
+      "istisna"
+     ]
+    },
+    {
      "metin": "Bearer",
      "gerekce": "HTTP başlığı (Bearer) — metin değil",
      "turler": [

@@ -25,6 +25,7 @@ import re
 import pytest
 from fastapi import HTTPException
 from fastapi.routing import APIRoute
+from jwt_test_anahtari import imzali_jwt  # TA T4: GERÇEK ES256 imzalı test belirteci (JWKS doğrulaması)
 
 #: Jetondan BAĞIMSIZ olması pazarlık edilemez uçlar (Ö.4-Y8, D4.11 planı). Sabit — üretim kümesinden türetilmez.
 _GUVENLIK_UCLARI = frozenset(
@@ -46,7 +47,7 @@ class _Istek:
     def __init__(self, path: str):
         self.url = type("U", (), {"path": path})()
         # 4B-1.5: `sub` taşıyan JWT ({"sub": "test-kullanici"}) — kimliği çözülemeyen jeton zorlama açıkken 402 alır.
-        self.headers = {"authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWt1bGxhbmljaSJ9.imza"}
+        self.headers = {"authorization": "Bearer " + imzali_jwt({"sub": "test-kullanici"})}
 
 
 def _somut(yol: str) -> str:

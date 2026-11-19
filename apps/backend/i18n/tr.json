@@ -743,6 +743,7 @@
       "borcTavani": "Kullandıkça öde üyeliğinizde faturalanmamış kullanım sınırına ulaşıldı; yeni yapay zekâ analizi başlatılamadı. Ödemeniz alındığında sınır sıfırlanır. Seans, acil durdurma ve sensör izleme ETKİLENMEZ.",
       "cevrimdisi": "İnternet bağlantısı yok — yapay zekâ analizi şu an başlatılamadı. Analiz ücreti hesabınızdan çevrimiçi düşüldüğü için internet gerekir; bağlantı gelince yeniden deneyin. Seans, acil durdurma ve sensör izleme ETKİLENMEZ.",
       "kimlikGerekli": "Ücretli yapay zekâ analizi için hesabınızla giriş yapın (analiz jetonu hesabınızdan düşülür). Seans, acil durdurma ve sensör izleme bundan ETKİLENMEZ.",
+      "oturumDogrulanamadi": "Hesap oturumunuz doğrulanamadı — yapay zekâ analizi başlatılamadı. Çıkış yapıp hesabınızla yeniden giriş yapın; internet bağlantınızı da denetleyin. Seans, acil durdurma ve sensör izleme ETKİLENMEZ.",
       "yetersiz": "Jeton hakkınız bitti; yeni yapay zekâ analizi başlatılamadı. Seans, acil durdurma ve sensör izleme bundan ETKİLENMEZ. Ek jeton paketiyle hemen devam edebilirsiniz."
     }
   },

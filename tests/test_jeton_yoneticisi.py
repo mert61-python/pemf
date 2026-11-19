@@ -26,6 +26,7 @@ import importlib
 import os
 
 import pytest
+from jwt_test_anahtari import imzali_jwt  # TA T4: GERÇEK ES256 imzalı test belirteci (JWKS doğrulaması)
 
 _ORTAM_ANAHTARLARI = ("PEMF_JETON_ENFORCED", "PEMF_DATA_DIR")
 
@@ -56,6 +57,11 @@ def _yeni(tmp_path, **env):
     import servers.jeton as j
 
     importlib.reload(j)
+    from jwt_test_anahtari import TEST_JWKS
+
+    j._jwks_getir = lambda: (
+        TEST_JWKS
+    )  # TA T4: yeniden yükleme conftest'in JWKS bağını siler → test anahtarına yeniden bağla
     # T3 · Y194: jeton KOD düzeyinde kapalı (`JETON_SAHIP_ACIK = False`, ortam yok sayılır) → ücretlendirme mantığı burada sahip
     # anahtarı açılmış gibi sınanır (satış açılınca geçerli olacak davranış).
     j.JETON_ENFORCED = os.environ.get("PEMF_JETON_ENFORCED") == "1"
@@ -79,7 +85,7 @@ class _IstekKimlikli(_Istek):
 
     def __init__(self, path: str):
         super().__init__(path)
-        self.headers = {"authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWt1bGxhbmljaSJ9.imza"}
+        self.headers = {"authorization": "Bearer " + imzali_jwt({"sub": "test-kullanici"})}
 
 
 _GUVENLIK_YOLLARI_ORNEK = (

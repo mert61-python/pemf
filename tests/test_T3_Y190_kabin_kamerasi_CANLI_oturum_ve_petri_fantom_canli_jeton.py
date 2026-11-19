@@ -230,11 +230,10 @@ def test_KRITIK_canli_durdur_ucu_oturumu_KAPATIR_tarama_CANLI_acikken_409_secim_
 
 
 def _jwt(sub: str) -> str:
-    """Sahte belirteç ÇALIŞMA ANINDA üretilir (depoda belirteç biçimli dizge durmaz — gitleaks `jwt` kuralı)."""
-    import json
+    """Belirteç ÇALIŞMA ANINDA üretilir (depoda belirteç biçimli dizge durmaz — gitleaks `jwt` kuralı)."""
+    from jwt_test_anahtari import imzali_jwt  # TA T4: GERÇEK ES256 imza (JWKS doğrulaması)
 
-    g = base64.urlsafe_b64encode(json.dumps({"sub": sub}).encode()).decode().rstrip("=")
-    return f"eyJhbGciOiJIUzI1NiJ9.{g}.sahte-imza"
+    return imzali_jwt({"sub": sub})
 
 
 def _istek(yol, oturum=None):

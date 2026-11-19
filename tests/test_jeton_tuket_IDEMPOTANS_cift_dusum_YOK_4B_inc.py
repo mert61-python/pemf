@@ -85,8 +85,9 @@ def test_KARSIT_KANIT_sql_olcucusu_SILINEN_degismezleri_YAKALAR():
 
 
 def _jwt(sub: str) -> str:
-    b = base64.urlsafe_b64encode(json.dumps({"sub": sub}).encode()).decode().rstrip("=")
-    return f"eyJhbGciOiJIUzI1NiJ9.{b}.imza"
+    from jwt_test_anahtari import imzali_jwt  # TA T4: GERÇEK ES256 imza (JWKS doğrulaması)
+
+    return imzali_jwt({"sub": sub})
 
 
 def _sub(token: str) -> str:

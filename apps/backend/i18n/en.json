@@ -743,6 +743,7 @@
       "borcTavani": "Your pay as you go membership has reached its unbilled usage limit; a new AI analysis could not be started. The limit resets when your payment is received. Sessions, emergency stop and sensor monitoring are NOT affected.",
       "cevrimdisi": "No internet connection — the AI analysis could not be started right now. Because the analysis fee is deducted from your account online, the internet is required; try again when the connection is back. Sessions, emergency stop and sensor monitoring are NOT affected.",
       "kimlikGerekli": "Sign in with your account for paid AI analysis (the analysis credit is deducted from your account). Sessions, emergency stop and sensor monitoring are NOT affected by this.",
+      "oturumDogrulanamadi": "Your account session could not be verified — the AI analysis could not be started. Sign out and sign in again with your account; also check your internet connection. Sessions, emergency stop and sensor monitoring are NOT affected.",
       "yetersiz": "Your credit allowance has run out; a new AI analysis could not be started. Sessions, emergency stop and sensor monitoring are NOT affected by this. You can continue right away with an extra credit pack."
     }
   },

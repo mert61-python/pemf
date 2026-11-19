@@ -2048,6 +2048,13 @@
   },
   {
    "yuzey": "sunucu",
+   "anahtar": "jeton.mesaj.oturumDogrulanamadi",
+   "tur": "seans",
+   "kaynak": "apps/backend/servers/jeton.py",
+   "aciklama": "oturum imzası doğrulanamadı (TA T4 · Y137): yeniden giriş; seans, acil durdurma ve sensör izleme etkilenmez"
+  },
+  {
+   "yuzey": "sunucu",
    "anahtar": "jeton.mesaj.borcTavani",
    "tur": "seans",
    "kaynak": "apps/backend/servers/jeton.py",

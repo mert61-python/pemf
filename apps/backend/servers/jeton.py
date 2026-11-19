@@ -258,12 +258,17 @@ def _kimlik_gerekli_mesaj() -> str:
     return ceviri.t("jeton.mesaj.kimlikGerekli")
 
 
+#: TA T4 (Y137): belirtecin imzası yerelde doğrulanamadı — çıkış / yeniden giriş eylemi.
+def _oturum_dogrulanamadi_mesaj() -> str:
+    return ceviri.t("jeton.mesaj.oturumDogrulanamadi")
+
+
 #: S-4B.5 + S-4BI.8 (sahip kararı 2026-10-19): ücretlendirme açıkken internetsiz analiz YOK.
 def _cevrimdisi_mesaj() -> str:
     return ceviri.t("jeton.mesaj.cevrimdisi")
 
 
-#: 402 yanıtında ret SEBEBİ (`Karar.sebep`: yetersiz / borc_tavani / cevrimdisi / kimlik_yok) — arayüz pencere başlığını buna göre
+#: 402 yanıtında ret SEBEBİ (`Karar.sebep`: yetersiz / borc_tavani / cevrimdisi / kimlik_yok / kimlik_dogrulanamadi) — arayüz pencere başlığını buna göre
 #: seçer (`apiClient`: "cevrimdisi" → "İnternet bağlantısı gerekli"). Tarayıcı okuyabilsin diye CORS `expose_headers`'ta (api_server).
 JETON_SEBEP_BASLIGI = "X-PEMF-Jeton-Sebep"
 
@@ -902,6 +907,124 @@ def _tuketim_gonder_canli(token: str, **k) -> "bool | _KesinRed":
         return False
 
 
+# ── TA T4 (Y137 · S-D3.9): JWT İMZASI YERELDE (önbellekli JWKS) ─────────────────────────────────────────────────────────────
+# Ücretli kararın kimliği (ve yolda kalan ödeme defterine yazılan `sahip`) eskiden İMZASI DOĞRULANMAYAN JWT gövdesinden okunuyordu
+# (`_jwt_sahip`): LAN'daki biri başkasının `sub`'ını taşıyan sahte belirteçle o hesap adına deftere tüketim yazdırabilirdi (A-01 ile
+# kabul edilmişti; ticari açılıştan önce kapanır). Artık karar YALNIZ imzası projenin herkese açık JWKS anahtarıyla YERELDE doğrulanan
+# belirteçle verilir: asimetrik ES256 / RS256 (paylaşılan HS256 sırrı cihazda YOK → HS256 / "none" REDDEDİLİR), `kid` JWKS'te, `exp`
+# geçmemiş, `iss` varsa `<proje>/auth/v1`, `sub` dolu. Doğrulanamazsa 402 (`kimlik_dogrulanamadi`) + eylem söyleyen ileti; deftere
+# HİÇBİR ŞEY yazılmaz. JWKS önbellekte `_JWKS_TTL` kadar tutulur; bilinmeyen `kid` (anahtar dönüşü) en çok `_JWKS_ZORLA_ARALIK`'ta bir
+# yeniden çekilir; çekilemezse eldeki (bayat da olsa) anahtarlar kullanılır. Kitaplık: yalnız `cryptography` (requirements'ta;
+# PyJWT bildirilmiş bağımlılık DEĞİL). Tedavi / E-stop / seans bu kapıya HİÇ gelmez (`_islem_turu` → None, Ö.4-Y8).
+_JWKS_TTL = 600.0
+_JWKS_ZORLA_ARALIK = 30.0
+_JWT_SAAT_PAYI = 60.0
+_JWKS_KILIT = threading.Lock()
+_jwks_onbellek: dict = {"anahtarlar": {}, "zaman": None, "son_zorla": None}
+
+
+def _b64u(s: str) -> bytes:
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def _proje_kok() -> str:
+    from utils.secrets_manager import get_secret
+
+    return (get_secret("supabase_url", default="", generate=False) or "").rstrip("/")
+
+
+def _jwks_getir() -> dict:
+    """Projenin herkese açık JWKS'i (`<proje>/auth/v1/.well-known/jwks.json`). Hata → raise. (Taşıma katmanı: testler bunu yamalar.)"""
+    base = _proje_kok()
+    if not base:
+        raise ConnectionError("jeton: supabase yapilandirmasi yok (JWKS)")
+    import requests
+
+    r = requests.get(base + "/auth/v1/.well-known/jwks.json", timeout=_SUPABASE_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def _jwk_acik_anahtar(jwk: dict) -> tuple[str, object] | None:
+    """JWK → (alg, açık anahtar). Yalnız imza için asimetrik EC P-256 (ES256) ve RSA (RS256); diğerleri None."""
+    from cryptography.hazmat.primitives.asymmetric import ec, rsa
+
+    if jwk.get("kty") == "EC" and jwk.get("crv") == "P-256":
+        x, y = (int.from_bytes(_b64u(jwk[k]), "big") for k in ("x", "y"))
+        return "ES256", ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1()).public_key()
+    if jwk.get("kty") == "RSA":
+        e, n = (int.from_bytes(_b64u(jwk[k]), "big") for k in ("e", "n"))
+        return "RS256", rsa.RSAPublicNumbers(e, n).public_key()
+    return None
+
+
+def _jwks_anahtarlari(zorla: bool = False) -> dict:
+    """kid → (alg, açık anahtar); önbellekli. `zorla` (bilinmeyen kid) TTL'yi beklemeden, en çok `_JWKS_ZORLA_ARALIK`'ta bir çeker."""
+    simdi = time.monotonic()
+    with _JWKS_KILIT:
+        o = _jwks_onbellek
+        taze = o["zaman"] is not None and simdi - o["zaman"] < _JWKS_TTL
+        zorla = zorla and (o["son_zorla"] is None or simdi - o["son_zorla"] >= _JWKS_ZORLA_ARALIK)
+        if taze and not zorla:
+            return o["anahtarlar"]
+        if zorla:
+            o["son_zorla"] = simdi
+    try:
+        govde = _jwks_getir()
+    except Exception:
+        logger.warning("jeton: JWKS alınamadı — önbellekteki imza anahtarları kullanılır", exc_info=True)
+        return _jwks_onbellek["anahtarlar"]
+    yeni: dict = {}
+    for jwk in (govde.get("keys") or []) if isinstance(govde, dict) else []:
+        try:
+            if isinstance(jwk, dict) and jwk.get("kid") and jwk.get("use", "sig") == "sig":
+                c = _jwk_acik_anahtar(jwk)
+                if c is not None:
+                    yeni[str(jwk["kid"])] = c
+        except Exception:
+            logger.warning("jeton: JWKS'te okunamayan anahtar atlandı (kid=%s)", jwk.get("kid"))
+    with _JWKS_KILIT:
+        _jwks_onbellek.update(anahtarlar=yeni, zaman=time.monotonic())
+    return yeni
+
+
+def _jwt_dogrulanmis_sahip(token: str) -> str | None:
+    """İmzası YERELDE doğrulanan belirtecin sahip özeti (`_jwt_sahip` ile aynı biçim); doğrulanamazsa None (asla fırlatmaz)."""
+    try:
+        bas_b64, govde_b64, imza_b64 = (token or "").split(".")
+        baslik, govde = json.loads(_b64u(bas_b64)), json.loads(_b64u(govde_b64))
+        alg, kid = baslik.get("alg"), str(baslik.get("kid") or "")
+        if alg not in ("ES256", "RS256") or not kid:
+            return None
+        anahtarlar = _jwks_anahtarlari()
+        if kid not in anahtarlar:
+            anahtarlar = _jwks_anahtarlari(zorla=True)
+        if kid not in anahtarlar or anahtarlar[kid][0] != alg:
+            return None
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec, padding
+        from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+
+        girdi, imza, anahtar = f"{bas_b64}.{govde_b64}".encode("ascii"), _b64u(imza_b64), anahtarlar[kid][1]
+        if alg == "ES256":
+            if len(imza) != 64:
+                return None
+            r, s = int.from_bytes(imza[:32], "big"), int.from_bytes(imza[32:], "big")
+            anahtar.verify(encode_dss_signature(r, s), girdi, ec.ECDSA(hashes.SHA256()))
+        else:
+            anahtar.verify(imza, girdi, padding.PKCS1v15(), hashes.SHA256())
+        exp = govde.get("exp")
+        if isinstance(exp, bool) or not isinstance(exp, (int, float)) or exp <= time.time() - _JWT_SAAT_PAYI:
+            return None
+        iss = govde.get("iss")
+        if iss is not None and iss != _proje_kok() + "/auth/v1":
+            return None
+        sub = str(govde.get("sub") or "")
+    except Exception:
+        return None
+    return hashlib.sha256(sub.encode("utf-8")).hexdigest()[:16] if sub else None
+
+
 # Çevrimdışı defter yazımları per-istek yönetici örneklerinden gelir; dosya yarışını tek
 # modül-kilidiyle serileştir (örnek başına kilit dosyayı KORUMAZDI).
 _GATE_DEFTER_KILIT = threading.Lock()
@@ -1002,6 +1125,10 @@ def _jeton_on_karari(request: Request) -> "Callable[[], Karar] | None":
         # cihaz-geneli çevrimdışı tavanı doldururdu (tavan 2026-10-19'da kaldırıldı). Ücretlendirme açıkken yeni AI analizi hesap
         # ister; tedavi / E-stop / seans bu kapıya HİÇ gelmez (`_islem_turu` → None, Ö.4-Y8).
         raise _red(Karar(izinli=False, mesaj=_kimlik_gerekli_mesaj(), sebep="kimlik_yok"))
+    # TA T4 (Y137 · S-D3.9): ücretli karar — ve yolda kalan ödeme defterine yazılabilecek her tüketim — YALNIZ imzası yerelde
+    # (önbellekli JWKS) doğrulanan kimlikle verilir; doğrulanamazsa analiz başlamaz, deftere hiçbir şey yazılmaz.
+    if _jwt_dogrulanmis_sahip(token) is None:
+        raise _red(Karar(izinli=False, mesaj=_oturum_dogrulanamadi_mesaj(), sebep="kimlik_dogrulanamadi"))
 
     # ── TD9 (Y148): canlı kip — dakika başına (SGI-2.1: yalnız canlı kipli uçlar) ─────────────────────────────────────────
     oturum = (request.headers.get(CANLI_OTURUM_BASLIGI) or "").strip() if hasattr(request, "headers") else ""

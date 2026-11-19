@@ -22,9 +22,10 @@ from fastapi import HTTPException
 
 
 def _jwt(sub: str | None) -> str:
+    from jwt_test_anahtari import imzali_jwt  # TA T4: GERÇEK ES256 imza (JWKS doğrulaması)
+
     govde = {"sub": sub, "role": "authenticated"} if sub else {"role": "authenticated"}
-    b = base64.urlsafe_b64encode(json.dumps(govde).encode()).decode().rstrip("=")
-    return f"eyJhbGciOiJIUzI1NiJ9.{b}.imza"
+    return imzali_jwt(govde)
 
 
 class _Istek:

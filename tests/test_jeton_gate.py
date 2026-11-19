@@ -29,6 +29,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
+from jwt_test_anahtari import imzali_jwt  # TA T4: GERÇEK ES256 imzalı test belirteci (JWKS doğrulaması)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -39,6 +40,11 @@ def jeton(tmp_path, monkeypatch):
     import servers.jeton as j
 
     importlib.reload(j)
+    from jwt_test_anahtari import TEST_JWKS
+
+    j._jwks_getir = lambda: (
+        TEST_JWKS
+    )  # TA T4: yeniden yükleme conftest'in JWKS bağını siler → test anahtarına yeniden bağla
     return j
 
 
@@ -46,7 +52,8 @@ class _Istek:
     """jeton_gate'in kullandığı en küçük Request yüzeyi."""
 
     # 4B-1.5: gerçek Supabase jetonu `sub` taşıyan bir JWT'dir; kimliği çözülemeyen jeton zorlama açıkken 402 alır.
-    def __init__(self, path: str, token: str = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWt1bGxhbmljaSJ9.imza"):
+    def __init__(self, path: str, token: "str | None" = None):
+        token = imzali_jwt({"sub": "test-kullanici"}) if token is None else token
         self.url = type("U", (), {"path": path})()
         self.headers = {"authorization": f"Bearer {token}"} if token else {}
 

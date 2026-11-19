@@ -26,8 +26,9 @@ import pytest
 
 def _jwt(sub: str) -> str:
     """D4.23 eki: uzlaştırma kaydı TÜKETENE bağlı → test jetonları `sub` taşıyan JWT biçiminde (imza önemsiz)."""
-    b = base64.urlsafe_b64encode(json.dumps({"sub": sub}).encode()).decode().rstrip("=")
-    return f"eyJhbGciOiJIUzI1NiJ9.{b}.imza"
+    from jwt_test_anahtari import imzali_jwt  # TA T4: GERÇEK ES256 imza (JWKS doğrulaması)
+
+    return imzali_jwt({"sub": sub})
 
 
 def _sub(token: str) -> str:
