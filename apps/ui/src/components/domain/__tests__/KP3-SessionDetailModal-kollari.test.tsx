@@ -56,7 +56,7 @@ it("tek ölçümlü bobin NOKTA olarak, sabit sıcaklıklı seri ±1 °C eksenle
   expect(u.UNSAFE_queryAllByType(Polyline)).toHaveLength(1); // yalnız 2+ geçerli noktalı bobin 7 çizgi
   expect(u.queryByText(T("seans.detay.sensorVerisiYok"))).toBeNull();
   const eksen = u.UNSAFE_queryAllByType(SvgText).map((x) => String(([] as unknown[]).concat(x.props.children).join("")));
-  expect(eksen).toEqual(expect.arrayContaining(["30.0", "32.0"])); // tümü 31 °C → eksen ±1 açıldı
+  expect(eksen).toEqual(expect.arrayContaining(["30,0", "32,0"])); // tümü 31 °C → eksen ±1 açıldı (Y306: düzgün adım, TR virgül)
 });
 
 it("hiç geçerli örnek yoksa 'sensör verisi yok'", async () => {

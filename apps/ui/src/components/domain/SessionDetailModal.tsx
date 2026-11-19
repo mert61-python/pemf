@@ -30,9 +30,10 @@ import { apiGet } from "@/services/apiClient";
 import { kayitYogunlugu, olculenAlanOrt } from "@/utils/yogunlukGosterimi";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { hedefEtiketi, modEtiketi } from "@/utils/seansDegerEtiketi";
-import { etkinBicimYereli } from "@/i18n/dil";
+import { etkinBicimYereli, ondalikMetni } from "@/i18n/dil";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
+import { eksenAdimlari } from "@/utils/eksenAdimlari";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
 const COIL_COLORS = [
@@ -585,11 +586,14 @@ function TempChart({
     tMin -= 1;
     tMax += 1;
   }
-  const tRange = tMax - tMin || 1;
-  const xRange = xMaxMin || 1;
+  // Y306 (tezgâh denemesi 4a): eksenler DÜZGÜN adımla (1 / 2 / 5 × 10^k) — etiketler yinelenmez, dakikalar düzenli; ondalık dile göre.
+  const ey = eksenAdimlari(tMin, tMax, 4, ondalik);
+  const ex = eksenAdimlari(0, xMaxMin || 1, 5);
+  const tRange = ey.max - ey.min;
+  const xRange = ex.max;
 
   const xAt = (relMin: number) => PAD.left + (relMin / xRange) * plotW;
-  const yAt = (temp: number) => PAD.top + plotH - ((temp - tMin) / tRange) * plotH;
+  const yAt = (temp: number) => PAD.top + plotH - ((temp - ey.min) / tRange) * plotH;
 
   return (
     <View
@@ -603,9 +607,9 @@ function TempChart({
       {width <= 0 ? null : (
       <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         <Rect x={0} y={0} width={width} height={height} fill="#0a0f1e" />
-        {/* Yatay grid + °C ekseni */}
-        {Array.from({ length: 5 }, (_, i) => {
-          const y = PAD.top + (plotH / 4) * i;
+        {/* Yatay grid + °C ekseni (Y306: düzgün adımların değerlerinde) */}
+        {ey.degerler.map((val, i) => {
+          const y = yAt(val);
           return (
             <Line
               key={`h${i}`}
@@ -618,9 +622,8 @@ function TempChart({
             />
           );
         })}
-        {Array.from({ length: 5 }, (_, i) => {
-          const y = PAD.top + (plotH / 4) * i;
-          const val = tMax - (tRange / 4) * i;
+        {ey.degerler.map((val, i) => {
+          const y = yAt(val);
           return (
             <SvgText
               key={`yl${i}`}
@@ -630,7 +633,7 @@ function TempChart({
               fontSize={11}
               textAnchor="end"
             >
-              {val.toFixed(ondalik)}
+              {ondalikMetni(val, ey.basamak)}
             </SvgText>
           );
         })}
@@ -638,8 +641,7 @@ function TempChart({
           {birim}
         </SvgText>
         {/* X ekseni etiketleri (dakika) */}
-        {Array.from({ length: 5 }, (_, i) => {
-          const relMin = (xRange / 4) * i;
+        {ex.degerler.map((relMin, i) => {
           const x = xAt(relMin);
           return (
             <SvgText
@@ -650,7 +652,7 @@ function TempChart({
               fontSize={10}
               textAnchor="middle"
             >
-              {relMin.toFixed(0)}
+              {ondalikMetni(relMin, ex.basamak)}
             </SvgText>
           );
         })}

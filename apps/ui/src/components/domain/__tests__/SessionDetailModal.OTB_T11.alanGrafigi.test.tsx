@@ -7,7 +7,7 @@
  */
 import React from "react";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { Polyline, Text as SvgText } from "react-native-svg";
+import Svg, { Polyline, Text as SvgText } from "react-native-svg";
 import i18n from "i18next";
 
 const mockApiGet = jest.fn();
@@ -43,7 +43,7 @@ async function ac(sensor_samples: unknown[]) {
   return u;
 }
 
-it("KRİTİK T-11: MLX alanı bobin başına ÇİZİLİR (mT ekseni, 2 basamak); NULL dakika atlanır; not AÇIK", async () => {
+it("KRİTİK T-11: MLX alanı bobin başına ÇİZİLİR (mT ekseni, en az 2 basamak); NULL dakika atlanır; not AÇIK", async () => {
   const u = await ac([
     { coil_id: 1, sample_ts: 1000, magnetic_field_mt: 1.12, temperature_c: null },
     { coil_id: 1, sample_ts: 1060, magnetic_field_mt: 1.18 },
@@ -55,7 +55,7 @@ it("KRİTİK T-11: MLX alanı bobin başına ÇİZİLİR (mT ekseni, 2 basamak);
   await act(async () => { fireEvent(g, "layout", { nativeEvent: { layout: { width: 600, height: 240 } } }); });
   expect(u.UNSAFE_queryAllByType(Polyline)).toHaveLength(2);
   const eksen = u.UNSAFE_queryAllByType(SvgText).map((x) => String(([] as unknown[]).concat(x.props.children).join("")));
-  expect(eksen).toEqual(expect.arrayContaining(["mT", "1.18", "0.40"]));
+  expect(eksen).toEqual(expect.arrayContaining(["mT", "0,40", "1,20"])); // Y306: düzgün adım (0,2), TR ondalık virgül
   expect(JSON.stringify(u.getByTestId("seans-alan-notu").props.children)).toMatch(/ofset/);
   // sıcaklık ölçümü yok → sıcaklık bölümü kendi "veri yok" metni (AYNEN)
   expect(u.getByText(T("seans.detay.sensorVerisiYok"))).toBeTruthy();
@@ -77,4 +77,50 @@ it("EN: alan grafiği başlığı / notu İngilizce", async () => {
   const m = JSON.stringify(u.toJSON());
   expect(m).toContain("Magnetic Field Chart (MLX)");
   expect(JSON.stringify(u.getByTestId("seans-alan-notu").props.children)).not.toMatch(/[çğıöşüÇĞİÖŞÜ]/);
+});
+
+const eksenMetinleri = (u: ReturnType<typeof render>) =>
+  u.UNSAFE_queryAllByType(SvgText).map((x) => String(([] as unknown[]).concat(x.props.children).join("")));
+const sayiEtiketleri = (eksen: string[]) => eksen.filter((s) => /^-?[0-9]+([.,][0-9]+)?$/.test(s));
+
+it("KRİTİK Y306 (tezgâh 4a): dar MLX aralığında (1,35–1,38 mT) eksen etiketleri YİNELENMEZ, düzgün adım, TR ondalık VİRGÜL", async () => {
+  const u = await ac([
+    { coil_id: 6, sample_ts: 1000, magnetic_field_mt: 1.351 },
+    { coil_id: 6, sample_ts: 1060, magnetic_field_mt: 1.366 },
+    { coil_id: 6, sample_ts: 1120, magnetic_field_mt: 1.379 },
+    { coil_id: 6, sample_ts: 1600, magnetic_field_mt: 1.372 },
+  ]);
+  const g = u.getByTestId("seans-alan-grafigi");
+  await act(async () => { fireEvent(g, "layout", { nativeEvent: { layout: { width: 600, height: 240 } } }); });
+  const sayilar = sayiEtiketleri(eksenMetinleri(u));
+  expect(sayilar).toEqual(expect.arrayContaining(["1,35", "1,36", "1,37", "1,38"]));
+  expect(new Set(sayilar).size).toBe(sayilar.length); // hiçbir etiket iki kez yok
+  expect(sayilar.some((s) => s.includes("."))).toBe(false);
+  // dakika ekseni (10 dk): 0 / 2 / 4 / 6 / 8 / 10 — düzensiz 0 / 2 / 5 / 7 / 10 değil
+  expect(sayilar).toEqual(expect.arrayContaining(["0", "2", "4", "6", "8", "10"]));
+  expect(sayilar).not.toContain("5");
+  expect(sayilar).not.toContain("7");
+  // eksen etiketleri çizim alanının İÇİNDE (üst 20 px, alt 36 px pay): ölçek düzgün eksenin sınırlarıyla kurulur
+  const yuk = Number(u.UNSAFE_getByType(Svg).props.height);
+  const yEtiket = u.UNSAFE_queryAllByType(SvgText).filter((x) => x.props.textAnchor === "end" && /^[0-9]/.test(String(x.props.children)));
+  expect(yEtiket.length).toBeGreaterThanOrEqual(4);
+  for (const x of yEtiket) {
+    expect(Number(x.props.y)).toBeGreaterThanOrEqual(20 + 4 - 0.01);
+    expect(Number(x.props.y)).toBeLessThanOrEqual(yuk - 36 + 4 + 0.01);
+  }
+});
+
+it("Y306 EN: aynı grafik İngilizcede ondalık NOKTA", async () => {
+  __bayrakTestiAyarla(true);
+  await act(async () => {
+    await dilSec("en", depo);
+  });
+  const u = await ac([
+    { coil_id: 6, sample_ts: 1000, magnetic_field_mt: 1.351 },
+    { coil_id: 6, sample_ts: 1060, magnetic_field_mt: 1.379 },
+  ]);
+  await act(async () => { fireEvent(u.getByTestId("seans-alan-grafigi"), "layout", { nativeEvent: { layout: { width: 600, height: 240 } } }); });
+  const sayilar = sayiEtiketleri(eksenMetinleri(u));
+  expect(sayilar).toEqual(expect.arrayContaining(["1.35", "1.38"]));
+  expect(sayilar.some((s) => s.includes(","))).toBe(false);
 });
