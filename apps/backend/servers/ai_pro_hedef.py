@@ -378,12 +378,27 @@ def odak_plani(
         girdi = {"hedef_P": hedef, "kedi": {"merkez_P": geo["merkez_P"], "theta": geo["theta"]}}
     else:
         girdi = {"hedef_P": [float(konum["x_mm"]), float(konum["y_mm"]), float(konum["z_mm"])]}
-    if doz_mT is None:
-        tv = odak_oneri.hedef_tavani(kip, A, **girdi)
-        if tv["engel"]:
-            return _odak_engeli(kip, tv["engel"], None, tv["engel_ek"])
-        doz_mT = max(0.01, round(ODAK_VARSAYILAN_DOZ_KESRI * float(tv["tavan_mT"]), 2))
-    return odak_oneri.oner(kip, A, float(doz_mT), **girdi)
+    # OTB T-2: doz verilmezse başlangıç önerisi MODELİN ulaşabildiği tavanın %80'i (`oner` içinde; fizik tavanının değil).
+    return odak_oneri.oner(
+        kip, A, None if doz_mT is None else float(doz_mT), varsayilan_kesir=ODAK_VARSAYILAN_DOZ_KESRI, **girdi
+    )
+
+
+def odak_tavanlari(saglayici, frek_hz: float | None = None) -> dict | None:
+    """OTB T-1: petri onay penceresinin "Doz (en çok X)"i SEÇİLİ kip / kuyuya göre — son lokalizasyonun kuyularıyla her kip ve görülen
+    her kuyu için MODELİN ulaşabildiği tavan (`oneri.petri_tavanlari`). Petri dışı ya da hesaplanamazsa None (pencere sayı göstermez)."""
+    if getattr(saglayici, "ad", "") != "petri":
+        return None
+    from ai_hub.odak import oneri as odak_oneri
+
+    try:
+        A = odak_oneri.alan_modeli(duzlem_veri_koku(), frek_hz)
+        return odak_oneri.petri_tavanlari(A, saglayici.son_lokalizasyon_meta().get("odak_adaylar") or [])
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("ODAK: kip / kuyu tavanları hesaplanamadı (yalnız gösterim)", exc_info=True)
+        return None
 
 
 def _odak_predict(saglayici, x_mm: float, y_mm: float, z_mm: float, hedef_id: int) -> tuple:

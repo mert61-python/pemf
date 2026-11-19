@@ -33,6 +33,10 @@ from ai_hub.odak.model import model_al, yerel_nokta
 
 #: |beklenen / istenen − 1| bu sınırı aşarsa SÜRME (istem 45 A4).
 DOZ_SAPMA_SINIRI = 0.10
+#: OTB T-3 (ODM tezgâhı 19-11: B5 1,44 istendi → beklenen 1,63, %15 → engel): tavanın altındaki dozda beklenen istenenden
+#: DOZ_SAPMA_SINIRI'ndan çok saparsa öneri FİZİK DÜZELTME adımı uygular — genlik × istenen / beklenen (bobin genlik azamisine, yani duty
+#: ≤ 0,5'e kırpılır) — ve zaman domeninde YENİDEN denetler; en çok bu kadar adım, düzelmezse engel AYNEN.
+DUZELTME_ADIMI = 3
 #: Konum payı: hedef bu kadar kayınca doz ne kadar değişir (onay ekranında ±).
 KONUM_PAYI_MM = 10.0
 SATIRLAR = "ABCD"
@@ -246,41 +250,77 @@ def _yuvarla(v, n=3):
     return None if v is None else round(float(v), n)
 
 
-def oner(kip: str, A: AlanModeli, doz_mT: float, model=None, **girdi) -> dict:
-    """Plan (JSON'lanabilir). Engel varsa `plan["engel"]` dolu ve duty / faz SIFIR (sürülmez)."""
-    plan = {"kip": kip, "doz_mT": _yuvarla(doz_mT), "duty": [0.0] * N_BOBIN, "faz": [0.0] * N_BOBIN, "engel": None, "engel_ek": {},
-            "kalibrasyon": A.kimlik, "model": "KNN k=1 + yerel alan", "frek_hz": A.f_hz}
+def ulasilabilir_tavan(A: AlanModeli, MT, a) -> float:
+    """OTB T-2: modelin YÖNÜYLE (`a`, işaretli genlik) duty ≤ 0,5'te verilebilen en büyük doz (zaman domeni, hedef kümesinin en zayıf
+    noktası): genlik, en çok sınırlayan bobin azamisine değene dek ölçeklenir. Yön yoksa 0."""
+    a = np.asarray(a, dtype=float)
+    dolu = np.abs(a) > 1e-12
+    if not dolu.any():
+        return 0.0
+    k = float(np.min(A.a_azami[dolu] / np.abs(a[dolu])))
+    return float(A.td_tepe(MT, A.isaretli_duty(a * k)).min())
+
+
+def _model_ve_tavan(kip: str, A: AlanModeli, g: dict, MT, model=None) -> tuple:
+    """(model, Py, fizik tavanı, ULAŞILABİLİR tavan = min(fizik, model yönüyle)) — OTB T-2: "en çok" MODELİN verebildiği. Model yok /
+    eski → Engel (çağıran sürmez)."""
+    try:
+        m = model or model_al(kip, f_hz=A.f_hz)
+    except FileNotFoundError:
+        raise Engel("modelYok") from None
+    if m.kalibrasyon_kimligi != A.kimlik:
+        raise Engel("modelEski")
+    fizik = tavan_td(A, MT)
+    Py = yerel_nokta(kip, g["oz"], A.taban_y)
+    at = np.clip(m.tahmin(m.ozellik(g["oz"], A.alan_olcum(Py[None])[0], fizik))[0] * fizik, -A.a_azami, A.a_azami)
+    return m, Py, fizik, min(fizik, ulasilabilir_tavan(A, MT, at))
+
+
+def oner(kip: str, A: AlanModeli, doz_mT, model=None, varsayilan_kesir: float = 0.8, **girdi) -> dict:
+    """Plan (JSON'lanabilir). Engel varsa `plan["engel"]` dolu ve duty / faz SIFIR (sürülmez). `doz_mT` None → ulaşılabilir tavanın
+    `varsayilan_kesir`i (başlangıç önerisi, Y273)."""
+    plan = {"kip": kip, "doz_mT": None if doz_mT is None else _yuvarla(doz_mT), "duty": [0.0] * N_BOBIN, "faz": [0.0] * N_BOBIN,
+            "engel": None, "engel_ek": {}, "kalibrasyon": A.kimlik, "model": "KNN k=1 + yerel alan", "frek_hz": A.f_hz}
     try:
         g = kip_girdisi(kip, A, **girdi)
         T, C = g["T"], g["C"]
         if not np.all(A.cam_icinde(T)):
             raise Engel("hedefKabinDisi")
         MT = A.alan(T)
-        plan["tavan_mT"] = _yuvarla(tavan_td(A, MT))
         if g["kuyu"] is not None:
             plan["kuyular"] = [
                 {"etiket": k["etiket"], "px": k.get("px"), "mT": None, "secili": i == g["secili"], "bos": bool(k.get("bos"))}
                 for i, k in enumerate(g["kuyu"])
             ]
-        D = float(doz_mT)
+        m, Py, fizik, ulasilabilir = _model_ve_tavan(kip, A, g, MT, model)
+        # OTB T-2: "en çok" = modelin ulaşabildiği (fizik tavanıyla sınırlı); fizik tavanı ayrıca söylenir.
+        plan["fizik_tavan_mT"] = _yuvarla(fizik)
+        plan["tavan_mT"] = _yuvarla(ulasilabilir)
+        if doz_mT is None:
+            plan["doz_mT"] = max(0.01, round(varsayilan_kesir * float(plan["tavan_mT"]), 2))
+        D = float(plan["doz_mT"])
         if not np.isfinite(D) or D <= 0:
             raise Engel("dozGecersiz")
         if D > plan["tavan_mT"] * (1 + 1e-6):
             raise Engel("dozTavanUstu", tavan=plan["tavan_mT"])
-        try:
-            m = model or model_al(kip, f_hz=A.f_hz)
-        except FileNotFoundError:
-            raise Engel("modelYok") from None
-        if m.kalibrasyon_kimligi != A.kimlik:
-            raise Engel("modelEski")
-        Py = yerel_nokta(kip, g["oz"], A.taban_y)
         X = m.ozellik(g["oz"], A.alan_olcum(Py[None])[0], D)
         a = np.clip(m.tahmin(X)[0] * D, -A.a_azami, A.a_azami)
         sd = A.isaretli_duty(a)
-        faz = A.fazlar(sd)
         # FİZİK (karar vermez): zaman domeni, Y280 hizalı
         BT = A.td_tepe(MT, sd)
         beklenen = float(BT.min())
+        # OTB T-3: sapma sınırı aşılırsa FİZİK DÜZELTME adımı (genlik × istenen / beklenen, duty ≤ 0,5) + yeniden denetim
+        ilk_beklenen = beklenen
+        for _ in range(DUZELTME_ADIMI):
+            if beklenen <= 0 or abs(beklenen / D - 1.0) <= DOZ_SAPMA_SINIRI:
+                break
+            a = np.clip(a * (D / beklenen), -A.a_azami, A.a_azami)
+            sd = A.isaretli_duty(a)
+            BT = A.td_tepe(MT, sd)
+            beklenen = float(BT.min())
+        if beklenen != ilk_beklenen:
+            plan["duzeltme"] = {"ilk_beklenen_mT": _yuvarla(ilk_beklenen), "kat": _yuvarla(beklenen / max(ilk_beklenen, 1e-9), 3)}
+        faz = A.fazlar(sd)
         plan["beklenen_mT"] = _yuvarla(beklenen)
         plan["dogrusal_mT"] = _yuvarla(float(A.dogrusal_tepe(MT, a).min()))
         if C is not None and len(C):
@@ -336,6 +376,34 @@ def _e_degerleri(A: AlanModeli, T, C, sd, kip: str = "") -> tuple:
         logging.getLogger(__name__).warning("ODAK: E hesaplanamadı (%s; yalnız gösterim eksik, sürüş etkilenmez)", ortam, exc_info=True)
         return None, None, ortam
     return _yuvarla(e_h, 6), (None if e_c is None else _yuvarla(e_c, 6)), ortam
+
+
+def petri_tavanlari(A: AlanModeli, kuyular: list, model_al_=None) -> dict:
+    """OTB T-1: onay penceresinin "Doz (en çok X)"i SEÇİLİ kip / kuyuya göre — {"TUM_PETRI": mT, "KUYUCUK": {etiket: mT}}, her biri modelin
+    ulaşabildiği (fizik tavanıyla sınırlı, `_model_ve_tavan`). Boş (görülmeyen) kuyu hedef olamaz → yok; hesaplanamayan hedef yok (pencere
+    o seçimde sayı göstermez)."""
+    al = model_al_ or model_al
+    out: dict = {"KUYUCUK": {}}
+    try:
+        g = kip_girdisi("TUM_PETRI", A, kuyular=kuyular)
+        out["TUM_PETRI"] = _yuvarla(_model_ve_tavan("TUM_PETRI", A, g, A.alan(g["T"]), al("TUM_PETRI", f_hz=A.f_hz))[3])
+        sira = g["kuyu"]
+    except (Engel, FileNotFoundError):
+        try:
+            sira = petri_izgarasi(kuyular)["sira"]
+        except Engel:
+            return out
+    try:
+        mk = al("KUYUCUK", f_hz=A.f_hz)
+    except FileNotFoundError:
+        return out
+    for k in sira:  # boş (görülmeyen) kuyu hedef olamaz: `kip_girdisi` Engel("kuyuYok") verir → listede yok (ODK11)
+        try:
+            gk = kip_girdisi("KUYUCUK", A, kuyular=kuyular, hedef_etiket=k["etiket"])
+            out["KUYUCUK"][k["etiket"]] = _yuvarla(_model_ve_tavan("KUYUCUK", A, gk, A.alan(gk["T"]), mk)[3])
+        except Engel:
+            continue
+    return out
 
 
 def hedef_tavani(kip: str, A: AlanModeli, **girdi) -> dict:

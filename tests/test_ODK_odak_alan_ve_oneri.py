@@ -353,8 +353,9 @@ def test_KRITIK_ONERI_ENGELLERI_duty_SIFIR(A):
     e, ek = kod(doz_mT=tv * 1.2, model=m, **ortak)
     assert e == "dozTavanUstu" and ek["tavan"] == pytest.approx(tv)
     assert kod(doz_mT=0.5 * tv, model=_DogruModel(A, [hedef["P"]], kimlik="baska"), **ortak)[0] == "modelEski"
-    e, ek = kod(doz_mT=0.5 * tv, model=_DogruModel(A, [hedef["P"]], olcek=0.7), **ortak)
-    assert e == "dozSapmasi" and ek["istenen"] == pytest.approx(round(0.5 * tv, 3))
+    # OTB T-3 (sahip 19-11): %30 az veren model artık FİZİK DÜZELTMESİYLE sürülür; engel yalnız düzelmezse (test_OTB_T123_*).
+    p = oneri.oner(doz_mT=0.5 * tv, model=_DogruModel(A, [hedef["P"]], olcek=0.7), **ortak)
+    assert p["engel"] is None and p["duzeltme"]["kat"] > 1.2 and abs(p["beklenen_mT"] / p["doz_mT"] - 1) <= 0.1, p
     assert kod(doz_mT=0.5, model=m, kip="KUYUCUK", A=A, kuyular=kuyular, hedef_etiket="Z9")[0] == "kuyuYok"
     assert (
         kod(doz_mT=0.5, model=m, kip="KUYUCUK", A=A, kuyular=kuyular[:6], hedef_etiket="A1")[0] == "plakaYok"

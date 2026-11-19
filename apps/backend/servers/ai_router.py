@@ -2677,6 +2677,9 @@ _ODAK_OZET_ALANLARI = (
     "doz_mT",
     "beklenen_mT",
     "tavan_mT",
+    "fizik_tavan_mT",
+    "duzeltme",
+    "tavanlar",
     "cevre_mT",
     "oran",
     "frek_hz",
@@ -2841,6 +2844,11 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
             _odak = ai_pro_hedef.odak_plani(_saglayici, c, _muhur_hedefi, payload.doz_mT, payload.odak_kip, _frek)
             if _odak.get("engel"):
                 raise HTTPException(status_code=409, detail=ai_pro_hedef.odak_engel_metni(_odak))
+            # OTB T-1: onay penceresi kip / kuyu değişince "en çok"u yeniden hesap beklemeden doğru gösterir (yalnız gösterim; mühürdeki
+            # doz / plan DEĞİŞMEZ — yeni seçim yine "Yeniden hesapla" ile yeni öneri ister).
+            _tavanlar = ai_pro_hedef.odak_tavanlari(_saglayici, _frek)
+            if _tavanlar:
+                _odak = {**_odak, "tavanlar": _tavanlar}
             D, P, e_field = [float(d) for d in _odak["duty"]], [float(p) for p in _odak["faz"]], 0.0
         else:
             D, P, e_field = _predict_and_drive(c["x_mm"], c["y_mm"], c["z_mm"], oid)
