@@ -92,7 +92,7 @@ def test_KRITIK_surus_istisnasi_seansi_IPTAL_eder_kabul_edilen_bobin_DURUR(ortam
     mp.setattr(hc, "update_coil", gercek)
 
 
-def test_KARSIT_sonraki_seans_normal_baslar_ve_normal_Durdur_TAMAMLANDI_yazar(ortam):
+def test_KARSIT_sonraki_seans_normal_baslar_ve_normal_Durdur_DURDURULDU_yazar_Y306(ortam):
     api, hc, db, c, mp = ortam
     gercek = _ikinci_bobinde_patla(mp, hc)
     assert _baslat(c, [_B1, _B2]).status_code == 503
@@ -102,7 +102,9 @@ def test_KARSIT_sonraki_seans_normal_baslar_ve_normal_Durdur_TAMAMLANDI_yazar(or
     with api._session_lock:
         assert api._active_session.get("baslatma_ucusta") is False, "yeni seansin baslatma bayragi inmedi"
     assert c.post("/api/session/stop").status_code == 200
-    assert _durumlar(db)[-1] == "completed", f"normal Durdur satiri yanlis kapandi: {_durumlar(db)}"
+    assert _durumlar(db)[-1] == "stopped", (
+        f"normal Durdur satiri yanlis kapandi: {_durumlar(db)}"
+    )  # Y306: süre dolmadan elle Durdur = "Durduruldu" (stopped) — iptal / donanım reddi DEĞİL
 
 
 def test_KRITIK_ic_durdurma_TEYITSIZse_yanit_durduruldu_DEMEZ(ortam):

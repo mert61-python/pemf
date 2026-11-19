@@ -69,7 +69,8 @@ def test_KRITIK_Y90_AI_Pro_devraldigi_manuel_seans_KESINTIYE_UGRADI(o):
     )
 
 
-def test_KARSIT_Y90_manuel_seans_operatorce_durdurulunca_TAMAMLANDI_kalir(o):
+def test_KARSIT_Y90_manuel_seans_operatorce_SURE_DOLMADAN_durdurulunca_DURDURULDU_Y306(o):
+    # Y306 (sahip 19-11): süre dolmadan ELLE durdurma artık "Durduruldu" (stopped) — devralma (Y90) ise "Kesintiye Uğradı" kalır.
     manuel = _manuel_baslat(o)
     assert o.c.post("/api/session/stop").status_code == 200
-    assert _durum(o, manuel)[0] == "completed"
+    assert _durum(o, manuel)[0] == "stopped"

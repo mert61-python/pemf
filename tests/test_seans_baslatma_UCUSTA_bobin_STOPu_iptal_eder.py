@@ -378,8 +378,9 @@ def test_KRITIK_surus_penceresinde_SEANS_DURDURu_satiri_TAMAMLANDI_yazmaz_iptal_
         )
 
 
-def test_KARSIT_baslatma_BITTIKTEN_sonra_seans_DURDURu_satiri_TAMAMLANDI_kalir(o):
-    """Başarıyla başlamış seansın Durdur'u "completed" yazmaya devam eder (iptal yalnız uçuştaki başlatmanın kaydıdır)."""
+def test_KARSIT_baslatma_BITTIKTEN_sonra_seans_DURDURu_satiri_DURDURULDU_iptal_DEGIL_Y306(o):
+    """Başarıyla başlamış seansın Durdur'u İPTAL yazmaz (iptal yalnız uçuştaki başlatmanın kaydıdır); Y306: süre dolmadan elle
+    durdurma "stopped" ("Durduruldu")."""
     _temizle(o)
     o.engel["ev"] = None
     o.engel["sidler"].clear()
@@ -389,4 +390,4 @@ def test_KARSIT_baslatma_BITTIKTEN_sonra_seans_DURDURu_satiri_TAMAMLANDI_kalir(o
     sid = o.engel["sidler"][-1] if o.engel["sidler"] else None
     durum = (o.db.get_session_details(sid) or {}).get("session_status") if sid else None
     _temizle(o)
-    assert durum == "completed", f"başlamış seansın normal Durdur'u 'Tamamlandı' yazmadı: {durum}"
+    assert durum == "stopped", f"başlamış seansın normal Durdur'u 'Durduruldu' yazmadı: {durum}"

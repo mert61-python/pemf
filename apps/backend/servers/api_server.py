@@ -5360,6 +5360,26 @@ def kapanis_seans_kaydini_kapat(anlik) -> None:
     )
 
 
+#: Y306 (sahip 19-11): süre bekçisi saniyede bir bakar — operatör Durdur'u planlanan sürenin son saniyesinde (bekçi tiklemeden) basarsa
+#: seans yine "süre doldu" (`completed`) sayılır.
+SURE_DOLDU_PAYI_SN = 1.0
+
+
+def _planlanan_sure_doldu(sess: dict, pay_s: float = 0.0) -> bool:
+    """Seansın planlanan süresi doldu mu — süre bekçisi (pay 0) ve `/api/session/stop`un durum ayrımı (Y306) AYNI ölçütü kullanır.
+    D1.70 (Y5): seans ortasında girilen süre KALAN süredir → `bitis_mono` (kesin bitiş) varsa o esas; yoksa planlanan toplam
+    (`duration_minutes`) ile geçen süre (DST-güvenli monotonik; yoksa duvar saati). Planlanan süre yoksa (0) süre DOLMAZ."""
+    import time as _t
+
+    _bm = sess.get("bitis_mono")
+    if _bm is not None:
+        return _t.monotonic() + pay_s >= float(_bm)
+    total = int(sess.get("duration_minutes", 0) or 0) * 60
+    _sm = sess.get("start_mono")
+    _elapsed = (_t.monotonic() - _sm) if _sm is not None else (_t.time() - sess.get("start_time", _t.time()))
+    return total > 0 and _elapsed + pay_s >= total
+
+
 def _session_duration_watchdog():
     """KRİTİK GÜVENLİK: seans süresi dolunca bobinleri DONANIM düzeyinde durdurur.
     Firmware keep-alive süreyi her sn tazelediğinden tek başına auto-stop OLMAZ; bu watchdog
@@ -5371,15 +5391,10 @@ def _session_duration_watchdog():
             with _session_lock:
                 sess = dict(_active_session)
             if sess.get("is_active"):
-                total = int(sess.get("duration_minutes", 0)) * 60
-                _sm = sess.get("start_mono")
-                _elapsed = (
-                    (_t.monotonic() - _sm) if _sm is not None else (_t.time() - sess.get("start_time", _t.time()))
-                )
                 # ⚠️ D1.70 (B-1.8 · sahip kararı Y5): seans ORTASINDA girilen süre KALAN süredir —
                 # `parametre_guncelle` kesin bitiş anını (`bitis_mono`) yazar; varsa o esastır (yoksa planlanan toplam).
-                _bm = sess.get("bitis_mono")
-                _doldu = (_t.monotonic() >= float(_bm)) if _bm is not None else (total > 0 and _elapsed >= total)
+                # Y306: ölçüt `_planlanan_sure_doldu`da TEK (durdurma ucunun durum ayrımı da onu kullanır).
+                _doldu = _planlanan_sure_doldu(sess)
                 if _doldu:
                     # Audit P2 (TOCTOU seal): fiziksel STOP'tan HEMEN önce seansın HÂLÂ aynı olduğunu
                     # doğrula — aksi halde operatör A'yı durdurup B'yi aynı bobinlerde başlattıysa bayat
@@ -5936,6 +5951,10 @@ async def stop_session():
             # 1-D inceleme i3-F-1: başlatma hâlâ UÇUŞTAYSA (sürüş sonrası denetim bitmedi) bu Durdur başlatmayı iptal
             # eder — başlatma 409 "BAŞLATILMADI" döner; satır "Tamamlandı" değil "İptal Edildi" kapanır.
             _ucustaki_baslatma = bool(_active_session.get("baslatma_ucusta"))
+            # Y306 (sahip 19-11): operatör seansı planlanan süre DOLMADAN durdurduysa HER kipte (Manuel / Otomatik / AI Pro, hangi
+            # düğmeden olursa) "Durduruldu" (`stopped`; KPI "Dur./Hata"); süre dolduysa "Tamamlandı" (D1.75 / Y90 ilkesi). Eskiden
+            # canlı kartın "Durdur"u her seansı `completed` kapatıyordu (19-11 18:07 seansı geçmişte "Tamamlandı").
+            _sure_doldu = _planlanan_sure_doldu(_active_session, SURE_DOLDU_PAYI_SN)
             _active_session["is_active"] = False
     if not _seans_var:
         # ⚠️ D1.81 (B-5.3 · İG-5.3): "Aktif seans yok" ARTIK STOP'SUZ DÖNMEZ. Ölçüldü: E-stop'un yarışında uçuştaki AI
@@ -6024,7 +6043,9 @@ async def stop_session():
                         db.end_session(
                             db_session_id,
                             duration_minutes=dur_min,
-                            session_status="cancelled" if _ucustaki_baslatma else "completed",
+                            session_status=(
+                                "cancelled" if _ucustaki_baslatma else ("completed" if _sure_doldu else "stopped")
+                            ),
                         )
                         # Yeni kolon: gercek wall-clock bitis epoch'u (end_session bunu yazmaz).
                         db.set_session_meta(db_session_id, ended_epoch=_now)

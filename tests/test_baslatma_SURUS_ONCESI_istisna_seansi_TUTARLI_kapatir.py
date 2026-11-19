@@ -118,7 +118,9 @@ def test_KARSIT_istisnadan_sonra_SONRAKI_seans_normal_baslar(ortam):
     r = _baslat(c)
     assert r.status_code == 200 and r.json().get("status") == "success", r.text[:200]
     assert c.post("/api/session/stop").status_code == 200
-    assert _durumlar(db)[-1] == "completed", _durumlar(db)
+    assert _durumlar(db)[-1] == "stopped", _durumlar(
+        db
+    )  # Y306: süre dolmadan elle Durdur = "Durduruldu" (stopped) — iptal / donanım reddi DEĞİL
 
 
 def test_KRITIK_istisna_yardimcisi_BASKA_seansin_ucustaki_baslatma_bayragini_INDIRMEZ(ortam):

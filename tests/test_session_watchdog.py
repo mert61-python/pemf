@@ -197,8 +197,11 @@ def test_watchdog_uses_monotonic_not_wallclock(monkeypatch):
     from servers import api_server as api
 
     src = inspect.getsource(api._session_duration_watchdog)
-    assert "start_mono" in src, "watchdog monotonic işareti kullanmalı"
-    assert "_t.monotonic()" in src, "geçen süre monotonic saatten hesaplanmalı"
+    assert "_planlanan_sure_doldu(sess)" in src, "watchdog süre ölçütünü TEK yardımcıdan almalı (Y306)"
+    # Y306: ölçüt `_planlanan_sure_doldu`da (durdurma ucunun durum ayrımı da onu kullanır)
+    yardimci = inspect.getsource(api._planlanan_sure_doldu)
+    assert "start_mono" in yardimci, "watchdog monotonic işareti kullanmalı"
+    assert "_t.monotonic()" in yardimci, "geçen süre monotonic saatten hesaplanmalı"
 
     # Her iki seans kurucusu da işareti dikmeli (yoksa watchdog eski yola düşer)
     assert '"start_mono"' in inspect.getsource(api.start_session)
