@@ -2763,7 +2763,18 @@ def propose_ai_pro(request: Request, payload: AiProProposePayload = AiProPropose
     _muhur_hedefi = oid
     _otomatik_secim = False
     _kuyu = str(payload.kuyu or "").strip().upper()
-    if _kuyu and _saglayici.ad == ai_pro_hedef.PetriSaglayici.ad:
+    # ⚠️ OTB T-9 (ODM tezgâhı 19-11, seans 36): TÜM PETRİ önerisinin hedefi BÜTÜN PLAKA → mühür 0 + "Tüm petri"; tek kuyu (Y143 otomatik
+    # seçim ya da haritadan `kuyu`) MÜHÜRLENMEZ. Eskiden otomatik seçilen kuyu mühürleniyordu: plan mühürdeki kipten (TUM_PETRI) DOĞRU
+    # sürülürken kayıt / canlı kart / onay penceresi "Kuyu C2" diyor, döngü (D1.60) o kuyunun görülmediği karede sürüşü kesiyordu.
+    _tum_petri = (
+        _saglayici.ad == ai_pro_hedef.PetriSaglayici.ad
+        and ai_pro_hedef.odak_destekli(_saglayici)
+        and ai_pro_hedef.odak_kipi(_saglayici, oid, payload.odak_kip) == "TUM_PETRI"
+    )
+    if _tum_petri:
+        _muhur_hedefi = 0
+        c = {**c, "target_label": ai_pro_hedef.TUM_PETRI_ETIKETI, "e_cancer": None, "e_healthy": None}
+    elif _kuyu and _saglayici.ad == ai_pro_hedef.PetriSaglayici.ad:
         # AP-B3: tazelik yukarıda İSTEĞİN hedefiyle (önizlemenin lokalize ettiği) denetlendi; seçilen kuyu AYNI lokalizasyonun adayıdır.
         _aday = next(
             (

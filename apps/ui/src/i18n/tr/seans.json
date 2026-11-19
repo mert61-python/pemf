@@ -1,6 +1,7 @@
 {
   "aiProMod": {
-    "otomatikHedef": "{{hedef}} (otomatik)"
+    "otomatikHedef": "{{hedef}} (otomatik)",
+    "tumPetri": "Tüm petri"
   },
   "denetim": {
     "baslatmaGeriAlindi": "Başlatma, uçuştayken verilen DURDUR ile geri alındı.",

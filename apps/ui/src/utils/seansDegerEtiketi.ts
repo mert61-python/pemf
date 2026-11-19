@@ -21,8 +21,16 @@ export const hedefEtiketi = (t: TFunction, hedef: string): string => {
     case "Sinir Rejenerasyonu": return t("kontrol.hedef.sinirRejenerasyonu");
     case "Bağ Dokusu Tamiri": return t("kontrol.hedef.bagDokusuTamiri");
     case "Ödem Azaltma": return t("kontrol.hedef.odemAzaltma");
-    default: return hedef;
+    default: return aiProKayitHedefi(t, hedef);
   }
+};
+
+/** OTB T-9: AI Pro seans KAYDININ hedefi (VERİ, Türkçe: "Tüm petri" / "Kuyu C2" / "Tümör T1") — gösterimde istek dilinde; tanınmayan AYNEN.
+ *  Python karşılığı `seans_durum.py::_ai_pro_kayit_hedefi`. */
+const aiProKayitHedefi = (t: TFunction, h: string): string => {
+  if (h === "Tüm petri") return t("seans.aiProMod.tumPetri");
+  const m = /^(Kuyu|Tümör) ([A-Z]?\d+)$/.exec(h);
+  return m ? `${aiProHedefEtiketi(t, m[1])} ${m[2]}` : h;
 };
 
 /**

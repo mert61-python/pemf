@@ -241,6 +241,9 @@ def model_adi(saglayici) -> str:
 
 def hedef_gosterim_adi(saglayici, hedef_id: int) -> str:
     """Kullanıcıya gösterilen hedef adı (istek dili); sağlayıcı ayrı gösterim adı vermiyorsa `hedef_adi`."""
+    # OTB T-9: TÜM PETRİ seansının hedefi BÜTÜN PLAKA (mühür 0) — canlı kart "Kuyu (otomatik)" demez.
+    if int(hedef_id) == 0 and (getattr(saglayici, "odak_ayari", None) or {}).get("kip") == "TUM_PETRI":
+        return ceviri.t("seans.aiProMod.tumPetri")
     yap = getattr(saglayici, "hedef_adi_gosterim", None) or saglayici.hedef_adi
     return yap(hedef_id)
 
@@ -250,6 +253,8 @@ def hedef_gosterim_adi(saglayici, hedef_id: int) -> str:
 # Hoca modelleri (em_fantom / em_petri / em_kedi) SİLİNMEZ ama SÜRÜŞ KAYNAĞI OLMAZ. ai_hub importu fonksiyon içinde (kod koruması).
 # ══════════════════════════════════════════════════════════════════════════════════════════
 ODAK_PETRI_KIPLERI = ("TUM_PETRI", "KUYUCUK")
+#: OTB T-9: TÜM PETRİ önerisinin mühür / seans kaydı hedefi (VERİ, Türkçe saklanır — `kayit.hedef`); gösterim `seans.aiProMod.tumPetri`.
+TUM_PETRI_ETIKETI = "Tüm petri"
 #: Doz verilmeden istenen öneride başlangıç dozu = tavanın bu kesri (kullanıcı onay penceresinde değiştirir; sabit 1 mT YOK — Y273).
 ODAK_VARSAYILAN_DOZ_KESRI = 0.8
 
@@ -915,6 +920,8 @@ class _EmCvSaglayici:
 
     def etiket_gosterim(self, etiket: str) -> str:
         """VERİ etiketinin (`"Tümör T1"`) kullanıcıya gösterilen hâli: Türkçe ön ek istek / cihaz dilinde (TR'de bayt bayt aynı)."""
+        if etiket == TUM_PETRI_ETIKETI:
+            return ceviri.t("seans.aiProMod.tumPetri")  # OTB T-9: bütün plaka
         on = f"{self.hedef_etiketi} "
         if etiket.startswith(on):
             return f"{ceviri.t(self.hedef_etiketi_anahtari)} {etiket[len(on) :]}"

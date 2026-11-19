@@ -4738,6 +4738,13 @@
    "kritik": false,
    "muaf": [
     {
+     "metin": "Tüm petri",
+     "gerekce": "OTB T-9: TÜM PETRİ mühür / seans kaydı hedefi VERİSİ (`kayit.hedef` → `target_condition`, Türkçe saklanır) — gösterim `seans.aiProMod.tumPetri` (`etiket_gosterim`, `hedef_gosterim_adi`, `seans_durum.hedef_etiketi`)",
+     "turler": [
+      "sabit"
+     ]
+    },
+    {
      "metin": "Kedi Organ",
      "gerekce": "model adı (DB'ye giden `mode` verisinin ve `modelName` alanının parçası) — gösterim adı `ai.model.*`",
      "turler": [

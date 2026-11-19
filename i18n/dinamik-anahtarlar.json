@@ -240,6 +240,14 @@
   },
   {
    "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(kayit_hedef_anahtari)",
+   "onek": "seans.aiProMod.",
+   "degerler": ["tumPetri"],
+   "gerekce": "OTB T-9: AI Pro seans KAYDININ hedefi (`target_condition` = mühür etiketi, VERİ) AI_PRO_KAYIT_HEDEFI'nde ANAHTAR olarak saklanır; değer kümesi KAPALI (Tüm petri), bilinmeyen hedef çevrilmeden aynen döner"
+  },
+  {
+   "yuzey": "sunucu",
    "dosya": "apps/backend/utils/panel_yayin.py",
    "ifade": "ceviri.t(panel_anahtari)",
    "onek": "ai.panel.",

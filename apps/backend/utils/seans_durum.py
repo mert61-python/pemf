@@ -94,6 +94,9 @@ AI_PRO_ORGAN = {
 AI_PRO_HEDEF_ETIKETI = {"Tümör": "seans.aiProMod.tumor", "Kuyu": "seans.aiProMod.kuyu"}
 _OTOMATIK = re.compile(r"^(.+) \(otomatik\)$")
 _NUMARALI = re.compile(r"^(.+) (\d+)$")
+#: OTB T-9: AI Pro seans KAYDININ hedefi (`target_condition` — mühür etiketi): bütün plaka + "<Kuyu|Tümör> <C2|T1|3>".
+AI_PRO_KAYIT_HEDEFI = {"Tüm petri": "seans.aiProMod.tumPetri"}
+_AI_PRO_KAYIT_HEDEF_DESENI = re.compile(r"^(Kuyu|Tümör) ([A-Z]?\d+)$")
 
 
 def _hedef_etiketi(e: str) -> str:
@@ -131,13 +134,22 @@ def mod_etiketi(mod):
     return mod
 
 
+def _ai_pro_kayit_hedefi(h: str) -> str:
+    """OTB T-9: AI Pro seans satırının hedefi (VERİ, Türkçe: "Tüm petri" / "Kuyu C2" / "Tümör T1") istek dilinde; tanınmayan AYNEN."""
+    kayit_hedef_anahtari = AI_PRO_KAYIT_HEDEFI.get(h)
+    if kayit_hedef_anahtari:
+        return ceviri.t(kayit_hedef_anahtari)
+    m = _AI_PRO_KAYIT_HEDEF_DESENI.match(h)
+    return f"{_hedef_etiketi(m[1])} {m[2]}" if m else h
+
+
 def hedef_etiketi(hedef):
     """Hedef durumunu (`AUTO_TARGETS` değeri) istek dilindeki gösterim etiketine çevirir. ⚠️ YALNIZ GÖSTERİM (değer seansa / aramaya
-    Türkçe GİDER). Bilinmeyen / metin olmayan değer (serbest metin, eski kayıt, None) AYNEN döner."""
+    Türkçe GİDER). Bilinmeyen / metin olmayan değer (serbest metin, eski kayıt, None) AYNEN döner. AI Pro hedefi (OTB T-9) parça parça."""
     if not isinstance(hedef, str):
         return hedef
     hedef_anahtari = HEDEF_ETIKETLERI.get(hedef)
-    return ceviri.t(hedef_anahtari) if hedef_anahtari else hedef
+    return ceviri.t(hedef_anahtari) if hedef_anahtari else _ai_pro_kayit_hedefi(hedef)
 
 
 def durum_etiketi(durum) -> str:

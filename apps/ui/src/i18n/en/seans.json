@@ -1,6 +1,7 @@
 {
   "aiProMod": {
-    "otomatikHedef": "{{hedef}} (automatic)"
+    "otomatikHedef": "{{hedef}} (automatic)",
+    "tumPetri": "Whole well plate"
   },
   "denetim": {
     "baslatmaGeriAlindi": "The start was canceled by a STOP issued while it was in flight.",
