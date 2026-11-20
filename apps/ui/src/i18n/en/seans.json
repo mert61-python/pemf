@@ -24,6 +24,17 @@
     "dakika": "Minutes",
     "durum": "Status",
     "espSokulu": "ESP (removed)",
+    "konum": {
+      "baslik": "Cabin sensor position slices",
+      "duzelt": "Edit",
+      "ekle": "Add sensor position",
+      "olcum": "Measured: avg. {{ort}} mT · peak {{tepe}} mT",
+      "sil": "Delete",
+      "sure": "{{dk}} min {{sn}} s",
+      "tahmin": "Model estimate (same point, same drive): {{tahmin}} mT · difference {{fark}}",
+      "tahminYok": "No model estimate (no cabin calibration or field model, or no drive in that slice).",
+      "tahminYokSerbest": "Free slice — no model estimate."
+    },
     "maksC": "Max. °C",
     "mod": "Mode",
     "operator": "Operator",

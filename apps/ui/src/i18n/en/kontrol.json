@@ -150,7 +150,24 @@
   },
   "kabinSensoru": {
     "aciklama": "A single sensor moved around the cabin — the value is the field at the sensor's current position, not a coil's.",
-    "baslik": "Cabin sensor (MLX)"
+    "baslik": "Cabin sensor (MLX)",
+    "konum": {
+      "aciklama": "Optional: enter a new position whenever you move the sensor (from the left and front ledge edges, height above the base — the Verify measuring rule). If none is entered, the measurement counts as free.",
+      "baslangic": "Start time (HH:MM:SS)",
+      "dugme": "Sensor position",
+      "kaydedilemedi": "The position could not be saved — check the connection and try again.",
+      "kaydet": "Save position",
+      "not": "Note (optional)",
+      "on": "From the front ledge (cm)",
+      "saatGecersiz": "Enter the time as HH:MM:SS (e.g. 18:07:30).",
+      "serbest": "Free (no position)",
+      "serbestDurum": "Position: free (not entered)",
+      "simdiki": "Position: left {{sol}} cm · front {{on}} cm · height {{yukseklik}} cm",
+      "sol": "From the left ledge (cm)",
+      "tasidim": "I moved the sensor — save",
+      "vazgec": "Cancel",
+      "yukseklik": "Height above the base (cm)"
+    }
   },
   "modul": {
     "hata": {

@@ -50,6 +50,7 @@ from database.thdb_outbox import OutboxKarisimi  # noqa: E402
 from database.thdb_pii import PiiKarisimi  # noqa: E402
 from database.thdb_seans import SeansKarisimi  # noqa: E402
 from database.thdb_sema import SemaKarisimi  # noqa: E402
+from database.thdb_sensor_konumu import SensorKonumuKarisimi  # noqa: E402
 from database.thdb_telemetri import TelemetriKarisimi  # noqa: E402
 
 # `_DB_VEYA_RUNTIME` de TEK KAYNAKTA (database/db_hatalari.py) — yukarida import ediliyor.
@@ -95,6 +96,7 @@ class TreatmentHistoryDB(
     SemaKarisimi,
     SeansKarisimi,
     BakimKarisimi,
+    SensorKonumuKarisimi,
 ):
     """PEMF tedavi geçmişi veritabanı yönetim sınıfı (Connection Pool + WAL mode)"""
 

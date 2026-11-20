@@ -73,6 +73,7 @@ def _canli_alan_gonder(ileti: dict, alicilar: list) -> None:
 
 
 from servers import canli_alan as _canli_alan_modulu  # noqa: E402
+from servers.sensor_konumu import SensorKonumuGovde  # noqa: E402  Y308 canlı konum ucu gövdesi
 
 _canli_alan = _canli_alan_modulu.CanliAlan(_canli_alan_bobinleri, _canli_alan_gonder)
 update_live_stm_status = live_state.update_live_stm_status
@@ -5938,6 +5939,47 @@ def _start_background_threads() -> None:
     if os.environ.get("PEMF_SIMULATE") == "1":
         _threading.Thread(target=_hardware_simulation_loop, daemon=True, name="hw-sim").start()
         logging.info("HARDWARE SIMULATION aktif (sanal STM+ESP+sensor) - PEMF_SIMULATE=1")
+
+
+# ── Y308 (sahip 19-11): KABİN SENSÖRÜ (MLX) KONUMU — seans SIRASINDA giriş ("Sensörü taşıdım" / serbest). İSTEĞE BAĞLI: hiç giriş
+# yoksa hiçbir şey değişmez. Sürüşe / ACİL DURDUR'a HİÇBİR koşul eklemez (yalnız kayıt); zaman sunucu saatidir. Seans sonrası
+# giriş / düzeltme: /api/history/{id}/sensor_konumu.
+@app.get("/api/session/sensor_konumu")
+def sensor_konumu_canli():
+    """Aktif seansın SON konum girişi (kabin sensörü kartı gösterir); seans yoksa `aktif: False`."""
+    with _session_lock:
+        aktif = bool(_active_session.get("is_active"))
+        db_id = _active_session.get("db_session_id")
+    if not aktif or not db_id:
+        return {"aktif": False, "konum": None}
+    db = _get_treatment_db()
+    konumlar = db.sensor_konumlari(int(db_id)) if db is not None else []
+    return {"aktif": True, "konum": konumlar[-1] if konumlar else None}
+
+
+@app.post("/api/session/sensor_konumu")
+def sensor_konumu_canli_ekle(request: Request, govde: SensorKonumuGovde):
+    """Aktif seansa konum girişi (şimdiki zaman). Aktif seans yoksa 409 (eylem söyler); geçersiz girdi 422. Yalnız JSON (D5)."""
+    from servers import audit_log as _iz
+    from servers import sensor_konumu as sk
+    from servers.history_router import _sensor_konumu_kimlik
+
+    with _session_lock:
+        aktif = bool(_active_session.get("is_active"))
+        db_id = _active_session.get("db_session_id")
+    if not aktif or not db_id:
+        raise HTTPException(status_code=409, detail=ceviri.t("gecmis.sensorKonumu.aktifYok"))
+    _sensor_konumu_kimlik(request, int(db_id))
+    try:
+        alan = sk.dogrula(govde)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=ceviri.t("gecmis.sensorKonumu.gecersiz")) from None
+    db = _get_treatment_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
+    kimlik = db.sensor_konumu_ekle(int(db_id), time.time(), **alan)
+    _iz.kimlikli_yaz(request, "history.sensorKonumu", scope=f"id={db_id}", item_count=1, detail={"islem": "canli"})
+    return {"status": "success", "id": kimlik}
 
 
 @app.post("/api/session/stop")

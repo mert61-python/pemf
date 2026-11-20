@@ -150,7 +150,24 @@
   },
   "kabinSensoru": {
     "aciklama": "Tek sensör, kabinde taşınır — değer sensörün o anki konumundaki alandır, bobin değil.",
-    "baslik": "Kabin sensörü (MLX)"
+    "baslik": "Kabin sensörü (MLX)",
+    "konum": {
+      "aciklama": "İsteğe bağlı: sensörü taşıdıkça yeni konum girin (sol ve ön çıkıntı kenarından, tabandan yükseklik — Doğrula'daki ölçü kuralı). Girilmezse ölçüm serbest sayılır.",
+      "baslangic": "Başlangıç saati (SS:DD:ss)",
+      "dugme": "Sensör konumu",
+      "kaydedilemedi": "Konum kaydedilemedi — bağlantıyı denetleyip yeniden deneyin.",
+      "kaydet": "Konumu kaydet",
+      "not": "Not (isteğe bağlı)",
+      "on": "Ön çıkıntıdan (cm)",
+      "saatGecersiz": "Saati SS:DD:ss biçiminde girin (ör. 18:07:30).",
+      "serbest": "Serbest (konumsuz)",
+      "serbestDurum": "Konum: serbest (girilmedi)",
+      "simdiki": "Konum: sol {{sol}} cm · ön {{on}} cm · yükseklik {{yukseklik}} cm",
+      "sol": "Sol çıkıntıdan (cm)",
+      "tasidim": "Sensörü taşıdım — kaydet",
+      "vazgec": "Vazgeç",
+      "yukseklik": "Tabandan yükseklik (cm)"
+    }
   },
   "modul": {
     "hata": {

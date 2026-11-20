@@ -674,6 +674,11 @@ class PDFReportGenerator:
             self._add_coil_runs_table(story, session.get('id'))
         except Exception as e:
             self.logger.warning(f"Bobin calismalari tablosu atlandi (session {session.get('id')}): {e}")
+        # Y308: kabin sensörü (MLX) konum dilimleri — YALNIZ konum girişi varsa (yoksa PDF bugünküyle birebir).
+        try:
+            self._add_sensor_konum_table(story, session.get('id'))
+        except Exception as e:
+            self.logger.warning(f"Sensor konumu tablosu atlandi (session {session.get('id')}): {e}")
 
     @staticmethod
     def _format_duration(parameters: dict, session: dict) -> str:
@@ -789,6 +794,71 @@ class PDFReportGenerator:
         story.append(Spacer(1, 10))
         story.append(Paragraph(ceviri.t("pdf.seans.bobinCalismalari"), self.styles['Heading3']))
         story.append(self._build_coil_runs_table(runs, summaries))
+
+    def _add_sensor_konum_table(self, story, session_id):
+        """Y308 (sahip 19-11): seans detayındaki konum dilimleri tablosunun AYNISI (konum, süre, ort / tepe mT, aynı sürüşle ODAK model
+        tahmini, fark %); serbest dilimde tahmin yok. Giriş yoksa HİÇBİR şey eklenmez. Ondalık ayırıcı istek dilinde (Y306)."""
+        if session_id is None or not hasattr(self.db, "sensor_konumlari"):
+            return
+        konumlar = self.db.sensor_konumlari(session_id)
+        if not konumlar:
+            return
+        from servers import sensor_konumu as sk
+
+        det = self.db.get_session_details(session_id) or {}
+        dilimler = sk.dilimler(
+            konumlar,
+            det.get("started_epoch"),
+            det.get("ended_epoch"),
+            self.db.get_sensor_samples(session_id),
+            self.db.get_session_coil_runs(session_id),
+        )
+
+        def _s(v, b):
+            return "-" if v is None else ceviri.sayi_metni(v, b)
+
+        veri = [
+            [
+                ceviri.t("pdf.seans.saat"),
+                ceviri.t("pdf.seans.sureSn"),
+                ceviri.t("pdf.seans.konum"),
+                ceviri.t("pdf.seans.ortMt"),
+                ceviri.t("pdf.seans.tepeMt"),
+                ceviri.t("pdf.seans.tahminMt"),
+                ceviri.t("pdf.seans.farkYuzde"),
+            ]
+        ]
+        for d in dilimler:
+            veri.append(
+                [
+                    _fmt_hms(d["baslangic_epoch"]),
+                    _fmt_num(d["sure_sn"], "{:.0f}"),
+                    sk.konum_metni(d, ceviri.t("pdf.seans.serbest")),
+                    _s(d["ortalama_mt"], 2),
+                    _s(d["tepe_mt"], 2),
+                    _s(d["tahmin_mt"], 2),
+                    _s(d["fark_yuzde"], 1),
+                ]
+            )
+        story.append(Spacer(1, 10))
+        story.append(Paragraph(ceviri.t("pdf.seans.konumBaslik"), self.styles['Heading3']))
+        tablo = Table(veri, colWidths=[1.8 * cm, 1.6 * cm, 3.6 * cm, 1.8 * cm, 2.0 * cm, 2.4 * cm, 1.6 * cm])
+        tablo.setStyle(
+            TableStyle(
+                [
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), getattr(self, 'unicode_font_bold', 'Helvetica-Bold')),
+                    ('FONTNAME', (0, 1), (-1, -1), getattr(self, 'unicode_font', 'Helvetica')),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ]
+            )
+        )
+        story.append(tablo)
+        story.append(Paragraph(ceviri.t("pdf.seans.konumNotu"), self.styles['UnicodeNormal']))
 
     def _build_coil_runs_table(self, runs, summaries) -> "Table":
         """Bobin çalışması kayıtlarını başlıklı + stilli ReportLab Table'ına dönüştür."""

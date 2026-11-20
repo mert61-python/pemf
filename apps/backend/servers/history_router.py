@@ -20,6 +20,8 @@ from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
 from utils.seans_durum import durum_etiketi, hedef_etiketi, mod_etiketi
 
+from servers.sensor_konumu import SensorKonumuGovde
+
 router = APIRouter(prefix="/api/history", tags=["history"])
 logger = logging.getLogger("HistoryRouter")
 
@@ -596,6 +598,77 @@ def _epoch_to_hms(epoch):
         return ""
 
 
+# ── Y308 (sahip 19-11): KABİN SENSÖRÜ (MLX) KONUMU — İSTEĞE BAĞLI, seans SONRASI giriş / düzeltme (canlı: /api/session/sensor_konumu)
+def _sensor_konumu_kimlik(request: Request, session_id: int):
+    """Y107 deseni: kayıtlı operatörlü klinikte seans kaydını değiştiren uç KİMLİK ister (kimliksiz → 428, iz `reddedildi`)."""
+    from servers import audit_log as _iz
+    from servers.auth import cozumlenmis_operator, kayitli_operator_var, kimliksiz_detayi
+
+    if kayitli_operator_var() and not cozumlenmis_operator(request):
+        _iz.kimlikli_yaz(request, "history.sensorKonumu", scope=f"id={session_id}", item_count=0, outcome="reddedildi")
+        raise HTTPException(status_code=428, detail=kimliksiz_detayi(ceviri.t("gecmis.kimlik.sensorKonumu")))
+
+
+def _sensor_konumu_girdi(db, session_id: int, govde: SensorKonumuGovde):
+    """Gövde → DB alanları + zaman (seans aralığında); seans yoksa 404, geçersizse 422."""
+    from servers import sensor_konumu as sk
+
+    raw = db.get_session_details(session_id)
+    if not raw:
+        raise HTTPException(status_code=404, detail=ceviri.t("gecmis.sensorKonumu.bulunamadi"))
+    try:
+        alan = sk.dogrula(govde)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=ceviri.t("gecmis.sensorKonumu.gecersiz")) from None
+    zaman = govde.zamanEpoch if govde.zamanEpoch is not None else raw.get("started_epoch")
+    if (
+        not isinstance(zaman, (int, float))
+        or not math.isfinite(float(zaman))
+        or not sk.zaman_seansta_mi(float(zaman), raw.get("started_epoch"), raw.get("ended_epoch"))
+    ):
+        raise HTTPException(status_code=422, detail=ceviri.t("gecmis.sensorKonumu.zamanDisi"))
+    return alan, float(zaman)
+
+
+@router.post("/{session_id}/sensor_konumu")
+def sensor_konumu_ekle(session_id: int, request: Request, govde: SensorKonumuGovde, db=Depends(get_db)):
+    """Seans bittikten sonra konum girişi (başlangıç saati seçilerek). Yalnız JSON gövde (D5)."""
+    from servers import audit_log as _iz
+
+    _sensor_konumu_kimlik(request, session_id)
+    alan, zaman = _sensor_konumu_girdi(db, session_id, govde)
+    kimlik = db.sensor_konumu_ekle(session_id, zaman, **alan)
+    _iz.kimlikli_yaz(request, "history.sensorKonumu", scope=f"id={session_id}", item_count=1, detail={"islem": "ekle"})
+    return {"status": "success", "id": kimlik}
+
+
+@router.put("/{session_id}/sensor_konumu/{kayit_id}")
+def sensor_konumu_guncelle(
+    session_id: int, kayit_id: int, request: Request, govde: SensorKonumuGovde, db=Depends(get_db)
+):
+    from servers import audit_log as _iz
+
+    _sensor_konumu_kimlik(request, session_id)
+    alan, zaman = _sensor_konumu_girdi(db, session_id, govde)
+    if not db.sensor_konumu_guncelle(kayit_id, session_id, zaman, **alan):
+        raise HTTPException(status_code=404, detail=ceviri.t("gecmis.sensorKonumu.bulunamadi"))
+    _iz.kimlikli_yaz(
+        request, "history.sensorKonumu", scope=f"id={session_id}", item_count=1, detail={"islem": "duzelt"}
+    )
+    return {"status": "success"}
+
+
+@router.delete("/{session_id}/sensor_konumu/{kayit_id}")
+def sensor_konumu_sil(session_id: int, kayit_id: int, request: Request, db=Depends(get_db)):
+    from servers import audit_log as _iz
+
+    _sensor_konumu_kimlik(request, session_id)
+    if not db.sensor_konumu_sil(kayit_id, session_id):
+        raise HTTPException(status_code=404, detail=ceviri.t("gecmis.sensorKonumu.bulunamadi"))
+    _iz.kimlikli_yaz(request, "history.sensorKonumu", scope=f"id={session_id}", item_count=1, detail={"islem": "sil"})
+    return {"status": "success"}
+
+
 @router.get("/{session_id}/details")
 def get_session_full_details(session_id: int, db=Depends(get_db)):
     """Asama-3: Bir seansin tam rapor sozlesmesi (seans + bobin calismalari +
@@ -664,13 +737,22 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         )
         session["alan_notu"] = mt_duzeltme.alan_notu_metni() if _duzeltildi else ""
 
-        return _json_sonlu(
-            {
-                "session": session,
-                "coil_runs": coil_runs,
-                "sensor_samples": sensor_samples,
-            }
-        )
+        yanit = {
+            "session": session,
+            "coil_runs": coil_runs,
+            "sensor_samples": sensor_samples,
+        }
+        # Y308: kabin sensörü konum girişleri VARSA girişler + dilimler (konum, süre, ort / tepe mT, model tahmini, fark %); yoksa
+        # yanıt bugünküyle BİREBİR (anahtar eklenmez).
+        konumlar = db.sensor_konumlari(session_id) if hasattr(db, "sensor_konumlari") else []
+        if konumlar:
+            from servers import sensor_konumu as sk
+
+            yanit["sensor_konumlari"] = konumlar
+            yanit["konum_dilimleri"] = sk.dilimler(
+                konumlar, raw.get("started_epoch"), raw.get("ended_epoch"), sensor_samples, runs
+            )
+        return _json_sonlu(yanit)
     except HTTPException:
         raise
     except Exception as e:
@@ -748,6 +830,42 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
                 + [""] * 11
                 + [round(_ort, 4), sum(int(s.get("sample_count") or 0) for _, s in _kabin_alan) or "", _not]
             )
+
+        # Y308: konum girişi VARSA aynı tablo (seans detayı / PDF ile aynı dilimler) boş satırdan sonra; yoksa CSV BİREBİR.
+        konumlar = db.sensor_konumlari(session_id) if hasattr(db, "sensor_konumlari") else []
+        if konumlar:
+            from servers import sensor_konumu as sk
+
+            _det = db.get_session_details(session_id) or {}
+            writer.writerow([])
+            writer.writerow([ceviri.t("gecmis.csv.konumDilimleri")])
+            writer.writerow(
+                [
+                    ceviri.t("gecmis.csv.baslangic"),
+                    ceviri.t("gecmis.csv.sureSn"),
+                    ceviri.t("gecmis.csv.konum"),
+                    ceviri.t("gecmis.csv.ortMt"),
+                    ceviri.t("gecmis.csv.tepeMt"),
+                    ceviri.t("gecmis.csv.tahminMt"),
+                    ceviri.t("gecmis.csv.farkYuzde"),
+                    ceviri.t("gecmis.csv.not"),
+                ]
+            )
+            for d in sk.dilimler(
+                konumlar, _det.get("started_epoch"), _det.get("ended_epoch"), db.get_sensor_samples(session_id), runs
+            ):
+                writer.writerow(
+                    [
+                        _epoch_to_hms(d["baslangic_epoch"]),
+                        d["sure_sn"],
+                        sk.konum_metni(d, ceviri.t("gecmis.csv.serbest")),
+                        "" if d["ortalama_mt"] is None else d["ortalama_mt"],
+                        "" if d["tepe_mt"] is None else d["tepe_mt"],
+                        "" if d["tahmin_mt"] is None else d["tahmin_mt"],
+                        "" if d["fark_yuzde"] is None else d["fark_yuzde"],
+                        d["not"],
+                    ]
+                )
 
         csv_data = output.getvalue()
         output.close()

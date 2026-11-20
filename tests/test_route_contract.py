@@ -186,6 +186,12 @@ GOLDEN_ROUTES = {
     ("/api/moduller/gorunurluk", "POST"),
     ("/api/moduller/uygula", "POST"),
     ("/api/moduller/{kimlik}/sec", "POST"),
+    # Y308 (sahip 19-11): kabin sensörü (MLX) konumu — İSTEĞE BAĞLI; seans sırasında (canlı) ve sonra (geçmiş) giriş / düzeltme / silme.
+    ("/api/session/sensor_konumu", "GET"),
+    ("/api/session/sensor_konumu", "POST"),
+    ("/api/history/{session_id}/sensor_konumu", "POST"),
+    ("/api/history/{session_id}/sensor_konumu/{kayit_id}", "PUT"),
+    ("/api/history/{session_id}/sensor_konumu/{kayit_id}", "DELETE"),
     ("/api/update/apply", "POST"),
     ("/api/update/rollback", "POST"),
     ("/api/update/status", "GET"),
@@ -264,4 +270,5 @@ def test_route_contract_unchanged():
     # → 123 (+6 KD · Y260 kabin kalibrasyonu: /api/ai/pro/kalibrasyon GET + kare / hesapla / kaydet / dogrula / fantom POST), 2026-11-10
     # → 125 (+2 KD-2: /api/ai/pro/kalibrasyon/taban + /sahne-yenile POST), 2026-11-10
     # → 133 (+8 GA geliştirici modülleri: /api/moduller GET, durum GET, {kimlik}/sec, baslat, uygula, durdur, birak, gorunurluk POST), 2026-11-20
-    assert len(current) == len(beklenen) == 133 - (0 if _simulator_mountlu() else 1)
+    # → 138 (+5 Y308 kabin sensörü konumu: session/sensor_konumu GET+POST, history/{id}/sensor_konumu POST + /{kayit_id} PUT+DELETE), 2026-11-20
+    assert len(current) == len(beklenen) == 138 - (0 if _simulator_mountlu() else 1)

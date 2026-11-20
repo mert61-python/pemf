@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   fill: { height: "100%", borderRadius: rs(5) },
   value: { width: rs(66), textAlign: "right", fontSize: rf(12), fontWeight: "700" },
-  birim: { width: rs(28), color: colors.textMuted, fontSize: rf(10) },
+  birim: { width: rs(30), color: colors.textMuted, fontSize: rf(11) }, // rf(9|10) cırcırı: en az 11
   foot: { color: colors.textMuted, fontSize: rf(11) },
   uyari: { color: colors.warning, fontSize: rf(11), fontWeight: "700" },
 });

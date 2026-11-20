@@ -195,7 +195,7 @@
    "aciklama": "kontrol / bobin parametreleri / sürüş kipi / doz göstergeleri (KRİTİK)",
    "durum": "tamam",
    "metin": 202,
-   "dosyaSayisi": 12
+   "dosyaSayisi": 13
   },
   {
    "ad": "arayuz-05b-guvenlik-kritik",
@@ -240,7 +240,7 @@
    "aciklama": "seans geçmişi, seans ayrıntısı, indirme",
    "durum": "tamam",
    "metin": 152,
-   "dosyaSayisi": 5
+   "dosyaSayisi": 6
   },
   {
    "ad": "arayuz-07b-ai-gecmisi-kpi",
@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 40
+   "dosyaSayisi": 41
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -276,7 +276,7 @@
    "aciklama": "yönlendirici hata iletileri (hasta, geçmiş, seans, kimlik, sistem, güncelleme, jeton)",
    "durum": "tamam",
    "metin": 160,
-   "dosyaSayisi": 15
+   "dosyaSayisi": 16
   },
   {
    "ad": "sunucu-10b-ana-sunucu",
@@ -330,7 +330,7 @@
    "aciklama": "veritabanı / şema / yedek / KVKK iletileri (çoğu muaf: iç / günlük / DB değeri)",
    "durum": "tamam",
    "metin": 190,
-   "dosyaSayisi": 18
+   "dosyaSayisi": 19
   },
   {
    "ad": "sunucu-10h-servis",
@@ -1279,6 +1279,17 @@
    "birlesikIstisna": [],
    "not": ""
   },
+  "apps/ui/src/components/domain/KonumDilimleriBolumu.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-07a-seans-gecmisi",
+   "sira": 7,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
   "apps/ui/src/components/domain/MobileUpdateBanner.tsx": {
    "yuzey": "arayuz",
    "grup": "arayuz-03b-ayarlar-bilesen",
@@ -1316,6 +1327,17 @@
    "durum": "tamam",
    "metin": 4,
    "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/ui/src/components/domain/SensorKonumuFormu.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-05a-kontrol-kritik",
+   "sira": 5,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": true,
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
@@ -1451,6 +1473,32 @@
    "metin": 10,
    "kritik": false,
    "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/ui/src/services/sensorKonumu.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [
+    {
+     "metin": "/history/{{seansId}}/sensor_konumu",
+     "gerekce": "API yolu — teknik, kullanıcı metni değil",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "/history/{{seansId}}/sensor_konumu/{{kayitId}}",
+     "gerekce": "API yolu — teknik, kullanıcı metni değil",
+     "turler": [
+      "cagri"
+     ]
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -6240,6 +6288,17 @@
    "birlesikIstisna": [],
    "not": ""
   },
+  "apps/backend/servers/sensor_konumu.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10a-yonlendirici",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
   "apps/backend/servers/session_state.py": {
    "yuzey": "sunucu",
    "grup": "sunucu-10f-bildirim-ws",
@@ -8389,6 +8448,17 @@
      ]
     }
    ],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/backend/database/thdb_sensor_konumu.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10g-veritabani",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
    "birlesikIstisna": [],
    "not": ""
   },

@@ -963,6 +963,8 @@ class SeansKarisimi:
                     (session_id,),
                 )
                 cursor.execute('DELETE FROM session_coil_runs WHERE session_id = ?', (session_id,))
+                # Y308: kabin sensörü konum girişleri seansla birlikte silinir (yetim kalmaz).
+                cursor.execute('DELETE FROM sensor_konumlari WHERE session_id = ?', (session_id,))
 
                 # Sonra seansı sil
                 cursor.execute('DELETE FROM treatment_sessions WHERE id = ?', (session_id,))
@@ -1022,6 +1024,7 @@ class SeansKarisimi:
                     kimlikler,
                 )
                 cursor.execute(f'DELETE FROM session_coil_runs WHERE session_id IN ({yer})', kimlikler)
+                cursor.execute(f'DELETE FROM sensor_konumlari WHERE session_id IN ({yer})', kimlikler)  # Y308
                 cursor.execute(f'DELETE FROM treatment_sessions WHERE id IN ({yer})', kimlikler)
                 silinen = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
                 conn.commit()

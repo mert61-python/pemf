@@ -24,6 +24,17 @@
     "dakika": "Dakika",
     "durum": "Durum",
     "espSokulu": "ESP (sökülü)",
+    "konum": {
+      "baslik": "Kabin sensörü konum dilimleri",
+      "duzelt": "Düzelt",
+      "ekle": "Sensör konumu ekle",
+      "olcum": "Ölçülen: ort. {{ort}} mT · en yüksek {{tepe}} mT",
+      "sil": "Sil",
+      "sure": "{{dk}} dk {{sn}} sn",
+      "tahmin": "Model tahmini (aynı nokta, aynı sürüş): {{tahmin}} mT · fark {{fark}}",
+      "tahminYok": "Model tahmini yok (kabin kalibrasyonu ya da alan modeli yok, ya da o dilimde sürüş yok).",
+      "tahminYokSerbest": "Serbest dilim — model tahmini yok."
+    },
     "maksC": "Maks. °C",
     "mod": "Mod",
     "operator": "Operatör",

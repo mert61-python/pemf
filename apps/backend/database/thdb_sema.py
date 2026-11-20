@@ -301,6 +301,13 @@ class SemaKarisimi:
             )
         ''')
 
+        # Y308 (sahip 19-11): kabin sensörü (MLX) konum kaydı — İSTEĞE BAĞLI, AYRI tablo (mevcut tablolara ALTER YOK); idempotent,
+        # `_semayi_kur`un işleminde. Eski sürüm bu tabloyu tanımaz / yok sayar. Bkz. `database.thdb_sensor_konumu`.
+        from database import thdb_sensor_konumu
+
+        cursor.execute(thdb_sensor_konumu.SEMA)
+        cursor.execute(thdb_sensor_konumu.DIZIN)
+
     def _create_core_indexes(self, cursor):
         """Çekirdek tabloların sorgu indekslerini oluştur."""
         # İndeksler oluştur

@@ -19,6 +19,7 @@ bırakmasını yakalayamıyor. `RealtimeChart`teki `hesaplaPad(...)` çağrısı
 """
 
 import pathlib
+import re
 
 import capraz
 import pytest
@@ -71,7 +72,8 @@ def test_KRITIK_seans_sicaklik_grafigi_olculen_genislikte():
     assert "const width = 720" not in src, (
         "TempChart sabit 720 px viewBox'a dönmüş: 360 px telefonda eksen yazıları 5-6 px'e düşer."
     )
-    assert 'testID="seans-sicaklik-grafigi"' in src and "onLayout" in src
+    # OYZ4: OTB T-11 (cf2793ed) grafiği sıcaklık + MLX için parametreledi — testID artık varsayılan değer (`testID = "…"`); sözleşme AYNI.
+    assert re.search(r'testID\s*=\s*"seans-sicaklik-grafigi"', src) and "onLayout" in src
 
 
 def test_sensor_grafigi_sabit_kapakla_sinirlanmiyor():

@@ -35,6 +35,8 @@ import i18n from "i18next";
 import { useTranslation } from "react-i18next";
 import { eksenAdimlari } from "@/utils/eksenAdimlari";
 import { kabinSensoruKanaliMi } from "@/utils/kabinSensoru";
+import { KonumDilimleriBolumu } from "@/components/domain/KonumDilimleriBolumu";
+import type { KonumDilimi, SensorKonumuKaydi } from "@/services/sensorKonumu";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
 const COIL_COLORS = [
@@ -133,6 +135,9 @@ interface SessionDetails {
   session?: SessionInfo | null;
   coil_runs?: CoilRun[] | null;
   sensor_samples?: SensorSample[] | null;
+  /** Y308: kabin sensörü konum girişleri + dilimleri (YALNIZ giriş varsa gelir). */
+  sensor_konumlari?: SensorKonumuKaydi[] | null;
+  konum_dilimleri?: KonumDilimi[] | null;
 }
 
 // ─── Yardımcılar ──────────────────────────────────────────────────────────────
@@ -211,6 +216,8 @@ export function SessionDetailModal({
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [details, setDetails] = useState<SessionDetails | null>(null);
+  // Y308: konum girişi eklenince / silinince detay yeniden yüklenir (dilimler backend'de hesaplanır).
+  const [surum, setSurum] = useState(0);
 
   useEffect(() => {
     if (!visible || sessionId === null || sessionId === undefined) return;
@@ -231,7 +238,7 @@ export function SessionDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [visible, sessionId]);
+  }, [visible, sessionId, surum]);
 
   // ORTA fix (yanlış-hasta flash): sessionId değişince effect setDetails(null)'ı fetch ÖNCESİ değil
   // render-SONRASI yaptığından, bir render ESKİ seansın (başka hastanın) adı/notunu çizebiliyordu.
@@ -272,6 +279,16 @@ export function SessionDetailModal({
               <CoilRunsSection coilRuns={coilRuns} />
               <TemperatureSection samples={sensorSamples} />
               <MagneticFieldSection samples={sensorSamples} />
+              <KonumDilimleriBolumu
+                seansId={sessionId as string | number}
+                baslangicEpoch={session?.started_epoch ?? null}
+                konumlar={isCurrent ? (details?.sensor_konumlari ?? []) : []}
+                dilimler={isCurrent ? (details?.konum_dilimleri ?? []) : []}
+                alanVar={sensorSamples.some(
+                  (s) => kabinSensoruKanaliMi(s.coil_id) && s.magnetic_field_mt != null && Number.isFinite(s.magnetic_field_mt),
+                )}
+                onDegisti={() => setSurum((n) => n + 1)}
+              />
             </ScrollView>
           )}
         </View>
