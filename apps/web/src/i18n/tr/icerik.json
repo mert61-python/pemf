@@ -34,7 +34,7 @@
     "androidRol": "Kliniğinizdeki cihaza bağlanır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensörleri izleyebilir ve hasta kayıtlarına bakabilirsiniz. Cihazın bağlı olduğu klinik bilgisayarı açık olmalıdır.",
     "androidSurumNotu": "Telefon uygulamasının sürüm numarası bilgisayar uygulamasından ayrıdır; ikisi bağımsız güncellenir.",
     "kanal": "Sürüm 2026.1",
-    "surumTarihi": "7 Kas 2026"
+    "surumTarihi": "23 Kas 2026"
   },
   "karsilastir": {
     "aiPro": "AI Pro otomatik seans",
@@ -221,8 +221,8 @@
     }
   },
   "surum": {
-    "n1": "Güncellemeler artık sorulmadan indirilmez: yeni sürüm bulununca neyin güncelleneceği, inecek boyut ve kısa bir not gösterilip onayınız istenir.",
-    "n2": "“Güncelle” derseniz güncelleme kurulur ve uygulama kendiliğinden yeniden başlar (seans sürüyorsa bitmesi beklenir); “Şimdi değil” derseniz bir sonraki açılışta yeniden sorulur."
+    "n1": "Petri seanslarında sensör ve kablosu plakanın yanındayken seans artık kendiliğinden durmaz; plaka seansın başındaki yerinden kayarsa seans 30 saniye içinde durur ve nedenini ekranda yazar.",
+    "n2": "Alan sensörü artık “Kabin sensörü (MLX)” adıyla bobinlerden ayrı gösterilir; seans detayında manyetik alan grafiği var ve elle durdurulan seans geçmişte “Durduruldu” görünür."
   },
   "uyari": {
     "tibbi": "PEMF Vet, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış klinik destek yazılımıdır. Akıllı teşhis ve AI analiz çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve tedavisinin yerine geçmez. Otonom seans (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır."

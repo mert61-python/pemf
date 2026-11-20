@@ -63,7 +63,7 @@ const ALTIN: Record<string, unknown> = {
  },
  "CLIENT": {
   "channel": "Sürüm 2026.1",
-  "releaseDate": "7 Kas 2026",
+  "releaseDate": "23 Kas 2026",
   "androidOs": "Android 8.0 ve üzeri · telefona doğrudan kurulur"
  },
  "MODULES": [
@@ -242,10 +242,10 @@ const ALTIN: Record<string, unknown> = {
   }
  ],
  "PATCH": {
-  "date": "7 Kas 2026",
+  "date": "23 Kas 2026",
   "notes": [
-   "Güncellemeler artık sorulmadan indirilmez: yeni sürüm bulununca neyin güncelleneceği, inecek boyut ve kısa bir not gösterilip onayınız istenir.",
-   "“Güncelle” derseniz güncelleme kurulur ve uygulama kendiliğinden yeniden başlar (seans sürüyorsa bitmesi beklenir); “Şimdi değil” derseniz bir sonraki açılışta yeniden sorulur."
+   "Petri seanslarında sensör ve kablosu plakanın yanındayken seans artık kendiliğinden durmaz; plaka seansın başındaki yerinden kayarsa seans 30 saniye içinde durur ve nedenini ekranda yazar.",
+   "Alan sensörü artık “Kabin sensörü (MLX)” adıyla bobinlerden ayrı gösterilir; seans detayında manyetik alan grafiği var ve elle durdurulan seans geçmişte “Durduruldu” görünür."
   ]
  },
  "COMPARE": [

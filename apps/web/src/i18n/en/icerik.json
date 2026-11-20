@@ -34,7 +34,7 @@
     "androidRol": "Connects to the device in your clinic: you can start and stop sessions, change coil settings, monitor the sensors and look at patient records. The clinic computer the device is connected to must be on.",
     "androidSurumNotu": "The phone app’s version number is separate from the computer app’s; the two are updated independently.",
     "kanal": "Version 2026.1",
-    "surumTarihi": "7 Nov 2026"
+    "surumTarihi": "23 Nov 2026"
   },
   "karsilastir": {
     "aiPro": "AI Pro automatic session",
@@ -221,8 +221,8 @@
     }
   },
   "surum": {
-    "n1": "Updates are no longer downloaded without asking: when a new version is found, you see what will be updated, the download size and a short note, and are asked to approve.",
-    "n2": "If you choose “Update”, it is installed and the app restarts by itself (waiting for a running session to end); if you choose “Not now”, you will be asked again on the next launch."
+    "n1": "In Petri sessions, the session no longer stops by itself when the sensor and its cable are next to the plate; if the plate moves from where it was at the start, the session stops within 30 seconds and shows the reason on screen.",
+    "n2": "The field sensor is now shown as “Cabin sensor (MLX)”, separate from the coils; session details include a magnetic field chart, and a manually stopped session shows as “Stopped” in the session history."
   },
   "uyari": {
     "tibbi": "PEMF Vet is clinical support software designed to be used under the supervision of a veterinarian. Smart diagnosis and AI analysis outputs are for information only; they do not replace the veterinarian’s medical diagnosis, decisions and treatment. Autonomous session (AI Pro) features are used under the veterinarian’s responsibility."

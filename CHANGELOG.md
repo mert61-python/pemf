@@ -6,7 +6,7 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
-## app 1.9.53 · launcher 1.9.55 · mobile 2.3.36 — yayın adayı (20 Kasım 2026; yayın tarihi ve paket kimliği yayın günü yazılır)
+## launcher 1.9.55 — 2026-11-23 · app 1.9.53 · mobile 2.3.36 (yayın adayı: tarih PLANLANAN yayın günü — yayın başka gün olursa bu tarih ve sitedeki sürüm tarihi o gün yazılır; paket kimliği yayın günü)
 
 > ⚠️ Yayın adayı — sahibin "yayınla"sıyla yayınlanır (tezgâhta, LattePanda günü). **Kontrolcü
 > yazılımı DDS v2.6** (sensör yeniden bağlanma) bu sürümle AYNI gün karta yüklenmelidir; v2.5 kartla uygulama çalışır ama koparsa
