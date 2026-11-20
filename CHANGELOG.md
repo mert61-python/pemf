@@ -75,7 +75,11 @@ bağlanmazsa yedek ölçüm son karar sayılmaz (S-YLI.4); etkileşimli kaldırm
 iki dilli gerçek şablonla ölçüldü. Seans silinince sensör konumu girişleri de silinir; konum kaydı buluta gönderilmez. AI model
 paketleri: **Veteriner** (`vet.zip`, 200,8 MB) ve **Araştırma** (`research.zip` 1 663,7 MB) yenilendi; Ev Sahibi paketi ve araştırma
 2. parçası AYNI (sha değişmedi). Kontrolcü yazılımı uyum varlığı DDS v2.6 hazırlandı (yayınlanmaz; karta tezgâhta yüklenir).
-Paket kimliği (buildId — zip sha 12 hane + içerik kimliği `icerik`[:12]): yayın derlemesinden sonra yazılır.
+
+## app 1.9.53 — 2026-11-23 (Windows uygulama paketi; değişiklikler yukarıdaki launcher 1.9.55 bölümünde)
+
+Paket kimliği (buildId — zip sha 12 hane; içerik kimliği `icerik`[:12] ayrı): `d70902ec9b96` · içerik kimliği `d55330f75870`.
+Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞTİ (`720a60be1bb7`, yeni URL `client-app-v1.9.53`).
 
 ## launcher 1.9.54 — 2026-11-07 (🔔 güncellemeler artık onayla; app 1.9.52 ile)
 
