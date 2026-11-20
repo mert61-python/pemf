@@ -221,7 +221,7 @@
     }
   },
   "surum": {
-    "n1": "In Petri sessions, the session no longer stops by itself when the sensor and its cable are next to the plate; if the plate moves from where it was at the start, the session stops within 30 seconds and shows the reason on screen.",
+    "n1": "In Well Plate sessions, the session no longer stops by itself when the sensor and its cable are next to the plate; if the plate moves from where it was at the start, the session stops within 30 seconds and shows the reason on screen.",
     "n2": "The field sensor is now shown as “Cabin sensor (MLX)”, separate from the coils; session details include a magnetic field chart, and a manually stopped session shows as “Stopped” in the session history."
   },
   "uyari": {
