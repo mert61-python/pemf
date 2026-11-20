@@ -6,9 +6,9 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
-## app 1.9.53 · launcher 1.9.55 · mobile 2.3.36 — TASLAK (yayınlanmadı; B6'da tarih, paket kimliği ve kesin sürümler yazılır)
+## app 1.9.53 · launcher 1.9.55 · mobile 2.3.36 — yayın adayı (20 Kasım 2026; yayın tarihi ve paket kimliği yayın günü yazılır)
 
-> ⚠️ TASLAK — bu girdi yayın hazırlığında (YH-A, 15-16 Kasım 2026) yazıldı; yayın sahibin "yayınla"sıyla yapılır. **Kontrolcü
+> ⚠️ Yayın adayı — sahibin "yayınla"sıyla yayınlanır (tezgâhta, LattePanda günü). **Kontrolcü
 > yazılımı DDS v2.6** (sensör yeniden bağlanma) bu sürümle AYNI gün karta yüklenmelidir; v2.5 kartla uygulama çalışır ama koparsa
 > sensörü yeniden bağlayamaz. AI Pro'nun yeni alan modelleri **Veteriner ve Araştırma model paketlerindedir** — bu paketler de
 > yenilenmeden AI Pro "model dosyaları bulunamadı" der ve sürmez.
@@ -27,6 +27,29 @@ yapılacağını söyler. Kamera açılışı hızlandı.
 dozda alan eskiden olduğundan yüksek görünüyordu. Sensör (MLX90393) bağlantısı koparsa ya da açılışta yoksa kart onu birkaç
 saniyede bir yeniden arar; bağlanamazsa ekranda "manyetik alan sensörü düştü" uyarısı ve yapılacak adım çıkar (DDS v2.6).
 Sensör Monitörü grafiğinde saat ekseni ve yakınlaştırma var.
+
+**🧫 Petri seansları tezgâhta denendi, bulunan sorunlar düzeltildi.** Sensör ve kablosu plakanın yanındayken seans artık
+kendiliğinden durmaz; plaka seansın başındaki yerinden kayar ya da kaldırılırsa 30 saniye içinde durur ve nedeni ("Plaka seansın
+başındaki yerinden kaydı …") ekranda ve geçmişte yazılır. "Tüm petri" hedefi her yerde doğru adla görünür. Bobin 1'in kabindeki yeri
+cetvelle ölçülüp alan modeline işlendi ve modeller yeniden eğitildi (tezgâhta 14 ölçümün 14'ü tuttu). Hareketsiz plakada kuyu
+aralığı ölçümü kareden kareye oynadığı için "Kamera oynamış olabilir" uyarısı artık son 5 ölçümün ortancasına bakar (tolerans aynı).
+
+**📈 Seans detayı.** "Manyetik Alan Grafiği (MLX)" eklendi; grafik eksenleri düzenli adımlarla ve yinelenmeyen etiketlerle çizilir.
+Elle durdurulan seans geçmişte artık "Durduruldu" görünür (planlanan süre dolduysa "Tamamlandı"); Raporlar ve PDF / CSV de buna uyar.
+
+**🧲 Kabin sensörü (MLX).** Alan sensörü tek ve kabinde taşınır; değer artık "Bobin 6" değil **"Kabin sensörü (MLX)"** adıyla, bobin
+satırlarından ayrı gösterilir (Ana Ekran, Kontrol, Sensörler, seans detayı, CSV, bildirimler; eski kayıtlar da). İsteğe bağlı olarak
+sensörün konumu girilebilir (sol / ön çıkıntıdan ve tabandan cm; seans sırasında ya da sonra): girilirse seans detayı, PDF ve CSV
+ölçümleri konum dilimlerine ayırır ve her konumda alan modelinin tahminini yanına yazar; girilmezse hiçbir şey değişmez.
+
+**🌐 Dil ve sayı biçimi.** Türkçede ondalık ayırıcı virgül (ör. "14,40 mm", "1,32 mT"), İngilizcede nokta; İngilizcede yüzde "50%".
+Tarih ve saat biçimi seçili dilden gelir. Canlı E-Alanı kutusu "Tüm petri" hedefinde "Tüm kuyular (ort.)" der ve birimi (V/m) yazar.
+
+**🧩 Kontrol ekranında yeni kartlar (varsayılan kapalı).** "Alan haritası" (alan modelinin kabin içindeki tahmini, yalnız gösterim)
+ve geliştirici modülleri (dijital ikiz, kontrol) varsayılan olarak kapalı / gizlidir; açıldığında da ACİL DURDUR modüllere gider.
+
+**🔐 Site.** Şifre sıfırlama bağlantısındaki açık kapatıldı (site güncellemesiyle). Satış ve ödeme kapalı kalır; ticari açılış günü
+işleri ayrıca yapılır.
 
 **🪟 Onay pencereleri uygulamanın içinde.** Sürüş Kipi, ACİL DURDUR mandalını Sıfırla, silme gibi onaylar artık tarayıcının
 "127.0.0.1:8000 şunu diyor:" penceresiyle değil, uygulamanın kendi penceresiyle (Türkçe / İngilizce) sorulur. ACİL DURDUR
@@ -47,7 +70,12 @@ boşuna bulut bağlantısı denenip zaman aşımına düşülüyordu; yerel STOP
 kimliğini (`paketIcerigi`) de söyler; PEMF Vet Client 1.9.55 bu kimliği kurulu paket kaydına da yazar ve kayıt diskteki paketle
 eşleşmezse (yerel deneme kurulumu, elle kopya) `buildId` de çalışan paketin içerik kimliğini söyler — iki alan çelişmez. Sessiz
 kaldırmada (`/S`, veriler korunarak) bayat `backend.port` silinir, veri kökü kaydı (`veri_koku.txt`) kalır. Veri kökü çözülemezse yedek
-kök kurulur. DEMA simülatöründen kullanılmayan bir paket kaydı (`@google/genai`) kaldırıldı. Paket kimliği (buildId): B6'da yazılır.
+kök kurulur. DEMA simülatöründen kullanılmayan bir paket kaydı (`@google/genai`) kaldırıldı. Güncelleme bekleyicisi: kart 20 sn'de
+bağlanmazsa yedek ölçüm son karar sayılmaz (S-YLI.4); etkileşimli kaldırmada da bayat `backend.port` silinir (Y296); kurucu şablonu
+iki dilli gerçek şablonla ölçüldü. Seans silinince sensör konumu girişleri de silinir; konum kaydı buluta gönderilmez. AI model
+paketleri: **Veteriner** (`vet.zip`, 200,8 MB) ve **Araştırma** (`research.zip` 1 663,7 MB) yenilendi; Ev Sahibi paketi ve araştırma
+2. parçası AYNI (sha değişmedi). Kontrolcü yazılımı uyum varlığı DDS v2.6 hazırlandı (yayınlanmaz; karta tezgâhta yüklenir).
+Paket kimliği (buildId — zip sha 12 hane + içerik kimliği `icerik`[:12]): yayın derlemesinden sonra yazılır.
 
 ## launcher 1.9.54 — 2026-11-07 (🔔 güncellemeler artık onayla; app 1.9.52 ile)
 
