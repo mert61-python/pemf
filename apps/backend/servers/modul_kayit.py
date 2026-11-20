@@ -48,7 +48,9 @@ def kok() -> Path:
         return Path(acik)
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))) / "moduller"
-    return Path(__file__).resolve().parents[3] / "moduller"
+    from utils.path_utils import kaynak_kokunu_bul  # OYZ4: kök çapası derinlikten bağımsız (kural)
+
+    return kaynak_kokunu_bul(__file__) / "moduller"
 
 
 def _sayi(v) -> bool:

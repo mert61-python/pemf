@@ -22,6 +22,8 @@ import subprocess
 import sys
 import threading
 
+from utils.path_utils import kaynak_kokunu_bul
+
 logger = logging.getLogger(__name__)
 
 ALT_KOMUT = "--alt-surec"
@@ -34,7 +36,9 @@ TEK_IS_PARCACIGI = {
     "MKL_NUM_THREADS": "1",
     "PYTHONIOENCODING": "utf-8",
 }
-_BACKEND_DIZINI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# OYZ4 (kök çapası kuralı — `test_kok_capasi_derinlikten_bagimsiz`): kaynak kipinde `apps/backend` derinlikten bağımsız depo kökünden.
+# Donmuş EXE bu yolu kullanmaz (aşağıda `sys.executable --alt-surec`).
+_BACKEND_DIZINI = str(kaynak_kokunu_bul(__file__) / "apps" / "backend")
 _BACKEND_SERVICE = os.path.join(_BACKEND_DIZINI, "backend_service.py")
 #: Kaynak kipi önyükleyicisi: gömülü Python (`._pth` kipi) betik dizinini `sys.path`'e KOYMAZ (ölçüldü: `No module named 'utils'`) →
 #: `apps/backend` açıkça eklenir, `backend_service` `__main__` olarak koşar; kalan argv `[-c, --alt-surec, ad, …]`.
