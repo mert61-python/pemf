@@ -332,6 +332,11 @@ def _kosu_kaydi_sizmaz():
     crt = sys.modules.get("servers.coil_run_tracker")
     once = (dict(crt._active_coil_runs), dict(crt._coil_run_stats)) if crt is not None else ({}, {})
     yield
+    # OYZ4: AI Pro koşu açılışı kayıt işçisinde ARKA PLANDA (`dongu_disi_yazim.arka_planda`) — test bitmeden yazılsın; kuyrukta kalan
+    # iş sonraki testin DB'sine / seansına koşu açmasın.
+    dyz = sys.modules.get("utils.dongu_disi_yazim")
+    if dyz is not None:
+        dyz.bosalt(30)
     crt = sys.modules.get("servers.coil_run_tracker")
     if crt is None:
         return

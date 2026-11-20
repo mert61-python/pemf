@@ -12,6 +12,10 @@ from test_ODK_ai_pro_odak_entegrasyon import M2, P2, _Hat, _hazirlik, _oner, _So
 
 
 def _kosular(o, sid):
+    from utils import dongu_disi_yazim
+
+    # OYZ4: kayıt sürüş yolunda DEĞİL — FIFO kayıt işçisinde, beklenmeden açılır; okumadan önce işçi boşaltılır.
+    assert dongu_disi_yazim.bosalt(30), "kayıt işçisi 30 sn'de boşalmadı"
     with o.db._get_connection() as c:
         return c.execute(
             "SELECT coil_id, frequency_hz, duty_percent, hw_type, ended_epoch FROM session_coil_runs WHERE session_id = ? ORDER BY coil_id",
@@ -48,7 +52,7 @@ def test_T10_kayit_HATASI_surusu_DURDURMAZ(o, monkeypatch):
     def patla(*a, **k):
         raise RuntimeError("DB yok")
 
-    monkeypatch.setattr(coil_run_tracker, "_begin_coil_run", patla)
+    monkeypatch.setattr(coil_run_tracker, "_begin_coil_run_govde", patla)  # OYZ4: AI Pro kaydı işçide gövdeyi çağırır
     _hazirlik(o)
     pid = _oner(o, doz_mT=0.4).json()["proposalId"]
     ai_approval.approve(pid, "arastirmaci@test.local")

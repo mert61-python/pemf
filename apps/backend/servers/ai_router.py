@@ -1807,6 +1807,7 @@ def _drive_coils_ai_pro(D, P) -> list:
     if _kedi_modeli_mi(_muhur.get("model") or "") and not _kedi_aipro_surus_acik():
         logger.warning("AI Pro sürüşü ATLANDI: kedi AI Pro sürüşü kapalı (Y142 — %s).", KEDI_AIPRO_SURUS_BAYRAGI)
         _surulecek = []
+    _kosu_acilacak: list = []  # OTB T-10 · OYZ4: kabul edilen bobinlerin çalışma kaydı SÜRÜŞTEN SONRA, kayıt işçisinde açılır
     for cid in _surulecek:
         if cid in _plan_disi:
             continue
@@ -1828,7 +1829,7 @@ def _drive_coils_ai_pro(D, P) -> list:
             continue
         if kabul:
             surulen.append(cid)
-            _ai_pro_kosu_ac(cid, duty_pct, phase_i)  # OTB T-10: bobin çalışma kaydı
+            _kosu_acilacak.append((cid, duty_pct, phase_i))
         else:
             logger.warning("AI Pro bobin %d SÜRÜLMEDİ: donanım komutu reddetti (ya da sürüş yetkisi geçersiz).", cid)
     # ⚠️ 1-E incelemesi (i-6.1, Y54): plan-dışı kümesi döngüden ÖNCE okunur. Operatörün tekil STOP'u döngü ORTASINA düşerse
@@ -1849,25 +1850,59 @@ def _drive_coils_ai_pro(D, P) -> list:
             except Exception:
                 logger.exception("AI Pro: plan dışı bobin %d STOP'u gönderilemedi", cid)
         surulen = [c for c in surulen if c not in _plan_disi_son]
+    _ai_pro_kosulari_ac(
+        [k for k in _kosu_acilacak if k[0] in surulen]
+    )  # OTB T-10: bobin çalışma kaydı (sürüş yolunda DEĞİL)
     return surulen
 
 
-def _ai_pro_kosu_ac(cid: int, duty_pct: float, faz: float) -> None:
+def _ai_pro_kosulari_ac(bobinler: list) -> None:
     """OTB T-10 (ODM tezgâhı 19-11: AI Pro seansında bobinler ~2 dk sürüldü, seans detayı "bobin çalışma kaydı yok"): telde KABUL edilen
-    bobinin çalışma kaydı (coil run; elle yolla AYNI — frekans, duty %, faz, `stm`) — bobin başına bir kez açılır, her turda yeniden
+    bobinlerin çalışma kaydı (coil run; elle yolla AYNI — frekans, duty %, faz, `stm`) — bobin başına bir kez açılır, her turda yeniden
     açılmaz (AI Pro duty / fazı her karede değişir; koşu kaydı süreyi ve sensör özetini tutar). Kapanış: operatörün tekil STOP'u ve seans
-    kapanışı (`_artik_kosular`) — elle yolla AYNI. Best-effort: kayıt hatası sürüşü DURDURMAZ."""
+    kapanışı (`_artik_kosular`) — elle yolla AYNI. Best-effort: kayıt hatası sürüşü DURDURMAZ.
+
+    ⚠️ OYZ4 (zincir 56 AŞAMA 4 · Y30 bulgusu): kayıt SÜRÜŞ YOLUNDA DEĞİL. Eskiden bobin başına eşzamanlı `_begin_coil_run` sürüş
+    döngüsünün İÇİNDEYDİ: ilk turda bobin 2–7'nin START'ı her DB yazımı kadar (kilitli tedavi DB'sinde `busy_timeout` 5 sn × bobin)
+    gecikiyor, döngü durdurma denetimine geç varıyordu (ölçüldü: 7 bobin × 0,4 sn yazımda kare 2,93 sn). Artık yazım FIFO kayıt
+    işçisinde BEKLENMEDEN (`dongu_disi_yazim.arka_planda`; sonraki durdurma kapanışı `sirada_calistir` onun ARKASINDA koşar → aç-sonra-
+    kapat sırası korunur). Başlangıç damgası SÜRÜŞ ANINDA alınır (D2.40: kuyrukta bekleme doz kaydına kaymaz); yinelenme denetimi işçide
+    de yapılır (kuyrukta bekleyen iki tur aynı bobine iki koşu açmaz). Kapı: tests/test_OYZ4_AI_Pro_kosu_kaydi_SURUS_YOLUNDA_DEGIL.py."""
+    if not bobinler:
+        return
     try:
+        from utils import dongu_disi_yazim as _kayit_kuyrugu
+
         from servers import coil_run_tracker as _crt
 
         with _crt._active_coil_runs_lock:
-            acik = int(cid) in _crt._active_coil_runs
-        if not acik:
-            _crt._begin_coil_run(
-                int(cid), _ai_pro_frek_hz, round(float(duty_pct), 1), round(float(faz), 1), None, "stm"
+            acilacak = [(int(c), d, f) for c, d, f in bobinler if int(c) not in _crt._active_coil_runs]
+        if acilacak:
+            _kayit_kuyrugu.arka_planda(
+                _ai_pro_kosulari_yaz,
+                acilacak,
+                _ai_pro_frek_hz,
+                (time.time(), time.monotonic()),
+                ad="AI Pro bobin kosu kaydi",
             )
     except Exception:
-        logger.debug("AI Pro bobin %s çalışma kaydı açılamadı (sürüş etkilenmedi)", cid, exc_info=True)
+        logger.debug("AI Pro bobin çalışma kayıtları kuyruğa alınamadı (sürüş etkilenmedi)", exc_info=True)
+
+
+def _ai_pro_kosulari_yaz(bobinler: list, frek, baslangic: tuple) -> None:
+    """Kayıt işçisinde: henüz açık koşusu olmayan her bobin için çalışma kaydı (başlangıç = sürüş anı). Hata sürüşü etkilemez."""
+    from servers import coil_run_tracker as _crt
+
+    for cid, duty_pct, faz in bobinler:
+        try:
+            with _crt._active_coil_runs_lock:
+                if cid in _crt._active_coil_runs:
+                    continue
+            _crt._begin_coil_run_govde(
+                cid, frek, round(float(duty_pct), 1), round(float(faz), 1), None, "stm", _baslangic=baslangic
+            )
+        except Exception:
+            logger.debug("AI Pro bobin %s çalışma kaydı açılamadı (sürüş etkilenmedi)", cid, exc_info=True)
 
 
 def _teldeki_ai_pro_bobinleri() -> dict:

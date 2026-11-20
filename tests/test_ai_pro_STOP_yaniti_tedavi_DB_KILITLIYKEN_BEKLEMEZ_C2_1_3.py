@@ -64,6 +64,10 @@ def _baslat_ve_sur(o):
         sid = o.api._active_session.get("db_session_id")
     ap.kare(o)
     assert ap.bekle(lambda: bool(ap.calisan(o)), 3), "aparat: AI Pro bobinleri sürmedi"
+    from utils import dongu_disi_yazim
+
+    # OYZ4: bobin çalışma kayıtları kayıt işçisinde arka planda açılır (sürüş beklemez) — kilit / okuma ondan sonra
+    assert dongu_disi_yazim.bosalt(30), "aparat: kayıt işçisi boşalmadı"
     return sid
 
 

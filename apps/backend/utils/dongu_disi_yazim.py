@@ -126,6 +126,28 @@ def sirada_calistir(fn, *args, bekleme_sn: float = DURDURMA_KAYIT_BEKLEME_SN, ad
         return fn(*args, **kwargs)
 
 
+def _iscide_kos_sayacsiz(baglam: contextvars.Context, fn, args, kwargs):
+    _yerel.iscide = True
+    return baglam.run(fn, *args, **kwargs)
+
+
+def arka_planda(fn, *args, ad: str = "kayit", **kwargs) -> None:
+    """`fn(*args, **kwargs)`'u FIFO işçide koşar ve HİÇ BEKLEMEZ (OYZ4 · OTB T-10 Y30 bulgusu): SÜRÜŞ yolundaki kayıt açılışları için
+    (AI Pro bobin çalışma kaydı) — sürüş kayıt DB'sini beklemez. FIFO sırası korunur: sonra kuyruğa giren durdurma kapanışı
+    (`sirada_calistir`) bunun ARKASINDA koşar. Geri birikim sayacına (`_bekleyen`) GİRMEZ: sağlıklı DB'de ms'de biten bir arka plan
+    açılışı "DB meşgul" sayılıp durdurma yanıtının kaydı beklemesini kapatmasın. Hata işçide ERROR günlüğüne yazılır. İşçinin
+    kendisinden ya da işçi açılamazken (kapanış) doğrudan koşar."""
+    if getattr(_yerel, "iscide", False):
+        fn(*args, **kwargs)
+        return
+    try:
+        gelecek = _isci().submit(_iscide_kos_sayacsiz, contextvars.copy_context(), fn, args, kwargs)
+    except RuntimeError:  # yürütücü kapatıldı / iş parçacığı açılamadı → eşzamanlı yol
+        fn(*args, **kwargs)
+        return
+    gelecek.add_done_callback(_gec_hata_gunlugu(ad))
+
+
 def bosalt(sure: float = 30.0) -> bool:
     """Bekleyen kayıt yazımları bitene dek bekler (testler / kapanış). Döngü iş parçacığından ÇAĞIRMAYIN."""
     with _kilit:
