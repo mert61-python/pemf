@@ -1,5 +1,5 @@
 ; Tauri NSIS şablonunun KALDIRMA akışı — üretilmiş şablondan BİREBİR alıntı (LN L7 · D2.67 / D2.77 bağlam kapısının fikstürü).
-; Kaynak: tauri-cli 2.11.4 üretimi (iki dil: Turkish + English) launcher/target/release/nsis/x64 (2026-11-18, YH B3): installer.nsi :40 + :729-:848, utils.nsh :3-:19.
+; Kaynak: tauri-cli 2.11.4 üretimi (iki dil: Turkish + English) launcher/target/release/nsis/x64 (2026-11-20, OYZ4 TA i — kurucu kaynaklarına lisans metinleri eklendi, kaldırmaya 5 satır): installer.nsi :40 + :735-:859, utils.nsh :3-:19.
 ; Şablon güncellenirse: tests/test_kaldirma_KVKK_konumu_ve_BAGLAM_L7.py::test_FIKSTUR_uretilmis_sablonla_AYNI (PEMF_TAURI_NSIS_DIZINI).
 ; ELLE DÜZENLEMEYİN — alıntı sınırları aşağıdaki >>> / <<< satırlarıdır.
 
@@ -25,7 +25,7 @@
   ${EndIf}
 !macroend
 ; <<<
-; >>> installer.nsi:729-848
+; >>> installer.nsi:735-859
 Function un.onInit
   !insertmacro SetContext
 
@@ -59,6 +59,10 @@ Section Uninstall
   Delete "$INSTDIR\${MAINBINARYNAME}.exe"
 
   ; Delete resources
+    Delete "$INSTDIR\THIRD_PARTY_LICENSES.md"
+    Delete "$INSTDIR\licenses\GPL-3.0.txt"
+    Delete "$INSTDIR\licenses\LGPL-2.1.txt"
+    Delete "$INSTDIR\licenses\LGPL-3.0.txt"
 
   ; Delete external binaries
 
@@ -70,6 +74,7 @@ Section Uninstall
   ; Delete uninstaller
   Delete "$INSTDIR\uninstall.exe"
 
+  RMDir /REBOOTOK "$INSTDIR\licenses"
   RMDir "$INSTDIR"
 
   ; Remove shortcuts if not updating
