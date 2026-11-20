@@ -136,6 +136,10 @@ def kur(monkeypatch, tmp_path, *, dongu_noop: bool = True):
     monkeypatch.setattr(air, "_ai_loop_active", False)
     monkeypatch.setattr(air, "_ai_owner_client", "")
     monkeypatch.setattr(air, "_ai_organ_cache", dict(air._ai_organ_cache))
+    # Y312 (PX, xdist): Y54 plan-dışı kümesi süreç geneli ve onay kimliğiyle anahtarlı; `muhurlu_seans_yaz` her seansa AYNI
+    # "test-onay"ı verir → aynı işçide önce koşan testin tekil STOP'u (test_seans_baslatma_UCUSTA_bobin_STOPu_iptal_eder) bobini
+    # sonraki testin "aynı" seansında plan dışı bırakıyordu (Y25: bobin 2 sessizce sürülmedi). Her kurulum TEMİZ kümeyle başlar.
+    monkeypatch.setattr(air, "_ai_pro_plan_disi", {"onay": None, "bobinler": set()})
 
     async def _decode(*a, **k):
         return np.zeros((8, 8, 3), dtype=np.uint8)

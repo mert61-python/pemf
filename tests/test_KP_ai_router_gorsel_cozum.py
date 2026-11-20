@@ -417,6 +417,28 @@ def test_kiskac_izi_256_anahtari_asinca_TEMIZLENIR_yeni_iz_yazilir(monkeypatch, 
     assert any("eğitim aralığı (±300 mm) DIŞINDA" in r.getMessage() for r in caplog.records)
 
 
+def test_kiskac_izi_AYNI_hedef_60_sn_icinde_IKINCI_iz_YAZILMAZ_baska_hedef_ve_sure_dolunca_yazilir(monkeypatch, caplog):
+    """İz hız sınırı (organ + cm değeri başına `_KISKAC_IZ_ARALIK_S`'de bir): aynı hedef ikinci kez → iz YOK; başka cm değeri ya da
+    başka organ → iz; süre dolunca aynı hedef yine iz. Y312 (PX): bu dal yalnız ÖNCEKİ dosyaların süreç geneli sözlükte bıraktığı
+    anahtarla koşuyordu (seri sıraya bağlı kapsam — paralel `--cov`da `ai_router` 1 satır eksik kaldı); burada kendi kurulumuyla."""
+    monkeypatch.setattr(air, "_kiskac_iz_son", {})
+
+    def _iz_sayisi(organ, ham_mm):
+        caplog.clear()
+        with caplog.at_level("WARNING", logger="ai_router"):
+            air._kiskac_izi(organ, ham_mm, (300.0, 0.0, 0.0))
+        return sum("eğitim aralığı (±300 mm) DIŞINDA" in r.getMessage() for r in caplog.records)
+
+    assert _iz_sayisi(2, (310.0, 0.0, 0.0)) == 1
+    assert _iz_sayisi(2, (310.0, 0.0, 0.0)) == 0, (
+        "aynı organ + aynı cm değeri süre içinde İKİNCİ kez iz bıraktı (hız sınırı yok)"
+    )
+    assert _iz_sayisi(2, (320.0, 0.0, 0.0)) == 1, "başka cm değeri bastırıldı"
+    assert _iz_sayisi(3, (310.0, 0.0, 0.0)) == 1, "başka organ bastırıldı"
+    air._kiskac_iz_son[(2, (31, 0, 0))] -= air._KISKAC_IZ_ARALIK_S + 1.0
+    assert _iz_sayisi(2, (310.0, 0.0, 0.0)) == 1, "süre dolduktan sonra aynı hedef yine iz bırakmadı"
+
+
 def test_kiskac_izi_BOZUK_organ_kimligi_istisna_YUKSELTMEZ(monkeypatch):
     """organ_id 'x' (int'e çevrilemez) → iz yazılamaz ama çağırana istisna gitmez; sözlük değişmez."""
     monkeypatch.setattr(air, "_kiskac_iz_son", {})
