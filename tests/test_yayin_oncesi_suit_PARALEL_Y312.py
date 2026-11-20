@@ -2,12 +2,14 @@
 """Y312 (sahip 20-11: "tam testlerde süreler kısalsın" · "xdist kur") — Y30 tam süiti pytest-xdist KURULUYSA PARALEL koşar.
 
 ÖLÇÜLEN (PX, istem 60): Y30 (`yayin_oncesi_suit.ps1`) süiti TEK süreçte koşuyordu — 12 736 test ~1 sa 47 dk (B7, 20-11 06:10); makinede
-8 fiziksel çekirdek boştaydı. DÜZELTME: kancasız (TAM) kipte xdist varsa `-n <min(8, fiziksel çekirdek)> --dist loadgroup` (dosya
-grupları: tests/xdist_grup.py); xdist YOKSA SERİ + UYARI (yayın DURMAZ); `-Isci 0` elle SERİ; kancalı (denetim) kip SERİ (bekçi işçiye
-geçmez). İşçi sayısı süiti DARALTMAZ: TAM kip, Y176 damgası AYNEN.
+8 fiziksel çekirdek boştaydı. DÜZELTME: kancasız (TAM) kipte xdist varsa `-n <min(8, fiziksel çekirdek, ⌊RAM GB / 5⌋)> --dist loadgroup`
+(dosya grupları: tests/xdist_grup.py; RAM tavanı: guii'de 8 işçi gerçek ağırlıklarla RAM'i %99,5'e çıkardı — istem kuralı "RAM %80'i
+aşarsa 6 işçi"); xdist YOKSA SERİ + UYARI (yayın DURMAZ); `-Isci 0` elle SERİ; kancalı (denetim) kip SERİ (bekçi işçiye geçmez). İşçi
+sayısı süiti DARALTMAZ: TAM kip, Y176 damgası AYNEN.
 
 KAPI (gerçek pwsh + gerçek betik, geçici git deposunda — test_Y176_yesil_suit_damgasi düzeneği):
-  · xdist kurulu → paralel satırı, işçi = min(8, fiziksel çekirdek), komutta `-n <işçi> --dist loadgroup`, aynı test sayısı, TAM damga;
+  · xdist kurulu → paralel satırı, işçi = min(8, fiziksel çekirdek, ⌊RAM GB / 5⌋), komutta `-n <işçi> --dist loadgroup`, aynı test
+    sayısı, TAM damga;
   · xdist YOK (yoklamayı boş döndüren sarmal yorumlayıcı) → UYARI + SERİ, süit yine koşar ve damga yazılır (yayın DURMAZ);
   · `-Isci 0` → SERİ, TAM kip (damga yazılır) · kancalı kip → SERİ, damgaya dokunmaz;
   · paralel KIRMIZI → çıkış kodu taşınır, eski damga silinir, kırmızı kısa özette ADIYLA.
@@ -60,12 +62,19 @@ def _kos(d: Path, *ek: str, python: str | None = None) -> tuple[int, str]:
     return r.returncode, r.stdout + r.stderr
 
 
-def _fiziksel_cekirdek() -> int:
+def _cim(sorgu: str) -> int:
     r = subprocess.run(
-        [PWSH, "-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfCores -Sum).Sum"],
-        capture_output=True, text=True, timeout=120,
-    )  # fmt: skip
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", sorgu], capture_output=True, text=True, timeout=120
+    )
     return int(r.stdout.strip())
+
+
+def _fiziksel_cekirdek() -> int:
+    return _cim("(Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfCores -Sum).Sum")
+
+
+def _ram_gb() -> int:
+    return _cim("[int][Math]::Floor((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)")
 
 
 def _komut_satiri(cikti: str) -> str:
@@ -80,22 +89,24 @@ def _damga(d: Path) -> dict:
     return json.loads(y.read_text(encoding="utf-8-sig"))
 
 
-def test_KRITIK_xdist_KURULU_TAM_kip_PARALEL_isci_min8_fiziksel_ayni_test_sayisi_damga_AYNEN(depo):
+def test_KRITIK_xdist_KURULU_TAM_kip_PARALEL_isci_min8_fiziksel_RAM5GB_ayni_test_sayisi_damga_AYNEN(depo):
     capraz.paket_yoksa_atla("xdist", sebep="pytest-xdist (requirements-test.txt) — paralel Y30")
     _testler(depo, _ISCIDE)
     rc, cikti = _kos(depo)
     assert rc == 0, cikti[-1500:]
     m = re.search(
-        r"^\[YAYIN-ONCESI\] paralel: pytest-xdist (\S+) - (\d+) isci \(fiziksel cekirdek (\d+)\), --dist loadgroup",
+        r"^\[YAYIN-ONCESI\] paralel: pytest-xdist (\S+) - (\d+) isci \(fiziksel cekirdek (\d+), RAM (\d+) GB\), --dist loadgroup",
         cikti,
         re.M,
     )
     assert m, f"xdist kuruluyken paralel kip seçilmedi:\n{cikti[-1500:]}"
     import xdist
 
-    isci, cekirdek = int(m.group(2)), int(m.group(3))
+    isci, cekirdek, ram = int(m.group(2)), int(m.group(3)), int(m.group(4))
     assert m.group(1) == xdist.__version__
-    assert cekirdek == _fiziksel_cekirdek() and isci == min(8, cekirdek), (isci, cekirdek)
+    assert cekirdek == _fiziksel_cekirdek() and ram == _ram_gb(), (cekirdek, ram)
+    # Y312 (PX, guii ölçümü): 8 işçi RAM'i %99,5'e çıkardı → işçi başına ~5 GB bütçe (bu makinede 31 GB → 6 işçi).
+    assert isci == max(1, min(8, cekirdek, ram // 5)), (isci, cekirdek, ram)
     assert f" -n {isci} --dist loadgroup" in _komut_satiri(cikti)
     assert "3 passed" in cikti, f"testler xdist işçisinde koşmadı ya da işçi sayısı süiti DARALTTI:\n{cikti[-1500:]}"
     d = _damga(depo)

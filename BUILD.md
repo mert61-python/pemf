@@ -358,7 +358,7 @@ Sonra `apps/ui\dist`'i iki yere **mirror**'la (robocopy /MIR):
 #    (atlama anahtari YOK). Sonra manifest'i URET (surum-basina etiketle): sha DEGISMEYEN paketlerin URL'si korunur ve
 #    "URL KORUNDU" satiriyla bildirilir → onlar YENIDEN YUKLENMEZ (eski etiketlerinde durur).
 #    ⚠️ `-ManifestArgs:` iki noktali yazilir (deger `--` ile basliyor). make_manifest'i DOGRUDAN cagirmak Y30'u ATLAR.
-#    Y312: pytest-xdist kuruluysa (requirements-test.txt) tam suit PARALEL kosar: -n min(8, fiziksel cekirdek) --dist loadgroup
+#    Y312: pytest-xdist kuruluysa (requirements-test.txt) tam suit PARALEL kosar: -n min(8, fiziksel cekirdek, RAM GB / 5) --dist loadgroup
 #    (seri ~1 sa 47 dk → paralel ~20 dk). xdist yoksa SERI + uyari (yayin durmaz). Elle seri: yayin_oncesi_suit.ps1 -Isci 0.
 pwsh -File scripts\katmanli_yayin_hazirla.ps1 -ManifestArgs:"--dir,pemf-app-packages,--version,<sürüm>,--tag,client-app-v<sürüm>,--repo,mert61-python/pemf-update"
 # 1) ONCE paketler → client-app-v<sürüm> ETIKETI  (siradan surumde YALNIZ base-app.zip degisir)

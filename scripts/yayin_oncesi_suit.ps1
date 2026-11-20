@@ -28,7 +28,9 @@
 #   Kapı: tests/test_Y176_yesil_suit_damgasi.py
 #
 # Y312 (sahip 20-11: "tam testlerde süreler kısalsın" · "xdist kur") PARALEL SÜİT — pytest-xdist KURULUYSA TAM kip süiti
-#   `-n <işçi> --dist loadgroup` ile koşar (seri ~1 sa 47 dk). İşçi = min(8, fiziksel çekirdek); bir dosyanın testleri AYNI işçide
+#   `-n <işçi> --dist loadgroup` ile koşar (seri ~1 sa 47 dk). İşçi = min(8, fiziksel çekirdek, ⌊RAM GB / 5⌋) — PX ölçümü (guii, 20-11):
+#   8 işçi gerçek model ağırlıklarıyla RAM'i %99,5'e çıkardı (tek işçi 4,6 GB); istem kuralı "RAM %80'i aşarsa 6 işçi" → işçi başına
+#   ~5 GB bütçe (31 GB → 6 işçi). Bir dosyanın testleri AYNI işçide
 #   kendi sırasıyla (tests/xdist_grup.py), `xdist_group("seri")` işaretliler tek işçide. İşçi sayısı süiti DARALTMAZ: TAM kip,
 #   Y176 damgası ve "kanca yok" kuralı AYNEN. xdist YOKSA süit SERİ koşar + UYARI satırı (yayın DURMAZ).
 #   -Isci 0  → elle SERİ (paralelde ortam sorunu çıkarsa geri dönüş; yine TAM kip) · -Isci <n> → n işçi.
@@ -85,9 +87,13 @@ if ($PSBoundParameters.ContainsKey('PytestOnek')) {
     $cekirdek = 0
     try { $cekirdek = [int]((Get-CimInstance Win32_Processor -ErrorAction Stop | Measure-Object -Property NumberOfCores -Sum).Sum) } catch { $cekirdek = 0 }
     if ($cekirdek -lt 1) { $cekirdek = [Math]::Max(1, [int][Math]::Floor([Environment]::ProcessorCount / 2)) }
-    if ($Isci -lt 0) { $Isci = [Math]::Min(8, $cekirdek) }
+    # Y312 (PX ölçümü): işçi başına ~5 GB RAM bütçesi (8 işçi guii'de %99,5 RAM). Okunamazsa tavan YOK (çekirdek sınırı kalır).
+    $ramGb = 0
+    try { $ramGb = [int][Math]::Floor((Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).TotalPhysicalMemory / 1GB) } catch { $ramGb = 0 }
+    $ramTavan = if ($ramGb -ge 1) { [Math]::Max(1, [int][Math]::Floor($ramGb / 5)) } else { 8 }
+    if ($Isci -lt 0) { $Isci = [Math]::Min([Math]::Min(8, $cekirdek), $ramTavan) }
     $paralel = @('-n', "$Isci", '--dist', 'loadgroup')
-    Write-Host "[YAYIN-ONCESI] paralel: pytest-xdist $xdistSurum - $Isci isci (fiziksel cekirdek $cekirdek), --dist loadgroup (Y312)."
+    Write-Host "[YAYIN-ONCESI] paralel: pytest-xdist $xdistSurum - $Isci isci (fiziksel cekirdek $cekirdek, RAM $ramGb GB), --dist loadgroup (Y312)."
   }
 }
 
