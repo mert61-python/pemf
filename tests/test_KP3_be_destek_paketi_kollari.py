@@ -32,7 +32,11 @@ KOK = Path(__file__).resolve().parents[1]
 ARAC = KOK / "tools" / "destek_paketi.py"
 
 
-def _arac_kopyasi(ad="kp3_destek_paketi"):
+# Y312 (PX, ölçüldü): modül adı kapsam kaynağındaki `tools.destek_paketi` OLMALI. coverage.py izleme kararını dosya başına İLK
+# yürütmede verir ve önbelleğe alır; takma adla (eski "kp3_destek_paketi") ilk yürütme dosyayı süreç boyunca ölçüm DIŞI bırakıyordu
+# → seri (alfabetik) koşuda `tools/destek_paketi.py` hiç ölçülmüyordu ("module-not-measured"), paralel `--cov`da işçi dağılımına göre
+# kısmen ölçülüp TOTAL'i düşürüyordu. Kopya `sys.modules`'a yine GİRMEZ (her çağrı taze yürütme).
+def _arac_kopyasi(ad="tools.destek_paketi"):
     spec = importlib.util.spec_from_file_location(ad, ARAC)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
@@ -127,7 +131,7 @@ def test_depo_koku_donmus_ve_isaretsiz_ve_sys_path(monkeypatch, tmp_path):
     monkeypatch.delattr(sys, "frozen")
     arka = str(KOK / "apps" / "backend")
     monkeypatch.setattr(sys, "path", [p for p in sys.path if Path(p) not in (KOK, Path(arka))])
-    _arac_kopyasi("kp3_destek_paketi_2")
+    _arac_kopyasi()
     assert str(KOK) in sys.path and arka in sys.path, "depo kökü / backend sys.path'e eklenmedi"
 
 

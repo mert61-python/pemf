@@ -250,6 +250,36 @@ def test_KALICILIK_bozuk_kimlik_ve_telemetrisiz_atlanir_ORTAM_sicakligi_dakika_s
     ]
 
 
+def test_KALICILIK_dakika_icinde_EN_GUNCEL_parametre_saklanir_faz_GELMEZSE_onceki_korunur(ortam):
+    """Aynı dakika içinde iki tur: çalışan + telemetrili bobin 3'ün akümülatöründe frekans / duty / FAZ en güncel değere çekilir;
+    ikinci turda fazı gelmeyen (None) bobin 4'te önceki faz KORUNUR (frekans / duty yine güncellenir); dakika sınırı yok → tampon boş.
+    Y312 (PX): faz dalı seride yalnız açılışın başlattığı süreç geneli kalıcılık iş parçacığının BAŞKA testlerin bobin durumunu
+    yakalamasıyla koşuyordu (paralel `--cov`da `api_server` 1 satır eksik kaldı) — burada kendi kurulumuyla ölçülür."""
+    a = ortam.a
+    with a._session_lock:
+        a._active_session.update(is_active=True, db_session_id=None)
+    simdi = _time.monotonic()
+    for i in range(8):
+        _bobin(a, i, running=False)
+    _bobin(a, 2, id=3, running=True, objectTemp=30.0, frequencyHz=10, dutyCycle=20, phase=90)
+    _bobin(a, 3, id=4, running=True, objectTemp=31.0, frequencyHz=10, dutyCycle=20, phase=45)
+    for i in (2, 3):
+        a._coil_last_telemetry[i] = simdi
+        a._coil_olculen_alanlar[i] = {"objectTemp": simdi + 3600}
+    with a._minute_acc_lock:
+        a._minute_acc.clear()
+    with a._sensor_sample_buffer_lock:
+        a._sensor_sample_buffer.clear()
+    assert _tur(a._sensor_persistence_loop) == (1, [])
+    _bobin(a, 2, frequencyHz=15, dutyCycle=45, phase=135)
+    _bobin(a, 3, frequencyHz=15, dutyCycle=45, phase=None)
+    assert _tur(a._sensor_persistence_loop) == (1, [])
+    with a._minute_acc_lock:
+        ozet = {cid: (acc["n"], acc["freq"], acc["duty"], acc["phase"]) for cid, acc in a._minute_acc.items()}
+    assert ozet == {3: (2, 15, 45, 135), 4: (2, 15, 45, 45)}
+    assert list(a._sensor_sample_buffer) == []
+
+
 def test_KALICILIK_tazelik_ve_olcum_hatasi_donguyu_OLDURMEZ(ortam, monkeypatch, caplog):
     """Tazelik yayını istisna + aktif seansta ölçülen sıcaklık sayı değil → iki hata da döngüde yakalanır ("olculen alan tazelik
     denetimi hatasi", "sensor persistence loop error"), tur uykuya varır."""
