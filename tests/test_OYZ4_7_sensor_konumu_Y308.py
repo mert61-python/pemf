@@ -512,6 +512,7 @@ def test_PDF_konum_tablosu_YALNIZ_giris_varken(db, monkeypatch):
     g = prg.PDFReportGenerator.__new__(prg.PDFReportGenerator)
     g.db = db
     g.styles = {"Heading3": None, "UnicodeNormal": None}
+    g.unicode_font, g.unicode_font_bold = "Helvetica", "Helvetica-Bold"  # üründe __init__ HEP kurar (Type1 yedeği yok)
     eklenen: list = []
     monkeypatch.setattr(prg, "Paragraph", lambda metin, stil: ("P", metin))
     monkeypatch.setattr(prg, "Spacer", lambda *a: ("S",))

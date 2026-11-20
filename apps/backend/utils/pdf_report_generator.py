@@ -847,8 +847,9 @@ class PDFReportGenerator:
             TableStyle(
                 [
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), getattr(self, 'unicode_font_bold', 'Helvetica-Bold')),
-                    ('FONTNAME', (0, 1), (-1, -1), getattr(self, 'unicode_font', 'Helvetica')),
+                    # OYZ4: Type1 yedeği YOK (`test_KRITIK_kaynakta_Type1_yedegi_ARTMADI`) — öznitelikler __init__'te HEP kurulur
+                    ('FONTNAME', (0, 0), (-1, 0), self.unicode_font_bold),
+                    ('FONTNAME', (0, 1), (-1, -1), self.unicode_font),
                     ('FONTSIZE', (0, 0), (-1, -1), 8),
                     ('GRID', (0, 0), (-1, -1), 1, colors.black),
                     ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),

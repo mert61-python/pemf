@@ -10,7 +10,9 @@ girişi (konumsuz dilim). Her giriş bir sonrakine (ya da seans sonuna) kadar ge
 VERİ: mevcut tablolara ALTER YOK — AYRI tablo `sensor_konumlari`; mevcut göç düzeneğinde (`_semayi_kur`, tek işlem) idempotent
 `CREATE TABLE IF NOT EXISTS`; şifreli DB'nin kendi bağlantı yolundan. Eski sürüm bu tabloyu tanımaz ve YOK SAYAR. Buluta senkron
 kapsamına ALINMAZ (outbox'a yazılmaz — yerel). Seans silinince kayıtları da silinir (`delete_session` / toplu silme); yedek ve veri
-taşıma DB dosyasının bütünüyle çalıştığı için tabloyu kendiliğinden kapsar (ölçüldü: testler)."""
+taşıma DB dosyasının bütünüyle çalıştığı için tabloyu kendiliğinden kapsar (ölçüldü: testler).
+
+`self` uzerinden kullandigi ve ANA SINIFTA kalan uyeler: `_ensure_write_guardrail`, `_get_connection`."""
 
 from __future__ import annotations
 

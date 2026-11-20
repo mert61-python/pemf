@@ -158,7 +158,8 @@ def test_KRITIK_manyetik_DOYGUNLUK_operatore_SOYLENIR_ve_bir_kez(kur):
     olay = {"coil_id": 6, "magnetic_field": 24.5, "magnetic_samples": 400, "magnetic_saturated": True}
     api._handle_backend_event(_Olay(dict(olay)))
     api._handle_backend_event(_Olay(dict(olay)))
-    doygunluk_bildirimleri = [m for m, _s in bildirimler if "manyetik" in m.lower()]
+    # OYZ4 Y306-6: metin "Kabin sensörünün (MLX, kartta kanal 6) ölçtüğü alan sensör aralığını AŞTI …" (eskiden "Bobin 6 manyetik alanı …")
+    doygunluk_bildirimleri = [m for m, _s in bildirimler if "sensör aralığını" in m]
     assert len(doygunluk_bildirimleri) == 1, (
         f"doygunluk bildirimi {len(doygunluk_bildirimleri)} kez basildi (1 bekleniyordu) -> alarm yorgunlugu"
     )
