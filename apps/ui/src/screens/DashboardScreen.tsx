@@ -2,6 +2,8 @@
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { Clock, HeartPulse, RadioTower, Wifi } from "lucide-react-native";
 import { CoilCard } from "@/components/domain/CoilCard";
+import { KabinSensoruKarti } from "@/components/domain/KabinSensoruKarti";
+import { bobinKartiVerisi } from "@/utils/kabinSensoru";
 import { Card } from "@/components/ui/Card";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -171,10 +173,12 @@ export function DashboardScreen() {
       ) : (
         <ResponsiveGrid minItemWidth={280}>
           {coils.map((coil) => (
-            <CoilCard key={coil.id} coil={coil} />
+            <CoilCard key={coil.id} coil={bobinKartiVerisi(coil)} />
           ))}
         </ResponsiveGrid>
       )}
+      {/* Y306 (madde 6): MLX alanı bobin kartında değil — AYRI kabin sensörü kartı. */}
+      <KabinSensoruKarti />
 
       {/* Bottom row: Notifications + System Info + Gateway */}
       <View style={styles.bottomGrid}>

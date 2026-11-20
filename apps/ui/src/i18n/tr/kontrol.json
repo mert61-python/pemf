@@ -148,6 +148,10 @@
     "odemAzaltma": "Ödem Azaltma",
     "sinirRejenerasyonu": "Sinir Rejenerasyonu"
   },
+  "kabinSensoru": {
+    "aciklama": "Tek sensör, kabinde taşınır — değer sensörün o anki konumundaki alandır, bobin değil.",
+    "baslik": "Kabin sensörü (MLX)"
+  },
   "modul": {
     "hata": {
       "ayarGecersiz": "{{alan}} değeri geçersiz — sayı girin.",

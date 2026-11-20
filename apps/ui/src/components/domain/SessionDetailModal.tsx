@@ -34,6 +34,7 @@ import { etkinBicimYereli, ondalikMetni } from "@/i18n/dil";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
 import { eksenAdimlari } from "@/utils/eksenAdimlari";
+import { kabinSensoruKanaliMi } from "@/utils/kabinSensoru";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
 const COIL_COLORS = [
@@ -393,8 +394,9 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                     {kayitYogunlugu(run.intensity_mt)}
                   </Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE} testID={`seans-bobin-olculen-alan-${coilId}`}>
-                    {/* CH3 · Y152: ÷5 düzeltilmiş değer " *" ile işaretli (TEK dizge); not tablonun altında (backend metni). */}
-                    {`${olculenAlanOrt(summary?.field_avg)}${summary?.alan_notu ? " *" : ""}`}
+                    {/* CH3 · Y152: ÷5 düzeltilmiş değer " *" ile işaretli (TEK dizge); not tablonun altında (backend metni).
+                        Y306 (madde 6): kabin sensörü kanalının alanı BOBİNİN değil → bu satırda "—", değer aşağıdaki AYRI kabin satırında. */}
+                    {kabinSensoruKanaliMi(coilId) ? "—" : `${olculenAlanOrt(summary?.field_avg)}${summary?.alan_notu ? " *" : ""}`}
                   </Text>
                   <Text style={[styles.td, styles.colHw]} {...VERI_HUCRE}>{hwLabel(run.hw_type)}</Text>
                   <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
@@ -406,12 +408,18 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                 </View>
               );
             })}
+            <KabinSensoruSatiri coilRuns={coilRuns} />
           </View>
         </ScrollView>
       )}
       <Text style={styles.hwNote}>
         {t("seans.detay.stmNotu")}
       </Text>
+      {kabinOrtalamasi(coilRuns) ? (
+        <Text style={styles.hwNote} testID="seans-kabin-sensoru-notu">
+          {`${t("kontrol.kabinSensoru.baslik")}: ${t("kontrol.kabinSensoru.aciklama")}`}
+        </Text>
+      ) : null}
       {/* ⚠️ Uyarı YALNIZ gerçekten sökülü-donanım satırı olan eski seanslarda çıkar — her
           seansın altına kalıcı bir uyarı koymak, operatörün uyarıları okumayı bırakmasına
           yol açardı (alarm yorgunluğu). */}
@@ -486,6 +494,40 @@ function TemperatureSection({ samples }: { samples: SensorSample[] }) {
   );
 }
 
+// ─── Kabin sensörü (MLX) satırı — Y306 (sahip 19-11, madde 6) ────────────────────────────────────────────────────────────
+/** Kabin sensörü kanalının koşularındaki alan ortalaması (süre ağırlıklı) + ÷5 notu; alan ölçülmediyse null. */
+function kabinOrtalamasi(coilRuns: CoilRun[]): { ort: number; not: boolean } | null {
+  const k = coilRuns.filter((r) => kabinSensoruKanaliMi(r.coil_id) && Number.isFinite(r.summary?.field_avg as number));
+  if (!k.length) return null;
+  const w = k.map((r) => (Number(r.duration_seconds) > 0 ? Number(r.duration_seconds) : 1));
+  const ort = k.reduce((s, r, i) => s + (r.summary?.field_avg as number) * w[i], 0) / w.reduce((a, b) => a + b, 0);
+  return { ort, not: k.some((r) => Boolean(r.summary?.alan_notu)) };
+}
+
+/** Bobin satırlarından AYRI satır: tek sensör kabinde taşınır — değer bir bobinin değil sensörün bulunduğu noktanın alanıdır. */
+function KabinSensoruSatiri({ coilRuns }: { coilRuns: CoilRun[] }) {
+  const { t } = useTranslation();
+  const k = kabinOrtalamasi(coilRuns);
+  if (!k) return null;
+  const bos = <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>{""}</Text>;
+  return (
+    <View style={[styles.tableRow, styles.kabinSatiri]} testID="seans-kabin-sensoru-satiri">
+      <Text style={[styles.td, styles.colCoil, styles.kabinEtiket]} {...VERI_HUCRE}>{t("kontrol.kabinSensoru.baslik")}</Text>
+      <Text style={[styles.td, styles.colTime]} {...VERI_HUCRE}>{""}</Text>
+      <Text style={[styles.td, styles.colDur]} {...VERI_HUCRE}>{""}</Text>
+      {bos}
+      {bos}
+      {bos}
+      <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE} testID="seans-kabin-sensoru-alan">
+        {`${olculenAlanOrt(k.ort)}${k.not ? " *" : ""}`}
+      </Text>
+      <Text style={[styles.td, styles.colHw]} {...VERI_HUCRE}>{""}</Text>
+      {bos}
+      {bos}
+    </View>
+  );
+}
+
 // ─── Manyetik alan (MLX) grafiği — OTB T-11 (sahip 19-11 "bu yayına girsin") ────────────────────────────────────
 /** Seans boyunca kart sensörünün (MLX90393) dakika ortalaması tepe |B| (mT), bobin kanalına göre — sıcaklık grafiğiyle AYNI desen.
  *  Yalnız EKRAN (PDF'te bobin koşusu özeti zaten ortalama alanı taşır). Ölçülmeyen dakika (NULL) çizilmez — 0 diye UYDURULMAZ. */
@@ -519,7 +561,10 @@ function MagneticFieldSection({ samples }: { samples: SensorSample[] }) {
               return (
                 <View key={id} style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: color }]} />
-                  <Text style={styles.legendText}>{t("seans.detay.bobinNo", { no: id })}</Text>
+                  <Text style={styles.legendText}>
+                    {/* Y306 (madde 6): kabin sensörü kanalı "Bobin 6" değil "Kabin sensörü (MLX)" (eski kayıtlar da — yalnız gösterim). */}
+                    {kabinSensoruKanaliMi(id) ? t("kontrol.kabinSensoru.baslik") : t("seans.detay.bobinNo", { no: id })}
+                  </Text>
                 </View>
               );
             })}
@@ -704,6 +749,9 @@ function TempChart({
 }
 
 const styles = StyleSheet.create({
+  // Y306 (madde 6): kabin sensörü satırı bobin satırlarından AYRI görünür
+  kabinSatiri: { borderTopWidth: 1, borderTopColor: colors.border },
+  kabinEtiket: { color: colors.cyan, fontWeight: "700" },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

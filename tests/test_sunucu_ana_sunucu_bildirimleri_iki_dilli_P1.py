@@ -107,12 +107,13 @@ BILDIRIMLER = [
     (
         "bildirim.alanDogrulanamadi",
         {"coil": 2},
-        "⚠️ Bobin 2 alan sensörü doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
+        # Y306 (madde 6, TR DEĞİŞTİ): MLX bir bobinin değil KABİNİN sensörü — "Bobin N alan sensörü" → "Kabin sensörü (MLX, kartta kanal N)".
+        "⚠️ Kabin sensörü (MLX, kartta kanal 2) doğrulanamadı — ölçülen alan (mT) gösterilmiyor ve kayda yazılmıyor. Teknik desteğe bildirin (kod: FW-ALAN).",
     ),
     (
         "bildirim.alanDoygun",
         {"coil": 2},
-        "⚠️ Bobin 2 manyetik alanı sensör aralığını AŞTI (±24,6 mT) — gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
+        "⚠️ Kabin sensörünün (MLX, kartta kanal 2) ölçtüğü alan sensör aralığını AŞTI (±24,6 mT) — gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
     ),
     ("bildirim.stmWatchdogSeansDurdu", {}, "⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu"),
     (

@@ -42,8 +42,10 @@ it("ölçülen alan 'sonda alanı' + mT, ölçülen 45 °C üstü kırmızı; do
     ],
   };
   const u = render(<SensorMonitorScreen />);
-  expect(u.getByText("1.84 mT")).toBeTruthy();
-  expect(u.getAllByText(T("sensor.alanSonda")).length).toBe(1);
+  // Y306 (madde 6): MLX alanı bobin 6 kartında DEĞİL — ayrı kabin sensörü kartında (ondalık dile göre).
+  expect(u.getByTestId("kabin-sensoru-deger").props.children).toBe("1,84 mT");
+  expect(u.queryByText("1.84 mT")).toBeNull();
+  expect(u.queryAllByText(T("sensor.alanSonda")).length).toBe(0);
   const sicak = u.getByText("50.0 °C");
   expect(StyleSheet.flatten(sicak.props.style).color).toBe("#ef4444");
   expect(u.queryByText("9.90 mT")).toBeNull();

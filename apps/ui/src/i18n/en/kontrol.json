@@ -148,6 +148,10 @@
     "odemAzaltma": "Edema Reduction",
     "sinirRejenerasyonu": "Nerve Regeneration"
   },
+  "kabinSensoru": {
+    "aciklama": "A single sensor moved around the cabin — the value is the field at the sensor's current position, not a coil's.",
+    "baslik": "Cabin sensor (MLX)"
+  },
   "modul": {
     "hata": {
       "ayarGecersiz": "The {{alan}} value is invalid — enter a number.",

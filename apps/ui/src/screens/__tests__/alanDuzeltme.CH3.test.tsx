@@ -41,7 +41,9 @@ function metin(d: any): string {
 
 it("KRİTİK eski (göç edilmiş) seans: değer düzeltilmiş + yıldızlı, not NEDEN ve kapsamla çizilir", async () => {
   const u = await ciz(F.eski);
-  const hucre = metin(u.getByTestId("seans-bobin-olculen-alan-6").props.children);
+  // Y306 (madde 6): kanal 6 = kabin sensörü → bobin satırında "—", değer AYRI kabin satırında (÷5 yıldızı dahil).
+  expect(metin(u.getByTestId("seans-bobin-olculen-alan-6").props.children)).toBe("—");
+  const hucre = metin(u.getByTestId("seans-kabin-sensoru-alan").props.children);
   expect(hucre).toMatch(/2\.33 mT/);
   expect(hucre).toContain("*");
   const not = metin(u.getByTestId("seans-alan-duzeltme-notu").props.children);
@@ -52,7 +54,7 @@ it("KRİTİK eski (göç edilmiş) seans: değer düzeltilmiş + yıldızlı, no
 
 it("KARŞIT yeni (TD2 sonrası) seans: not YOK, yıldız YOK", async () => {
   const u = await ciz(F.yeni);
-  const hucre = metin(u.getByTestId("seans-bobin-olculen-alan-6").props.children);
+  const hucre = metin(u.getByTestId("seans-kabin-sensoru-alan").props.children);
   expect(hucre).toMatch(/2\.50 mT/);
   expect(hucre).not.toContain("*");
   expect(u.queryByTestId("seans-alan-duzeltme-notu")).toBeNull();

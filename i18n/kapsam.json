@@ -195,7 +195,7 @@
    "aciklama": "kontrol / bobin parametreleri / sürüş kipi / doz göstergeleri (KRİTİK)",
    "durum": "tamam",
    "metin": 202,
-   "dosyaSayisi": 11
+   "dosyaSayisi": 12
   },
   {
    "ad": "arayuz-05b-guvenlik-kritik",
@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 39
+   "dosyaSayisi": 40
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -321,7 +321,7 @@
    "aciklama": "bildirim / WS / STM / firmware / mandal iletileri (KRİTİK)",
    "durum": "tamam",
    "metin": 198,
-   "dosyaSayisi": 22
+   "dosyaSayisi": 23
   },
   {
    "ad": "sunucu-10g-veritabani",
@@ -1583,6 +1583,17 @@
    "yuzey": "arayuz",
    "grup": "arayuz-04-hasta",
    "sira": 4,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/ui/src/utils/kabinSensoru.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
    "durum": "tamam",
    "metin": 0,
    "kritik": false,
@@ -3419,6 +3430,25 @@
    "metin": 0,
    "kritik": false,
    "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/ui/src/components/domain/KabinSensoruKarti.tsx": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-05a-kontrol-kritik",
+   "sira": 5,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": true,
+   "muaf": [
+    {
+     "metin": "{{deger1}} mT",
+     "gerekce": "birim biçimi (\"N mT\") — sayı + birim, kullanıcı metni değil",
+     "turler": [
+      "jsx-ifade"
+     ]
+    }
+   ],
    "birlesikIstisna": [],
    "not": ""
   },
@@ -9535,6 +9565,17 @@
    "durum": "tamam",
    "metin": 0,
    "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": ""
+  },
+  "apps/backend/utils/kabin_sensoru.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10f-bildirim-ws",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": true,
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""

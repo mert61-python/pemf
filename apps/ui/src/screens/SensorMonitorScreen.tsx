@@ -23,6 +23,8 @@ import { Chip } from "@/components/ui/Chip";
 import { akimOlcumuYokMetni, alanDogrulanamadiMetni, akimOlcumuAcik } from "@/utils/olculenAlan";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useTranslation } from "react-i18next";
+import { KabinSensoruKarti } from "@/components/domain/KabinSensoruKarti";
+import { bobinOlcumAlanlari, kabinSensoruKanaliMi } from "@/utils/kabinSensoru";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
 const COIL_COLORS = [
@@ -184,6 +186,8 @@ export function SensorMonitorScreen() {
         )}
       </View>
 
+      {/* Y306 (madde 6): MLX alanı AYRI kabin sensörü kartında (bobin kartında değil). */}
+      <KabinSensoruKarti />
       {/* Coil stats grid */}
       <Text style={styles.statsTitle}>{t("sensor.anlikDegerler")}</Text>
       <ResponsiveGrid minItemWidth={160}>
@@ -203,8 +207,8 @@ export function SensorMonitorScreen() {
               objectTemp={latest?.objectTemp ?? coil?.objectTemp ?? 0}
               currentA={latest?.currentA ?? coil?.currentA ?? 0}
               frequencyHz={coil?.frequencyHz ?? 0}
-              measuredFields={coil?.measuredFields}
-              alanDogrulanamadi={coil?.alanDogrulanamadi === true}
+              measuredFields={bobinOlcumAlanlari(id, coil?.measuredFields)}
+              alanDogrulanamadi={!kabinSensoruKanaliMi(id) && coil?.alanDogrulanamadi === true}
               akimGuvenilmez={coil?.akimGuvenilmez === true}
               akimOlcumu={akimOlcumu}
             />

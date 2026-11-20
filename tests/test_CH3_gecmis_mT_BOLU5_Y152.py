@@ -225,7 +225,11 @@ def test_KRITIK_seans_ayrintisi_ve_CSV_DUZELTILDI_notu(temp_app_data, monkeypatc
     assert ornek and all(s.get("alan_duzeltildi") is True for s in ornek), ornek
     r = h.export_coil_runs_csv(sid, db=db)
     satirlar = list(csv.reader(io.StringIO(r.body.decode("utf-8-sig"))))
-    baslik, veri = satirlar[0], satirlar[1]
+    # Y306 (madde 6): kanal 6 = kabin sensörü → alan ve ÷5 notu bobin satırında değil, AYRI "Kabin sensörü (MLX)" satırında.
+    baslik, veri = satirlar[0], next(s for s in satirlar[1:] if s[0] == "Kabin sensörü (MLX)")
+    assert satirlar[1][0] == "6" and satirlar[1][-1] == "" and satirlar[1][baslik.index("Ort.Alan(mT)")] == "", (
+        satirlar[1]
+    )
     assert baslik[-1] == "Alan notu" and veri[-1] == NOT_METNI, (baslik, veri)
     assert float(veri[baslik.index("Ort.Alan(mT)")]) == pytest.approx(2.33)
 

@@ -41,6 +41,8 @@ import { hedefEtiketi } from "@/utils/seansDegerEtiketi";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
 import { kritikMetin, useKritikDil } from "@/i18n/kritik";
+import { KabinSensoruKarti } from "@/components/domain/KabinSensoruKarti";
+import { bobinOlcumAlanlari } from "@/utils/kabinSensoru";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 type TabKey = "automatic" | "manual" | "aipro";
@@ -620,6 +622,8 @@ export function ControlScreen() {
       </TouchableOpacity>
       {/* D1.E02 · A-51: bu düğme ÇİZİLDİĞİ sürece kayan ACİL DURDUR gizlenir; ekran çökerse işaret de sökülür. */}
       <KendiDurdurmaIsareti />
+      {/* Y306 (madde 6): kabin sensörü (MLX) AYRI kart — ACİL DURDUR'un ALTINDA (yeri değişmez). */}
+      <KabinSensoruKarti />
 
       {/* GA (istem 53) B3: geliştirici modülü seçicisi — ACİL DURDUR düğmesinin ARKASINDA (düğmenin yeri DEĞİŞMEZ); modüller gizliyken
           (varsayılan, Y299) hiç çizilmez. Modül seçiliyken PEMF sekmeleri yerine modülün paneli. */}
@@ -790,7 +794,7 @@ export function ControlScreen() {
                 magneticMt={coil.magneticMt}
                 currentA={coil.currentA}
                 akimOlcumu={akimOlcumuAcik(snapshot)}
-                measuredFields={coil.measuredFields}
+                measuredFields={bobinOlcumAlanlari(coil.id, coil.measuredFields)}
                 defaultFreq={parseFloat(masterFreq) || 100}
                 defaultDuty={parseFloat(masterDuty) || 25}
                 defaultPhase={parseFloat(masterPhase) || 0}

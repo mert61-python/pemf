@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from utils import ceviri, mt_duzeltme
 from utils.akim_olcumu import akim_olcumu_acik
+from utils.kabin_sensoru import kabin_sensoru_kanali_mi
 from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
 from utils.seans_durum import durum_etiketi, hedef_etiketi, mod_etiketi
@@ -708,9 +709,13 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         writer.writerow(headers)
 
         _akim = akim_olcumu_acik()
+        _kabin = []  # Y306 (madde 6): kabin sensörü (MLX) kanalının koşuları — alan AYRI satırda
         for r in runs:
             # CH4 · Y154: akım sensörü KAPALIYKEN "Ort.Akim(A)" sütunu BOŞ (sütun sırası — dışa aktarım biçimi — değişmez).
             summ = _akimsiz_ozet(summaries.get(r.get("id")) or {}, _akim)
+            if kabin_sensoru_kanali_mi(r.get("coil_id")):
+                _kabin.append((r, dict(summ)))
+                summ = {**summ, "field_avg": "", "alan_duzeltme": None}
             writer.writerow(
                 [
                     r.get("coil_id", ""),
@@ -729,6 +734,19 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
                     summ.get("sample_count", ""),
                     mt_duzeltme.alan_notu(summ.get("alan_duzeltme")),
                 ]
+            )
+        # Y306 (madde 6): MLX bir bobinin değil KABİNİN sensörü → bobin satırlarından AYRI satır (süre ağırlıklı ortalama, ÷5 notu).
+        _kabin_alan = [(r, s) for r, s in _kabin if isinstance(s.get("field_avg"), (int, float))]
+        if _kabin_alan:
+            _w = [float(r.get("duration_seconds") or 0) or 1.0 for r, _ in _kabin_alan]
+            _ort = sum(float(s["field_avg"]) * w for (_, s), w in zip(_kabin_alan, _w)) / sum(_w)
+            _not = next(
+                (mt_duzeltme.alan_notu(s.get("alan_duzeltme")) for _, s in _kabin_alan if s.get("alan_duzeltme")), ""
+            )
+            writer.writerow(
+                [ceviri.t("gecmis.csv.kabinSensoru")]
+                + [""] * 11
+                + [round(_ort, 4), sum(int(s.get("sample_count") or 0) for _, s in _kabin_alan) or "", _not]
             )
 
         csv_data = output.getvalue()

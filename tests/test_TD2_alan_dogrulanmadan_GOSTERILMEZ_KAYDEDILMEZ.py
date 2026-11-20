@@ -97,7 +97,9 @@ def test_KRITIK_dogrulanmamis_alan_CANLI_duruma_CSVye_seans_kaydina_YAZILMAZ(api
     assert coil["alanDogrulanamadi"] is True and coil["magneticMt"] == 0.0, coil
     assert "magneticMt" not in (coil.get("measuredFields") or []), coil
     assert not kayit and not seans, f"doğrulanmamış alan kayda gitti: {kayit} {seans}"
-    uyari = [m for m, _s in bildirim if "alan sensörü doğrulanamadı" in m]
+    uyari = [
+        m for m, _s in bildirim if "doğrulanamadı" in m and "FW-ALAN" in m
+    ]  # Y306: metin "Kabin sensörü (MLX …) doğrulanamadı"
     assert len(uyari) == 1 and "FW-ALAN" in uyari[0], bildirim
     assert any(m.get("type") == "coil_status" and m["data"].get("alanDogrulanamadi") for m in yayin)
 
