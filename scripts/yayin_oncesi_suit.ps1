@@ -26,11 +26,20 @@
 #   dizinine (`pemf-app-packages`) yazarken HEAD'i tutan, ≤ 24 sa, TAM damga ister; tek istisna paket / sha değiştirmeyen
 #   ve rollout'u DÜŞÜREN "acil fren" çağrısıdır. Kancalı (denetim / sandbox) koşu damgaya DOKUNMAZ.
 #   Kapı: tests/test_Y176_yesil_suit_damgasi.py
+#
+# Y312 (sahip 20-11: "tam testlerde süreler kısalsın" · "xdist kur") PARALEL SÜİT — pytest-xdist KURULUYSA TAM kip süiti
+#   `-n <işçi> --dist loadgroup` ile koşar (seri ~1 sa 47 dk). İşçi = min(8, fiziksel çekirdek); bir dosyanın testleri AYNI işçide
+#   kendi sırasıyla (tests/xdist_grup.py), `xdist_group("seri")` işaretliler tek işçide. İşçi sayısı süiti DARALTMAZ: TAM kip,
+#   Y176 damgası ve "kanca yok" kuralı AYNEN. xdist YOKSA süit SERİ koşar + UYARI satırı (yayın DURMAZ).
+#   -Isci 0  → elle SERİ (paralelde ortam sorunu çıkarsa geri dönüş; yine TAM kip) · -Isci <n> → n işçi.
+#   Kancalı (denetim) kip SERİ kalır: denetim koşucusunun bekçisi kendi sürecinde kurulur, xdist işçisine GEÇMEZ.
+#   Kapı: tests/test_yayin_oncesi_suit_PARALEL_Y312.py
 # =============================================================================
 param(
   [string]$Python = "",
   [string[]]$PytestOnek = @(),
-  [string]$Hedef = "tests"
+  [string]$Hedef = "tests",
+  [int]$Isci = -1
 )
 $ErrorActionPreference = 'Stop'
 $kok = Split-Path -Parent $PSScriptRoot
@@ -56,6 +65,32 @@ if (-not $PytestOnek -or $PytestOnek.Count -eq 0) {
   $PytestOnek = @($Python, '-m', 'pytest')
 }
 
+# Y312: paralel argümanları (yalnız kancasız kip; xdist yoksa SERİ + uyarı — yayın DURMAZ).
+$paralel = @()
+if ($PSBoundParameters.ContainsKey('PytestOnek')) {
+  Write-Host "[YAYIN-ONCESI] denetim kancasi: suit SERI (bekci xdist iscisine gecmez - Y312)."
+} elseif ($Isci -eq 0) {
+  Write-Host "[YAYIN-ONCESI] -Isci 0: suit SERI (elle secildi - Y312)."
+} else {
+  # stderr'siz yoklama: paket yoksa boş satır basar (5.1'de `2>$null` + Stop yerel komutu istisnaya çevirir). Çıktısız komutun sonucu
+  # `[string]` dönüşümünde $null kalır → dize içine gömülür (her zaman dize).
+  $xdistSurum = ''
+  try {
+    $xdistSurum = "$(& $PytestOnek[0] -c "import importlib.util as u; print(u.find_spec('xdist') and u.find_spec('execnet') and __import__('xdist').__version__ or '')")"
+  } catch { $xdistSurum = '' }
+  $xdistSurum = $xdistSurum.Trim()
+  if (-not $xdistSurum) {
+    Write-Host "[YAYIN-ONCESI] UYARI: pytest-xdist kurulu degil - suit SERI kosuyor (yavas; yayin DURMAZ). Kurulum: requirements-test.txt (Y312)."
+  } else {
+    $cekirdek = 0
+    try { $cekirdek = [int]((Get-CimInstance Win32_Processor -ErrorAction Stop | Measure-Object -Property NumberOfCores -Sum).Sum) } catch { $cekirdek = 0 }
+    if ($cekirdek -lt 1) { $cekirdek = [Math]::Max(1, [int][Math]::Floor([Environment]::ProcessorCount / 2)) }
+    if ($Isci -lt 0) { $Isci = [Math]::Min(8, $cekirdek) }
+    $paralel = @('-n', "$Isci", '--dist', 'loadgroup')
+    Write-Host "[YAYIN-ONCESI] paralel: pytest-xdist $xdistSurum - $Isci isci (fiziksel cekirdek $cekirdek), --dist loadgroup (Y312)."
+  }
+}
+
 $env:PEMF_CAPRAZ_KAYNAK_ZORUNLU = '1'
 $env:PEMF_GOLDEN_REQUIRED = '1'
 
@@ -77,7 +112,7 @@ if ($tamKip) {
 $komut = $PytestOnek[0]
 $argumanlar = @()
 if ($PytestOnek.Count -gt 1) { $argumanlar += $PytestOnek[1..($PytestOnek.Count - 1)] }
-$argumanlar += @($Hedef, '-q', '-rfEs', '-p', 'no:cacheprovider')
+$argumanlar += @($Hedef, '-q', '-rfEs', '-p', 'no:cacheprovider') + $paralel
 
 Write-Host "[YAYIN-ONCESI] tam suit (ZORUNLU=1, GOLDEN_REQUIRED=1): $komut $($argumanlar -join ' ')"
 # ⚠️ PSModulePath (ölçüldü, 4-A ZORUNLU koşusu 2026-10-10): pwsh 7 kendi modül dizinlerini süreç PSModulePath'ine ekler;
