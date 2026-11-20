@@ -63,6 +63,8 @@ const APP_ROOTS: &[&str] = &[
     "PEMF_Backend/_internal/deploy",
     "PEMF_Backend/_internal/frontend_version.json",
     "PEMF_Backend/_internal/i18n",
+    "PEMF_Backend/THIRD_PARTY_LICENSES.md",
+    "PEMF_Backend/licenses",
     "PEMF_Backend/_app_roots.json",
     "PEMF_Backend/setup_services.ps1",
     "PEMF_Backend/start_hotspot.ps1",

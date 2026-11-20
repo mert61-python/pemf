@@ -100,6 +100,14 @@ ADD_SCRIPTS = [
     'pemf_teardown.ps1',
     'pemf_uninstall_all.ps1',
 ]
+# TA (i) · sahip 19-11 (OYZ4): LISANS DAGITIMI — atif envanteri (NOTICE) + kopyleft TAM metinleri kurulu uygulamanin yaninda
+# (`PEMF_Backend/THIRD_PARTY_LICENSES.md` + `PEMF_Backend/licenses/`). LGPL bilesenleri (pi-heif icindeki libheif / libde265 DLL'leri,
+# soxr, zeroconf) IKILI olarak dagitiliyor → lisans metni ikiliyle birlikte gitmeli; eskiden yalniz depodaydi. Kaynak depo koku
+# (`scripts/lisans_envanteri_uret.py` uretir). Dosya YOKSA paketleme DURUR (sessizce metinsiz paket yayinlanmaz). APP katmani:
+# envanter her bagimlilik / crate degisikliginde degisir — DEPS'te olsaydi her degisiklik kliniklere ~1,5 GB indirtirdi.
+# Baslatici kurucusu ayni dosyalari `launcher/app/tauri.conf.json::bundle.resources` ile kurulum dizinine koyar.
+# Kapi: tests/test_OYZ4_TA_lisans_metinleri_PAKETTE_ve_KURUCUDA.py.
+LISANS_DOSYALARI = ['THIRD_PARTY_LICENSES.md', 'licenses/GPL-3.0.txt', 'licenses/LGPL-2.1.txt', 'licenses/LGPL-3.0.txt']
 
 # ── APP KATMANI SINIRI ────────────────────────────────────────────────────────────────────────
 # Bizim urettigimiz, HER surumde degisen seyler. Geri kalan her sey deps'tir.
@@ -140,6 +148,9 @@ APP_ROOTS = [
     # yayinda degisir (goc partileri anahtar ekler) ve KODLA birlikte gitmeli: deps'te kalsalardi (1) her katalog degisikligi kliniklere
     # 1,49 GB indirtirdi, (2) yalniz app katmani guncellenince yeni kod ESKI katalogu okur, yeni anahtarlar anahtar adiyla gorunurdu.
     'PEMF_Backend/_internal/i18n',
+    # TA (i) (OYZ4): lisans envanteri + tam metinler (LISANS_DOSYALARI) — exe'nin yaninda, her yayinda app katmaniyla tazelenir.
+    'PEMF_Backend/THIRD_PARTY_LICENSES.md',
+    'PEMF_Backend/licenses',
     # Sinir dosyasi KENDISI de app katmanina aittir. Listede olmazsa launcher onu yedege almaz
     # ve geri alma sinirini okuyamaz -> basarisiz guncelleme geri alinamaz (2026-08-08'de test
     # yakaladi). Launcher ayrica savunma amacli marker'i yedege KOPYALAR; bu satir tutarlilik icin.
@@ -170,6 +181,14 @@ for s in ADD_SCRIPTS:
     sp = os.path.join(SCRIPTS, s)
     if os.path.exists(sp):
         app_items.append((sp, 'PEMF_Backend/' + s))
+_lisans_eksik = [s for s in LISANS_DOSYALARI if not os.path.isfile(os.path.join(GUII, *s.split('/')))]
+if _lisans_eksik:
+    sys.exit(
+        'HATA: lisans dosyasi yok: ' + ', '.join(_lisans_eksik) + f' ({GUII}) — lisans metni olmadan paket uretilmez '
+        '(TA i; envanter: `python scripts/lisans_envanteri_uret.py`)'
+    )
+for s in LISANS_DOSYALARI:
+    app_items.append((os.path.join(GUII, *s.split('/')), 'PEMF_Backend/' + s))
 
 print('Katmanli paket kuruluyor (ZIP_STORED, ai_models haric)...', flush=True)
 print('  DIST =', DIST, flush=True)
@@ -189,6 +208,7 @@ _beklenen = sum(
     )
 )
 _beklenen += sum(1 for s in ADD_SCRIPTS if os.path.exists(os.path.join(SCRIPTS, s)))
+_beklenen += len(LISANS_DOSYALARI)
 if _toplam != _beklenen:
     sys.exit(f'HATA: katmanlara ayirma dosya KAYBETTI/COGALTTI: {_toplam} != {_beklenen}')
 
@@ -573,6 +593,10 @@ try:
         'ai_hub APP katmaninda': any(n.startswith('PEMF_Backend/_internal/ai_hub/') for n in app_names),
         'torch DEPS katmaninda': any(n.startswith('PEMF_Backend/_internal/torch/') for n in deps_names),
         'app sinir dosyasi (_app_roots.json) var': APP_ROOTS_FILE in app_names,
+        # TA (i): LGPL / GPL tam metinleri + NOTICE exe'nin yaninda (kurulu dizinde `PEMF_Backend/licenses/`).
+        'lisans metinleri APP katmaninda (THIRD_PARTY_LICENSES.md + GPL-3.0 / LGPL-2.1 / LGPL-3.0)': all(
+            ('PEMF_Backend/' + s) in app_names for s in LISANS_DOSYALARI
+        ),
         # ── TEK SURUM, TEK YAZILIM KAPISI (2026-08-09 denetimi, ENGEL) ──────────────────
         # Yayindaki base.zip ile base-app+base-deps 53 dosyada FARKLI olcuulmustu (exe dahil):
         # eski client'lar (<=1.9.12) `runtimes`/`base`, yeni client'lar `layers` okudugu icin

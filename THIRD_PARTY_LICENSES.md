@@ -1454,7 +1454,7 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 
 Aşağıdaki LGPL bileşenleri **değiştirilmeden**, uygulamadan **ayrı paylaşımlı kitaplık** (DLL / `.pyd`) olarak dağıtılır ve
 dinamik bağlanır; kullanıcı bunları aynı arayüzle derlenmiş kendi sürümüyle değiştirebilir. Bağlantılar dağıtılan **tam
-sürümün** kaynağıdır. Tam lisans metinleri depoda `licenses/` altındadır (LGPL-3.0, GPL-3.0'ın ek izinleri olarak yazıldığından
+sürümün** kaynağıdır. Tam lisans metinleri bu dosyanın yanındaki `licenses/` altındadır (LGPL-3.0, GPL-3.0'ın ek izinleri olarak yazıldığından
 ikisi birlikte verilir). `pi-heif`in kendi kaynağı BSD-3-Clause'dur; LGPL yükümlülüğü içindeki libheif / libde265 ikililerinden
 gelir (HEVC kodlayıcı ya da GPL bileşen içermez).
 

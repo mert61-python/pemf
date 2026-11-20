@@ -521,7 +521,7 @@ def _lgpl_bolumu() -> str:
         f"\n{_LGPL_BASLIGI}\n\n"
         "Aşağıdaki LGPL bileşenleri **değiştirilmeden**, uygulamadan **ayrı paylaşımlı kitaplık** (DLL / `.pyd`) olarak dağıtılır ve\n"
         "dinamik bağlanır; kullanıcı bunları aynı arayüzle derlenmiş kendi sürümüyle değiştirebilir. Bağlantılar dağıtılan **tam\n"
-        "sürümün** kaynağıdır. Tam lisans metinleri depoda `licenses/` altındadır (LGPL-3.0, GPL-3.0'ın ek izinleri olarak yazıldığından\n"
+        "sürümün** kaynağıdır. Tam lisans metinleri bu dosyanın yanındaki `licenses/` altındadır (LGPL-3.0, GPL-3.0'ın ek izinleri olarak yazıldığından\n"
         "ikisi birlikte verilir). `pi-heif`in kendi kaynağı BSD-3-Clause'dur; LGPL yükümlülüğü içindeki libheif / libde265 ikililerinden\n"
         "gelir (HEVC kodlayıcı ya da GPL bileşen içermez).\n\n"
         "| Bileşen | Sürüm | Lisans | Tam sürüm kaynağı | Lisans metni |\n|---|---|---|---|---|\n" + satirlar + "\n"
