@@ -74,7 +74,10 @@ _OTURUM_IZOLE = Path(tempfile.mkdtemp(prefix="pemf_test_veri_"))
 # ⚠️ D0Ö.05 (B-10.51): ezilmeden ÖNCEKİ gerçek değer saklanır — `test_veri_dizini_izolasyonu.py`
 # "gerçek kök" sentinelini BURADAN türetir. Test modülü toplanırken APPDATA ZATEN ezilmiştir;
 # oradan okunan değer oturum temp kökünü gösterir ve sentinel gerçek hasta dizinini GÖRMEZ.
-_ORIJINAL_APPDATA = os.environ.get("APPDATA")
+# ⚠️ Y312 (PX, paralel süit): xdist işçisi ortamı DENETLEYİCİDEN miras alır ve denetleyicinin bu conftest'i APPDATA'yı ZATEN ezmiştir →
+# işçide `os.environ["APPDATA"]` başka bir oturumun temp kökü olurdu (ölçüldü: sentinel `p8at\pemf_test_veri_*`i izledi). Ezilmeden
+# önceki değer ortam değişkeniyle taşınır: ilk içe aktaran süreç yazar, işçiler (ve alt süreçler) okur.
+_ORIJINAL_APPDATA = os.environ.setdefault("PEMF_TEST_ORIJINAL_APPDATA", os.environ.get("APPDATA") or "") or None
 os.environ["PEMF_DATA_DIR"] = str(_OTURUM_IZOLE)
 os.environ["APPDATA"] = str(_OTURUM_IZOLE)
 # ⚠️ DENETİM 2026-08-28 #02: `device_registry_secret` artık VERİ KÖKÜNÜN DIŞINDA, makine
@@ -113,6 +116,16 @@ _HW_SIM_BILDIRILDI: list = []
 
 def pytest_collection_finish(session):
     _PEMF_SIMULATE_TOPLAMA_SONU.append(os.environ.get("PEMF_SIMULATE"))
+
+
+# Y312 (PX): `--dist loadgroup` (paralel Y30) altında işaretsiz testler DOSYA biriminde, `xdist_group("seri")` işaretliler tek işçide —
+# düğüm kimliğine dokunmadan (yalnız zamanlayıcının birim seçimi). xdist yoksa kanca hiç çağrılmaz (optionalhook); seri koşuda None.
+# Ayrıntı: tests/xdist_grup.py · Kapı: tests/test_xdist_dosya_grubu_Y312.py
+@pytest.hookimpl(optionalhook=True, tryfirst=True)
+def pytest_xdist_make_scheduler(config, log):
+    import xdist_grup
+
+    return xdist_grup.zamanlayici(config, log)
 
 
 def pytest_report_header(config):

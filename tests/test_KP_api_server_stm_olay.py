@@ -73,6 +73,9 @@ def ortam(monkeypatch):
     with a._session_lock:
         seans_once = dict(a._active_session)
     olculen_once = copy.deepcopy(a._coil_olculen_alanlar)
+    # Y312 (PX, paralel süit): süreç geneli alan damgaları önceki DOSYALARDAN kalabilir (ölçüldü: xdist işçisinde 5 / 6. bobinin
+    # damgası → `_olculen_alanlari_tazele` [6, 7, 1] yayınladı) → her test BOŞ sözlükle başlar; sonda yine eski hâli geri konur.
+    a._coil_olculen_alanlar.clear()
     tel_once = dict(a._coil_last_telemetry)
     with a._stm_nack_lock:
         a._stm_nack_son.clear()

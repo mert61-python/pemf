@@ -19,6 +19,10 @@
 pytest==9.1.1
 httpx==0.28.1
 pytest-cov==7.1.0
+# Y312 (PX, sahip 20-11 "xdist kur"): Y30 tam süiti PARALEL koşar (`-n <işçi> --dist loadgroup`; dosya grupları tests/xdist_grup.py).
+# execnet = xdist'in süreç köprüsü (tek bağımlılığı). Yoksa Y30 SERİ koşar + uyarı (yayın durmaz). Sürümler gömülü Python'la aynı.
+pytest-xdist==3.8.0
+execnet==2.1.2
 
 # ── Web/API (api_server + router'ları import etmek için) ──
 # DO-1: güvenlik-ilgili web deps'i shipped requirements.txt ile BİREBİR eşit (CI pip-audit gerçek

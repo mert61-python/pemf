@@ -54,6 +54,9 @@ def zincir(monkeypatch, tmp_path):
 
     fm = importlib.import_module("servers.firmware_manager")
     importlib.reload(fm)
+    # Y312 (PX, paralel süit): son dalın durumu (ör. Y80'in uzun "sürüm tutmadı" gerekçesi) süreçte KALIYORDU → sonraki dosyanın
+    # `/api/health` gövdesi büyüdü (ölçüldü: D6_73 → test_gzip_sikistirma 1468 > 1024 bayt). Sonda temiz durum geri konur.
+    durum_temiz = copy.deepcopy(fm._durum)
     sy = importlib.import_module("utils.stm_yakma")
     ikili = tmp_path / "pemf_fw.bin"
     ikili.write_bytes(b"PEMF-FW-2.4" * 97)
@@ -94,6 +97,9 @@ def zincir(monkeypatch, tmp_path):
         with ls._live_state_lock:
             ls._live_state["coils"].clear()
             ls._live_state["coils"].update(eski_bobin)
+        with fm._durum_kilidi:
+            fm._durum.clear()
+            fm._durum.update(durum_temiz)
 
 
 def _kos(z, kaynak):
