@@ -11,6 +11,7 @@ Ağ / gerçek kasa / gerçek veri kökü YOK: sır deposu (`utils.secrets_manage
 
 from __future__ import annotations
 
+import contextvars
 import ipaddress
 import logging
 import sys
@@ -30,6 +31,10 @@ def temiz(monkeypatch, tmp_path):
     for ad in ("PEMF_API_TOKEN", "PEMF_TRUSTED_PROXIES", "PEMF_API_HOST"):
         monkeypatch.delenv(ad, raising=False)
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path / "veri"))
+    # Y312 (PX, xdist): kimlik DB kararı bağlam değişkeni süreç genelidir — aynı işçide önce koşan bir test (ör.
+    # test_operator_identity_server_side) onu istek bağlamı dışında False bırakınca "okunamıyor" dalı hiç denenmiyordu.
+    # Her test TAZE (karar yok) bir değişkenle başlar; monkeypatch sonunda modülün kendi değişkenini geri koyar.
+    monkeypatch.setattr(auth, "_KIMLIK_DB_ARIZASI", contextvars.ContextVar("kimlik_db_arizasi", default=None))
     kilit: list = []
     monkeypatch.setattr(fa, "lock_down_file", lambda p, **k: kilit.append(Path(p)) or True)
     return kilit
