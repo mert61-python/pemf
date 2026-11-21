@@ -78,7 +78,7 @@ paketleri: **Veteriner** (`vet.zip`, 200,8 MB) ve **Araştırma** (`research.zip
 
 ## app 1.9.53 — 2026-11-23 (Windows uygulama paketi; değişiklikler yukarıdaki launcher 1.9.55 bölümünde)
 
-Paket kimliği (buildId — zip sha 12 hane; içerik kimliği `icerik`[:12] ayrı): `d70902ec9b96` · içerik kimliği `d55330f75870`.
+Paket kimliği (`buildId` — zip sha 12 hane; içerik kimliği `icerik`[:12] ayrı): `d70902ec9b96` · içerik kimliği `d55330f75870`.
 Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞTİ (`720a60be1bb7`, yeni URL `client-app-v1.9.53`).
 
 ## launcher 1.9.54 — 2026-11-07 (🔔 güncellemeler artık onayla; app 1.9.52 ile)

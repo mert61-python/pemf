@@ -298,7 +298,7 @@ export const MODULES: Module[] = [
     get name() { return i18n.t('baslatici.profil.veteriner') },
     get tagline() { return i18n.t('icerik.profil.vet.tagline') },
     // manifest profiles.vet = 0,12 GB (eskiden 0.9 yazıyordu — 7 kat fazla).
-    sizeGB: 0.1,
+    sizeGB: 0.2,
     included: true,
     addonMonthly: 0,
     get includes() {
