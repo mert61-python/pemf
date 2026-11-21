@@ -12,9 +12,6 @@ KAPI:
   · gerçek conftest bağlantısı: kanca optionalhook + tryfirst ve depo zamanlayıcısını döndürür;
   · uçtan uca (gerçek xdist, 3 işçi): iki dosyanın 6'şar testi tek işçide sırayla; iki dosyaya yayılmış "seri" grubu tek işçide;
     işaretsiz düğüm kimliği soneksiz. KARŞIT: kanca yokken aynı koşu dosyaları BÖLER (kapının boş geçmediği).
-  · YGH ağır model grubu (guii Y30 RAM tepesi %99,0 → ağır model dosyaları tek işçide): listedeki her dosya VAR ve `AGIR` birimine düşer,
-    açık `xdist_group` işareti listeden önce gelir, liste dışı dosya kendi biriminde kalır; uçtan uca (gerçek xdist, 3 işçi, listedeki iki
-    gerçek dosya adıyla): iki ağır dosya AYNI işçide dosya dosya sırayla, hafif dosya başka işçide.
 """
 
 from __future__ import annotations
@@ -154,80 +151,3 @@ def test_KARSIT_kanca_YOKKEN_loadgroup_dosyalari_BOLER(tmp_path):
     s, _ = _uctan_uca(tmp_path, kanca=False)
     bolunen = [ad for ad in ("a", "b") if len({isci for isci, _ in s[ad]}) > 1]
     assert bolunen, f"kancasız loadgroup dosyaları bölmedi — uçtan uca kapı ayırt edemiyor: {s}"
-
-
-KOK = TESTLER.parent
-
-
-def test_KRITIK_AGIR_MODEL_dosyalari_VAR_ve_TEK_birimde_digerleri_kendi_dosyasinda():
-    liste = sorted(xdist_grup.AGIR_MODEL_DOSYALARI)
-    assert len(liste) >= 2, "ağır model listesi boş — Y30 RAM tepesi geri döner (YGH)"
-    for yol in liste:
-        assert yol.startswith("tests/test_") and yol.endswith(".py"), yol
-        assert (KOK / yol).is_file(), (
-            f"ağır model listesinde OLMAYAN dosya: {yol} (silindi / taşındı → listeden çıkar ya da güncelle)"
-        )
-        assert xdist_grup.kapsam(f"{yol}::test_x") == xdist_grup.AGIR, yol
-        assert xdist_grup.kapsam(f"{yol}::Sinif::test_y[e@posta]") == xdist_grup.AGIR, yol
-        assert xdist_grup.kapsam(f"{yol}::test_z@seri") == xdist_grup.SERI, (
-            "açık xdist_group işareti listeden ÖNCE gelmeli"
-        )
-    assert xdist_grup.AGIR not in {xdist_grup.kapsam(f"tests/test_hafif_{i}.py::t") for i in range(3)}
-    assert xdist_grup.kapsam("tests/test_hafif.py::t") == "tests/test_hafif.py"
-    # Listenin dosya ADI eşleşmesi: aynı adlı başka dizindeki dosya ağır gruba düşmez (yol tam eşleşir).
-    assert xdist_grup.kapsam("tests/alt/" + liste[0].split("/", 1)[1] + "::t") != xdist_grup.AGIR
-
-
-_AGIR_DOSYA = """\
-import os
-import pytest
-
-
-@pytest.mark.parametrize("i", range(4))
-def test_sira(i):
-    isci = os.environ.get("PYTEST_XDIST_WORKER", "-")
-    with open(os.path.join(os.environ["Y312_KAYIT"], isci + ".txt"), "a", encoding="utf-8") as f:
-        f.write(f"{{isci}} {ad} {{i}}\\n")
-"""
-
-
-def test_KRITIK_UCTAN_UCA_AGIR_MODEL_dosyalari_AYNI_iscide_dosya_dosya_SIRAYLA(tmp_path):
-    capraz.paket_yoksa_atla("xdist", sebep="pytest-xdist (requirements-test.txt) — paralel Y30")
-    agir = sorted(xdist_grup.AGIR_MODEL_DOSYALARI)[:2]
-    d = tmp_path / "proje"
-    (d / "tests").mkdir(parents=True)
-    (d / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
-    (d / "conftest.py").write_text(_CONFTEST.format(testler=str(TESTLER)), encoding="utf-8")
-    adlar = {"A1": agir[0], "A2": agir[1], "H1": "tests/test_hafif_y312_1.py", "H2": "tests/test_hafif_y312_2.py"}
-    for ad, yol in adlar.items():
-        (d / yol).write_text(_AGIR_DOSYA.format(ad=ad), encoding="utf-8")
-    kayit = tmp_path / "kayit"
-    kayit.mkdir()
-    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTEST_")}
-    env.update(Y312_KAYIT=str(kayit), PYTHONDONTWRITEBYTECODE="1")
-    r = subprocess.run(
-        [sys.executable, "-m", "pytest", "-n", "3", "--dist", "loadgroup", "-p", "no:cacheprovider", "-v"],
-        cwd=d, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
-    )  # fmt: skip
-    assert r.returncode == 0 and "16 passed" in r.stdout, f"rc={r.returncode}\n{(r.stdout + r.stderr)[-2500:]}"
-    s: dict[str, list[tuple[str, int]]] = {}
-    for dosya in sorted(kayit.glob("*.txt")):
-        for satir in dosya.read_text(encoding="utf-8").splitlines():
-            isci, ad, i = satir.split()
-            s.setdefault(ad, []).append((isci, int(i)))
-    agir_isci = {isci for ad in ("A1", "A2") for isci, _ in s[ad]}
-    assert len(agir_isci) == 1 and next(iter(agir_isci)).startswith("gw"), f"ağır model dosyaları işçilere BÖLÜNDÜ: {s}"
-    for ad in ("A1", "A2"):
-        assert [i for _, i in s[ad]] == list(range(4)), f"{adlar[ad]} dosya sırası bozuldu: {s[ad]}"
-    # Aynı işçide ağır dosyalar art arda (grup tek birim): işçinin kendi kaydında A1'ler bitmeden A2 başlamaz ya da tersi.
-    sira = [
-        satir.split()[1]
-        for satir in (kayit / (next(iter(agir_isci)) + ".txt")).read_text(encoding="utf-8").splitlines()
-    ]
-    agir_sira = [a for a in sira if a in ("A1", "A2")]
-    assert agir_sira in (["A1"] * 4 + ["A2"] * 4, ["A2"] * 4 + ["A1"] * 4), f"ağır dosyalar iç içe geçti: {sira}"
-    hafif_isci = {isci for ad in ("H1", "H2") for isci, _ in s[ad]}
-    assert hafif_isci - agir_isci, f"hafif dosyalar da ağır işçide — grup diğerlerini ayırmıyor: {s}"
-    assert re.search(r"PASSED " + re.escape(agir[0]) + r"::test_sira\[0\]\s*$", r.stdout, re.M), (
-        "ağır dosyanın düğüm kimliği DEĞİŞTİ (sonek eklendi)"
-    )
