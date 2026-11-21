@@ -114,6 +114,16 @@ describe("D1.89 — Ana Ekran (GERÇEK LiveDataProvider)", () => {
     expect(u.queryByLabelText(new RegExp(`: ${duty} mT$`))).toBeNull();
     expect(u.queryByLabelText(`Duty (AI planı, bobin 1): %${duty}`)).not.toBeNull();
   });
+
+  it("KRİTİK ODD K-11: AI Pro ODAK seansında Ana Ekran etiketi 'ODAK dozu (hedef)' + doz · bobin sayısı (duty etiketi DEĞİL)", async () => {
+    // Backend ODAK seansında `odakDozMt` / `odakBobinSayisi` doldurur; aparattaki gerçek AI Pro yanıtı ODAK dışı (ikisi null).
+    expect(F.canliAiPro.odakDozMt).toBeNull();
+    const u = await anaEkran({ ...F.canliAiPro, odakDozMt: 0.6, odakBobinSayisi: 7 });
+    expect(u.queryByLabelText("ODAK dozu (hedef): 0,60 mT · 7 bobin")).not.toBeNull(); // Y306: TR virgül
+    expect(u.queryByLabelText(/^Duty \(AI planı, bobin 1\)/)).toBeNull();
+    // Ana Ekran KÜÇÜK etiket tablosunu okur; büyük harfli seans kartı etiketi burada görünmez.
+    expect(u.queryByLabelText(/^ODAK DOZU/)).toBeNull();
+  });
 });
 
 describe("D1.89 — Tedavi Geçmişi (GERÇEK TreatmentHistoryScreen)", () => {
