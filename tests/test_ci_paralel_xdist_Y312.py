@@ -3,8 +3,8 @@
 `pytest tests -n auto --dist loadgroup` (Linux + Windows).
 
 NEDEN `--dist loadgroup` ŞART: `tests/conftest.py` `pytest_xdist_make_scheduler` depo zamanlayıcısını YALNIZ loadgroup'ta döndürür
-(`tests/xdist_grup.py`: dosya birimi + ağır model grubu tek işçide). Yalnız `-n` (= `--dist load`) bir dosyanın testlerini işçilere
-BÖLER → dosya içi sıraya dayanan iki kollu kapılar kırmızı ve ağır model dosyaları her işçide ayrı yüklenir (RAM).
+(`tests/xdist_grup.py`: dosya birimi + `xdist_group("seri")` tek işçide). Yalnız `-n` (= `--dist load`) bir dosyanın testlerini
+işçilere BÖLER → dosya içi sıraya dayanan iki kollu kapılar ve modül fikstürleri bozulur.
 
 KAPI:
   · iş akışı: her işletim sisteminin TEK `pytest tests` adımı `-n auto` + `--dist loadgroup` taşır, `-p no:xdist` yok; `-rfEs`, junit ve
@@ -80,7 +80,7 @@ def test_KRITIK_CI_pytest_adimlari_PARALEL_loadgroup_iki_isletim_sisteminde():
         assert a[:2] == ["pytest", "tests"], f"{isletim}: {a[:4]}"
         assert _deger(a, "-n") == "auto", f"{isletim}: `-n auto` yok — CI SERİ koşar (YGH)"
         assert _deger(a, "--dist") == "loadgroup", (
-            f"{isletim}: `--dist loadgroup` değil ({_deger(a, '--dist')!r}) — depo zamanlayıcısı (dosya birimi + ağır model grubu, "
+            f"{isletim}: `--dist loadgroup` değil ({_deger(a, '--dist')!r}) — depo zamanlayıcısı (dosya birimi + seri grubu, "
             "tests/xdist_grup.py) DEVREYE GİRMEZ, dosyalar işçilere bölünür"
         )
         assert not any(x == "no:xdist" or x.endswith("no:xdist") for x in a), f"{isletim}: xdist kapatılmış"

@@ -120,9 +120,9 @@ jobs:
       # ⚠️ 4A-4.1 (4-A incelemesi): `-r<harfler>` pytest'in varsayılanı `fE`'nin YERİNE geçer — `-rs` tek başına kısa özetteki
       # FAILED/ERROR satırlarını siliyordu. `-rfEs`: kırmızılar ve atlama nedenleri birlikte.
       # ⚠️ Y312 · YGH (sahip 20-11 "CI paraleli de zincire"): iki adım da PARALEL — `-n auto --dist loadgroup`. `loadgroup` ŞART:
-      # tests/conftest.py zamanlayıcısı (tests/xdist_grup.py: dosya birimi + ağır model grubu tek işçide) yalnız loadgroup'ta devreye
+      # tests/conftest.py zamanlayıcısı (tests/xdist_grup.py: dosya birimi + "seri" grubu tek işçide) yalnız loadgroup'ta devreye
       # girer; yalnız `-n` dosyaları işçilere BÖLER. pytest-cov işçi kapsamlarını birleştirir; junit'i denetleyici yazar (atlama kapısı
-      # aynen okur). Kapı: tests/test_ci_paralel_xdist_Y312.py. Linux'ta paralel kırmızı çıkarsa yalnız bu commit geri alınır.
+      # aynen okur). Kapı: tests/test_ci_paralel_xdist_Y312.py. Linux'ta paralel kırmızı çıkarsa YGH'nin iki CI commit'i geri alınır.
       - name: Kritik-yol testleri
         if: runner.os != 'Windows'
         env:
