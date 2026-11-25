@@ -74,24 +74,24 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.54",
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.54/PEMFVetClient-Setup.exe",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.54/PEMFVetClient-Setup-1.9.54.exe",
-    "sha256": "ec096e4ad9be1c41e2879f90e15feb87083de7e329f78c72632f9d272ebb4cd2",
-    "size": 220893572,
+    "version": "1.9.55",
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.55/PEMFVetClient-Setup.exe",
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.55/PEMFVetClient-Setup-1.9.55.exe",
+    "sha256": "4883ba02434a11530226d59cb8d29e986222f92869279d3947e658ef540c25e2",
+    "size": 301181214,
     "rollout": 100,
-    "notes": "Güncellemeler artık sorulmadan indirilmez: yeni sürüm bulununca PEMF Vet Client neyin güncelleneceğini, inecek boyutu ve kısa notu gösterip onayınızı ister. \"Güncelle\" derseniz güncelleme indirilir, kurulur ve uygulama kendiliğinden yeniden başlar (seans sürüyorsa bitmesi beklenir); \"Şimdi değil\" derseniz bir sonraki açılışta yeniden sorulur. Zorunlu güvenlik güncellemeleri sorulmadan iner ve ekranda bildirilir.",
-    "notes_en": "Updates are no longer downloaded without asking: when a new version is found, PEMF Vet Client shows what will be updated, the download size and a short note, and asks for your approval. If you choose \"Update\", it is downloaded and installed and the app restarts by itself (if a session is running, it waits for the session to end); if you choose \"Not now\", you will be asked again on the next launch. Mandatory safety updates download without asking and are announced on screen."
+    "notes": "İnternetsiz açılan PEMF Vet Client, bağlantı gelince kendiliğinden çevrimiçine döner. Bilgisayar ikinci bir Windows hesabıyla da kullanılıyorsa paylaşım kartı açılışta kaybolmaz; \"İzin ver\" PEMF'in kendi programlarının Windows güvenlik duvarı engelini kaldırır. Kurulum bitince durum satırı \"uygulama penceresi açıldı\" der.",
+    "notes_en": "PEMF Vet Client opened without internet now goes back online by itself when the connection returns. If the computer is also used from a second Windows account, the sharing card no longer disappears at startup, and \"Allow\" removes the Windows Firewall block on PEMF's own programs. After setup the status line says \"app window opened\"."
   },
   "mobile": {
     "android": {
-      "version": "2.3.35",
-      "versionCode": 42,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.51/PEMF_Vet_Mobil-2.3.35.apk",
-      "sha256": "2bf78cea893e5c87ddc4ab9bab1a884de8fc6369e14d1f0f589bbdcf43fdd20a",
-      "size": 129194143,
-      "notes": "İngilizce dil seçeneği eklendi (Ayarlar › Dil / Language). Android güncelleme bildirimi Türkçe karakterlerle doğru yazılıyor.",
-      "notes_en": "Adds an English language option (Settings › Language / Dil). The Android update notification text is corrected."
+      "version": "2.3.36",
+      "versionCode": 43,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.53/PEMF_Vet_Mobil-2.3.36.apk",
+      "sha256": "1f12d4d546c1f110fd97f003ca41964dca273f6e892e001f7e1467370783b654",
+      "size": 129371983,
+      "notes": "Bilgisayardaki PEMF 1.9.53 ile gelen ekran değişiklikleri telefonda da: sensör grafiğinde saat ekseni ve yakınlaştırma, hasta listesinde erişim sorununun nedeni ve yapılacak adım, AI Pro'da frekans seçimi ve kuyu haritası. Kabin sensörü kartı, sensör konumu girişi ve seans detayındaki alan grafiği telefonda da.",
+      "notes_en": "Screen changes that come with PEMF 1.9.53 on the computer are on the phone too: a clock axis and zoom on the sensor chart, the reason and next step when the patient list cannot be accessed, and frequency selection and the well map in AI Pro. The cabin sensor card, sensor position entry and the field chart in session details are on the phone too."
     }
   }
 }

@@ -205,8 +205,8 @@ export const CLIENT = {
       // için config yorumu zaten "kullanıcıyı yanıltır" diye tarif ediyor.
       version: `${DOWNLOAD_HOST.windowsTag.replace(/^launcher-v/, '')}`,
       // Kurulum dosyası boyutu (MB; Windows Gezgini'nin gösterdiği 1024 tabanı) — `pemf-app-packages/manifest.json` `launcher.size`
-      // 220.893.572 B ≈ 211 MiB (launcher 1.9.54). Kapı: `tests/test_site_paket_boyutlari.py` (±%10, tek kaynak manifest).
-      sizeMB: 211,
+      // 301.181.214 B ≈ 287 MiB (launcher 1.9.55; WebView2 çevrimdışı kurucusu 294 MB). Kapı: `tests/test_site_paket_boyutlari.py` (±%10, tek kaynak manifest).
+      sizeMB: 287,
     },
     macos: {
       key: 'macos' as const,
