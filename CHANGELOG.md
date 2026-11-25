@@ -6,7 +6,7 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
-## launcher 1.9.55 — 2026-11-23 · app 1.9.53 · mobile 2.3.36 (yayın adayı: tarih PLANLANAN yayın günü — yayın başka gün olursa bu tarih ve sitedeki sürüm tarihi o gün yazılır; paket kimliği yayın günü)
+## launcher 1.9.55 — 2026-11-25 · app 1.9.53 · mobile 2.3.36 (yayın adayı: tarih PLANLANAN yayın günü — yayın başka gün olursa bu tarih ve sitedeki sürüm tarihi o gün yazılır; paket kimliği yayın günü)
 
 > ⚠️ Yayın adayı — sahibin "yayınla"sıyla yayınlanır (tezgâhta, LattePanda günü). **Kontrolcü
 > yazılımı DDS v2.6** (sensör yeniden bağlanma) bu sürümle AYNI gün karta yüklenmelidir; v2.5 kartla uygulama çalışır ama koparsa
@@ -76,7 +76,7 @@ iki dilli gerçek şablonla ölçüldü. Seans silinince sensör konumu girişle
 paketleri: **Veteriner** (`vet.zip`, 200,8 MB) ve **Araştırma** (`research.zip` 1 663,7 MB) yenilendi; Ev Sahibi paketi ve araştırma
 2. parçası AYNI (sha değişmedi). Kontrolcü yazılımı uyum varlığı DDS v2.6 hazırlandı (yayınlanmaz; karta tezgâhta yüklenir).
 
-## app 1.9.53 — 2026-11-23 (Windows uygulama paketi; değişiklikler yukarıdaki launcher 1.9.55 bölümünde)
+## app 1.9.53 — 2026-11-25 (Windows uygulama paketi; değişiklikler yukarıdaki launcher 1.9.55 bölümünde)
 
 Paket kimliği (`buildId` — zip sha 12 hane; içerik kimliği `icerik`[:12] ayrı): `d70902ec9b96` · içerik kimliği `d55330f75870`.
 Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞTİ (`720a60be1bb7`, yeni URL `client-app-v1.9.53`).

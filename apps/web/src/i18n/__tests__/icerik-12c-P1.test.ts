@@ -63,7 +63,7 @@ const ALTIN: Record<string, unknown> = {
  },
  "CLIENT": {
   "channel": "Sürüm 2026.1",
-  "releaseDate": "23 Kas 2026",
+  "releaseDate": "25 Kas 2026",
   "androidOs": "Android 8.0 ve üzeri · telefona doğrudan kurulur"
  },
  "MODULES": [
@@ -242,7 +242,7 @@ const ALTIN: Record<string, unknown> = {
   }
  ],
  "PATCH": {
-  "date": "23 Kas 2026",
+  "date": "25 Kas 2026",
   "notes": [
    "Petri seanslarında sensör ve kablosu plakanın yanındayken seans artık kendiliğinden durmaz; plaka seansın başındaki yerinden kayarsa seans 30 saniye içinde durur ve nedenini ekranda yazar.",
    "Alan sensörü artık “Kabin sensörü (MLX)” adıyla bobinlerden ayrı gösterilir; seans detayında manyetik alan grafiği var ve elle durdurulan seans geçmişte “Durduruldu” görünür."
