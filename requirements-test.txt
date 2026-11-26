@@ -13,6 +13,12 @@
 # ("kod onsuz düz-metine düşer, testler mock'lar") yanlış güvence veriyordu: kapılar SESSİZCE atlanıyordu.
 # Sürümler ana requirements.txt (CPython 3.10) ile birebir kilitli.
 # Kurulum (CI):  pip install -r requirements-test.txt
+# ⚠️ YS1g (sahip 26-11, Y320 sonrası: "başka eksik varsa CI'da kuralım hepsini … koşmamış hiç test olmamalı"): yukarıdaki
+# "ağır AI CI'dan çıkarıldı" kararı KALKTI — CI yalnız Windows ürün hattı (Y320) ve ÜRÜN ortamını kurar: tests.yml ÖNCE derleme
+# kilidini `pip install --no-deps -r build_tools/myenv-requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu`
+# (scripts/bootstrap.ps1 ile AYNI komut; torch CPU / ultralytics / xgboost / grad-cam / pi-heif … — requirements.txt yalnız 45
+# doğrudan bağımlılık), SONRA bu dosyayı kurar. Buradaki sabitler kilitle BİREBİR (test_YH_D2); kilitte olmayan tek test eklentisi
+# PyMuPDF. GitHub windows-latest ilk tam koşusu (0cf83c06): ağır AI yokken 114 kırmızı + ~300 atlama.
 # =============================================================================
 
 # ── Test koşucu + HTTP istemci (FastAPI TestClient httpx kullanır) + kapsam (audit B-3.1) ──
@@ -44,9 +50,8 @@ websockets==15.0.1
 
 # ── Import-zamanı runtime bağımlılıkları (introspeksiyonla saptandı) ──
 numpy==1.26.4
-opencv-python-headless==4.11.0.86  # CI headless: opencv-python yerine (libGL gerektirmez).
-                                   # SÜRÜM üretimle aynı (4.11.0.86) — yalnız varyant farklı; testler
-                                   # prod'dan farklı bir cv2 API'siyle koşmasın diye hizalandı.
+# YS1g: opencv-python-headless KALDIRILDI — CI artık Windows (libGL derdi yok) ve ürünün opencv-python==4.11.0.86'sını derleme
+# kilidinden kurar; ürün headless'ı bilerek kaldırır (kilit notu: albumentations transitifi) → ikisi birlikte cv2'yi ezerdi.
 pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 reportlab==4.0.7                   # history_router → pdf_report_generator import-zamanı
 cryptography==50.0.0               # DO-1: shipped ile esit (2026-08-04: 46.0.7->50.0.0 CVE bump)
@@ -86,3 +91,12 @@ PyYAML==6.0.3                    # cabin_config kapısı (tests/test_kabin_confi
 PyMuPDF==1.28.0                  # Y205 · S-D5.18 (sahip): PDF kapıları (rapor metni / Türkçe karakter / gömülü font) — YALNIZ test bağımlılığı;
                                  # sürüm yerelde kurulu olanla aynı (pip install YAPILMADI). Kurulu değilse testler
                                  # `capraz.paket_yoksa_atla("fitz")` ile atlar, PEMF_CAPRAZ_KAYNAK_ZORUNLU=1'de DÜŞER.
+# YS1g (26-11, GitHub windows-latest ilk tam koşu): üretim kodu bu paketleri İŞLEV İÇİNDE (lazy) yükler — modül-düzeyi kapanış kapısı
+# (kilitte de aynı sürümle var; burada açık: yerelde yalnız bu dosyayı kuran ortam da jeton / entitlement testlerini koşabilsin)
+# görmüyordu, CI test ortamında yoklardı → 46 test ModuleNotFoundError (jeton / entitlement Supabase RPC taşıması, SGI-2.4 ara katman).
+# Üretimde ultralytics / torchvision üzerinden DOLAYLI gelir; sürümler ürün ortamında kurulu olanla aynı.
+requests==2.33.1
+urllib3==2.6.3
+charset-normalizer==3.4.7
+anyio==4.13.0                      # YS1g: servers/jeton.py işlev içinde yükler (derin kapanış kapısı buldu); httpx / starlette dolaylı
+# YS1g: PyInstaller (spec kapıları, 11 kırmızı) ve onnx (ODAK ONNX kapıları) artık `-r requirements.txt`ten gelir.

@@ -44,7 +44,8 @@ def _backend() -> dict:
 def _kapsar(adim: dict, isletim: str) -> bool:
     """Adımın `if:` koşulu bu işletim sisteminde koşar mı? (Yalnız iş akışındaki basit biçimler.)"""
     kosul = str(adim.get("if", "")).strip()
-    if not kosul:
+    # YS1g: junit eseri adımı `if: always()` — her işletim sisteminde (kırmızıda da) koşar.
+    if not kosul or kosul in ("always()", "${{ always() }}"):
         return True
     m = re.fullmatch(r"runner\.os\s*(==|!=)\s*'(\w+)'", kosul)
     assert m, f"tanınmayan adım koşulu (kapı genişletilmeli): {kosul!r}"

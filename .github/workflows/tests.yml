@@ -86,10 +86,38 @@ jobs:
           pip install --only-binary sqlcipher3 sqlcipher3==0.6.2
           python -c "from sqlcipher3 import dbapi2; print('sqlcipher3 hazir, SQLite', dbapi2.sqlite_version)"
 
+      # YS1g (sahip 26-11: "başka eksik varsa CI'da kuralım hepsini … koşmamış hiç test olmamalı"): ÜRÜN ortamı = DERLEME KİLİDİ
+      # (build_tools/myenv-requirements.txt, 237 sabit; scripts/bootstrap.ps1 ile AYNI komut: --no-deps + PyTorch CPU dizini), sonra
+      # test eklentileri. Eskiden ağır AI hariçti → ~300 test "paket yok" diye ATLANIYOR, 114'ü kırmızıydı (0cf83c06).
       - name: Test bağımlılıkları
         run: |
           python -m pip install --upgrade pip
+          pip install --no-deps -r build_tools/myenv-requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements-test.txt
+
+      # YS1g: TypeScript isteyen pytest kapıları (i18n K-2 metin çıkarıcı `scripts/i18n/cikar_ts.cjs`, arayüz / site kaynak kapıları)
+      # apps/ui ve apps/web node_modules'undaki derleyiciyi kullanır; yoksa ATLIYOR (16) ya da düşüyordu (K-2). Arayüz web dışa
+      # aktarımı (`frontend/dist`, build_backend_exe.ps1 ile AYNI `npm run export:web`) paket / statik sunum kapılarının girdisi.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/ui/package-lock.json
+            apps/web/package-lock.json
+            dema-terapi-simülatörü/package-lock.json
+
+      - name: Arayüz + site bağımlılıkları ve web dışa aktarımı (TypeScript kapıları)
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd apps/ui && npm install --legacy-peer-deps --no-audit --no-fund)
+          (cd apps/web && npm ci --no-audit --no-fund)
+          (cd apps/ui && npm run export:web)
+          rm -rf frontend/dist && mkdir -p frontend && cp -r apps/ui/dist frontend/dist
+          test -f frontend/dist/index.html
+          (cd "dema-terapi-simülatörü" && npm ci --no-audit --no-fund && npm run build)
+          test -d "dema-terapi-simülatörü/dist"
 
       # ⚠️ D3.02 (B-10.48 · A-69): özel gitleaks kurallarını GERÇEK ikiliyle ölçen testler CI'da da koşsun. İkili
       # `.pre-commit-config.yaml`'daki SABİT rev'den (gitleaks v8.24.0) pre-commit ile kaynaktan kurulur (hazır ikili
@@ -133,11 +161,23 @@ jobs:
         env:
           PEMF_SIMULATE: ""
           PEMF_GITLEAKS_ZORUNLU: "1"
+          PEMF_DEMA_DIST_ZORUNLU: "1"   # YS1g: DEMA dist yukarıda derlenir → o kapı ATLANAMAZ
         run: pytest tests -n auto --dist loadgroup -v -rfEs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
 
       # ⚠️ A-46 / D2.07: testler geçse bile "sqlcipher" nedenli ATLAMA varsa iş KIRMIZI. Kurulum adımı
       # bağlayıcıyı içe aktaramazsa iş zaten orada durur; bu adım kalan sessiz yolu kapatır (bağlayıcı
       # bir testte yüklenemedi / yeni bir test sqlcipher3'ü atlayarak eklendi). Çıkış 2 = junit yok/boş (kör).
+      # YS1g: test başına sonuç (atlama NEDENİ dahil) junit eseri olarak saklanır — kırmızı / atlama listesi günlükten değil buradan
+      # çıkarılır (CI-ATLANAN tablosu, istem 66). Kırmızı koşuda da yüklenir.
+      - name: Test raporu (junit) eseri
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-junit-${{ matrix.os }}
+          path: pytest-junit.xml
+          retention-days: 30
+          if-no-files-found: error
+
       - name: sqlcipher atlama kapısı (A-46)
         run: python scripts/ci_sqlcipher_atlama_kapisi.py pytest-junit.xml
 

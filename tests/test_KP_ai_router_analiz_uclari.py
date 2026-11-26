@@ -1004,6 +1004,23 @@ def test_fantom_yukleyici_indirici_UYARISINDA_boru_hatti_kurulur(monkeypatch):
     assert d == {"cfg": "CFG", "predictor": "ONGORUCU", "cls": _Hat} and kurulan == [("CFG", False)]
 
 
+@pytest.fixture(autouse=True)
+def _petri_modullerini_birak():
+    """YS1g (26-11, CI ürün ortamı): sahte indirici (`_indirici`) kuruluyken İLK kez içe aktarılan petri zinciri
+    (`petri_cv_v2` → `inference_em_petri`) model yolunu / indirme hatasını MODÜL DÜZEYİNDE sabitler; bozuk modül sys.modules'ta kalınca
+    AYNI işçideki sonraki gerçek petri testleri "BaggingRegressor.onnx bulunamadı … HF erişilemedi" ile düşer (taban 62a5ff58'de de:
+    bu dosya + test_petri_cv_v2_KAHIN… → 6 kırmızı). Eskiden CI'da ultralytics yoktu, petri testleri atlanıyordu. Bu dosyanın YENİ içe
+    aktardığı petri modülleri her test sonunda bırakılır."""
+    onceki = set(sys.modules)
+    yield
+    for ad in [
+        a
+        for a in sys.modules
+        if a not in onceki and a.startswith(("ai_hub.inference_em_petri", "ai_hub.inference_petri_dish"))
+    ]:
+        del sys.modules[ad]
+
+
 def _petri_hatti(monkeypatch, isit_hatasi=None):
     from ai_hub.inference_petri_dish import petri_cv_v2 as pv2
 

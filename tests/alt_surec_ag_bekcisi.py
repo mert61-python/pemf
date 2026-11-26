@@ -170,6 +170,12 @@ def _kanca(olay, arg):
                 raise PermissionError(f"ALT SÜREÇ AĞ BEKÇİSİ: bind {adres[0]}:{port} — sahibin servis portu")
     elif olay in ("subprocess.Popen", "os.system", "os.spawn", "os.posix_spawn", "os.startfile", "os.exec"):
         program = arg[0] if arg and arg[0] else (arg[1] if len(arg) > 1 else "")
+        # YS1g (GitHub windows-latest, Python 3.10.11): gh-101283 (3.10.10+) `shell=True`da `executable`a cmd.exe'nin TAM yolunu
+        # koyar; komut satırı (`…\cmd.exe /c "ver"`) `args`tadır → yalnız `executable` kaydedilince izin listesi (`cmd.exe /c "ver"`)
+        # eşleşmiyor, platform sürüm sorgusu "izin listesi dışı alt süreç" sayılıyordu (22 test). `args` dizeyse TAM komut satırı kaydedilir
+        # (3.10.2'de `executable` None → zaten bu kullanılıyordu).
+        if olay == "subprocess.Popen" and len(arg) > 1 and isinstance(arg[1], str) and arg[1]:
+            program = arg[1]
         if isinstance(program, (list, tuple)):
             program = program[0] if program else ""
         ALT_SURECLER.append(f"{olay}:{program}")

@@ -163,6 +163,51 @@ def test_KRITIK_arayuz_ve_site_CI_Node_22_ve_USTU_YS1f(dosya, is_adi):
     )
 
 
+def test_KRITIK_backend_isi_URUN_ortamini_ve_TS_kapilarinin_girdilerini_KURAR_YS1g():
+    """YS1g (sahip 26-11: "koşmamış hiç test olmamalı"): backend işi (1) ÜRÜN ortamını
+    DERLEME KİLİDİNDEN kurar (`--no-deps -r build_tools/myenv-requirements.txt`, bootstrap.ps1 komutu), (2) pytest'ten ÖNCE Node + apps/ui / apps/web bağımlılıklarını, arayüz web dışa aktarımını
+    (`frontend/dist`) ve DEMA derlemesini kurar; (3) DEMA dist kapısı zorunlu kipte koşar (atlanamaz)."""
+    adimlar = _yukle("tests.yml")["jobs"]["backend"]["steps"]
+    metin = [str(a.get("run", "")) + " " + str(a.get("uses", "")) for a in adimlar]
+    pyt = next(i for i, m in enumerate(metin) if "pytest tests" in m)
+    kilit = [
+        i
+        for i, m in enumerate(metin)
+        if re.search(
+            r"pip install --no-deps -r build_tools/myenv-requirements\.txt --extra-index-url https://download\.pytorch\.org/whl/cpu",
+            m,
+        )
+    ]
+    assert kilit and kilit[0] < pyt, "CI ürün DERLEME KİLİDİNİ (bootstrap.ps1 komutu) pytest'ten önce kurmuyor"
+    req = (KOK / "requirements-test.txt").read_text(encoding="utf-8")
+    assert not re.search(r"^opencv-python-headless==", req, re.M), "headless + ürün opencv-python birlikte cv2'yi ezer"
+    for parca in (
+        "actions/setup-node",
+        "cd apps/ui && npm install",
+        "cd apps/web && npm ci",
+        "npm run export:web",
+        "frontend/dist",
+        "npm run build",
+    ):
+        konum = [i for i, m in enumerate(metin) if parca in m]
+        assert konum and max(konum) < pyt, f"backend işinde pytest'ten ÖNCE {parca!r} yok — TS / dist kapıları ATLANIR"
+    node = next(a for a in adimlar if str(a.get("uses", "")).startswith("actions/setup-node"))
+    assert int(str(node["with"]["node-version"]).split(".")[0]) >= 22
+    ortam = adimlar[pyt].get("env") or {}
+    assert str(ortam.get("PEMF_DEMA_DIST_ZORUNLU")) == "1", (
+        "DEMA dist kapısı zorunlu değil — derleme düşse de SESSİZCE atlanır"
+    )
+    yukle = [
+        a
+        for a in adimlar
+        if str(a.get("uses", "")).startswith("actions/upload-artifact")
+        and "pytest-junit.xml" in str((a.get("with") or {}).get("path", ""))
+    ]
+    assert yukle and str(yukle[0].get("if", "")).strip() == "always()", (
+        "junit eseri (test başına sonuç + atlama nedeni) kırmızı koşuda da yüklenmiyor — CI-ATLANAN listesi kaybolur"
+    )
+
+
 def test_KRITIK_launcher_WINDOWSTA_derlenir():
     """Launcher'ın Windows'a özgü yolları (DPAPI, icacls, NSIS kancaları) yalnız orada derlenir."""
     assert "windows" in _yukle("tests.yml")["jobs"]["launcher"]["runs-on"]

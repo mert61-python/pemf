@@ -22,6 +22,8 @@ paketler CI'ya kurulmaz (~2GB). O sınıf için kural farklı: o modülü import
 from __future__ import annotations
 
 import ast
+import functools
+import importlib.metadata
 import re
 import sys
 import warnings
@@ -30,7 +32,17 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[1]
 
 #: Üretim kodu: testlerin import ettiği, CI'da modül düzeyinde yüklenen ağaçlar.
-_URETIM = ("apps/backend/backend_service.py", "servers", "ai_service", "utils")
+# ⚠️ YS1g (26-11): `servers` / `utils` 2026-09-18'de (F4) apps/backend/ altına TAŞINDI ama burada kök adıyla kalmıştı → kapı o günden
+# beri yalnız backend_service.py + ai_service'i tarıyordu (KÖR). Kökler apps/backend altında + her kök VAR mı kanıtlanır.
+_URETIM = (
+    "apps/backend/backend_service.py",
+    "apps/backend/servers",
+    "apps/backend/services",
+    "apps/backend/database",
+    "apps/backend/controllers",
+    "apps/backend/utils",
+    "ai_service",
+)
 
 #: requirements-test.txt baş yorumundaki BİLİNÇLİ "ağır AI" muafiyeti (lazy yüklenirler).
 #: Buraya ekleme yapmak = "bu paket CI'da ASLA kurulmayacak" demek; o zaman ikinci test
@@ -48,18 +60,38 @@ _AD_ESLEME = {
 }
 
 
-def _bildirilenler() -> set[str]:
-    """requirements-test.txt'te sabitlenen dağıtım adları (küçük harf)."""
+def _ci_kurulan_dosyalar() -> list[str]:
+    """YS1g: CI backend işinin `pip install … -r <dosya>` ile GERÇEKTEN kurduğu gereksinim dosyaları (derleme kilidi + test eklentileri)."""
+    yml = (KOK / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    bas = yml.index("  backend:")
+    dosyalar = re.findall(r"pip install[^\n]*?-r\s+(\S+)", yml[bas : yml.index("\n  sir-taramasi:", bas)])
+    assert "requirements-test.txt" in dosyalar, f"CI backend işi requirements-test.txt kurmuyor: {dosyalar}"
+    return dosyalar
+
+
+def _bildirilenler(dosya: str | None = None, _gorulen: set | None = None) -> set[str]:
+    """CI'ın kurduğu dosyalarda (varsayılan: `_ci_kurulan_dosyalar()`; `-r` içermeleri izlenir) sabitlenen dağıtım adları."""
+    if dosya is None:
+        return set().union(*(_bildirilenler(d, set()) for d in _ci_kurulan_dosyalar()))
+    gorulen = _gorulen if _gorulen is not None else set()
+    if dosya in gorulen:
+        return set()
+    gorulen.add(dosya)
     adlar = set()
-    for satir in (KOK / "requirements-test.txt").read_text(encoding="utf-8").splitlines():
+    for satir in (KOK / dosya).read_text(encoding="utf-8").splitlines():
+        icer = re.match(r"^\s*-r\s+(\S+)", satir)
+        if icer:
+            adlar |= _bildirilenler(icer.group(1), gorulen)
+            continue
         m = re.match(r"^\s*([A-Za-z0-9_.\-]+)\s*==", satir)
         if m:
-            adlar.add(m.group(1).lower())
+            adlar.add(m.group(1).lower().replace("_", "-"))
     return adlar
 
 
-def _modul_duzeyi_importlar(dosya: Path) -> set[str]:
-    """Dosyanın modül düzeyindeki, try/except ile KORUNMAYAN üçüncü-parti import kökleri."""
+def _modul_duzeyi_importlar(dosya: Path, derin: bool = False) -> set[str]:
+    """Dosyanın modül düzeyindeki (derin=True: İŞLEV İÇİ / lazy dahil — YS1g requests vakası), try/except ile KORUNMAYAN
+    üçüncü-parti import kökleri."""
     agac = ast.parse(dosya.read_text(encoding="utf-8"))
     korumali = {
         id(alt)
@@ -80,7 +112,7 @@ def _modul_duzeyi_importlar(dosya: Path) -> set[str]:
         yerel |= {p.name for p in _BACKEND.iterdir() if p.is_dir()}
         yerel |= {p.stem for p in _BACKEND.glob("*.py")}
     kokler = set()
-    for dugum in agac.body:
+    for dugum in ast.walk(agac) if derin else agac.body:
         if id(dugum) in korumali:
             continue
         if isinstance(dugum, ast.Import):
@@ -94,6 +126,7 @@ def _uretim_dosyalari() -> list[Path]:
     dosyalar = []
     for ad in _URETIM:
         p = KOK / ad
+        assert p.exists(), f"bağımlılık kapanış kapısının kökü YOK (taşındı mı?): {ad} — kapı KÖR kalır"
         if p.is_file():
             dosyalar.append(p)
         elif p.is_dir():
@@ -101,15 +134,22 @@ def _uretim_dosyalari() -> list[Path]:
     return dosyalar
 
 
+@functools.lru_cache(maxsize=1)
+def _kurulu_eslem() -> dict[str, set[str]]:
+    """Kurulu ortamın içe aktarma adı → dağıtım adları (sklearn → scikit-learn, yaml → PyYAML …); YS1g: kapsam tüm üretim
+    ağacına genişleyince elle eşleme yetmez."""
+    return {k: {d.lower().replace("_", "-") for d in v} for k, v in importlib.metadata.packages_distributions().items()}
+
+
 def _karsilanmayanlar(bildirilen: set[str]) -> dict[str, list[str]]:
-    """{import_koku: [dosyalar]} — ne bildirilmiş ne muaf olanlar."""
+    """{import_koku: [dosyalar]} — ne bildirilmiş ne muaf olanlar (İŞLEV İÇİ içe aktarmalar dahil)."""
     sorunlu: dict[str, list[str]] = {}
     for f in _uretim_dosyalari():
-        for kok in _modul_duzeyi_importlar(f):
+        for kok in _modul_duzeyi_importlar(f, derin=True):
             if kok in AGIR_MUAF:
                 continue
-            dagitimlar = _AD_ESLEME.get(kok, {kok})
-            if not {d.lower() for d in dagitimlar} & bildirilen:
+            dagitimlar = _AD_ESLEME.get(kok, {kok}) | _kurulu_eslem().get(kok, set())
+            if not {d.lower().replace("_", "-") for d in dagitimlar} & bildirilen:
                 sorunlu.setdefault(kok, []).append(f.relative_to(KOK).as_posix())
     return sorunlu
 
@@ -185,3 +225,21 @@ def test_KARSIT_KANIT_kapi_bos_gecmiyor():
     # Sahte bir bildirilen kümesiyle sorun ÜRETİLİYOR (mutasyon simülasyonu).
     sahte = _karsilanmayanlar(bildirilen - {"uvicorn"})
     assert "uvicorn" in sahte, "uvicorn requirements'tan düşünce kapı YAKALAMIYOR — kapı bozuk"
+
+
+def test_KARSIT_KANIT_ISLEV_ICI_import_ve_tasinan_kokler_OLCULUYOR_YS1g():
+    """YS1g: (1) `servers/jeton.py` `requests`i yalnız İŞLEV İÇİNDE yükler — modül düzeyi tarama görmez, derin tarama görür; bildirilenden
+    düşünce kapı YAKALAR (0cf83c06'da 46 test bu yüzden ModuleNotFoundError'du). (2) apps/backend altındaki kökler gerçekten taranır."""
+    jeton = KOK / "apps" / "backend" / "servers" / "jeton.py"
+    assert "requests" not in _modul_duzeyi_importlar(jeton)
+    assert "requests" in _modul_duzeyi_importlar(jeton, derin=True)
+    bildirilen = _bildirilenler()
+    assert "requests" in bildirilen and "torch" in bildirilen, "CI'ın kurduğu dosyalar (kilit + test) okunamıyor"
+    assert "build_tools/myenv-requirements.txt" in _ci_kurulan_dosyalar(), "CI derleme kilidini kurmuyor"
+    sahte = _karsilanmayanlar(bildirilen - {"requests"})
+    assert any(d.startswith("apps/backend/servers/") for d in sahte.get("requests", [])), (
+        f"requests düşünce YAKALANMADI: {sahte}"
+    )
+    assert {"servers", "utils", "services"} <= {
+        p.relative_to(KOK).parts[2] for p in _uretim_dosyalari() if len(p.relative_to(KOK).parts) > 3
+    }
