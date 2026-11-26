@@ -62,6 +62,15 @@ def _deger(argumanlar: list[str], bayrak: str) -> str | None:
     return None
 
 
+#: YS1i: süit UAC-süzgeçli belirteçle koşar (scripts/ci_kisitli_belirtec.py) — bu önek pytest argümanlarının ÖNÜNDE; kapı pytest kısmını
+#: ölçer (önekin varlığını tests/test_ci_kisitli_belirtec_YS1i.py kilitler).
+_KISITLI_ONEK = ["python", "scripts/ci_kisitli_belirtec.py"]
+
+
+def _oneksiz(a: list[str]) -> list[str]:
+    return a[len(_KISITLI_ONEK) :] if a[: len(_KISITLI_ONEK)] == _KISITLI_ONEK else a
+
+
 def _pytest_adimlari() -> dict[str, list[str]]:
     is_ = _backend()
     sonuc: dict[str, list[str]] = {}
@@ -69,7 +78,7 @@ def _pytest_adimlari() -> dict[str, list[str]]:
         isletim = _ISLETIM[os_adi]
         adimlar = [a for a in is_["steps"] if _kapsar(a, isletim) and "pytest tests" in str(a.get("run", ""))]
         assert len(adimlar) == 1, f"{isletim}: tam olarak bir `pytest tests` adımı bekleniyordu, bulunan {len(adimlar)}"
-        sonuc[isletim] = shlex.split(str(adimlar[0]["run"]))
+        sonuc[isletim] = _oneksiz(shlex.split(str(adimlar[0]["run"])))
     return sonuc
 
 

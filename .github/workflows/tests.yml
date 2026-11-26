@@ -156,13 +156,18 @@ jobs:
       # (%54,24). Linux'ta DPAPI/ACL/serial gibi platforma özgü yollar hiç koşmadığı için aynı
       # eşik orada yanlış-kırmızı üretirdi. Eşik `pyproject.toml → [tool.coverage.report]`.
       # NOT: eşik ayarlıydı ama CI kapsamı HİÇ ÖLÇMÜYORDU — yani ratchet boş bir güvenceydi.
+      # YS1i (3bec8be9 koşusu): koşucu (runneradmin) YÜKSELTİLMİŞ → ürünün kilidi Administrators'a tam yetki verdiği için ACL /
+      # ikinci-hesap benzetimleri ölçülemedi (24 kırmızı + 3 hata, kapsam %99,98). Süit, ürünün ve geliştiricinin koştuğu gibi
+      # UAC-SÜZGEÇLİ belirteçle koşar (scripts/ci_kisitli_belirtec.py: Administrators yalnız-ret, bütünlük orta). `shell: bash`:
+      # pwsh 7 açılışta PSModulePath'e kendi yollarını ekleyip alt powershell.exe 5.1'e sızdırıyordu → Get-Acl yüklenemiyordu (5).
       - name: Kritik-yol testleri + kapsam ratcheti
         if: runner.os == 'Windows'
+        shell: bash
         env:
           PEMF_SIMULATE: ""
           PEMF_GITLEAKS_ZORUNLU: "1"
           PEMF_DEMA_DIST_ZORUNLU: "1"   # YS1g: DEMA dist yukarıda derlenir → o kapı ATLANAMAZ
-        run: pytest tests -n auto --dist loadgroup -v -rfEs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
+        run: python scripts/ci_kisitli_belirtec.py pytest tests -n auto --dist loadgroup -v -rfEs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
 
       # ⚠️ A-46 / D2.07: testler geçse bile "sqlcipher" nedenli ATLAMA varsa iş KIRMIZI. Kurulum adımı
       # bağlayıcıyı içe aktaramazsa iş zaten orada durur; bu adım kalan sessiz yolu kapatır (bağlayıcı

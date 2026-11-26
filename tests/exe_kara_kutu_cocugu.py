@@ -88,7 +88,18 @@ def _norm(yol) -> str | None:
 
 
 def _kok_listesi(yollar) -> list[str]:
-    return [os.path.normcase(os.path.abspath(y)).rstrip("\\/") for y in yollar if y]
+    """Kökün hem verildiği biçimi hem `realpath` biçimi (YS1g: GitHub windows-latest'te TEMP 8.3 KISA yol `C:\\Users\\RUNNER~1\\…`;
+    ürünün kurduğu yol UZUN `…\\runneradmin\\…` görünür → yalnız verilen biçimle karşılaştırınca kendi veri kökü "izinli kök dışı"
+    sayılıyordu). Kökler başlangıçta BİR KEZ çözülür (denetim kancasında dosya sistemi çağrısı yok)."""
+    kokler = []
+    for y in yollar:
+        if not y:
+            continue
+        for bicim in (os.path.abspath(y), os.path.realpath(y)):
+            k = os.path.normcase(bicim).rstrip("\\/")
+            if k not in kokler:
+                kokler.append(k)
+    return kokler
 
 
 IZINLI = _kok_listesi(_IZINLI + [os.environ.get("TEMP", ""), os.environ.get("TMP", "")])
