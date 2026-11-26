@@ -154,6 +154,23 @@ HEDEFLER = {
     },
 }
 
+
+def _site_iki_dil(sayfalar: dict) -> dict:
+    """YS1h (26-11): site DİLİ adresle SABİTLENİR ve İKİ DİL ölçülür. Kapı tarayıcıyı `--lang=tr-TR` ile açıyordu ama o bayrak yalnız
+    Windows'ta `navigator.language`'ı belirler — GitHub ubuntu koşucusunda site İNGİLİZCE açıldı, /pricing 320 px'te taştı (EN paket
+    kartı); yerelde (tr-TR) İngilizce hiç ölçülmemişti. TR durumları aynı adla (`?lang=tr`; bilinen bulgu anahtarları değişmez), EN
+    durumları `-en` ekiyle (`?lang=en`). Site `?lang=`i kayıtlı seçimin ve tarayıcı dilinin ÖNÜNDE uygular (YH B3)."""
+    iki: dict = {}
+    for ad, tanim in sayfalar.items():
+        yol = tanim.get("yol", "/")
+        ayrac = "&" if "?" in yol else "?"
+        iki[ad] = {**tanim, "yol": f"{yol}{ayrac}lang=tr"}
+        iki[f"{ad}-en"] = {**tanim, "yol": f"{yol}{ayrac}lang=en"}
+    return iki
+
+
+HEDEFLER["site"] = _site_iki_dil(HEDEFLER["site"])
+
 # ── launcher durum enjeksiyonu (ampirik ajanın _inject.js'i; index.html'e DOKUNMADAN geçici kopya) ─
 LAUNCHER_INJECT = r"""
 <script>(function(){

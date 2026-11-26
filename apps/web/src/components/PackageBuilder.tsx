@@ -36,10 +36,12 @@ export default function PackageBuilder() {
               type="button"
               onClick={() => toggle(m.id)}
               aria-pressed={on}
-              className={`card relative p-6 text-left transition-all ${
+              className={`card relative min-w-0 p-6 text-left transition-all ${
                 on ? 'ring-2 ring-primary/60 glow-ring' : 'hover:border-border-strong'
               }`}
             >
+              {/* YS1h (26-11): `min-w-0` — ızgara öğesi (düğme) varsayılan `min-width: auto` ile içeriğinden dar OLAMIYORDU; Linux yazı
+                  tipi ölçüleriyle EN kart 320 px'te 331 px oldu, sayfa yatay taştı (site-ci 0cf83c06; Windows'ta görünmez). */}
               {/* [W adım 8 / site-8] Rozet `absolute right-4 top-4` idi: dar kartta başlığın
                   ÜSTÜNE biniyordu (320 px'te başlık 81-244, rozet 224-283 → 20 px çakışma).
                   Artık başlık satırının AKIŞINDA; başlık min-w-0 ile daralır, rozet shrink-0. */}
