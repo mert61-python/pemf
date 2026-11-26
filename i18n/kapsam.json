@@ -267,7 +267,7 @@
    "aciklama": "kalan servis / yardımcı / tür dosyaları",
    "durum": "tamam",
    "metin": 27,
-   "dosyaSayisi": 41
+   "dosyaSayisi": 42
   },
   {
    "ad": "sunucu-10a-yonlendirici",
@@ -3713,6 +3713,17 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "apps/ui/src/utils/kontrolHafizasi.ts": {
+   "yuzey": "arayuz",
+   "grup": "arayuz-09-yardimci",
+   "sira": 9,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "YS1d (Y320 ESLint): Kontrol belleği yazım yardımcısı — kullanıcı metni yok"
   },
   "apps/ui/src/utils/metinKirpma.ts": {
    "yuzey": "arayuz",
