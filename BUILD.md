@@ -237,9 +237,10 @@ python scripts/make_manifest.py --dir pemf-app-packages ... `
 > Client artık "bu platform için paket yok" deyip **durur** — sessizce kilitli bir cihaz kurmaktansa
 > açık hata.
 >
-> **Geri getirmek için:** paketleri CI ile üret (`linux-backend.yml` / `mac-backend.yml`,
-> `workflow_dispatch` veya `backend-linux-v*` / `backend-mac-v*` tag'i), **`layers` + `rollout`
-> ekle**, sonra bu iki testi güncelle: `manifest.rs::depodaki_gercek_manifest_ayristirilir` ve
+> **Geri getirmek için:** paketleri CI ile üret — ⚠️ `linux-backend.yml` / `mac-backend.yml` **Y320 ile
+> (26-11) KALDIRILDI** (CI yalnız Windows ürün hattı; iş akışları git geçmişinde: `git log --diff-filter=D --
+> .github/workflows/linux-backend.yml`), önce onları geri getir (eskiden `workflow_dispatch` veya `backend-linux-v*` /
+> `backend-mac-v*` tag'i), **`layers` + `rollout` ekle**, sonra bu iki testi güncelle: `manifest.rs::depodaki_gercek_manifest_ayristirilir` ve
 > `real_artifacts.rs::uretilen_manifest_launcher_tarafindan_okunur` — ikisi de şu an platformların
 > **yokluğunu** kilitliyor ki yanlışlıkla geri sızmasın. Client self-update'i yine Windows'a özel
 > kalır (mac/linux için .dmg/.deb self-update yolu yazılmadı).

@@ -13,7 +13,7 @@ SAHİP KARARI A-46: "sqlcipher3 kurulamazsa CI KIRMIZI olur; şifreleme/kurtarma
     Örnek: karantina bütçesini 1 denemeye indiren mutant, dosyanın tamamı atlandığı için YEŞİLDİ.
 
 BU DOSYA CI'I ÇALIŞTIRMAZ (A-43: hiçbir şey itilmez). İki şeyi kilitler:
-  1. İş akışı TANIMI: iki işletim sisteminde de sqlcipher3 kurulur ve İÇE AKTARILARAK doğrulanır (düşüş yok);
+  1. İş akışı TANIMI: backend işinde (YS1b · Y320: yalnız `windows-latest`) sqlcipher3 kurulur ve İÇE AKTARILARAK doğrulanır (düşüş yok);
      test adımı junit üretir; ardından `scripts/ci_sqlcipher_atlama_kapisi.py` aynı dosyayla koşar.
   2. Sayaç betiğinin DAVRANIŞI: "sqlcipher" nedenli atlama (harf duyarsız) → 1; yoksa 0; junit yok/boş → 2.
 """
@@ -55,12 +55,12 @@ def _isletimler() -> list[str]:
     return [_ISLETIM[o] for o in os_listesi]
 
 
-def test_KRITIK_iki_isletim_sisteminde_sqlcipher3_KURULUR_ICE_AKTARILIR_dusus_YOK():
-    """MUTASYON: Windows kurulum adımını silmek · Linux kurulumuna `|| echo …` düşüşünü geri koymak · içe aktarma
-    doğrulamasını silmek · `continue-on-error: true` → KIRMIZI."""
+def test_KRITIK_windows_isinde_sqlcipher3_KURULUR_ICE_AKTARILIR_dusus_YOK():
+    """MUTASYON: Windows kurulum adımını silmek · kuruluma `|| echo …` düşüşü koymak · içe aktarma doğrulamasını silmek ·
+    `continue-on-error: true` → KIRMIZI. (YS1b · Y320: Linux işi kalktı — matris yalnız `windows-latest`.)"""
     adimlar = _backend()["steps"]
     isletimler = _isletimler()
-    assert set(isletimler) == {"Linux", "Windows"}, f"backend matrisi beklenmedik: {isletimler}"
+    assert set(isletimler) == {"Windows"}, f"backend matrisi yalnız windows-latest olmalı (Y320): {isletimler}"
     for isletim in isletimler:
         kurulum = [
             (i, a)
@@ -116,7 +116,7 @@ def _sqlcipher3_pini(yol: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def test_KRITIK_sqlcipher3_test_ortaminda_ve_iki_isletim_sisteminde_URETIM_SURUMUYLE_kurulur():
+def test_KRITIK_sqlcipher3_test_ortaminda_ve_CI_isinde_URETIM_SURUMUYLE_kurulur():
     """2-A inceleme (sahip isteği 2026-10-07): sqlcipher3 `requirements-test.txt`te YOKTU — yalnız o dosyayı kuran yerel
     ortamda şifreleme/göç/karantina/kurtarma kapıları sessizce atlanıyordu; CI'ın Linux kurulumu da sürümsüzdü
     (`sqlcipher3-binary || sqlcipher3`) → ürünün SQLCipher sürümünden farklı bir kitaplıkla koşabiliyordu.

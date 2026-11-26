@@ -1,6 +1,9 @@
 name: critical-path-tests
 
-# PEMF kritik-yol testleri — backend (pytest, Linux+Windows) + launcher (cargo) + sır taraması.
+# PEMF kritik-yol testleri — backend (pytest, Windows) + launcher (cargo) + sır taraması.
+# YS1b · Y320 (sahip 25-11): CI YALNIZ Windows ürün hattı — backend `ubuntu-latest` kopyası ve Linux / macOS paketleme iş akışları
+# (`linux-backend.yml`, `mac-backend.yml`) kaldırıldı (git geçmişinde). lint / security / site / frontend Ubuntu koşucuda kalır
+# (ürün platformu değil, yalnız CI makinesi).
 # (Arayüz/site işleri için dosyanın SONUNDAKİ "KALDIRILDI (2026-08-12)" notuna bakınız.)
 #
 # ⚠️ DENETİM 2026-08-09 (Tier 1) — CI GERÇEKTEN AÇILDI. Önceki hâlinde:
@@ -56,7 +59,8 @@ jobs:
     strategy:
       fail-fast: false          # bir platformun düşmesi diğerinin sonucunu gizlemesin
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Y320: yalnız Windows (iş adı "backend (windows-latest)" aynen kalsın diye matris korunur). Kapı: test_ci_workflow_gate.py
+        os: [windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -72,18 +76,8 @@ jobs:
       # paketlenir, requirements.txt). Bu kapıların çoğu `importorskip`/`skipif` ile korunduğu için CI'da
       # ATLANIYOR ve iş YEŞİL bitiyordu. Her iki kurulum da bağlayıcıyı İÇE AKTARARAK doğrular; testten
       # sonra `sqlcipher atlama kapısı` adımı "sqlcipher" nedenli atlama sayısı > 0 ise işi düşürür.
-      # 2-A inceleme (sahip isteği 2026-10-07): iki işletim sistemi de AYNI sabit tekerleği kurar (requirements.txt ve
-      # requirements-test.txt ile birebir; cp310 manylinux_2_28 tekerleği PyPI'da var). Eskiden Linux sürümsüzdü
-      # (`sqlcipher3-binary || sqlcipher3`) → CI ürünün sürümünden farklı bir SQLCipher'la koşabiliyordu.
-      - name: SQLCipher kur (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libsqlcipher-dev
-          python -m pip install --upgrade pip
-          pip install --only-binary sqlcipher3 sqlcipher3==0.6.2
-          python -c "from sqlcipher3 import dbapi2; print('sqlcipher3 hazir, SQLite', dbapi2.sqlite_version)"
-
+      # 2-A inceleme (sahip isteği 2026-10-07): ürünün AYNI sabit tekerleği kurulur (requirements.txt ve requirements-test.txt ile
+      # birebir). (Y320: Linux kurulum adımı Linux işiyle birlikte kalktı.)
       - name: SQLCipher kur (Windows)
         if: runner.os == 'Windows'
         shell: bash
@@ -124,17 +118,11 @@ jobs:
       # scripts/yayin_oncesi_suit.ps1 (publish_release.ps1'in zorunlu adımı).
       # ⚠️ 4A-4.1 (4-A incelemesi): `-r<harfler>` pytest'in varsayılanı `fE`'nin YERİNE geçer — `-rs` tek başına kısa özetteki
       # FAILED/ERROR satırlarını siliyordu. `-rfEs`: kırmızılar ve atlama nedenleri birlikte.
-      # ⚠️ Y312 · YGH (sahip 20-11 "CI paraleli de zincire"): iki adım da PARALEL — `-n auto --dist loadgroup`. `loadgroup` ŞART:
+      # ⚠️ Y312 · YGH (sahip 20-11 "CI paraleli de zincire"): adım PARALEL — `-n auto --dist loadgroup`. `loadgroup` ŞART:
       # tests/conftest.py zamanlayıcısı (tests/xdist_grup.py: dosya birimi + "seri" grubu tek işçide) yalnız loadgroup'ta devreye
       # girer; yalnız `-n` dosyaları işçilere BÖLER. pytest-cov işçi kapsamlarını birleştirir; junit'i denetleyici yazar (atlama kapısı
-      # aynen okur). Kapı: tests/test_ci_paralel_xdist_Y312.py. Linux'ta paralel kırmızı çıkarsa YGH'nin iki CI commit'i geri alınır.
-      - name: Kritik-yol testleri
-        if: runner.os != 'Windows'
-        env:
-          PEMF_SIMULATE: ""
-          PEMF_GITLEAKS_ZORUNLU: "1"
-        run: pytest tests -n auto --dist loadgroup -v -rfEs --no-header --junitxml=pytest-junit.xml
-
+      # aynen okur). Kapı: tests/test_ci_paralel_xdist_Y312.py. (Y320: Linux pytest adımı Linux işiyle birlikte kalktı — YG1'in Linux
+      # kırmızıları Linux uyumsuzluğuydu, paralel değil; YGH geri alması GEREKSİZ.)
       # ⚠️ KAPSAM RATCHET'İ YALNIZ WINDOWS'TA (2026-08-09 denetimi, Tier 3).
       # İki sebep: (a) ürün Windows'ta çalışır, (b) `fail_under` eşiği Windows'ta ölçüldü
       # (%54,24). Linux'ta DPAPI/ACL/serial gibi platforma özgü yollar hiç koşmadığı için aynı

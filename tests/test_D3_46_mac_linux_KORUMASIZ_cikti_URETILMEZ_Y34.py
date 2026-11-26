@@ -7,10 +7,13 @@
 sessizce üretiliyordu. Y34: korumasız çıktı ÜRETİLMEZ (kapı kırmızı); Cython zinciri gelene kadar Mac / Linux "Yakında".
 Kapı: ortak sayaç `duz_py_var_mi(dist)` + `--yalniz-duz-py` kipi (PYZ okuyucu gerekmez) sahte dist ile; iş akışı YAML ayrıştırılarak ve
 build_mac.sh sırasıyla doğrulanır. ⚠️ Bilinçli sonuç: bugünkü spec'le Mac / Linux CI artefaktı KIRMIZI olur (A-43: itilmedi).
+YS1b · Y320 (sahip 25-11): CI yalnız Windows ürün hattı — `linux-backend.yml` + `mac-backend.yml` KALDIRILDI (git geçmişinde). Kapı artık
+HİÇBİR iş akışının Mac / Linux backend paketi üretmediğini kilitler; biri geri gelirse PyInstaller → bu kapı → zip sırasıyla gelmeli.
 """
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -54,20 +57,29 @@ def test_KARSIT_D3_46_yalniz_init_ve_pyd_TEMIZ(tmp_path):
     assert _kos("--yalniz-duz-py", tmp_path / "yok").returncode == 1  # sevk ağacı yoksa da geçmez
 
 
+IS_AKISLARI = KOK / ".github" / "workflows"
+
+
 def _adimlar(dosya: str) -> list[dict]:
-    w = yaml.safe_load((KOK / ".github" / "workflows" / dosya).read_text(encoding="utf-8"))
+    w = yaml.safe_load((IS_AKISLARI / dosya).read_text(encoding="utf-8"))
     return [a for is_ in (w.get("jobs") or {}).values() for a in (is_.get("steps") or [])]
 
 
-def test_KRITIK_D3_46_linux_is_akisi_PYINSTALLER_ile_PAKETLEME_arasinda_kapi_BLOKLAR():
-    adim = _adimlar("linux-backend.yml")
-    run = [str(a.get("run", "")) for a in adim]
-    i_py = next(i for i, r in enumerate(run) if "-m PyInstaller" in r)
-    i_paket = next(i for i, r in enumerate(run) if "zip -rq ../base-linux.zip" in r)
-    kapi = [i for i, r in enumerate(run) if "pyz_koruma_kapisi.py --yalniz-duz-py dist/PEMF_Backend" in r]
-    assert len(kapi) == 1 and i_py < kapi[0] < i_paket, (i_py, kapi, i_paket)
-    k = adim[kapi[0]]
-    assert not k.get("continue-on-error") and "|| true" not in str(k.get("run")), "kapı bloklamıyor (süs)"
+def test_KRITIK_D3_46_Y320_hicbir_is_akisi_MAC_LINUX_backend_paketi_URETMEZ():
+    """Y320: Linux / macOS backend paketleme CI'dan KALKTI → korumasız Mac / Linux çıktısı CI'da hiç üretilmez. MUTASYON: bir iş
+    akışına `base-linux.zip` / `base-mac.zip` paketlemesi ya da `build_mac.sh` adımı eklemek → KIRMIZI (geri gelen yol D3.46 kapısıyla
+    — PyInstaller → `pyz_koruma_kapisi.py --yalniz-duz-py` → zip — ve bu testin güncellenmesiyle gelmeli)."""
+    akislar = sorted(IS_AKISLARI.glob("*.yml"))
+    assert len(akislar) >= 5, f"iş akışı listesi boş / eksik okunuyor (kör kapı): {[p.name for p in akislar]}"
+    for ad in ("linux-backend.yml", "mac-backend.yml"):
+        assert not (IS_AKISLARI / ad).exists(), f"{ad} geri gelmiş (Y320)"
+    paketleyen = [
+        f"{p.name}: {str(a.get('run', ''))[:80]!r}"
+        for p in akislar
+        for a in _adimlar(p.name)
+        if re.search(r"base-(linux|mac)(-\w+)?\.zip|build_mac\.sh", str(a.get("run", "")))
+    ]
+    assert not paketleyen, f"Mac / Linux backend paketleyen CI adımı var (Y320 + D3.46): {paketleyen}"
 
 
 def test_KRITIK_D3_46_build_mac_PYINSTALLER_sonrasi_PAKETLEMEDEN_once_die():
@@ -77,8 +89,6 @@ def test_KRITIK_D3_46_build_mac_PYINSTALLER_sonrasi_PAKETLEMEDEN_once_die():
     i_zip = src.find('zip -rqy "../$OUT_ZIP"')
     assert -1 < i_py < i_kapi < i_zip, (i_py, i_kapi, i_zip)
     assert "|| die" in src[i_kapi : i_kapi + 200], "kapı kırmızıyken build_mac DURMUYOR"
-    mac = [str(a.get("run", "")) for a in _adimlar("mac-backend.yml")]
-    assert any("./build_tools/build_mac.sh" in r for r in mac), "mac iş akışı build_mac.sh'i koşmuyor (kapı atlanır)"
 
 
 def test_KARSIT_D3_46_windows_kipi_DEGISMEDI():
@@ -87,6 +97,6 @@ def test_KARSIT_D3_46_windows_kipi_DEGISMEDI():
     assert r.returncode == 2 and "exe ya da --yalniz-duz-py" in r.stderr, r.stdout + r.stderr
 
 
-@pytest.mark.parametrize("ad", ["linux-backend.yml", "mac-backend.yml"])
+@pytest.mark.parametrize("ad", ["tests.yml", "launcher.yml"])
 def test_D3_46_is_akislari_ayristirilir(ad):
-    assert _adimlar(ad), f"{ad} adımsız (ayrıştırma boş — kör kapı)"
+    assert _adimlar(ad), f"{ad} adımsız (ayrıştırma boş — Y320 taraması kör kalır)"

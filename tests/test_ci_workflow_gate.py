@@ -122,12 +122,24 @@ def test_KRITIK_tum_isler_TANIMLI():
     )
 
 
-def test_KRITIK_backend_WINDOWSTA_da_kosar():
+def test_KRITIK_backend_YALNIZ_WINDOWSTA_kosar_Y320():
     """Ürün Windows'ta çalışıyor: ProgramData veri kökü, DPAPI, güvenlik duvarı, dosya kilitleri.
-    Yalnız ubuntu'da koşan bir takım bu yolların hiçbirini görmez."""
+    Yalnız ubuntu'da koşan bir takım bu yolların hiçbirini görmez. YS1b · Y320 (sahip 25-11): CI yalnız Windows ürün hattı —
+    `ubuntu-latest` kopyası KALKTI (Linux / macOS paketleme kapsam dışı, Docker da silindi — Y317)."""
     os_listesi = _yukle("tests.yml")["jobs"]["backend"]["strategy"]["matrix"]["os"]
-    assert any("windows" in o for o in os_listesi), f"windows matrixte yok: {os_listesi}"
-    assert any("ubuntu" in o for o in os_listesi), f"linux matrixte yok: {os_listesi}"
+    assert os_listesi == ["windows-latest"], f"backend matrisi yalnız windows-latest olmalı (Y320): {os_listesi}"
+
+
+#: Y320: Linux / macOS backend paketleme iş akışları KALDIRILDI (git geçmişinde kalır).
+_Y320_KALDIRILAN = ("linux-backend.yml", "mac-backend.yml")
+
+
+@pytest.mark.parametrize("ad", _Y320_KALDIRILAN)
+def test_KRITIK_Y320_linux_mac_backend_paketleme_is_akisi_YOK(ad):
+    assert not (W / ad).exists(), (
+        f"{ad} geri gelmiş — Y320: CI yalnız Windows ürün hattı (Linux / macOS paketleme kapsam dışı)"
+    )
+    assert len(_is_akislari()) >= 5, f"iş akışı listesi boş / eksik okunuyor (kör kapı): {_is_akislari()}"
 
 
 def test_matrix_fail_fast_KAPALI():
@@ -315,9 +327,7 @@ BLOKLAMAYAN_IZINLI = {
     },
     # Tarayıcı kurulamazsa görünüm kapısı kendisi "ATLANDI" der (exit 3 → uyarı); kapının kendisi bloklar.
     ("site.yml", "site", "Tarayici (headless olcum icin)"): {"continue-on-error"},
-    # `ls -la … || true; exit 1` teşhis listesi (ardından exit 1 — yutma yok). ⚠️ `--help … || echo` smoke'u YUTUYOR:
-    # açık aday İG-9.58 (yayın iş akışı, etiketle tetiklenir) — düzeltilince bu biçim listeden ÇIKARILMALI.
-    ("linux-backend.yml", "build", "Doğrula + paketle (base-linux.zip)"): {"|| true", "|| echo"},
+    # (YS1b · Y320: `linux-backend.yml` "Doğrula + paketle" izni iş akışıyla birlikte KALKTI — İG-9.58 artık yok.)
 }
 
 
@@ -356,7 +366,19 @@ def bloklamayan_bicimler() -> dict[tuple[str, str, str], set[str]]:
 
 def test_KRITIK_hicbir_is_ya_da_adim_IZINSIZ_bloklamayan_degil():
     """`continue-on-error`, sabit-yanlış `if:` ve hata yutan `||` yalnız gerekçeli izin listesinde."""
-    assert len(_is_akislari()) >= 8, f"VAKUM: yalnız {_is_akislari()} tarandı"
+    # YS1b · Y320: linux-backend.yml + mac-backend.yml kalktı (9 → 7). Sayı yerine AD kümesi: okunamayan / kaybolan her iş akışı görünür.
+    beklenen = {
+        "frontend.yml",
+        "launcher.yml",
+        "lint.yml",
+        "security.yml",
+        "site.yml",
+        "supabase-ping.yml",
+        "tests.yml",
+    }
+    assert beklenen <= set(_is_akislari()), (
+        f"VAKUM: yalnız {_is_akislari()} tarandı (eksik {sorted(beklenen - set(_is_akislari()))})"
+    )
     bulunan = bloklamayan_bicimler()
     izinsiz = {k: v - BLOKLAMAYAN_IZINLI.get(k, set()) for k, v in bulunan.items()}
     izinsiz = {k: sorted(v) for k, v in izinsiz.items() if v}

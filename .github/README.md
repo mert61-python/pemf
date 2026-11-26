@@ -6,13 +6,12 @@ GitHub Actions iş akışları + bağımlılık güncelleme. Her workflow kendi 
 | Yol | Görev |
 |---|---|
 | `dependabot.yml` | Haftalık pip + actions güncellemesi (AI bağımlılıkları pinli) |
-| `workflows/tests.yml` | **Kritik-yol pytest** (push/PR; `PEMF_SIMULATE:""`, coverage) → [`../tests/`](../tests/README.md) |
+| `workflows/tests.yml` | **Kritik-yol pytest** (push/PR; yalnız `windows-latest` — Y320; `PEMF_SIMULATE:""`, coverage) → [`../tests/`](../tests/README.md) |
 | `workflows/lint.yml` | Ruff `F+E9+I` kontrolü + bloklamayan format kontrolü |
 | `workflows/frontend.yml` | **apps/ui/** (mobil+web istemci): tsc + jest-expo — yol filtreli (`apps/ui/**`) |
 | `workflows/site.yml` | **apps/web/** (ödeme sitesi): check:legal + oxlint + tsc + vitest + build — yol filtreli; **Node 22 şart** |
 | `workflows/security.yml` | `pip-audit` (çekirdek + dağıtılan AI ağacı), haftalık cron, bloklamaz |
-| `workflows/linux-backend.yml` | PyInstaller onedir → `base-linux.zip` (tag `backend-linux-v*`) |
-| `workflows/mac-backend.yml` | `build_mac.sh` (`macos-14`, arm64) → `base-mac.zip` + Rust E2E artifact testi |
+| ~~`workflows/linux-backend.yml`~~ · ~~`workflows/mac-backend.yml`~~ | **KALDIRILDI** (Y320, 2026-11-26): CI yalnız Windows ürün hattı — Linux / macOS backend paketleme kapsam dışı (Docker da silindi, Y317). Geri: `git log --diff-filter=D -- .github/workflows/linux-backend.yml` ile son sürüm bulunur. Kapı: `tests/test_ci_workflow_gate.py` (Y320) |
 | `workflows/launcher.yml` | Tauri launcher (mac/Win/Linux); macOS **kod-imzala + notarize/staple** (`APPLE_*` secrets) |
 | ~~`workflows/upload-testflight.yml`~~ | **ARŞİVLENDİ** (S-4B.4, 2026-10-11): test süitini koşturmadan sırlarla TestFlight'a yükleyen, Y30 DIŞI dağıtım yolu; dalı 2026-08-18'de arşivlenmişti, yüklediği `.ipa` izlenmiyordu. Geri: `git show 83ee5d12:.github/workflows/upload-testflight.yml`. Kapı: dış dağıtım işi pytest/Y30 işine `needs:` ile bağlı olmalı (`tests/test_ci_DIS_DAGITIM_isi_TEST_onkosullu_S4B4.py`) |
 | `workflows/supabase-ping.yml` | **Supabase hareketsizlik koruması**: günlük cron (`03:17 UTC`) `resolve_device` RPC'siyle Free-plan projeyi uyanık tutar (~7-gün otomatik durdurmayı önler). 3 denemede de 5xx/540 → iş KIRMIZI = "girişler çökmek üzere" erken uyarısı. Yalnız varsayılan dalda koşar |

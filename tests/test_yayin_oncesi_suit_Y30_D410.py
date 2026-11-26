@@ -53,7 +53,8 @@ def test_KRITIK_CI_pytest_satirlari_ATLAMA_NEDENINI_listeler():
         "backend"
     ]
     pytestli = [str(a.get("run", "")) for a in adimlar["steps"] if "pytest tests" in str(a.get("run", ""))]
-    assert len(pytestli) == 2, f"Linux + Windows pytest adımı bekleniyordu: {pytestli}"
+    # YS1b · Y320: backend matrisi yalnız windows-latest — Linux pytest adımı kalktı (2 → 1).
+    assert len(pytestli) == 1, f"tek (Windows) pytest adımı bekleniyordu (Y320): {pytestli}"
     eksik = [r for r in pytestli if not re.search(r"(^|\s)-r[a-zA-Z]*s", r)]
     assert not eksik, f"`-rs` YOK — CI atlamaları nedensiz yeşil okunur: {eksik}"
     ozetsiz = [r for r in pytestli if not _rapor_harfleri_kirmiziyi_da_listeler(r)]

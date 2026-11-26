@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # PEMF native macOS backend build — base.zip / base-linux.zip'in macOS karşılığı.
-# .github/workflows/linux-backend.yml'in birebir yerel (Mac'te çalışan) eşleniği.
+# .github/workflows/linux-backend.yml'in birebir yerel (Mac'te çalışan) eşleniğiydi (Y320, 26-11: Linux / macOS paketleme CI'dan
+# kaldırıldı — iş akışları git geçmişinde).
 #
 # NEDEN MAC'TE ZORUNLU: PyInstaller cross-compile YAPMAZ. Ubuntu'da build edilirse
 # ELF çıkar, Mac'te çalışmaz. Bu betik macOS'ta (tercihen Apple Silicon) koşmalı.
@@ -45,7 +46,7 @@ die() { printf '\n\033[1;31m[HATA] %s\033[0m\n' "$*" >&2; exit 1; }
 
 # --- 0) Ön koşullar -----------------------------------------------------------
 say "0/7  Ön koşul kontrolü"
-[[ "$(uname -s)" == "Darwin" ]] || die "Bu betik macOS içindir (uname=$(uname -s)). Linux için .github/workflows/linux-backend.yml kullanın."
+[[ "$(uname -s)" == "Darwin" ]] || die "Bu betik macOS içindir (uname=$(uname -s)). Linux paketleme Y320 ile kaldırıldı (git geçmişinde .github/workflows/linux-backend.yml)."
 command -v brew >/dev/null || die "Homebrew yok. Kur: https://brew.sh"
 
 BREW_PREFIX="$(brew --prefix)"

@@ -107,10 +107,11 @@ TAŞI" bloğunda duruyor):
 > ⚠️ **`base-linux.zip`in yokluğu ARIZA DEĞİL, KARARDIR.** `DEPO-DENETIMI-2026-09-15.md`
 > onu "KAYIP" diye işaretlemişti — **o bulgu yanlıştı** (bu satırı güncel sanmaktan doğdu).
 >
-> **Geri almak için:** paketleri CI ile üret (`linux-backend.yml`), `layers` + `rollout`
-> ekle, `manifest.rs`teki iddiaları geri getir. ⚠️ `linux-backend.yml` bugün
-> `permissions: contents: read` ve yalnız `upload-artifact` kullanıyor — **release'e
-> yazamaz**; o adım ayrıca açılmalı.
+> **Geri almak için:** paketleri CI ile üret (`linux-backend.yml` — ⚠️ **Y320 ile 26-11'de
+> KALDIRILDI**, CI yalnız Windows ürün hattı; git geçmişinden geri getirilir), `layers` + `rollout`
+> ekle, `manifest.rs`teki iddiaları geri getir. ⚠️ `linux-backend.yml` kaldırılmadan önce
+> `permissions: contents: read` ve yalnız `upload-artifact` kullanıyordu — **release'e
+> yazamazdı**; geri getirilirse o adım ayrıca açılmalı.
 
 **v2 — CANLI ŞEMA** (hedef DEĞİL; `pemf-app-packages/manifest.json`'dan alındı): açık
 platform anahtarları, **eksik anahtarda sessiz fallback YOK, sert hata**. Tek-parça

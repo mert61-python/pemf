@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Y312 · YGH (istem 59, sahip 20-11 "CI paraleli de zincire") — GitHub CI backend testleri Y30 gibi PARALEL koşar:
-`pytest tests -n auto --dist loadgroup` (Linux + Windows).
+`pytest tests -n auto --dist loadgroup` (YS1b · Y320: yalnız Windows ürün hattı — `ubuntu-latest` kopyası kalktı).
 
 NEDEN `--dist loadgroup` ŞART: `tests/conftest.py` `pytest_xdist_make_scheduler` depo zamanlayıcısını YALNIZ loadgroup'ta döndürür
 (`tests/xdist_grup.py`: dosya birimi + `xdist_group("seri")` tek işçide). Yalnız `-n` (= `--dist load`) bir dosyanın testlerini
@@ -72,10 +72,11 @@ def _pytest_adimlari() -> dict[str, list[str]]:
     return sonuc
 
 
-def test_KRITIK_CI_pytest_adimlari_PARALEL_loadgroup_iki_isletim_sisteminde():
-    """MUTASYON: bir işletim sisteminden `-n auto`yu silmek · `--dist loadgroup` → `load` · `-p no:xdist` eklemek → KIRMIZI."""
+def test_KRITIK_CI_pytest_adimi_PARALEL_loadgroup_YALNIZ_windowsta_Y320():
+    """MUTASYON: `-n auto`yu silmek · `--dist loadgroup` → `load` · `-p no:xdist` eklemek · matrise `ubuntu-latest`i geri koymak
+    (Y320: CI yalnız Windows ürün hattı) → KIRMIZI."""
     adimlar = _pytest_adimlari()
-    assert set(adimlar) == {"Linux", "Windows"}, adimlar
+    assert set(adimlar) == {"Windows"}, f"backend matrisi yalnız windows-latest olmalı (Y320): {sorted(adimlar)}"
     for isletim, a in adimlar.items():
         assert a[:2] == ["pytest", "tests"], f"{isletim}: {a[:4]}"
         assert _deger(a, "-n") == "auto", f"{isletim}: `-n auto` yok — CI SERİ koşar (YGH)"

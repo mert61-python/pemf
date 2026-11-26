@@ -14,7 +14,7 @@ ama installer `frontend/dist`ten paketlendiği için kullanıcıya ESKİ arayüz
 "düzeltildi ama geçmedi" görünür; teşhisi çok zordur çünkü kaynak dosyada düzeltme DURUYOR.
 
 ÇÖZÜM: ikinci klon kaldırıldı, tüm build yolları `apps/ui/`ye çevrildi (build_installer.ps1,
-PEMF_Backend_onedir.spec, .github/workflows/linux-backend.yml). (Onefile spec'i A-31 · D2.36 ile SİLİNDİ.)
+PEMF_Backend_onedir.spec, .github/workflows/linux-backend.yml — Y320 ile 26-11'de KALDIRILDI). (Onefile spec'i A-31 · D2.36 ile SİLİNDİ.)
 
 Bu dosya tekrarını kilitler: ikinci bir kaynak ağacı belirirse ya da bir build yolu geri
 `frontend/`ye dönerse test kırılır. (Paket İÇİ yol `frontend/dist` OLARAK KALIR — backend ve
@@ -112,14 +112,16 @@ def test_KRITIK_build_backend_exe_PfDir_TEK_kaynagi_gosterir_D5_60():
     )
 
 
-def test_ci_export_adimi_da_TEK_kaynaktan_alir():
-    """CI'daki web export de aynı ağaçtan olmalı; yoksa Linux paketi eski arayüz taşır."""
-    ci = _KOK / ".github" / "workflows" / "linux-backend.yml"
-    capraz.atla_yoksa(ci.relative_to(_KOK).as_posix(), izlenen=True)  # D5-L (L-2): ZORUNLU kipte DÜŞER
-    metin = ci.read_text(encoding="utf-8")
-    m = re.search(r"^\s*cd\s+(\S+)\s*$", metin, re.M)
-    assert m, "CI'da export dizinine geçiş satırı bulunamadı"
-    assert m.group(1) == _KAYNAK_YOL, f"CI '{m.group(1)}' dizininden export alıyor, tek kaynak '{_KAYNAK_YOL}'."
+def test_ci_export_adimi_YOK_Y320_web_export_yalniz_tek_kaynakli_yerel_derlemede():
+    """CI'daki web export de aynı ağaçtan olmalıydı (Linux paketi eski arayüz taşımasın). YS1b · Y320: `linux-backend.yml` (CI'daki TEK
+    `expo export`) KALDIRILDI → web export yalnız yerel ürün derlemesinde (`build_backend_exe.ps1`, üstteki kapı). Bir iş akışı yeniden
+    `expo export` koşarsa bu kapı kırmızı olur: o adımın tek kaynaktan (`apps/ui`) aldığı burada yeniden kilitlenmeli."""
+    akislar = sorted((_KOK / ".github" / "workflows").glob("*.yml"))
+    assert len(akislar) >= 5, f"iş akışı listesi boş / eksik okunuyor (kör kapı): {[p.name for p in akislar]}"
+    disa_aktaran = [p.name for p in akislar if re.search(r"expo\s+export", p.read_text(encoding="utf-8"))]
+    assert not disa_aktaran, (
+        f"CI'da web export eden iş akışı var — tek kaynak ({_KAYNAK_YOL}) kapısı yok: {disa_aktaran}"
+    )
 
 
 def test_paket_ICI_yolu_frontend_dist_OLARAK_KALIR():
