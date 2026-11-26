@@ -125,6 +125,7 @@ class KediSaglayici:
         from servers import ai_router as air
 
         air._kedi_organ_izi.organlar = None
+        air._kedi_organ_izi.duzlem = None
         sonuc = None
         if air.ai_service_enabled():
             try:
@@ -134,6 +135,10 @@ class KediSaglayici:
         if sonuc is None:
             sonuc = air._localize_organ_cpu(frame_bgr, hedef_id)
         self._ood_isaretle(sonuc)
+        # FK · K1: sabit düzlem engeli (ilk kod) — ipucu "organ görünmüyor" yerine kalibrasyonun EYLEMİNİ söyler. Engel yoksa None.
+        self._duzlem_engeli = next(
+            iter((getattr(air._kedi_organ_izi, "duzlem", None) or {}).get("engeller") or []), None
+        )
         try:
             self._odak_kedi = kedi_govde_geometrisi(getattr(air._kedi_organ_izi, "organlar", None))
         except Exception:
@@ -187,6 +192,9 @@ class KediSaglayici:
         """2026-08-24 sahip isteği: "hayvan yok" ile "hayvan var, organ görünmüyor" AYRI eylem
         gerektirir; metinler o günkü hâliyle korunur (kaynak-regex kapısı bunları arar)."""
         ad = hedef_adi or ceviri.t("ai.pro.hedefOrgan")
+        _engel = getattr(self, "_duzlem_engeli", None)
+        if ozne_var and _engel and kapi_metni(_engel):
+            return kapi_metni(_engel)
         if ozne_var and getattr(self, "_kabin_disi", False):
             return ceviri.t("ai.pro.ipucu.kabinDisi", ad=ad)
         if ozne_var:

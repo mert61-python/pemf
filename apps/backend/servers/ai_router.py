@@ -1053,9 +1053,22 @@ def _localize_organ_cpu(frame, organ_id):
     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
     tmp.close()
     _gecici_gorsel_yaz(tmp.name, frame)
+    _kedi_organ_izi.duzlem = None
     try:
         clf = _get_or_load_catorgan()
-        result = clf.predict(tmp.name, render=True, target_oid=(int(organ_id) or None))
+        # FK · K1 (KD-3b'nin kedi karşılığı): kabin kamerası karesi → veri kökündeki SABİT DÜZLEM kalibrasyonu + seçili kamera
+        # (petri / fantomla aynı kaynak). Kalibrasyon dosyası YOKSA çağrı eskisiyle AYNI (öngörücü ArUco yolunda kalır).
+        _duzlem = ai_pro_hedef.duzlem_durumu()
+        _ek = (
+            {}
+            if _duzlem == (None, None)
+            else {
+                "duzlem": _duzlem,
+                "kamera_indeksi": ai_pro_hedef.secili_kamera_indeksi(),
+                "kamera_kimligi": ai_pro_hedef.secili_kamera_kimligi(),
+            }
+        )
+        result = clf.predict(tmp.name, render=True, target_oid=(int(organ_id) or None), **_ek)
     except Exception as e:
         # E3-b: kedi-yok (segmentasyon hatası) İSTİSNA yerine temiz "kedi yok" tuple'ı dön
         # (localized=False, kedi_var=False) → loop/frame'in MEVCUT başarılı cache.update'i kedi_var=False
@@ -1078,6 +1091,14 @@ def _localize_organ_cpu(frame, organ_id):
         )
         _kabin_okunamaz_bildir()
         return False, 0.0, 0.0, 0.0, 0.0, result.get("_overlay_bgr"), bool(result.get("organs")), None
+    # FK · K1: sabit düzlem ENGELİ (kamera farklı / oynamış / bozuk kalibrasyon) → organ konumu üretilmedi; nedeni ipucuna
+    # (`KediSaglayici.ipucu` → `ai_pro_hedef.kapi_metni`) iş parçacığı yerel izle taşınır.
+    _kd = result.get("kabin_duzlemi") or {}
+    _kedi_organ_izi.duzlem = _kd
+    if _kd.get("engeller"):
+        logger.warning(
+            "AI Pro kedi: sabit düzlem engeli %s — organ kabin konumu ÜRETİLMEDİ (sürülmez)", _kd.get("engeller")
+        )
     _pnp = result.get("pnp_fit") or {}
     return _extract_organ_target(
         result.get("organs") or {},

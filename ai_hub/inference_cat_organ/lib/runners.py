@@ -207,11 +207,41 @@ def _simcc_decode(simcc_x: np.ndarray, simcc_y: np.ndarray,
 # ============================================================================
 # Pose: FasterRCNN (detector) + RTMPose-S (top-down) — hepsi ONNX
 # ============================================================================
+#: FK · K1: poz kırpması için dedektör kutusunun kedi (segmentasyon) kutusuyla en az örtüşmesi (IoU).
+KEDI_KUTUSU_IOU_ESIGI = 0.5
+
+
+def _iou(a, b) -> float:
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    kes = ix * iy
+    bir = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - kes
+    return float(kes / bir) if bir > 0 else 0.0
+
+
+def _poz_kutusu(boxes, scores, kedi_kutusu):
+    """FK · K1 (K0 bulgusu B1): kabin karesinde SuperAnimal dedektörünün EN YÜKSEK skorlu kutusu bütün kabini kaplıyor (halkaları hayvan
+    sanıyor, 0,95) → poz o kutudan kırpılınca noktalar kabine saçılıyor, organlar kedinin dışına düşüyordu (K0 peluş kaydı). Kedi
+    (segmentasyon) kutusu verildiyse: en yüksek skorlu kutu onunla örtüşüyorsa (IoU ≥ eşik) DAVRANIŞ AYNEN; örtüşmüyorsa eşiği geçen
+    kutulardan en çok örtüşeni, o da yoksa kedi kutusunun kendisi. → (box_xyxy, kaynak)."""
+    best = int(np.argmax(scores))
+    if kedi_kutusu is None:
+        return boxes[best], "dedektor"
+    kk = [float(v) for v in kedi_kutusu]
+    iou = [_iou([float(v) for v in b], kk) for b in boxes]
+    if iou[best] >= KEDI_KUTUSU_IOU_ESIGI:
+        return boxes[best], "dedektor"
+    en = int(np.argmax(iou))
+    if iou[en] >= KEDI_KUTUSU_IOU_ESIGI:
+        return boxes[en], "dedektor_ortusen"
+    return np.asarray(kk, dtype=np.float32), "segmentasyon"
+
+
 def run_pose(image_path: str, device=None, out_dir=None, plot=False,
-              bbox_threshold: float = 0.5) -> dict:
+              bbox_threshold: float = 0.5, kedi_kutusu=None) -> dict:
     """DLC SuperAnimal-Quadruped pipeline'inin ONNX-native karsiligi.
 
-    1. FasterRCNN ONNX -> bbox_xyxy
+    1. FasterRCNN ONNX -> bbox_xyxy (FK · K1: `kedi_kutusu` verildiyse onunla örtüşen kutu — `_poz_kutusu`)
     2. top_down_crop (256x256, crop_with_context, center_padding)
     3. ImageNet normalize -> RTMPose ONNX -> (simcc_x, simcc_y)
     4. SimCC decode -> 39 keypoint (crop koord)
@@ -240,8 +270,8 @@ def run_pose(image_path: str, device=None, out_dir=None, plot=False,
     if not np.any(keep):
         return {"error": f"detector conf < {bbox_threshold}"}
     boxes = boxes[keep]; scores = scores[keep]
-    best = int(np.argmax(scores))
-    box_xyxy = boxes[best].astype(np.float32)
+    box_xyxy, kutu_kaynagi = _poz_kutusu(boxes, scores, kedi_kutusu)
+    box_xyxy = np.asarray(box_xyxy).astype(np.float32)
     box_xywh = (float(box_xyxy[0]), float(box_xyxy[1]),
                  float(box_xyxy[2] - box_xyxy[0]),
                  float(box_xyxy[3] - box_xyxy[1]))
@@ -266,7 +296,7 @@ def run_pose(image_path: str, device=None, out_dir=None, plot=False,
     kp[:, 1] = locs[0, :, 1] * scale[1] + offset[1]
     kp[:, 2] = vals[0]
 
-    return {"keypoints": kp, "bbox": box_xyxy}
+    return {"keypoints": kp, "bbox": box_xyxy, "kutu_kaynagi": kutu_kaynagi}
 
 
 def _kp_dict(keypoints: np.ndarray, thr: float = 0.3) -> dict:

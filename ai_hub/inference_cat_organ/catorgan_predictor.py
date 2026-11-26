@@ -146,9 +146,38 @@ class CatOrganPredictor:
         _runners.DET_ONNX = resolve(_MODEL_FILES["det"])
         _runners.POSE_ONNX = resolve(_MODEL_FILES["pose"])
 
+    @staticmethod
+    def _duzlem_hazirla(image_path: str, seg: dict, duzlem, kamera_indeksi, kamera_kimligi):
+        """FK · K1 (KD-3b'nin kedi karşılığı): sabit düzlem kalibrasyonu (`cv_ortak.sabit_duzlem.yukle(veri kökü)` çıktısı (kal, hata))
+        → `KareDurumu`: kamera kimliği / çözünürlük eşleşmesi + SABİT SAHNE kayması (kedinin maskesi dışlanır — petri / fantomla aynı
+        denetimler). Kalibrasyon dosyası YOKSA (ya da `duzlem` verilmediyse — AI Hub fotoğrafı) None: davranış AYNEN (ArUco kipi)."""
+        if duzlem is None or (duzlem[0] is None and duzlem[1] is None):
+            return None
+        import cv2
+
+        from ..cv_ortak import sabit_duzlem as _sd
+
+        img = cv2.imdecode(np.fromfile(image_path, np.uint8), cv2.IMREAD_COLOR)
+        h, w = img.shape[:2]
+        kd = _sd.kare_hazirla(duzlem, kare_boyutu=(w, h), kamera_indeksi=kamera_indeksi, kamera_kimligi=kamera_kimligi)
+        if kd.harita is None:
+            return kd
+        hr = kd.harita
+        und = cv2.undistort(img, hr.K, hr.D, None, hr.K_yeni)
+        x1, y1, x2, y2 = (float(v) for v in seg["bbox"])
+        ham = seg.get("mask_xy") or [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+        cokgen = cv2.undistortPoints(np.asarray(ham, np.float64).reshape(-1, 1, 2), hr.K, hr.D, P=hr.K_yeni).reshape(-1, 2)
+        _sd.sahne_denetle(kd, und, [cokgen])
+        return kd
+
     def predict(self, image_path: str | os.PathLike, *, render: bool = False,
-                target_oid: int | None = None, lang: str = "tr") -> dict:
-        """Tek görüntü → organs.json v2.1 dict. render=True ise `_overlay_bgr` ekler."""
+                target_oid: int | None = None, lang: str = "tr",
+                duzlem=None, kamera_indeksi: int | None = None, kamera_kimligi: dict | None = None) -> dict:
+        """Tek görüntü → organs.json v2.1 dict. render=True ise `_overlay_bgr` ekler.
+
+        FK · K1: `duzlem` = `cv_ortak.sabit_duzlem.yukle(veri kökü)` çıktısı (YALNIZ kabin kamerası karesi — AI Pro). Kalibrasyon geçerliyse
+        organ kabin konumu hedef düzleminden (`lib.duzlem_organ`); engel varsa (kamera farklı / oynamış / bozuk) konum ÜRETİLMEZ ve
+        `kabin_duzlemi.engeller` nedeni söyler."""
         image_path = str(image_path)
 
         # 1. Segmentasyon (YOLOv8m-seg ONNX)
@@ -156,9 +185,11 @@ class CatOrganPredictor:
         if "error" in seg:
             raise RuntimeError(f"segmentasyon: {seg['error']}")
         bbox = np.array(seg["bbox"])
+        kd = self._duzlem_hazirla(image_path, seg, duzlem, kamera_indeksi, kamera_kimligi)
 
         # 2. DLC pose (FasterRCNN + RTMPose-S ONNX)
-        pose = _runners.run_pose(image_path, device=self.device)
+        # FK · K1: poz kırpması kedi (segmentasyon) kutusuyla örtüşen dedektör kutusundan (`runners._poz_kutusu`).
+        pose = _runners.run_pose(image_path, device=self.device, kedi_kutusu=seg["bbox"])
         if "error" in pose:
             raise RuntimeError(f"pose: {pose['error']}")
         kp = pose["keypoints"]
@@ -176,6 +207,8 @@ class CatOrganPredictor:
             "config": self.cabin_cfg,
             # D1.E08: yapılandırma YÜKLENMEDİYSE ArUco bulunsa da kabin kalibre SAYILMAZ (DEFAULT geometri gerçek değil).
             "kabin_yuklendi": bool(getattr(self, "kabin_yuklendi", True)),
+            # FK · K1: yalnız GEÇERLİ harita (engelsiz) organ konumuna gider; engelli karede konum yok (kalibrasyonsuz tavan).
+            "duzlem_harita": kd.harita if (kd is not None and kd.gecerli) else None,
         }
         organs = estimate_organs_pnp(kp_d, kp[:, 2], bbox, pose_info,
                                      mask_xy=seg.get("mask_xy"),
@@ -203,6 +236,7 @@ class CatOrganPredictor:
                          round(float(kp[i, 2]), 4)]
                      for i, n in enumerate(KEYPOINT_NAMES)},
             "pose_classifier": pose_info,
+            "pose_kutusu": pose.get("kutu_kaynagi"),  # FK · K1: dedektor | dedektor_ortusen | segmentasyon
             "method": "Procrustes+QR-canonical",
             "morphology_method": morph.get("method") if morph else None,
             "organ_atlas_source": "canonical_atlas_v2",
@@ -219,6 +253,8 @@ class CatOrganPredictor:
                 "yuklendi": bool(getattr(self, "kabin_yuklendi", True)),
                 "hata": getattr(self, "kabin_hatasi", None),
             },
+            # FK · K1: sabit düzlem durumu (`KareDurumu.ozet`: geçerli / engel kodları / ölçümler) — kalibrasyon dosyası yoksa None.
+            "kabin_duzlemi": None if kd is None else kd.ozet(),
         }
 
         if render:

@@ -249,6 +249,16 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
     # doğrulanmamış çerçeveyle kabul). Perspektif kabin çözümü yoksa organ KALİBRASYONSUZ: `calibrated=False`, mevcut tek
     # formülün tavanı (0,25 < güven eşiği → sürülmez), kabin koordinatı ÜRETİLMEZ. Gerçek kabinde doğrulama: Oturum 13.
     kabin_kalibre = bool(cabin_active and perspective is not None and "organs_cabin_cm" in perspective)
+    # FK · K1 (KD-3b'nin kedi karşılığı): ArUco / perspektif kabin çözümü YOKSA ve çağıran GEÇERLİ bir sabit düzlem haritası verdiyse
+    # (`cv_ortak.sabit_duzlem` — kabin kamerası + kalibrasyon kimliği / sahne denetimleri çağıranda) organ kabin konumu hedef düzleminden
+    # (`duzlem_organ`: yüzüstü yatış + ölçülen ölçek). Harita yoksa davranış AYNEN (kalibrasyonsuz, tavan 0,25).
+    duzlem = None
+    harita = (cabin_params or {}).get("duzlem_harita")
+    if not kabin_kalibre and harita is not None:
+        from .duzlem_organ import organ_kabin_konumlari
+
+        merkez_px = project_3d_to_2d(np.zeros(3), s, R, t)[0]
+        duzlem = organ_kabin_konumlari(harita, org_xy, org_3d[:, 1], s, merkez_px)
     z_mid = float(np.mean(org_z))
     for i, (oid, (name, x3, y3, z3)) in enumerate(org_items):
         rel_z = float(org_z[i] - z_mid)
@@ -261,11 +271,14 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
         cm_sd = float(np.linalg.norm(organ_3d_std[i]))      # cm (skalar)
         # Mask flag (organ vucut silueti icinde mi)
         in_mask = bool(organ_in_mask[i]) if i < len(organ_in_mask) else True
+        # FK · K1: sabit düzlemden kabin konumu çıkan organ KALİBRE sayılır (perspektif-doğru kabin çerçevesi, petri / fantom ile aynı).
+        duzlem_mm = duzlem["konumlar_mm"][i] if duzlem is not None else None
+        organ_kalibre = kabin_kalibre or duzlem_mm is not None
         # Reliability = poz × derinlik × maske × belirsizlik (+ Audit-P2 kalibresiz 0.25 tavani).
         # Formul TEK kaynakta (guven_dokumu_hesapla) — bilesenler entry'ye de yazilir ki
         # operator dusuk guvenin NEDENINI gorebilsin (sunum-katmani XAI, 2026-08-26).
         rel_unc, guven_dokumu = guven_dokumu_hesapla(
-            pose_info["confidence"], depth_factor, in_mask, cm_sd, kabin_kalibre
+            pose_info["confidence"], depth_factor, in_mask, cm_sd, organ_kalibre
         )
         entry = {
             "name": name,
@@ -284,10 +297,14 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
             "in_body_mask": in_mask,
             "reliability": round(rel_unc, 3),
             "reliability_components": guven_dokumu,  # sunum-katmani XAI: guvenin NEDENI (2026-08-26)
-            "calibrated": kabin_kalibre,  # Audit P2 + O-1: kabin koordinatı PERSPEKTİF çözümüyle ölçüldü mü
+            "calibrated": organ_kalibre,  # Audit P2 + O-1: kabin koordinatı ölçüldü mü (PERSPEKTİF ya da FK · K1 sabit düzlem)
         }
-        # Level 3: perspektif sonuc varsa cabin mutlak 3D koord ekle
-        if perspective is not None and "organs_cabin_cm" in perspective:
+        if duzlem_mm is not None:
+            entry["coord_cabin_cm"] = [round(float(v) / 10.0, 2) for v in duzlem_mm]
+            entry["cabin_origin"] = "sabit_duzlem"
+            entry["hedef_yukseklik_cm"] = round(float(duzlem["yukseklik_mm"][i]) / 10.0, 2)
+        # Level 3: perspektif sonuc varsa cabin mutlak 3D koord ekle (FK · K1: düzlem konumu varsa EZİLMEZ — `calibrated` onu anlatır)
+        if duzlem_mm is None and perspective is not None and "organs_cabin_cm" in perspective:
             cabin_xyz = perspective["organs_cabin_cm"][i]
             entry["coord_cabin_cm"] = [round(float(cabin_xyz[0]), 2),
                                                 round(float(cabin_xyz[1]), 2),
@@ -341,6 +358,16 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
             "pose_atlas_used": pose_type,
             "mask_pca": (mask_pca if mask_pca.get("ok") else None),
             "perspective": (perspective.get("info") if perspective else None),
+            # FK · K1: hedef düzlemi özeti (ölçülen ölçek, düzlemin piksel / cm'si, neden) — harita verilmediyse None.
+            "duzlem": (
+                None
+                if duzlem is None
+                else {
+                    "olcek": None if duzlem["olcek"] is None else round(float(duzlem["olcek"]), 3),
+                    "duzlem_px_cm": None if duzlem["duzlem_px_cm"] is None else round(float(duzlem["duzlem_px_cm"]), 2),
+                    "neden": duzlem["neden"],
+                }
+            ),
         },
         "R_matrix": R.tolist(),
         "t_vec": t.tolist(),

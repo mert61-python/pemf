@@ -52,7 +52,8 @@ def ongorucu(monkeypatch, tmp_path):
     kp = np.column_stack([u, v, np.full(len(u), 0.9)])
     bbox = [float(u.min()) - 10, float(v.min()) - 10, float(u.max()) + 10, float(v.max()) + 10]
     monkeypatch.setattr(runners, "run_yolo_segmentation", lambda p, device="cpu": {"bbox": bbox, "n_detections": 1})
-    monkeypatch.setattr(runners, "run_pose", lambda p, device="cpu": {"keypoints": kp})
+    # FK · K1: `run_pose` kedi (segmentasyon) kutusunu da alır (`kedi_kutusu=`) — sahte imza onu kabul eder.
+    monkeypatch.setattr(runners, "run_pose", lambda p, device="cpu", **_k: {"keypoints": kp})
     monkeypatch.setattr(cp.CatOrganPredictor, "_resolve_models", lambda self, d: None)
     gercek_yaml = cp.varsayilan_kabin_yaml()
 
