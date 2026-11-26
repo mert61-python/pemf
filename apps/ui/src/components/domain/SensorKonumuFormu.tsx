@@ -9,11 +9,15 @@ import { useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { colors, rf, rs, spacing, touch } from "@/theme/tokens";
-import type { SensorKonumuGovde, SensorKonumuKaydi } from "@/services/sensorKonumu";
+import { ondalikMetni } from "@/i18n/dil";
+import type { HazirNokta, SensorKonumuGovde, SensorKonumuKaydi } from "@/services/sensorKonumu";
 
 const sayi = (s: string) => Number(String(s).trim().replace(",", "."));
 const sayiMetni = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
 const saatMetni = (epoch: number) => new Date(epoch * 1000).toTimeString().slice(0, 8);
+/** FK K1 d2: hazır noktanın cm değeri alana dile göre ondalıkla (7,25 / 7.25; tamsayı ondalıksız). */
+const cmMetni = (v: number) =>
+  ondalikMetni(v, Number.isInteger(v) ? 0 : Number.isInteger(Math.round(v * 100) / 10) ? 1 : 2);
 
 /** "SS:DD(:ss)" → `tabanEpoch` gününde epoch (saniye); geçersizse null. */
 export function saattenEpoch(saat: string, tabanEpoch: number): number | null {
@@ -32,6 +36,7 @@ export function SensorKonumuFormu({
   ilk = null,
   tasindi = false,
   baslangicTabani,
+  hazir = [],
   testID = "sensor-konumu-formu",
 }: {
   /** Gövdeyi gönderir; hata metni döner (başarıda null). */
@@ -43,9 +48,12 @@ export function SensorKonumuFormu({
   tasindi?: boolean;
   /** Seans SONRASI: başlangıç saati seçilir (seansın başladığı gün / an). Verilmezse sunucu saati (canlı). */
   baslangicTabani?: number;
+  /** FK K1 d2: tezgâh MLX planının hazır noktaları (sırayla) — dokununca sol / ön / yükseklik + not (= nokta adı) dolar. Boşsa çizilmez. */
+  hazir?: HazirNokta[];
   testID?: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const dil: "tr" | "en" = i18n.language === "en" ? "en" : "tr";
   const [sol, setSol] = useState(sayiMetni(ilk?.sol_cm));
   const [on, setOn] = useState(sayiMetni(ilk?.on_cm));
   const [yuk, setYuk] = useState(sayiMetni(ilk?.yukseklik_cm));
@@ -75,6 +83,14 @@ export function SensorKonumuFormu({
     if (h) setHata(h);
   };
 
+  const hazirSec = (n: HazirNokta) => {
+    setSol(cmMetni(n.sol_cm));
+    setOn(cmMetni(n.on_cm));
+    setYuk(cmMetni(n.yukseklik_cm));
+    setNot(n.ad[dil] || n.ad.tr);
+    setHata(null);
+  };
+
   const alan = (etiket: string, deger: string, degis: (v: string) => void, id: string, klavye: "decimal-pad" | "default") => (
     <View style={styles.alan}>
       <Text style={styles.etiket}>{etiket}</Text>
@@ -92,6 +108,24 @@ export function SensorKonumuFormu({
   return (
     <View style={styles.form} testID={testID}>
       <Text style={styles.aciklama}>{t("kontrol.kabinSensoru.konum.aciklama")}</Text>
+      {hazir.length > 0 ? (
+        <View style={styles.hazir} testID="sensor-konumu-hazir">
+          <Text style={styles.etiket}>{t("kontrol.kabinSensoru.konum.hazir")}</Text>
+          <View style={styles.satir}>
+            {hazir.map((n, i) => (
+              <TouchableOpacity
+                key={`${i}-${n.ad.tr}`}
+                style={styles.cip}
+                onPress={() => hazirSec(n)}
+                accessibilityRole="button"
+                testID={`sensor-konumu-hazir-${i}`}
+              >
+                <Text style={styles.cipMetni}>{n.ad[dil] || n.ad.tr}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ) : null}
       <View style={styles.satir}>
         {alan(t("kontrol.kabinSensoru.konum.sol"), sol, setSol, "sensor-konumu-sol", "decimal-pad")}
         {alan(t("kontrol.kabinSensoru.konum.on"), on, setOn, "sensor-konumu-on", "decimal-pad")}
@@ -161,5 +195,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: rs(10),
   },
   ana: { backgroundColor: colors.primary, borderColor: colors.primary },
+  hazir: { gap: rs(4) },
+  cip: {
+    minHeight: touch.min,
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.cyan,
+    borderRadius: rs(16),
+    paddingHorizontal: rs(10),
+  },
+  cipMetni: { color: colors.cyan, fontSize: rf(12), fontWeight: "700" },
   dugmeMetni: { color: colors.text, fontSize: rf(12), fontWeight: "700" },
 });

@@ -5946,15 +5946,20 @@ def _start_background_threads() -> None:
 # giriş / düzeltme: /api/history/{id}/sensor_konumu.
 @app.get("/api/session/sensor_konumu")
 def sensor_konumu_canli():
-    """Aktif seansın SON konum girişi (kabin sensörü kartı gösterir); seans yoksa `aktif: False`."""
+    """Aktif seansın SON konum girişi (kabin sensörü kartı gösterir); seans yoksa `aktif: False`. FK · K1 d2: `hazir` = veri kökündeki
+    tezgâh MLX planının hazır noktaları (`sensor_konumu.hazir_noktalar`) — YALNIZ liste doluysa; dosya yoksa yanıt bugünküyle BİREBİR."""
+    from servers import sensor_konumu as sk
+
+    hazir = sk.hazir_noktalar(_app_data_dir())
+    ek = {"hazir": hazir} if hazir else {}
     with _session_lock:
         aktif = bool(_active_session.get("is_active"))
         db_id = _active_session.get("db_session_id")
     if not aktif or not db_id:
-        return {"aktif": False, "konum": None}
+        return {"aktif": False, "konum": None, **ek}
     db = _get_treatment_db()
     konumlar = db.sensor_konumlari(int(db_id)) if db is not None else []
-    return {"aktif": True, "konum": konumlar[-1] if konumlar else None}
+    return {"aktif": True, "konum": konumlar[-1] if konumlar else None, **ek}
 
 
 @app.post("/api/session/sensor_konumu")

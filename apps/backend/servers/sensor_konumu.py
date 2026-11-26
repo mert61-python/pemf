@@ -210,3 +210,50 @@ def dilimler(
             d["fark_yuzde"] = round((d["ortalama_mt"] - d["tahmin_mt"]) / d["tahmin_mt"] * 100.0, 1)
         sonuc.append(d)
     return sonuc
+
+
+#: FK · K1 d2 (istem 58): tezgâh MLX ölçümünün HAZIR NOKTA listesi — veri kökünde `kabin_kalibrasyonu/sensor_noktalari.json` (kedi fizik
+#: planı `DENETIM\odak\kedi_fizik\kedi_b3.py plan` üretir; kalibrasyon gibi VERİ KÖKÜNDE — güncelleme ezmez). Yeni şema / uç YOK: canlı uç
+#: listeyi `hazir` alanında döner, arayüz dokununca formun sol / ön / yükseklik / not (= nokta adı) alanlarını doldurur; kayıt mevcut
+#: girişle. Dosya yok / bozuk → boş liste (form bugünküyle aynı). Geçersiz nokta (aralık dışı / sayı değil / adsız) ATLANIR.
+HAZIR_DOSYA = ("kabin_kalibrasyonu", "sensor_noktalari.json")
+HAZIR_AZAMI = 40
+
+
+def hazir_noktalar(veri_koku) -> list[dict]:
+    """→ [{"ad": {"tr", "en"}, "sol_cm", "on_cm", "yukseklik_cm"}] (dosyadaki sıra = ölçüm sırası, en çok `HAZIR_AZAMI`)."""
+    import json
+    import os
+
+    try:
+        with open(os.path.join(str(veri_koku), *HAZIR_DOSYA), encoding="utf-8") as f:
+            veri = json.load(f)
+    except (OSError, ValueError):
+        return []
+    cikti: list[dict] = []
+    for n in (veri.get("noktalar") if isinstance(veri, dict) else None) or []:
+        if not isinstance(n, dict):
+            continue
+        ad = n.get("ad")
+        ad = {"tr": ad, "en": ad} if isinstance(ad, str) else ad
+        tr = str((ad or {}).get("tr") or "").strip() if isinstance(ad, dict) else ""
+        if not tr:
+            continue
+        try:
+            alan = dogrula(
+                SensorKonumuGovde(solCm=n.get("sol_cm"), onCm=n.get("on_cm"), yukseklikCm=n.get("yukseklik_cm"))
+            )
+        except ValueError:  # aralık dışı / sayı değil (pydantic ValidationError da ValueError)
+            continue
+        en = str(ad.get("en") or "").strip() or tr
+        cikti.append(
+            {
+                "ad": {"tr": tr[:NOT_AZAMI], "en": en[:NOT_AZAMI]},
+                "sol_cm": alan["sol_cm"],
+                "on_cm": alan["on_cm"],
+                "yukseklik_cm": alan["yukseklik_cm"],
+            }
+        )
+        if len(cikti) >= HAZIR_AZAMI:
+            break
+    return cikti

@@ -155,6 +155,7 @@
       "aciklama": "İsteğe bağlı: sensörü taşıdıkça yeni konum girin (sol ve ön çıkıntı kenarından, tabandan yükseklik — Doğrula'daki ölçü kuralı). Girilmezse ölçüm serbest sayılır.",
       "baslangic": "Başlangıç saati (SS:DD:ss)",
       "dugme": "Sensör konumu",
+      "hazir": "Hazır noktalar — dokunun, konum dolsun:",
       "kaydedilemedi": "Konum kaydedilemedi — bağlantıyı denetleyip yeniden deneyin.",
       "kaydet": "Konumu kaydet",
       "not": "Not (isteğe bağlı)",

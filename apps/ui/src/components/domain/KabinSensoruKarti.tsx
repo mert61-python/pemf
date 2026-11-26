@@ -16,7 +16,7 @@ import { colors, rf, rs, spacing, touch } from "@/theme/tokens";
 import { ondalikMetni } from "@/i18n/dil";
 import { alanGosterilebilir } from "@/utils/olculenAlan";
 import { KABIN_SENSORU_KANALI } from "@/utils/kabinSensoru";
-import { canliKonum, canliKonumEkle, type SensorKonumuKaydi } from "@/services/sensorKonumu";
+import { canliKonum, canliKonumEkle, type HazirNokta, type SensorKonumuKaydi } from "@/services/sensorKonumu";
 import { SensorKonumuFormu } from "@/components/domain/SensorKonumuFormu";
 import type { CoilStatus } from "@/types/domain";
 
@@ -48,10 +48,13 @@ export function KabinSensoruKarti({ testID = "kabin-sensoru-karti" }: { testID?:
   const seansVar = (snapshot as { activeTreatment?: { isActive?: boolean } } | null)?.activeTreatment?.isActive === true;
   const [konum, setKonum] = useState<SensorKonumuKaydi | null>(null);
   const [formAcik, setFormAcik] = useState(false);
+  // FK K1 d2: tezgâh MLX planının hazır noktaları (veri kökü) — formda tek dokunuşla konum.
+  const [hazir, setHazir] = useState<HazirNokta[]>([]);
 
   const yenile = useCallback(async () => {
     const r = await canliKonum();
     setKonum(r?.aktif ? r.konum : null);
+    setHazir(Array.isArray(r?.hazir) ? r.hazir : []);
   }, []);
 
   useEffect(() => {
@@ -93,6 +96,7 @@ export function KabinSensoruKarti({ testID = "kabin-sensoru-karti" }: { testID?:
           </View>
           {formAcik ? (
             <SensorKonumuFormu
+              hazir={hazir}
               tasindi={konum !== null}
               onVazgec={() => setFormAcik(false)}
               onKaydet={async (govde) => {

@@ -49,8 +49,16 @@ const hataSecenekleri = (hata: Hata) => ({
   onHttpError: (durum: number, detay?: string) => hata(detay || String(durum)),
 });
 
-/** Aktif seansın son konum girişi; seans yoksa `aktif: false`. Bağlantı yoksa null. */
-export function canliKonum(): Promise<{ aktif: boolean; konum: SensorKonumuKaydi | null } | null> {
+/** FK K1 d2: tezgâh MLX planının hazır noktası (veri kökü `kabin_kalibrasyonu/sensor_noktalari.json`; ad iki dilde). */
+export type HazirNokta = {
+  ad: { tr: string; en: string };
+  sol_cm: number;
+  on_cm: number;
+  yukseklik_cm: number;
+};
+
+/** Aktif seansın son konum girişi; seans yoksa `aktif: false`. Bağlantı yoksa null. `hazir`: hazır noktalar (yoksa boş / yok). */
+export function canliKonum(): Promise<{ aktif: boolean; konum: SensorKonumuKaydi | null; hazir?: HazirNokta[] } | null> {
   return apiGet("/session/sensor_konumu", null, { silent: true });
 }
 
