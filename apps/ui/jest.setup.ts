@@ -3,6 +3,14 @@
 // ⚠️ İG-6.199: fetch burada mock'lanMAZ. Global `fetch`, jest-expo ön ayarının kurduğu expo fetch'tir (`expo/src/winter/fetch`);
 // yerel istek modülü ön ayarda saplamadır (`ExpoFetchModule.NativeRequest.start() {}`) → istek ağa ÇIKMAZ. fetch'e bakan test kendi
 // mock'unu kurar (`global.fetch = jest.fn(...)`) ya da `@/services/apiClient`'i mock'lar.
+// YS1f (GitHub frontend-ci, 26-11): jsdom ortamının penceresinde `TextEncoder` YOK. expo'nun tembel `URL` / `URLSearchParams` küreseli
+// (expo/src/winter) ilk erişimde `whatwg-url-minimum`u yükler; o modül başında `new TextEncoder()` kurar → "TextEncoder is not defined",
+// süit YÜKLENMEZ (Node 20 / 22'de 29 jsdom süiti; bu makinenin Node 26'sında görünmüyordu). Yoksa Node'un standart uygulaması verilir.
+if (typeof globalThis.TextEncoder === "undefined") {
+  const { TextEncoder: KodlayiciNode, TextDecoder: CozucuNode } = require("util");
+  Object.assign(globalThis, { TextEncoder: KodlayiciNode });
+  if (typeof globalThis.TextDecoder === "undefined") Object.assign(globalThis, { TextDecoder: CozucuNode });
+}
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );

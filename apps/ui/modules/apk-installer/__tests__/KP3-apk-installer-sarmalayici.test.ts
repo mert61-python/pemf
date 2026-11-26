@@ -15,6 +15,11 @@ function yukle(os: string, yerli: unknown): Mod {
     jest.doMock("expo-modules-core", () => ({ requireOptionalNativeModule: jest.fn(() => yerli) }));
     m = require("../index");
   });
+  // YS1f (CI Node 22): `jest.doMock` kaydı `isolateModules` DIŞINA da sızar; sonradan expo'nun tembel `fetch` küreseli
+  // yüklenince yalnız `requireOptionalNativeModule` taşıyan sahte `expo-modules-core`u alıp süiti düşürüyordu
+  // ("requireNativeModule is not a function"). Sahte yalnız `../index`in yüklenmesi için → yüklemeden sonra geri alınır.
+  jest.dontMock("react-native");
+  jest.dontMock("expo-modules-core");
   return m!;
 }
 
@@ -27,6 +32,14 @@ it("yerel modül yoksa (iOS) hiçbir işlev atmaz; güvenli varsayılanlar", asy
   await expect(m.dosyaSha256("file:///a.apk")).resolves.toBe("");
   await expect(m.indirmeServisiniBaslat("b", "m", "k")).resolves.toBe(false);
   await expect(m.indirmeServisiniDurdur()).resolves.toBe(false);
+});
+
+it("YS1f: sahte modüller yalnız yükleme içindir — yüklemeden sonra expo-modules-core / react-native GERÇEK (sızıntı yok)", () => {
+  yukle("android", null);
+  jest.isolateModules(() => {
+    expect(typeof require("expo-modules-core").requireNativeModule).toBe("function");
+    expect(require("react-native").Platform.OS).not.toBe("android");
+  });
 });
 
 it("yerel modül varsa çağrılar aynen iletilir", async () => {

@@ -40,7 +40,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # YS1f (26-11): Node 20 -> 22. 20 desteği bitti (2026-04) ve @supabase/realtime-js Node < 22de yerleşik WebSocket
+          # bulamayınca istemciyi KURARKEN atıyordu -> supabaseAuth.ts içe aktaran 28 jest süiti yüklenemedi; ESLint adımı kırmızıyken
+          # jest hiç koşmadığı için görünmüyordu (geliştirici makinesi Node 26). site.yml ile aynı ders. Kapı: test_ci_workflow_gate.py
+          node-version: "22"
           cache: npm
           # ⚠️ `defaults.working-directory` YALNIZ `run:` adimlarini etkiler, `uses:` action'larini
           # DEGIL. Bu yol verilmezse setup-node kokteki (bos, artik) package-lock.json'a gore

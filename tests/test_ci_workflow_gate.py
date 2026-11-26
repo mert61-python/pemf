@@ -147,6 +147,22 @@ def test_matrix_fail_fast_KAPALI():
     assert _yukle("tests.yml")["jobs"]["backend"]["strategy"]["fail-fast"] is False
 
 
+@pytest.mark.parametrize(("dosya", "is_adi"), [("frontend.yml", "test"), ("site.yml", "site")])
+def test_KRITIK_arayuz_ve_site_CI_Node_22_ve_USTU_YS1f(dosya, is_adi):
+    """YS1f (26-11): frontend-ci Node 20 ile koşuyordu → @supabase/realtime-js Node < 22de yerleşik WebSocket bulamayıp istemciyi
+    KURARKEN atıyordu (28 jest süiti yüklenemedi; ESLint kırmızıyken jest koşmadığı için görünmedi). site.yml aynı dersi önceden almıştı."""
+    surumler = [
+        str((a.get("with") or {}).get("node-version", ""))
+        for a in _yukle(dosya)["jobs"][is_adi]["steps"]
+        if str(a.get("uses", "")).startswith("actions/setup-node")
+    ]
+    assert len(surumler) == 1, f"{dosya}: TEK setup-node adımı bekleniyordu: {surumler}"
+    ana = re.match(r"^(\d+)", surumler[0])
+    assert ana and int(ana.group(1)) >= 22, (
+        f"{dosya}: Node {surumler[0]!r} — 22 altı (Supabase realtime yerleşik WebSocket ister)"
+    )
+
+
 def test_KRITIK_launcher_WINDOWSTA_derlenir():
     """Launcher'ın Windows'a özgü yolları (DPAPI, icacls, NSIS kancaları) yalnız orada derlenir."""
     assert "windows" in _yukle("tests.yml")["jobs"]["launcher"]["runs-on"]

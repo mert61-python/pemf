@@ -28,6 +28,10 @@ jest.mock("@/services/supabaseAuth", () => {
 jest.mock("@/components/ui/ToastProvider", () => ({
   useToast: () => ({ showToast: (m: string, t?: string) => { mockTostlar.push([m, t]); } }),
 }));
+// YS1f (CI Node 22): bu test TARAYICI (LAN) dalını ölçer → dal AÇIKÇA sabitlenir. Eskiden `URL` küreseli expo'nun tembel yükleyicisi
+// bozuk kaldığı için yoktu ve `backendBuMakinede()` istisnayla false dönüyordu (yan etki); `URL` çalışınca 127.0.0.1 tabanı masaüstü
+// dalına düşüyordu ("Masaüstüne kaydedildi").
+jest.mock("@/services/backendKonumu", () => ({ ...jest.requireActual("@/services/backendKonumu"), backendBuMakinede: () => false }));
 jest.mock("expo-sharing", () => ({ isAvailableAsync: jest.fn(async () => false), shareAsync: jest.fn() }));
 jest.mock("expo-file-system/legacy", () => ({ documentDirectory: "file:///", writeAsStringAsync: jest.fn() }));
 jest.mock("expo-haptics", () => ({ impactAsync: jest.fn(), notificationAsync: jest.fn(), selectionAsync: jest.fn(),
@@ -93,10 +97,12 @@ async function kur(oturum: string, operatorler: SahteOperator[]) {
     }
     return r;
   }) as unknown as typeof fetch;
-  // Bu jest-expo ortamında `URL` global'i YOK (ölçüldü: typeof URL === "undefined"); tarayıcı dalının yalnız iki yöntemi verilir
-  // (`new URL` yine kurucu değil → `backendBuMakinede()` bugünkü gibi false = LAN/tarayıcı dalı).
+  // `URL` küreseli ortama göre (expo tembel yükleyicisi / Node sürümü) var ya da yok; tarayıcı dalının iki yöntemi HER durumda sahteyle
+  // verilir (expo'nun `URL.createObjectURL`u yerel blob modülü yoksa bilerek atar — tarayıcı davranışı değil).
   const g = globalThis as unknown as { URL?: Record<string, unknown> };
-  if (!g.URL) g.URL = { createObjectURL: () => "blob:a3", revokeObjectURL: () => undefined };
+  if (!g.URL) g.URL = {};
+  g.URL.createObjectURL = () => "blob:a3";
+  g.URL.revokeObjectURL = () => undefined;
   await s.ciz(
     <AuthProvider><UserModeProvider><Mod><OperatorProvider><AppNavProvider navigateTo={() => undefined}>
       <OperatorSwitcher />
