@@ -15,6 +15,8 @@ export default defineConfig({
   // KP-8 D (2026-11-17, KP-7 ile birleşik SON tur): TAM vitest (72 dosya / 1 215 test) satır / deyim / fonksiyon %100 · dal %97,84
   // (995 / 1 017; ödeme API'leri, plan fiyatı, sayfalar + 2 SAVUNMA etiketi) → 99 / 99 / 96 / 99.
   test: {
+    // YS1c · Y320 (3): testlerin dili makinenin yereline değil TR'ye sabit (GitHub ubuntu koşucusu en-US → 25-11 site-ci 12 dosya kırmızı).
+    setupFiles: ['./src/__tests__/_dilTr.kurulum.ts'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'scripts/**/*.mjs'],
