@@ -4,7 +4,7 @@
  *  - Ölçülen bobin kartı: alan ÖLÇÜLÜYORSA "sonda alanı" etiketiyle mT değeri, sıcaklık ölçülüyorsa °C; ölçülen 45 °C üstü KIRMIZI.
  *  - Alan sensörü ayarı doğrulanamadıysa değer yerine "—" ve NEDEN metni.
  */
-let mockSnap: { coils?: Array<Record<string, unknown>> } = { coils: [] };
+let mockSnap: { coils?: Record<string, unknown>[] } = { coils: [] };
 let mockBayat = false;
 jest.mock("@/context/LiveDataContext", () => ({
   useLiveData: () => ({ snapshot: mockSnap, sensorHistory: {}, connectionQuality: mockBayat ? "stale" : "live", telemetryStale: mockBayat }),

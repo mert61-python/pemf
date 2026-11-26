@@ -60,7 +60,7 @@ it("KRİTİK: hasta çipiyle süzülen liste 'tüm liste' çipiyle geri gelir", 
 });
 
 it("KRİTİK: 'Paylaş' kaydın PDF'ini kimliğiyle ister; indiricinin bildirimi toast köprüsüne gider", async () => {
-  const bildirimler: Array<[string, string | undefined]> = [];
+  const bildirimler: [string, string | undefined][] = [];
   setToastHandler((m, tur) => { bildirimler.push([m, tur]); });
   const u = await ekran([kayit(7, { result_summary: "mia-7" })]);
   if (!u.queryByTestId("ai-paylas-7")) await act(async () => { fireEvent.press(u.getByText("mia-7")); });

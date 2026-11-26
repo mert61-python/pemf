@@ -5,7 +5,7 @@
  *  - "Yeniden yükle" çerçeveyi yeniden kurar (yeni anahtar) ve göstergeyi geri getirir.
  * SAHTE: react-native-webview (platform; aldığı props kaydedilir) · E-alanı bandı (bu dosyanın konusu değil).
  */
-const mockGorunum: Array<Record<string, any>> = [];
+const mockGorunum: Record<string, any>[] = [];
 jest.mock("react-native-webview", () => ({ WebView: (p: Record<string, any>) => { mockGorunum.push(p); return null; } }));
 jest.mock("@/components/domain/EFieldBar", () => ({ EFieldBar: () => null }));
 

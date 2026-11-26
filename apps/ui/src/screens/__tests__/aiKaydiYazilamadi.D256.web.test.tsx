@@ -54,7 +54,7 @@ const HASTALAR = [{ id: "u-mia", name: "Mia", operator_email: HEKIM, species: "K
 const HASTALIK = { status: "success", results: [{ disease: "Gastroenteritis", probability: 0.71 }] };
 
 let s: Sahne;
-let bildirimler: Array<{ mesaj: string; tur?: string }>;
+let bildirimler: { mesaj: string; tur?: string }[];
 beforeEach(() => {
   s = new Sahne();
   cihazSahteleriniKur();

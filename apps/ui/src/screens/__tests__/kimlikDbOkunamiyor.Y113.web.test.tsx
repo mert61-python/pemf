@@ -103,7 +103,7 @@ afterEach(async () => {
 });
 
 async function kur(oturum: string, operatorler: SahteOperator[], sahipler: Record<string, string>,
-                   ekranlar: Array<"hasta" | "seans" | "ai"> = ["hasta", "seans", "ai"]) {
+                   ekranlar: ("hasta" | "seans" | "ai")[] = ["hasta", "seans", "ai"]) {
   mockOturum.eposta = oturum;
   mockToast.mockClear();
   const { hastalar, seanslar, analizler } = veri(sahipler);

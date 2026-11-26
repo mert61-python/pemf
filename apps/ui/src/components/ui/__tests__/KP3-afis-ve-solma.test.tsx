@@ -55,7 +55,7 @@ describe("FadeInView", () => {
     await act(async () => { await Promise.resolve(); });
     // ⚠️ toJSON animasyon değerinin SON hâlini göstermez (değer render dışından güncellenir) → Animated nesnesinden okunur.
     const opaklik = (x: ReturnType<typeof render>) => {
-      const st = ([] as unknown[]).concat(x.UNSAFE_getByType(Animated.View).props.style).flat() as Array<{ opacity?: unknown }>;
+      const st = ([] as unknown[]).concat(x.UNSAFE_getByType(Animated.View).props.style).flat() as { opacity?: unknown }[];
       const o = st.find((y) => y && y.opacity !== undefined)?.opacity as { __getValue?: () => number } | number | undefined;
       return typeof o === "number" ? o : o?.__getValue?.();
     };

@@ -44,7 +44,7 @@ const HEDEF = "file:///cache/pemf-vet-14.apk";
 const bosalt = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
 type Deneme = { downloadAsync: () => Promise<unknown>; pauseAsync?: () => Promise<unknown> };
-function dunya(denemeler: Array<(ilerle: (b: number) => void) => Deneme>) {
+function dunya(denemeler: ((ilerle: (b: number) => void) => Deneme)[]) {
   let inen = false;
   let sira = 0;
   type Ilerleme = (p: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void;

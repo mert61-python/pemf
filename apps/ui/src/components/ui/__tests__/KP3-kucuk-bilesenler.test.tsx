@@ -22,7 +22,7 @@ jest.mock("@react-native-community/netinfo", () => ({
     },
   },
 }));
-const mockGradyan: Array<{ colors: string[] }> = [];
+const mockGradyan: { colors: string[] }[] = [];
 jest.mock("expo-linear-gradient", () => ({
   LinearGradient: (p: { colors: string[] }) => { mockGradyan.push(p); return null; },
 }));

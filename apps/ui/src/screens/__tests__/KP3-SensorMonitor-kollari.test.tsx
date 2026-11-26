@@ -5,12 +5,12 @@
  *  - Grafik genişlik ölçülmeden çizilmez.
  * SAHTE: canlı veri bağlamı (girdi) · RealtimeChart (aldığı props kaydedilir).
  */
-let mockSnap: { coils: Array<{ id: number; connected?: boolean; running?: boolean }> } = { coils: [] };
+let mockSnap: { coils: { id: number; connected?: boolean; running?: boolean }[] } = { coils: [] };
 jest.mock("@/context/LiveDataContext", () => ({
   useLiveData: () => ({ snapshot: mockSnap, sensorHistory: {}, connectionQuality: "live", telemetryStale: false }),
 }));
 type Pencere = { tip: string; sn?: number; bas?: number; son?: number };
-const mockGrafik: Array<{ visibleCoils: Set<number>; showMagnetic?: boolean; showTemp?: boolean; pencere?: Pencere; onAralikSec?: (bas: number, son: number) => void }> = [];
+const mockGrafik: { visibleCoils: Set<number>; showMagnetic?: boolean; showTemp?: boolean; pencere?: Pencere; onAralikSec?: (bas: number, son: number) => void }[] = [];
 jest.mock("@/components/visual/RealtimeChart", () => ({
   RealtimeChart: (p: { visibleCoils: Set<number>; showMagnetic?: boolean; showTemp?: boolean; pencere?: Pencere; onAralikSec?: (bas: number, son: number) => void }) => { mockGrafik.push(p); return null; },
 }));

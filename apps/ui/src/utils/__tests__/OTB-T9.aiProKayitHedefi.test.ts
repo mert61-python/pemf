@@ -14,7 +14,7 @@ import { dilSec } from "@/i18n";
 
 const depo = { setItem: async () => undefined };
 const t = ((k: string, o?: object) => i18n.t(k, o as never)) as unknown as TFunction;
-const CIFTLER: Array<[string, string]> = [
+const CIFTLER: [string, string][] = [
   ["Tüm petri", "Whole well plate"],
   ["Kuyu C2", "Well C2"],
   ["Tümör T1", "Tumor T1"],

@@ -24,7 +24,7 @@ jest.mock("@/context/LiveDataContext", () => ({
 }));
 jest.mock("@/context/UserModeContext", () => ({ useUserMode: () => ({ userMode: "veterinarian" }) }));
 jest.mock("@/context/AuthContext", () => ({ useAuth: () => ({ session: { email: "v@x.com" } }) }));
-const mockCubuk: Array<{ chartConfig: { color: (o?: number) => string; labelColor: (o?: number) => string } }> = [];
+const mockCubuk: { chartConfig: { color: (o?: number) => string; labelColor: (o?: number) => string } }[] = [];
 jest.mock("react-native-chart-kit", () => ({
   BarChart: (p: (typeof mockCubuk)[number]) => { mockCubuk.push(p); return null; },
   PieChart: () => null,

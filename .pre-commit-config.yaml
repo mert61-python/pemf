@@ -72,3 +72,12 @@ repos:
         language: system
         files: ^versions\.json$
         pass_filenames: false
+      # YS1d · Y320 (4): frontend-ci ESLint'i (audit B-10.1) zincir kapilarinda KOSMUYORDU -> 48 HATA birikti, 25-11 CI kirmizisi.
+      # Commit'te DEGISEN apps/ui dosyalarinda YALNIZ HATA duzeyi: ESLint 9 `--quiet` uyari kurallarini hic kosmaz (1 479 uyari
+      # CI'da bilgi amacli kalir). Duz yapilandirma apps/ui altinda -> oradan kosar, yol oneki atilir. node_modules yoksa (npm
+      # kurulmamis klon) DUSER - sessiz atlama yok. Kapi: tests/test_eslint_commit_kapisi_YS1d.py.
+      - id: eslint-arayuz-hata
+        name: ESLint apps/ui (yalniz hata duzeyi, degisen dosyalar)
+        entry: bash -c 'cd apps/ui && node node_modules/eslint/bin/eslint.js --quiet --no-warn-ignored "${@#apps/ui/}"' --
+        language: system
+        files: ^apps/ui/(src|app)/.*\.(ts|tsx|js|jsx)$

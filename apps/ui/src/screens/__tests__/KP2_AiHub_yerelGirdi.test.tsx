@@ -178,9 +178,9 @@ async function moduluAc(u: ReturnType<typeof render>, ad: string) {
 }
 
 describe("küçültme başarısız → orijinal dosya `file` parçasıyla gider (her görüntü modülü)", () => {
-  const DURUMLAR: Array<{
+  const DURUMLAR: {
     ad: string; mod: "veterinarian" | "researcher"; modul: string; girdi: "kamera" | "galeri"; dugme: string; uc: string; dosya: string;
-  }> = [
+  }[] = [
     { ad: "FGS (görsel modül)", mod: "veterinarian", modul: "ai.modul.yuzAgrisi.ad", girdi: "kamera", dugme: "ai.fgs.analiziBaslat",
       uc: "/ai/vision/landmark", dosya: "upload.jpg" },
     { ad: "Fantom", mod: "researcher", modul: "ai.modul.fantomTumor.ad", girdi: "galeri", dugme: "ai.fantom.analiziBaslat",
@@ -289,7 +289,7 @@ describe("yerel kamera: modüle özgü seçenekler, base64 kare, iptal", () => {
 });
 
 describe("ses kaydı (ev sahibi kartı ve Kedi Sesi modülü)", () => {
-  const KARTLAR: Array<{ ad: string; mod: "pet_owner" | "veterinarian"; analiz: string }> = [
+  const KARTLAR: { ad: string; mod: "pet_owner" | "veterinarian"; analiz: string }[] = [
     { ad: "ev sahibi kartı", mod: "pet_owner", analiz: "ai.ses.sesiAnalizEt" },
     { ad: "Kedi Sesi modülü", mod: "veterinarian", analiz: "ai.ses.analiziBaslat" },
   ];
@@ -374,7 +374,7 @@ describe("ses kaydı (ev sahibi kartı ve Kedi Sesi modülü)", () => {
 });
 
 describe("canlı kamera izni reddedilirse canlı kip açılmaz", () => {
-  const DURUMLAR: Array<{ ad: string; mod: "veterinarian" | "researcher"; modul: string; ileti: string }> = [
+  const DURUMLAR: { ad: string; mod: "veterinarian" | "researcher"; modul: string; ileti: string }[] = [
     { ad: "görsel modül (FGS)", mod: "veterinarian", modul: "ai.modul.yuzAgrisi.ad", ileti: "ai.canli.kameraIzni" },
     { ad: "fantom (cihaz kamerası)", mod: "researcher", modul: "ai.modul.fantomTumor.ad", ileti: "ai.canli.kameraIzni" },
     { ad: "kedi organ", mod: "veterinarian", modul: "ai.modul.kediOrgan.ad", ileti: "ai.organ.canliKameraIzni" },

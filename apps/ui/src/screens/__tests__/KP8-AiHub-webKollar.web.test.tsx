@@ -81,8 +81,8 @@ afterEach(async () => {
 
 const metinVar = (m: string) => (document.body.textContent || "").includes(m);
 
-const IPTAL: Array<{ ad: string; kip: "veterinarian" | "researcher" | "pet_owner"; modul: string | null; dugme: string; accept: string;
-  yer: string; uc: string }> = [
+const IPTAL: { ad: string; kip: "veterinarian" | "researcher" | "pet_owner"; modul: string | null; dugme: string; accept: string;
+  yer: string; uc: string }[] = [
   { ad: "FGS galeri", kip: "veterinarian", modul: "ai.modul.yuzAgrisi.ad", dugme: "ai.ortak.galeridenSec", accept: "image/*",
     yer: "ai.ortak.goruntuSecilmedi", uc: "/ai/vision/landmark" },
   { ad: "FGS kamera", kip: "veterinarian", modul: "ai.modul.yuzAgrisi.ad", dugme: "ai.gorsel.fotografCek", accept: "image/*",
@@ -131,7 +131,7 @@ describe.each([false, true])("web seçicisi dosyasız kapanırsa girdi oluşmaz 
 });
 
 describe("web 'Fotoğraf Çek' ikinci kare → önceki nesne URL'si bırakılır", () => {
-  const KAMERALI: Array<{ ad: string; kip: "veterinarian" | "researcher"; modul: string }> = [
+  const KAMERALI: { ad: string; kip: "veterinarian" | "researcher"; modul: string }[] = [
     { ad: "FGS (görsel modül)", kip: "veterinarian", modul: "ai.modul.yuzAgrisi.ad" },
     { ad: "Fantom", kip: "researcher", modul: "ai.modul.fantomTumor.ad" },
     { ad: "Petri", kip: "researcher", modul: "ai.modul.petriKuyu.ad" },

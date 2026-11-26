@@ -37,11 +37,11 @@ jest.mock("@/context/LiveDataContext", () => ({
 }));
 jest.mock("@/context/UserModeContext", () => ({ useUserMode: () => ({ userMode: "veterinarian" }) }));
 jest.mock("@/context/AuthContext", () => ({ useAuth: () => ({ session: { email: "v@x.com" } }) }));
-const mockCubuk: Array<{ data: { labels: string[]; datasets: Array<{ data: number[] }> } }> = [];
-const mockPasta: Array<{ data: Array<{ name: string; population: number }> }> = [];
+const mockCubuk: { data: { labels: string[]; datasets: { data: number[] }[] } }[] = [];
+const mockPasta: { data: { name: string; population: number }[] }[] = [];
 jest.mock("react-native-chart-kit", () => ({
-  BarChart: (p: { data: { labels: string[]; datasets: Array<{ data: number[] }> } }) => { mockCubuk.push(p); return null; },
-  PieChart: (p: { data: Array<{ name: string; population: number }> }) => { mockPasta.push(p); return null; },
+  BarChart: (p: { data: { labels: string[]; datasets: { data: number[] }[] } }) => { mockCubuk.push(p); return null; },
+  PieChart: (p: { data: { name: string; population: number }[] }) => { mockPasta.push(p); return null; },
 }));
 
 import React from "react";
@@ -73,7 +73,7 @@ const olc = async (u: ReturnType<typeof render>) => {
 const satirOf = (hucre: { parent: unknown }) => {
   let s = (hucre as { parent: { type: unknown; parent: unknown; props: { style?: unknown } } | null }).parent;
   while (s && s.type !== View) s = s.parent as typeof s;
-  return s as unknown as { props: { style?: unknown }; findAllByType: (t: unknown) => Array<{ props: { children?: unknown } }> };
+  return s as unknown as { props: { style?: unknown }; findAllByType: (t: unknown) => { props: { children?: unknown } }[] };
 };
 
 beforeEach(async () => {

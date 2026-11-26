@@ -69,10 +69,10 @@ import i18n from "i18next";
 import { AI_TIMEOUT_MS } from "@/services/apiClient";
 import {
   alanlar, blobMetni, ekraniCiz, etiketeBas, ileti, metneBas, postlar, Sahne, web, webKur, webSok,
+  saatiIlerlet,
 } from "./KP3_aiHubWebAparati";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
-import { saatiIlerlet } from "./KP3_aiHubWebAparati";
 
 const T = (k: string, o?: object): string => (i18n.t as unknown as (k: string, o?: object) => string)(k, o);
 

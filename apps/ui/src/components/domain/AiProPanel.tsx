@@ -17,6 +17,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useOperator } from "@/context/OperatorContext";
 import { useAppNav } from "@/context/AppNavContext";
+import { kontrolHafizasinaYaz } from "@/utils/kontrolHafizasi";
 import { profilSozlugu } from "@/utils/profilSozlugu";
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -430,7 +431,7 @@ export function AiProPanel({
   const [duration, setDuration] = useState(() => hafiza?.duration ?? "20");
   // AP-B1: seçimler Kontrol belleğine (yalnız uygulama oturumu; sağlayıcı yoksa yazılmaz).
   useEffect(() => {
-    if (kontrolHafizasi) kontrolHafizasi.current.aiPro = { hedefModeli, kosulsuz, frek, duration, organId };
+    kontrolHafizasinaYaz(kontrolHafizasi, "aiPro", { hedefModeli, kosulsuz, frek, duration, organId });
   }, [kontrolHafizasi, hedefModeli, kosulsuz, frek, duration, organId]);
   const [running, setRunning] = useState(false);
   const [localized, setLocalized] = useState(false);

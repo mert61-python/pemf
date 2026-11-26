@@ -180,8 +180,8 @@ async function moduluAc(u: ReturnType<typeof render>, ad: string) {
 
 
 type Secici = "kitaplik" | "kamera" | "belge";
-const IPTAL: Array<{ ad: string; mod: "veterinarian" | "researcher" | "pet_owner"; modul: string | null; dugme: string; secici: Secici;
-  yer: string; uc: string }> = [
+const IPTAL: { ad: string; mod: "veterinarian" | "researcher" | "pet_owner"; modul: string | null; dugme: string; secici: Secici;
+  yer: string; uc: string }[] = [
   { ad: "FGS galeri", mod: "veterinarian", modul: "ai.modul.yuzAgrisi.ad", dugme: "ai.ortak.galeridenSec", secici: "kitaplik",
     yer: "ai.ortak.goruntuSecilmedi", uc: "/ai/vision/landmark" },
   { ad: "FGS kamera", mod: "veterinarian", modul: "ai.modul.yuzAgrisi.ad", dugme: "ai.gorsel.fotografCek", secici: "kamera",
@@ -229,7 +229,7 @@ describe("yerel seçici vazgeçilirse girdi oluşmaz (her modül)", () => {
 });
 
 describe("geniş içerik düzeninde girdi düğmeleri yan yana (flex 1), dar düzende alt alta", () => {
-  const MODULLER: Array<{ ad: string; mod: "veterinarian" | "researcher"; modul: string }> = [
+  const MODULLER: { ad: string; mod: "veterinarian" | "researcher"; modul: string }[] = [
     { ad: "FGS (görsel modül)", mod: "veterinarian", modul: "ai.modul.yuzAgrisi.ad" },
     { ad: "Fantom", mod: "researcher", modul: "ai.modul.fantomTumor.ad" },
     { ad: "Petri", mod: "researcher", modul: "ai.modul.petriKuyu.ad" },

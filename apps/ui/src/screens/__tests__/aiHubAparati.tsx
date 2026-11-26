@@ -106,7 +106,7 @@ export async function kurAiHub(
   },
 ) {
   aparat.ham = [];
-  const askidakiler: Array<{ yontem: string; yol: string; a: Askida }> = [];
+  const askidakiler: { yontem: string; yol: string; a: Askida }[] = [];
   const sunucu = sahteSunucu(operatorler, (yol, govde, yontem) => {
     const o = ozel?.(yol, govde, yontem);
     if (o instanceof Askida) {
@@ -205,7 +205,7 @@ export async function ciftTikKorumasiniBekle(s: Sahne) {
 }
 
 /** `/ai/log` POST gövdeleri (gerçek apiPost'un gönderdiği). */
-export function aiLogGovdeleri(): Array<Record<string, unknown>> {
+export function aiLogGovdeleri(): Record<string, unknown>[] {
   return aparat.kayit
     .filter((i) => i.yontem === "POST" && i.yol === "/ai/log")
     .map((i) => i.govde as Record<string, unknown>);

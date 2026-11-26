@@ -38,7 +38,7 @@ function metin(d: any): string {
   return (d.children || []).map(metin).join("");
 }
 
-async function ciz(detay: { session: { id: number }; coil_runs: Array<{ coil_id: number }> }): Promise<string> {
+async function ciz(detay: { session: { id: number }; coil_runs: { coil_id: number }[] }): Promise<string> {
   mockApiGet.mockReset();
   mockApiGet.mockResolvedValue(detay);
   // Modal yalnız GÜNCEL oturumun detayını çizer (`session.id` eşleşmesi) — kimlik yanıttan.

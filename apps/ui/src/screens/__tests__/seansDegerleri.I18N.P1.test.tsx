@@ -50,7 +50,7 @@ import { hedefEtiketi, modEtiketi } from "@/utils/seansDegerEtiketi";
 const depo = { setItem: async () => undefined };
 
 /** [ham değer (DB / istek), TR görünüm, EN görünüm] */
-const HEDEFLER: Array<[string, string, string]> = [
+const HEDEFLER: [string, string, string][] = [
   ["Doku İyileşmesi", "Doku İyileşmesi", "Tissue Healing"],
   ["Eklem Ağrısı", "Eklem Ağrısı", "Joint Pain"],
   ["Kas Spazmı", "Kas Spazmı", "Muscle Spasm"],
@@ -60,7 +60,7 @@ const HEDEFLER: Array<[string, string, string]> = [
   ["Bağ Dokusu Tamiri", "Bağ Dokusu Tamiri", "Connective Tissue Repair"],
   ["Ödem Azaltma", "Ödem Azaltma", "Edema Reduction"],
 ];
-const MODLAR: Array<[string, string, string]> = [
+const MODLAR: [string, string, string][] = [
   ["Manuel", "Manuel", "Manual"],
   ["Otomatik", "Otomatik", "Automatic"],
   ["AI", "AI", "AI"],

@@ -26,11 +26,11 @@ jest.mock("@/context/LiveDataContext", () => ({
 }));
 jest.mock("@/context/UserModeContext", () => ({ useUserMode: () => ({ userMode: "veterinarian" }) }));
 jest.mock("@/context/AuthContext", () => ({ useAuth: () => ({ session: { email: "v@x.com" } }) }));
-const mockCubuk: Array<{ data: { labels: string[] } }> = [];
-const mockPasta: Array<{ data: Array<{ name: string; population: number }> }> = [];
+const mockCubuk: { data: { labels: string[] } }[] = [];
+const mockPasta: { data: { name: string; population: number }[] }[] = [];
 jest.mock("react-native-chart-kit", () => ({
   BarChart: (p: { data: { labels: string[] } }) => { mockCubuk.push(p); return null; },
-  PieChart: (p: { data: Array<{ name: string; population: number }> }) => { mockPasta.push(p); return null; },
+  PieChart: (p: { data: { name: string; population: number }[] }) => { mockPasta.push(p); return null; },
 }));
 
 import React from "react";

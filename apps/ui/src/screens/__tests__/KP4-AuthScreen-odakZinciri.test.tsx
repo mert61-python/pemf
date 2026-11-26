@@ -60,7 +60,7 @@ const odak = (TextInput as unknown as { prototype: { focus: jest.Mock } }).proto
 async function ileri(u: U, k: string): Promise<string | null> {
   odak.mockClear();
   await act(async () => { fireEvent(u.getByPlaceholderText(T(k)), "submitEditing"); });
-  const c = odak.mock.contexts as Array<{ props?: { placeholder?: string } }>;
+  const c = odak.mock.contexts as { props?: { placeholder?: string } }[];
   return c.length ? (c[c.length - 1]?.props?.placeholder ?? null) : null;
 }
 

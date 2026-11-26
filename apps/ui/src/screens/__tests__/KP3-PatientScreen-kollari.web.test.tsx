@@ -59,7 +59,7 @@ function SeciliIzle() {
 
 let s: Sahne;
 let kayit: Istek[];
-let hastalar: Array<Record<string, unknown>>;
+let hastalar: Record<string, unknown>[];
 let ozel: (yol: string, govde: unknown, yontem: string) => [number, unknown] | undefined;
 let gidilen: string[];
 let onay: boolean;

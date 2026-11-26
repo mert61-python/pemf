@@ -47,9 +47,8 @@ import { AUTO_LOCK_MS, OperatorProvider } from "@/context/OperatorContext";
 import { AppNavProvider } from "@/context/AppNavContext";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 import { PatientScreen } from "@/screens/PatientScreen";
-import { TreatmentHistoryScreen } from "@/screens/TreatmentHistoryScreen";
+import { TreatmentHistoryScreen, zatenSilinmisSeans } from "@/screens/TreatmentHistoryScreen";
 import { baskaHekimSilmeMetni } from "@/utils/patientScope";
-import { zatenSilinmisSeans } from "@/screens/TreatmentHistoryScreen";
 import { aktifOperator, pinleSec, Sahne, sahteSunucu, type Istek, type SahteOperator } from "../../context/__tests__/operatorAparati";
 
 const A = "dr.a@klinik.com";

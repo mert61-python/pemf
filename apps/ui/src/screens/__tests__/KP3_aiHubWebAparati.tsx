@@ -33,7 +33,7 @@ type Ozel = (yol: string, govde: unknown, yontem: string) => Yanit;
 export const web = {
   istekler: [] as KayitliIstek[],
   dosyaSiradaki: null as File | null,
-  acilanSeciciler: [] as Array<{ accept: string; capture: string | null }>,
+  acilanSeciciler: [] as { accept: string; capture: string | null }[],
   serbestBirakilan: [] as string[],
   nesneUrlleri: new Map<string, Blob>(),
   /** createObjectURL'ın üreteceği URL biçimi (varsayılan `blob:kp2-N`). */

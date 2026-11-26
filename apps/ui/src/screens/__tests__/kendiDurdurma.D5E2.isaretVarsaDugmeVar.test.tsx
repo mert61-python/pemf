@@ -90,7 +90,7 @@ const govde = (o: unknown) => ({ ok: true, status: 200, json: async () => o, tex
 const yanit = (o: unknown) => Promise.resolve(govde(o));
 /** D5.E2 TUR 3b (f1): `true` iken `/hardware/emergency_stop` yanıtı BEKLETİLİR (durdurma uçuşta kalır); test sonunda topluca çözülür. */
 let beklet = false;
-const bekleyenler: Array<() => void> = [];
+const bekleyenler: (() => void)[] = [];
 const durdurmaSayisi = () => cagrilar.filter((y) => y === "/hardware/emergency_stop").length;
 
 const SEANS = { isActive: true, mode: "Manuel", frequencyHz: 50, intensityMt: 1, remainingMin: 29, elapsedSec: 10, durationSec: 1800 };

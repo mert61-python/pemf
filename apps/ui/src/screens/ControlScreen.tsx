@@ -23,6 +23,7 @@ import { CoilParameterPanel } from "@/components/domain/CoilParameterPanel";
 import { apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
 import { useAppNav } from "@/context/AppNavContext";
+import { kontrolHafizasinaYaz } from "@/utils/kontrolHafizasi";
 import { useAuth } from "@/context/AuthContext";
 import { AiProPanel } from "@/components/domain/AiProPanel";
 import { modelleriAl } from "@/components/domain/aiProProfilleri";
@@ -115,7 +116,7 @@ export function ControlScreen() {
   // GA (istem 53) B3: seçili geliştirici modülü (null = PEMF cihazı); bir anda TEK modül — seçiliyken sekmeler yerine modül paneli.
   const [etkinModul, setEtkinModul] = useState<string | null>(null);
   useEffect(() => {
-    if (kontrolHafizasi) kontrolHafizasi.current.sekme = activeTab;
+    kontrolHafizasinaYaz(kontrolHafizasi, "sekme", activeTab);
   }, [activeTab, kontrolHafizasi]);
   // AI Pro hedef modelleri PROFİLE göre — tek kaynak `aiProProfilleri.MODELLER_PROFILE_GORE`
   // (sahip kararı #13: kedi araştırmacıda, fantom/petri veterinerde HİÇ görünmez).
