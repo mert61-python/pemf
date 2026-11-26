@@ -48,6 +48,11 @@ jobs:
     # YGH: 25 dk 10-08'de (~790 test) kondu; süit bugün ~12 800 test (yerel CI-eşdeğeri seri 1 sa 51 dk). Paralelde bile 4 çekirdekli
     # koşucuda kapsamlı Windows adımı 25 dk'ya sığmaz → iş zaman aşımıyla düşerdi. Kapı: tests/test_ci_paralel_xdist_Y312.py (≥ 60).
     timeout-minutes: 90
+    # YS1a (Y320, 26-11): windows-latest konsolu cp1252 — `scripts/ci_modelleri.py` Türkçe "ğ / ı" yazarken UnicodeEncodeError ile
+    # çıkış 1 verdi, testler HİÇ koşmadı (YG1 4e). Betik de kendini UTF-8'e çevirir; bu ikinci katman diğer Türkçe yazan adımlar için.
+    # Kapı: tests/test_ci_modelleri_konsol_kodlamasi_YS1.py.
+    env:
+      PYTHONIOENCODING: utf-8
     strategy:
       fail-fast: false          # bir platformun düşmesi diğerinin sonucunu gizlemesin
       matrix:

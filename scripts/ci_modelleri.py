@@ -164,7 +164,16 @@ def indir(
     return 0
 
 
+def _konsol_utf8() -> None:
+    """YS1a (Y320): GitHub `windows-latest` konsolu cp1252 → Türkçe "ğ / ı" yazımı `UnicodeEncodeError` ile çıkış 1 veriyordu (paket
+    doğrulandıktan SONRA; `except` dalındaki yazım da düşüyordu). stdout / stderr UTF-8; yazılamayan karakter düşürmez, yerine '?' konur."""
+    for akis in (sys.stdout, sys.stderr):
+        if hasattr(akis, "reconfigure"):  # konsolsuz süreçte None / yeniden yönlendirilmiş akış olabilir
+            akis.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _konsol_utf8()
     ap = argparse.ArgumentParser(description="CI model paketi (KP-5 · Y279 · Y282)")
     alt = ap.add_subparsers(dest="komut", required=True)
     p = alt.add_parser("paketle")

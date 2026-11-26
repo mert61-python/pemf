@@ -163,6 +163,7 @@ def test_paketle_listedekileri_koyar_ozetleri_yeniler(tmp_path):
 
 
 def test_main_komutlari(tmp_path, monkeypatch):
+    monkeypatch.setattr(cm, "_konsol_utf8", lambda: None)  # YS1a: pytest'in yakalama akışları yeniden yapılandırılmasın
     monkeypatch.setattr(cm, "LISTE", _liste(tmp_path))
     z = _zip(tmp_path)
     assert cm.main(["indir", "--hedef", str(tmp_path / "m"), "--depo", str(tmp_path / "d"), "--yerel-zip", str(z)]) == 0
