@@ -92,9 +92,11 @@ def masaustu_dizini() -> tuple[Path, str]:
 
 #: Y331 (sahip 26-11; Y218 DEĞİŞTİ): seans CSV'lerinin klasörü kullanıcı klasörünün ALTINDA — `%USERPROFILE%/PEMF Vet/Seans CSV`.
 #: Windows Bilinen Klasör yönlendirmesi (Masaüstü / Belgeler → OneDrive) bu yola UYGULANMAZ; DB şifreli ve hasta bulut eşitlemesi
-#: KVKK için kapalıyken şifresiz CSV'nin Masaüstü üzerinden buluta gitmesi çelişkiydi. Dışa aktarım ("İndir") düğmeleri masaüstüne
-#: yazmayı sürdürür (kullanıcının açık eylemi — `masaustu_dizini`).
+#: KVKK için kapalıyken şifresiz CSV'nin Masaüstü üzerinden buluta gitmesi çelişkiydi.
 SEANS_CSV_ALT = ("PEMF Vet", "Seans CSV")
+#: Y342 (sahip 27-11; istem 63 YS3 e): PDF / CSV "İndir" düğmeleri (geçmiş raporu, hasta raporu, seans / bobin CSV'si, AI PDF) de
+#: Masaüstü yerine AYNI kuralla `%USERPROFILE%/PEMF Vet/Raporlar` — Masaüstü OneDrive'a bağlıysa hasta raporu buluta gidiyordu.
+RAPORLAR_ALT = ("PEMF Vet", "Raporlar")
 _BULUT_DEGISKENLERI = ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")
 
 
@@ -110,23 +112,34 @@ def _bulut_esitlemeli_mi(yol: Path) -> bool:
     return any(parca.lower().startswith("onedrive") for parca in Path(tam).parts)
 
 
-def seans_csv_dizini() -> tuple[Path, str]:
-    """(dizin, gerekçe) — seans alan CSV'sinin yazılacağı YEREL klasör (yoksa oluşturulur).
+def _yerel_belge_dizini(alt: tuple[str, ...]) -> tuple[Path, str]:
+    """(dizin, gerekçe) — kullanıcının belge klasörü `~/<alt>`, bulut eşitlemesi DIŞINDA (yoksa oluşturulur). Seans CSV'si (Y331)
+    ve İndir düğmelerinin (Y342) TEK kuralı.
 
-    Sıra: ``~/PEMF Vet/Seans CSV`` → (kullanıcı klasörü bulut eşitlemesindeyse) ``%LOCALAPPDATA%/PEMF Vet/Seans CSV``.
+    Sıra: ``~/<alt>`` → (kullanıcı klasörü bulut eşitlemesindeyse) ``%LOCALAPPDATA%/<alt>``.
     ⚠️ LocalSystem profili (``systemprofile``) REDDEDİLİR (`masaustu_dizini` ile aynı gerekçe): geçerli çalışma dizini."""
     ev = Path(os.path.expanduser("~"))
     if "systemprofile" in str(ev).lower():
         return Path.cwd(), "servis hesabı (kullanıcı klasörü yok)"
-    dizin, gerekce = ev.joinpath(*SEANS_CSV_ALT), "kullanıcı klasörü"
+    dizin, gerekce = ev.joinpath(*alt), "kullanıcı klasörü"
     if _bulut_esitlemeli_mi(dizin):
         yerel = os.environ.get("LOCALAPPDATA") or str(ev / "AppData" / "Local")
         dizin, gerekce = (
-            Path(yerel).joinpath(*SEANS_CSV_ALT),
+            Path(yerel).joinpath(*alt),
             "yerel uygulama verisi (kullanıcı klasörü bulut eşitlemesinde)",
         )
     dizin.mkdir(parents=True, exist_ok=True)
     return dizin, gerekce
+
+
+def seans_csv_dizini() -> tuple[Path, str]:
+    """(dizin, gerekçe) — seans alan CSV'sinin yazılacağı YEREL klasör: ``~/PEMF Vet/Seans CSV`` (Y331; `_yerel_belge_dizini`)."""
+    return _yerel_belge_dizini(SEANS_CSV_ALT)
+
+
+def raporlar_dizini() -> tuple[Path, str]:
+    """(dizin, gerekçe) — İndir düğmelerinin (PDF / CSV) yazdığı YEREL klasör: ``~/PEMF Vet/Raporlar`` (Y342; `_yerel_belge_dizini`)."""
+    return _yerel_belge_dizini(RAPORLAR_ALT)
 
 
 def _guvenli_parca(metin: str, azami: int = 40) -> str:

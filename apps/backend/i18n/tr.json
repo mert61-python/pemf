@@ -687,6 +687,9 @@
       "notDuzenle": "Operatör seçin — seans notunu düzenlemek için önce üst bardan hangi hekim olduğunuzu seçin.",
       "sensorKonumu": "Operatör seçin — sensör konumunu girmek için önce üst bardan hangi hekim olduğunuzu seçin."
     },
+    "raporKlasoru": {
+      "acilamadi": "Raporlar klasörü açılamadı ({{yol}}) — klasörü dosya gezgininde elle açın."
+    },
     "sensorKonumu": {
       "aktifYok": "Aktif seans yok — sensör konumu seans sırasında girilir. Seans bittiyse Geçmiş'te seansın detayından girin.",
       "bulunamadi": "Seans ya da konum kaydı bulunamadı — listeyi yenileyip yeniden deneyin.",

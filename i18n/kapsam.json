@@ -6291,6 +6291,13 @@
      ]
     },
     {
+     "metin": "Raporlar",
+     "gerekce": "İndir (PDF / CSV) dosyalarının dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil (Y342 klasör adı)",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
      "metin": "servis hesabı (kullanıcı klasörü yok)",
      "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil (Y331 günlük gerekçesi)",
      "turler": [

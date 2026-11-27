@@ -132,12 +132,26 @@ export function TreatmentHistoryScreen() {
   const [toplamSeans, setToplamSeans] = useState<number | null>(null);
   // Y331 (sahip 26-11): seans alan CSV'leri artık bulut eşitlemesi DIŞINDA yerel klasörde (`~/PEMF Vet/Seans CSV`) — klasörü açan
   // eylem (yalnız backend'in kendi bilgisayarında; sunucu da yalnız cihazın kendi ekranından açar, uzak istemciye yalnız yolu söyler).
-  const csvKlasorunuAc = async () => {
-    const r = await apiPost<{ status: string; yol?: string } | null>("/history/seans_csv_klasoru/ac", {}, null);
-    if (r?.status === "success") showToast(t("seans.gecmis.csvKlasoruAcildi", { yol: r.yol ?? "" }), "success");
-    else if (r?.status === "uzak") showToast(t("seans.gecmis.csvKlasoruUzak", { yol: r.yol ?? "" }), "info");
-    else showToast(t("seans.gecmis.csvKlasoruAcilamadi"), "error");
+  // Y342 (sahip 27-11): İndir düğmelerinin PDF / CSV'si de AYNI kuralla `~/PEMF Vet/Raporlar` — aynı eylem, ayrı klasör.
+  type KlasorMesajlari = { acildi: (yol: string) => string; uzak: (yol: string) => string; acilamadi: () => string };
+  const klasoruAc = async (uc: string, m: KlasorMesajlari) => {
+    const r = await apiPost<{ status: string; yol?: string } | null>(uc, {}, null);
+    if (r?.status === "success") showToast(m.acildi(r.yol ?? ""), "success");
+    else if (r?.status === "uzak") showToast(m.uzak(r.yol ?? ""), "info");
+    else showToast(m.acilamadi(), "error");
   };
+  const csvKlasorunuAc = () =>
+    klasoruAc("/history/seans_csv_klasoru/ac", {
+      acildi: (yol) => t("seans.gecmis.csvKlasoruAcildi", { yol }),
+      uzak: (yol) => t("seans.gecmis.csvKlasoruUzak", { yol }),
+      acilamadi: () => t("seans.gecmis.csvKlasoruAcilamadi"),
+    });
+  const raporKlasorunuAc = () =>
+    klasoruAc("/history/raporlar_klasoru/ac", {
+      acildi: (yol) => t("seans.gecmis.raporKlasoruAcildi", { yol }),
+      uzak: (yol) => t("seans.gecmis.raporKlasoruUzak", { yol }),
+      acilamadi: () => t("seans.gecmis.raporKlasoruAcilamadi"),
+    });
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -365,6 +379,17 @@ export function TreatmentHistoryScreen() {
               testID="gecmis-csv-klasoru"
             >
               <Text style={styles.btnOutlineText}>{t("seans.gecmis.csvKlasoru")}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {backendBuMakinede() ? (
+            <TouchableOpacity
+              style={[styles.btnOutline, { minHeight: touch.min, justifyContent: "center" }]}
+              onPress={raporKlasorunuAc}
+              accessibilityRole="button"
+              accessibilityLabel={t("seans.gecmis.raporKlasoruEtiketi")}
+              testID="gecmis-rapor-klasoru"
+            >
+              <Text style={styles.btnOutlineText}>{t("seans.gecmis.raporKlasoru")}</Text>
             </TouchableOpacity>
           ) : null}
         </View>

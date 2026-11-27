@@ -17,10 +17,10 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def masaustu():
+def raporlar():
     import servers.seans_alan_kaydi as sak
 
-    dizin, _ = sak.masaustu_dizini()
+    dizin, _ = sak.raporlar_dizini()  # Y342: İndir artık `PEMF Vet/Raporlar`a (conftest sahtesi)
     return Path(dizin)
 
 
@@ -54,21 +54,21 @@ UZAK = [
 
 @pytest.mark.parametrize(("host", "basliklar"), UZAK)
 @pytest.mark.parametrize("uc", ["/api/history/export_pdf?session_ids=1&kaydet=1", "/api/history/export_csv?kaydet=1"])
-def test_KRITIK_D3_05_LAN_ve_tunel_kaydet_istegi_MASAUSTUNE_YAZMAZ_akis_doner(masaustu, seans, host, basliklar, uc):
-    once = _dosyalar(masaustu)
+def test_KRITIK_D3_05_LAN_ve_tunel_kaydet_istegi_MASAUSTUNE_YAZMAZ_akis_doner(raporlar, seans, host, basliklar, uc):
+    once = _dosyalar(raporlar)
     r = _istemci(host).get(uc, headers=basliklar)
-    assert _dosyalar(masaustu) == once, f"{host} isteği sunucunun masaüstüne dosya yazdı: {_dosyalar(masaustu) - once}"
+    assert _dosyalar(raporlar) == once, f"{host} isteği sunucunun masaüstüne dosya yazdı: {_dosyalar(raporlar) - once}"
     assert not (r.headers.get("content-type", "").startswith("application/json") and "yol" in r.text), (
         f"uzak isteğe masaüstü YOLU döndü: {r.text[:200]}"
     )
 
 
 @pytest.mark.parametrize("uc", ["/api/history/export_pdf?session_ids=1&kaydet=1", "/api/history/export_csv?kaydet=1"])
-def test_KARSIT_D3_05_cihazin_kendi_ekrani_MASAUSTUNE_yazar(masaustu, seans, uc):
-    once = _dosyalar(masaustu)
+def test_KARSIT_D3_05_cihazin_kendi_ekrani_MASAUSTUNE_yazar(raporlar, seans, uc):
+    once = _dosyalar(raporlar)
     g = _istemci("127.0.0.1").get(uc).json()
     assert g.get("status") == "success" and Path(g["yol"]).exists(), g
-    assert _dosyalar(masaustu) - once, "cihazın kendi ekranı masaüstüne yazamadı"
+    assert _dosyalar(raporlar) - once, "cihazın kendi ekranı masaüstüne yazamadı"
 
 
 def test_KRITIK_D3_05_istek_nesnesi_YOKSA_yazilmaz_fail_closed():

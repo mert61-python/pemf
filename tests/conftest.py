@@ -933,6 +933,13 @@ def _masaustunu_koru(tmp_path):
         # Y331: seans CSV'si artık kullanıcı klasörünün altında (`~/PEMF Vet/Seans CSV`) — o da GERÇEK eve yazılmaz.
         mp.setattr(_sak, "_orijinal_seans_csv_dizini", getattr(_sak, "seans_csv_dizini", None), raising=False)
         mp.setattr(_sak, "seans_csv_dizini", lambda: (hedef, "test izolasyonu"), raising=False)
+        # Y342 (istem 63 YS3 e): İndir düğmeleri (`history_router._diske_kaydet`) `~/PEMF Vet/Raporlar`a yazar — gerçek eve yazılmaz.
+        # Masaüstü sahtesinden AYRI dizin: "İndir yine masaüstüne yazıyor" gerilemesi testlerde görünür kalsın (aynı dizin olsaydı
+        # eski çözücüye dönüş de yeşil geçerdi).
+        raporlar = tmp_path / "sahte_raporlar"
+        raporlar.mkdir(parents=True, exist_ok=True)
+        mp.setattr(_sak, "_orijinal_raporlar_dizini", getattr(_sak, "raporlar_dizini", None), raising=False)
+        mp.setattr(_sak, "raporlar_dizini", lambda: (raporlar, "test izolasyonu"), raising=False)
     except Exception:
         pass
 

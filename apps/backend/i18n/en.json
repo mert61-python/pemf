@@ -687,6 +687,9 @@
       "notDuzenle": "Select an operator — to edit the session note, first choose which veterinarian you are from the top bar.",
       "sensorKonumu": "Select an operator — to enter the sensor position, first choose which veterinarian you are from the top bar."
     },
+    "raporKlasoru": {
+      "acilamadi": "Could not open the Reports folder ({{yol}}) — open it manually in File Explorer."
+    },
     "sensorKonumu": {
       "aktifYok": "No active session — the sensor position is entered during a session. If the session has ended, enter it from the session details in History.",
       "bulunamadi": "Session or position entry not found — refresh the list and try again.",

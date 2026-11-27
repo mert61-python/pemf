@@ -116,6 +116,11 @@
     "pdfGorunen": "Görünenleri PDF İndir",
     "pdfSinir": "{{adet}} seans var; ilk {{enCok}} tanesi PDF'e aktarılacak. Aramayı daraltın.",
     "pdfTumu": "Tümünü PDF İndir",
+    "raporKlasoru": "📂 Raporlar klasörü",
+    "raporKlasoruAcilamadi": "Raporlar klasörü açılamadı.",
+    "raporKlasoruAcildi": "Raporlar klasörü açıldı: {{yol}}",
+    "raporKlasoruEtiketi": "İndirilen PDF / CSV raporlarının klasörünü bu bilgisayarda aç",
+    "raporKlasoruUzak": "Raporlar cihaz bilgisayarında: {{yol}}",
     "seansSilindi": "Seans silindi.",
     "secimEtiketi": "{{ad}} seçimi",
     "secimKipiEtiketi": "Toplu seçim kipini aç veya kapat",
@@ -143,7 +148,7 @@
     "indirilemedi": "İndirilemedi.",
     "indirilemediDurum": "İndirilemedi ({{status}}).",
     "kaydedilemediDurum": "Kaydedilemedi ({{status}}).",
-    "masaustuneKaydedildi": "Masaüstüne kaydedildi: {{ad}}",
+    "raporlaraKaydedildi": "Raporlar klasörüne kaydedildi: {{ad}} — Seans Geçmişi'ndeki «📂 Raporlar klasörü» ile açın.",
     "sunucuBeklenmeyen": "Kaydedilemedi — sunucu beklenmeyen yanıt verdi."
   },
   "kart": {

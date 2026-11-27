@@ -74,7 +74,7 @@ def _masaustune_yazilir_mi(kaydet, request) -> bool:
 
 
 def _diske_kaydet(icerik: bytes, ad: str) -> dict:
-    """Dosyayı KULLANICININ MASAÜSTÜNE yazar ve yolunu döndürür.
+    """Dosyayı KULLANICININ "PEMF Vet\\Raporlar" KLASÖRÜNE yazar ve yolunu döndürür (Y342 — eskiden masaüstü).
 
     ===========================================================================
     ⚠️ NEDEN VAR — "İndir" düğmeleri masaüstü uygulamasında ÖLÜYDÜ (2026-09-11)
@@ -91,14 +91,13 @@ def _diske_kaydet(icerik: bytes, ad: str) -> dict:
     o yazar, arayüz de yolu söyler. Hiçbir Tauri eklentisi, hiçbir launcher sürümü
     gerekmez.
 
-    ⚠️ HEDEF DİZİN TEK KAYNAKTAN: seans CSV'siyle AYNI çözücü kullanılır
-    (`servers.seans_alan_kaydi.masaustu_dizini`) — "sahibin dosyaları nereye gider"
-    sorusunun depoda TEK cevabı olsun. Test süiti o çözücüyü yamalıyor
-    (`conftest._masaustunu_koru`), böylece bu uç da gerçek masaüstüne SIZMAZ.
+    ⚠️ HEDEF DİZİN TEK KAYNAKTAN: seans CSV'siyle AYNI kural (`servers.seans_alan_kaydi._yerel_belge_dizini` —
+    `raporlar_dizini`): kullanıcı klasörü, OneDrive / bulut eşitlemesi DIŞINDA (Y342; Masaüstü OneDrive'a bağlıysa hasta raporu
+    buluta gidiyordu). Test süiti o çözücüyü yamalıyor (`conftest._masaustunu_koru`), böylece bu uç gerçek eve SIZMAZ.
     """
-    from servers.seans_alan_kaydi import masaustu_dizini
+    from servers.seans_alan_kaydi import raporlar_dizini
 
-    dizin, gerekce = masaustu_dizini()
+    dizin, gerekce = raporlar_dizini()
     guvenli = "".join(c for c in ad if c.isalnum() or c in ("_", "-", ".")) or "PEMF_disa_aktarim"
     hedef = Path(dizin) / guvenli
     # Aynı saniyede iki dışa aktarım üst üste YAZMASIN.
@@ -762,24 +761,46 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
-@router.post("/seans_csv_klasoru/ac")
-def seans_csv_klasorunu_ac(request: Request):
-    """Y331: Seans CSV klasörünü bu bilgisayarın dosya gezgininde açar (arayüz eylemi, masaüstü uygulaması). YALNIZ cihazın kendi
-    ekranından (`_masaustune_yazilir_mi` — LAN / uzak istemci sunucuda pencere AÇTIRAMAZ): uzak istek yalnız yolu alır."""
-    from servers.seans_alan_kaydi import seans_csv_dizini
-
-    # D5 · 1-C §9 #14 (Sıfırla emsali): basit (ön-uçuşsuz) POST kabul EDİLMEZ — başka bir sayfa cihazın tarayıcısından Gezgin açtıramaz.
-    if "application/json" not in (request.headers.get("content-type") or "").lower():
-        raise HTTPException(status_code=415, detail=ceviri.t("gecmis.csvKlasoru.json"))
-    dizin, _ = seans_csv_dizini()
+def _klasoru_ac(request: Request, cozucu, acilamadi) -> dict:
+    """Y331 / Y342 ortak: yerel belge klasörünü bu bilgisayarın dosya gezgininde açar (arayüz eylemi, masaüstü uygulaması). YALNIZ
+    cihazın kendi ekranından (`_masaustune_yazilir_mi` — LAN / uzak istemci sunucuda pencere AÇTIRAMAZ): uzak istek yalnız yolu alır.
+    `acilamadi(yol)` → eylem söyleyen 500 iletisi (çeviri anahtarı çağıranda SABİT — K-3 dinamik çağrı yok). İçerik türü kapısı
+    (JSON zorunlu, 415) ROTA gövdesinde kalır — D5 basit-POST envanteri rota gövdesini ölçer."""
+    dizin, _ = cozucu()
     if not _masaustune_yazilir_mi(1, request):
         return {"status": "uzak", "yol": str(dizin)}
     try:
         os.startfile(str(dizin))  # noqa: S606 — yerel kullanıcının kendi eylemi; Gezgin
     except Exception as e:
-        logger.warning("Seans CSV klasoru acilamadi: %s", e)
-        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.csvKlasoru.acilamadi", yol=str(dizin))) from None
+        logger.warning("Klasor acilamadi (%s): %s", dizin, e)
+        raise HTTPException(status_code=500, detail=acilamadi(str(dizin))) from None
     return {"status": "success", "yol": str(dizin)}
+
+
+@router.post("/seans_csv_klasoru/ac")
+def seans_csv_klasorunu_ac(request: Request):
+    """Y331: Seans CSV klasörünü açar (`_klasoru_ac`)."""
+    # D5 · 1-C §9 #14 (Sıfırla emsali): basit (ön-uçuşsuz) POST kabul EDİLMEZ — başka bir sayfa cihazın tarayıcısından Gezgin açtıramaz.
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail=ceviri.t("gecmis.csvKlasoru.json"))
+    from servers import seans_alan_kaydi
+
+    return _klasoru_ac(
+        request, seans_alan_kaydi.seans_csv_dizini, lambda yol: ceviri.t("gecmis.csvKlasoru.acilamadi", yol=yol)
+    )
+
+
+@router.post("/raporlar_klasoru/ac")
+def raporlar_klasorunu_ac(request: Request):
+    """Y342: İndir düğmelerinin yazdığı Raporlar klasörünü açar (`_klasoru_ac`)."""
+    # D5 · 1-C §9 #14 (Sıfırla emsali): basit (ön-uçuşsuz) POST kabul EDİLMEZ — başka bir sayfa cihazın tarayıcısından Gezgin açtıramaz.
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail=ceviri.t("gecmis.csvKlasoru.json"))
+    from servers import seans_alan_kaydi
+
+    return _klasoru_ac(
+        request, seans_alan_kaydi.raporlar_dizini, lambda yol: ceviri.t("gecmis.raporKlasoru.acilamadi", yol=yol)
+    )
 
 
 @router.get("/{session_id}/coil_runs.csv")

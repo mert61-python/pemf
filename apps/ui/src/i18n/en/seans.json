@@ -116,6 +116,11 @@
     "pdfGorunen": "Download Visible as PDF",
     "pdfSinir": "There are {{adet}} sessions; the first {{enCok}} will be exported to the PDF. Narrow the search.",
     "pdfTumu": "Download All as PDF",
+    "raporKlasoru": "📂 Reports folder",
+    "raporKlasoruAcilamadi": "Could not open the Reports folder.",
+    "raporKlasoruAcildi": "Reports folder opened: {{yol}}",
+    "raporKlasoruEtiketi": "Open the folder of downloaded PDF / CSV reports on this computer",
+    "raporKlasoruUzak": "Reports are on the device computer: {{yol}}",
     "seansSilindi": "Session deleted.",
     "secimEtiketi": "{{ad}} selection",
     "secimKipiEtiketi": "Toggle multi-select mode",
@@ -143,7 +148,7 @@
     "indirilemedi": "Could not be downloaded.",
     "indirilemediDurum": "Could not be downloaded ({{status}}).",
     "kaydedilemediDurum": "Could not be saved ({{status}}).",
-    "masaustuneKaydedildi": "Saved to desktop: {{ad}}",
+    "raporlaraKaydedildi": "Saved to the Reports folder: {{ad}} — open it with “📂 Reports folder” in Session History.",
     "sunucuBeklenmeyen": "Could not be saved — the server returned an unexpected response."
   },
   "kart": {

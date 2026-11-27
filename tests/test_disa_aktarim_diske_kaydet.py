@@ -71,11 +71,11 @@ def bos_db(tmp_path):
 
 
 @pytest.fixture
-def masaustu():
+def raporlar():
     """conftest'in izole ettiği sahte masaüstü — üretimle AYNI çözücüden okunur."""
     import servers.seans_alan_kaydi as sak
 
-    dizin, _ = sak.masaustu_dizini()
+    dizin, _ = sak.raporlar_dizini()  # Y342: İndir artık `PEMF Vet/Raporlar`a (conftest sahtesi)
     return Path(dizin)
 
 
@@ -84,7 +84,7 @@ def masaustu():
 # ============================================================================
 
 
-def test_KRITIK_pdf_kaydet_DOSYA_uretir_ve_YOLUNU_dondurur(istemci, masaustu):
+def test_KRITIK_pdf_kaydet_DOSYA_uretir_ve_YOLUNU_dondurur(istemci, raporlar):
     """MUTASYON: `if kaydet:` dalını sil → KIRMIZI (FileResponse döner, JSON değil).
 
     Sahadaki etki: masaüstü uygulamasında düğme yine hiçbir şey yapmaz.
@@ -100,18 +100,20 @@ def test_KRITIK_pdf_kaydet_DOSYA_uretir_ve_YOLUNU_dondurur(istemci, masaustu):
     assert g["ad"] == uretilen.name
 
 
-def test_KRITIK_hedef_dizin_seans_CSVsi_ile_AYNI_cozucuden(istemci, masaustu):
+def test_KRITIK_hedef_dizin_seans_CSVsi_ile_AYNI_cozucuden(istemci, raporlar):
     """⚠️ İKİ KAYNAK OLMASIN: "sahibin dosyaları nereye gider" sorusunun depoda TEK
     cevabı olmalı. Ayrışırsa seans CSV'si bir yere, raporlar başka yere düşer ve
     operatör dosyaları arar.
 
-    MUTASYON: `_diske_kaydet`teki `masaustu_dizini()` çağrısını
+    Y342 (istem 63 YS3 e): kural ARTIK seans CSV'siyle aynı (`_yerel_belge_dizini` — OneDrive dışı), klasör `PEMF Vet/Raporlar`.
+
+    MUTASYON: `_diske_kaydet`teki `raporlar_dizini()` çağrısını `masaustu_dizini()`ne ya da
     `Path(os.path.expanduser("~/Desktop"))` sabitine çevir → KIRMIZI (izole dizine
     yazmaz; ayrıca süit GERÇEK masaüstüne sızar).
     """
     g = istemci.get("/api/history/export_pdf?session_ids=1&kaydet=1").json()
-    assert Path(g["yol"]).parent.resolve() == masaustu.resolve(), (
-        f"rapor {Path(g['yol']).parent} altina yazildi, seans CSV'si {masaustu} altina -> IKI KAYNAK"
+    assert Path(g["yol"]).parent.resolve() == raporlar.resolve(), (
+        f"rapor {Path(g['yol']).parent} altina yazildi, Raporlar cozucusu {raporlar} -> IKI KAYNAK / masaustune donus"
     )
 
 
@@ -141,23 +143,23 @@ def test_KRITIK_gecici_PII_pdf_SILINIR(istemci):
 # ============================================================================
 
 
-def test_KRITIK_kayit_YOKKEN_dosya_URETILMEZ(bos_db, istemci, masaustu):
+def test_KRITIK_kayit_YOKKEN_dosya_URETILMEZ(bos_db, istemci, raporlar):
     """⚠️ Eskiden içinde "Veri bulunamadi" yazan bir `PEMF_Gecmis.csv` iniyordu.
 
     Operatör dosyayı AÇANA KADAR kayıt olmadığını anlamıyordu.
 
     MUTASYON: `if kaydet: return {"status": "bos"...}` dalını sil → KIRMIZI.
     """
-    once = set(masaustu.glob("*"))
+    once = set(raporlar.glob("*"))
     y = istemci.get("/api/history/export_csv?kaydet=1")
     assert y.status_code == 200
     g = y.json()
     assert g["status"] == "bos", f"bos veritabaninda {g} dondu"
     assert g.get("mesaj"), "operatore gosterilecek mesaj YOK"
-    assert set(masaustu.glob("*")) == once, "kayit yokken DOSYA URETILDI"
+    assert set(raporlar.glob("*")) == once, "kayit yokken DOSYA URETILDI"
 
 
-def test_KRITIK_VERI_VARKEN_csv_diske_YAZILIR(istemci, masaustu):
+def test_KRITIK_VERI_VARKEN_csv_diske_YAZILIR(istemci, raporlar):
     """⚠️ ASIL CSV KAPISI — sahibin bildirdiği düğme tam olarak budur.
 
     ⚠️ NEDEN AYRI BİR TEST: diğer CSV kapısı BOŞ veritabanıyla koşuyor ve akış her zaman
@@ -186,7 +188,7 @@ def test_KRITIK_VERI_VARKEN_csv_diske_YAZILIR(istemci, masaustu):
 
     uretilen = Path(g["yol"])
     assert uretilen.exists() and uretilen.stat().st_size > 0
-    assert uretilen.parent.resolve() == masaustu.resolve()
+    assert uretilen.parent.resolve() == raporlar.resolve()
     metin = uretilen.read_text(encoding="utf-8-sig")
     assert "ID" in metin.splitlines()[0], "CSV basligi yok -> icerik bozuk"
     assert str(sid) in metin, "olusturulan seans CSV'de YOK -> yanlis veri yazildi"

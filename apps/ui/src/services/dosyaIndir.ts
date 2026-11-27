@@ -46,7 +46,8 @@ export async function downloadFileWithAuth(
       if (!res.ok) { toast?.(i18n.t("seans.indir.kaydedilemediDurum", { status: res.status }), "error"); return; }
       const g = await res.json().catch(() => null);
       if (g?.status === "success" && g?.yol) {
-        toast?.(i18n.t("seans.indir.masaustuneKaydedildi", { ad: g.ad }), "success");
+        // Y342: backend artık masaüstüne DEĞİL `~/PEMF Vet/Raporlar`a yazar (OneDrive dışı) — bildirim klasörü ve açma yolunu söyler.
+        toast?.(i18n.t("seans.indir.raporlaraKaydedildi", { ad: g.ad }), "success");
         return;
       }
       if (g?.status === "bos") { toast?.(g.mesaj || i18n.t("seans.gecmis.disaAktarilacakYok"), "info"); return; }

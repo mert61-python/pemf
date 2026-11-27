@@ -65,9 +65,11 @@ def test_KRITIK_B6_coil_runs_csv_CIHAZ_EKRANINDAN_kaydet_1_masaustune_YAZAR(o):
     )
     g = r.json()
     assert g["status"] == "success" and g["ad"] == f"PEMF_Session_{o.sid}_Coils.csv", g
-    dizin, _ = sak.masaustu_dizini()  # conftest: sahte masaüstü
+    dizin, _ = sak.raporlar_dizini()  # conftest: sahte Raporlar (Y342)
     yazilan = dizin / g["ad"]
-    assert yazilan.is_file() and yazilan.read_bytes().startswith(b"\xef\xbb\xbf"), "dosya sahte masaüstüne yazılmadı"
+    assert yazilan.is_file() and yazilan.read_bytes().startswith(b"\xef\xbb\xbf"), (
+        "dosya sahte Raporlar klasörüne yazılmadı (Y342)"
+    )
 
 
 def test_KARSIT_B6_LAN_istegi_kaydet_1_gonderse_de_dosyayi_YANITTA_alir(o):
