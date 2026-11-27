@@ -156,13 +156,16 @@ pub fn extract_zip_cancellable(
             return Err(ExtractError::Cancelled);
         }
         let mut entry = zip.by_index(i)?;
-        // `enclosed_name()` zip-slip'e karşı ilk savunma (mutlak yol / `..` reddeder),
-        // ama kendi kontrolümüzü de yapıyoruz: tek savunma hattına güvenme.
-        let raw_name = entry.name().to_string();
-        let rel = match entry.enclosed_name() {
-            Some(p) => p.to_path_buf(),
-            None => return Err(ExtractError::PathEscape(raw_name)),
-        };
+        // `enclosed_name()` zip-slip'e karşı ilk savunma, ama kendi kontrolümüzü de yapıyoruz: tek savunma hattına güvenme.
+        // ⚠️ YS3 (zip 2 → 9): 9.x `enclosed_name` mutlak yolu REDDETMEZ, göreliye ÇEVİRİR (`/x/y` → `x/y`) ve kök içinde kalan
+        // `a/../b`'yi `b`'ye SADELEŞTİRİR (2.x ikisinde de ham yolu döner / reddederdi). Sadeleştirilmiş adı doğrulamak bu iki
+        // reddi sessizce kaldırırdı → `enclosed_name` yalnız "None mu" diye sorulur (NUL bayt, kökten taşan `..`, Windows'ta geçersiz
+        // parça); doğrulanan ve yazılan yol HAM addır (KRITIK_YS3_* testleri).
+        let raw_name = entry.name()?.to_string();
+        if entry.enclosed_name().is_none() {
+            return Err(ExtractError::PathEscape(raw_name));
+        }
+        let rel = PathBuf::from(&raw_name);
         if !is_safe_relative(&rel) {
             return Err(ExtractError::PathEscape(raw_name));
         }
@@ -315,7 +318,7 @@ fn segment_is_hostile(seg: &std::ffi::OsStr) -> bool {
 }
 
 /// ZIP girdisi sembolik link mi? (unix mode'da S_IFLNK)
-fn is_symlink(entry: &zip::read::ZipFile<'_>) -> bool {
+fn is_symlink(entry: &zip::read::ZipFile<'_, fs::File>) -> bool {
     const S_IFMT: u32 = 0o170000;
     const S_IFLNK: u32 = 0o120000;
     entry.unix_mode().is_some_and(|m| m & S_IFMT == S_IFLNK)
@@ -414,7 +417,7 @@ mod tests {
         let path = dir.path().join("a.zip");
         let f = fs::File::create(&path).unwrap();
         let mut w = zip::ZipWriter::new(f);
-        let opts: zip::write::FileOptions<()> =
+        let opts: zip::write::SimpleFileOptions =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, data) in entries {
             w.start_file(*name, opts).unwrap();
@@ -470,7 +473,7 @@ mod tests {
         let path = d.path().join("many.zip");
         let f = fs::File::create(&path).unwrap();
         let mut w = zip::ZipWriter::new(f);
-        let opts: zip::write::FileOptions<'_, ()> =
+        let opts: zip::write::SimpleFileOptions =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
         for i in 0..n {
             w.start_file(format!("dir/f{i}.bin"), opts).unwrap();
@@ -518,7 +521,7 @@ mod tests {
         let path = d.path().join("t.zip");
         let f = fs::File::create(&path).unwrap();
         let mut w = zip::ZipWriter::new(f);
-        let opts: zip::write::FileOptions<'_, ()> =
+        let opts: zip::write::SimpleFileOptions =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
         w.start_file(name, opts).unwrap();
         std::io::Write::write_all(&mut w, b"x").unwrap();
@@ -687,7 +690,7 @@ mod tests {
         // 2) b -> "a/.."       (sadeleştirilince kök; ama GERÇEKTE kökün EBEVEYNİ)
         w.add_symlink("b", "a/..", opts).unwrap();
         // 3) b/ustunden DIŞARI yazma denemesi
-        w.start_file("b/kacak.txt", zip::write::FileOptions::<()>::default()).unwrap();
+        w.start_file("b/kacak.txt", zip::write::SimpleFileOptions::default()).unwrap();
         w.write_all(b"pwned").unwrap();
         w.finish().unwrap();
 
@@ -728,7 +731,7 @@ mod tests {
         let path = dir.path().join("j.zip");
         let f = fs::File::create(&path).unwrap();
         let mut w = zip::ZipWriter::new(f);
-        w.start_file("link/kacak.txt", zip::write::FileOptions::<()>::default()).unwrap();
+        w.start_file("link/kacak.txt", zip::write::SimpleFileOptions::default()).unwrap();
         w.write_all(b"pwned").unwrap();
         w.finish().unwrap();
 
@@ -766,7 +769,7 @@ mod tests {
         let path = dir.path().join("d.zip");
         let f = fs::File::create(&path).unwrap();
         let mut w = zip::ZipWriter::new(f);
-        w.add_directory("link/kacak_dizin/", zip::write::FileOptions::<()>::default())
+        w.add_directory("link/kacak_dizin/", zip::write::SimpleFileOptions::default())
             .unwrap();
         w.finish().unwrap();
 
@@ -859,7 +862,7 @@ mod tests {
         let path = dir.path().join("x.zip");
         let f = fs::File::create(&path).unwrap();
         let mut w = zip::ZipWriter::new(f);
-        let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+        let opts: zip::write::SimpleFileOptions = zip::write::FileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
             .unix_permissions(0o755);
         w.start_file("PEMF_Backend", opts).unwrap();
@@ -1032,7 +1035,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("s.zip");
         let mut w = zip::ZipWriter::new(fs::File::create(&path).unwrap());
-        let o: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+        let o: zip::write::SimpleFileOptions = zip::write::FileOptions::default();
         w.add_symlink("a/b/link", "../../../../dis/hedef", o).unwrap();
         w.finish().unwrap();
         let out = tempfile::tempdir().unwrap();
@@ -1045,5 +1048,71 @@ mod tests {
             e => panic!("kaçan symlink başka hatayla düştü: {e:?}"),
         }
         assert!(!out.path().join("a").join("b").join("link").exists());
+    }
+
+    // ═══ YS3 · zip 2 → 9 taşıması: yazıcıdan BAĞIMSIZ kötü niyetli girdi adları ═══
+    /// Girdi adı arşiv BAYTLARINA konur (aynı uzunlukta yer tutucu yerel başlıkta + merkezi dizinde değiştirilir) → zip yazıcısının
+    /// ad süzgeci (sürümden sürüme değişir) testi etkilemez. Veri `x`, yer tutucu `q…` → çakışmaz.
+    fn ys3_ham_adli_zip(ad: &str) -> (tempfile::TempDir, PathBuf) {
+        let yer_tutucu = "q".repeat(ad.len());
+        let (d, path) = build_zip_named(&yer_tutucu);
+        let mut bayt = fs::read(&path).unwrap();
+        let (n, mut adet, mut i) = (ad.len(), 0, 0);
+        while i + n <= bayt.len() {
+            if &bayt[i..i + n] == yer_tutucu.as_bytes() {
+                bayt[i..i + n].copy_from_slice(ad.as_bytes());
+                adet += 1;
+                i += n;
+            } else {
+                i += 1;
+            }
+        }
+        assert_eq!(adet, 2, "yer tutucu yerel başlıkta + merkezi dizinde bulunmalı");
+        fs::write(&path, bayt).unwrap();
+        (d, path)
+    }
+
+    /// Ad, ham adla `PathEscape` reddi + hedefte HİÇBİR şey yazılmamış.
+    fn ys3_ad_reddedilir(ad: &str) {
+        let (_d, z) = ys3_ham_adli_zip(ad);
+        let out = tempfile::tempdir().unwrap();
+        match extract_zip(&z, out.path()) {
+            Err(ExtractError::PathEscape(m)) => assert_eq!(m, ad, "'{ad}' başka bir denetimle (ham ad değil) reddedildi"),
+            r => panic!("'{ad}' reddedilmedi: {r:?}"),
+        }
+        assert_eq!(fs::read_dir(out.path()).unwrap().count(), 0, "'{ad}' reddedilirken hedefe yazıldı");
+    }
+
+    /// KRİTİK (YS3): MUTLAK yollu girdi REDDEDİLİR. zip 2.x `enclosed_name` kök / önek bileşeninde `None` dönüyordu; zip 9 mutlak yolu
+    /// sessizce GÖRELİYE çevirir (`/x/y` → `x/y`) — koruma ham adı kendisi doğrulamazsa kötü niyetli paket hata vermeden açılırdı.
+    #[test]
+    fn KRITIK_YS3_mutlak_yollu_girdi_reddedilir_hicbir_sey_yazilmaz() {
+        let mut adlar = vec!["/pemf_ys3_mutlak/x.txt", "//pemf_ys3_unc/pay/x.txt"];
+        #[cfg(windows)]
+        adlar.extend(["C:/pemf_ys3_mutlak/x.txt", r"C:\pemf_ys3_mutlak\x.txt", "C:pemf_ys3_surucu.txt", r"\pemf_ys3_kok\x.txt"]);
+        for ad in adlar {
+            ys3_ad_reddedilir(ad);
+        }
+        assert!(!Path::new("/pemf_ys3_mutlak").exists(), "mutlak yola yazıldı");
+    }
+
+    /// KRİTİK (YS3): kök İÇİNDE kalsa bile `..` bileşenli girdi REDDEDİLİR (`is_safe_relative` sözleşmesi). zip 9 `enclosed_name`
+    /// `a/../b`'yi `b`'ye sadeleştirir — sadeleştirilmiş ad doğrulanırsa `..` reddi sessizce kalkardı.
+    #[test]
+    fn KRITIK_YS3_ic_ust_dizin_bileseni_kok_icinde_kalsa_da_reddedilir() {
+        let mut adlar = vec!["a/../b.txt", "a/b/../../c.txt", "./a/../b.txt"];
+        #[cfg(windows)]
+        adlar.push(r"a\..\b.txt");
+        for ad in adlar {
+            ys3_ad_reddedilir(ad);
+        }
+    }
+
+    /// KRİTİK (YS3): NUL baytlı ad İLK savunmada (`enclosed_name` → None; 2.x ve 9.x aynı) yol kaçışı olarak reddedilir — o katman
+    /// kalkarsa ad ham denetimi geçer ve açma belirsiz bir G/Ç hatasıyla düşerdi (hangi saldırının durdurulduğu iletiden okunmaz).
+    #[test]
+    fn KRITIK_YS3_nul_baytli_ad_ilk_savunmada_yol_kacisi_sayilir() {
+        ys3_ad_reddedilir("a\0b.txt");
+        ys3_ad_reddedilir("PEMF_Backend/x.dll\0.txt");
     }
 }

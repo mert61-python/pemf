@@ -37,7 +37,7 @@ fn zip_uret(girdiler: &[(&str, &[u8])]) -> Vec<u8> {
     let mut tampon = std::io::Cursor::new(Vec::new());
     {
         let mut z = zip::ZipWriter::new(&mut tampon);
-        let ayar: zip::write::FileOptions<'_, ()> =
+        let ayar: zip::write::SimpleFileOptions =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (ad, veri) in girdiler {
             z.start_file(*ad, ayar).unwrap();

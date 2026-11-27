@@ -5,12 +5,17 @@ resolver = "2"
 [workspace.package]
 version = "1.9.55"
 edition = "2021"
-rust-version = "1.77"
+# YS3: zip 9.x'in asgari derleyicisi 1.89 (CI `stable`; 1.77 artık derleyemezdi — bildirilen sürüm gerçeği söylesin).
+rust-version = "1.89"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+# YS3 (cargo audit): zip 2.4.2 → 9 (RUSTSEC-2026-0367 / -0368 / -0369 / -0429 / -0545 / -0548; asgari 9.0.5). Özellikler 2.x'in
+# `deflate`'iyle AYNI kod yolu: flate2 (arka uç miniz_oxide — ureq'in gzip'i zaten açar) + zopfli; 9.x'in `deflate`'i yeni bir
+# arka uç (zlib-rs) çekerdi. ⚠️ 9.x `enclosed_name` mutlak yolu göreliye çevirir / `..`yu sadeleştirir → koruma ham adı kendi
+# doğrular (extract.rs, KRITIK_YS3_* testleri).
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2", "deflate-zopfli"] }
 thiserror = "2"
 ureq = "2"

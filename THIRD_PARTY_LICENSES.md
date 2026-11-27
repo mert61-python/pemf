@@ -1018,7 +1018,6 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `alloc-stdlib` | 0.2.4 | BSD-3-Clause |
 | `android_system_properties` | 0.1.5 | MIT/Apache-2.0 |
 | `anyhow` | 1.0.104 | MIT OR Apache-2.0 |
-| `arbitrary` | 1.4.2 | MIT OR Apache-2.0 |
 | `atk` | 0.18.2 | MIT |
 | `atk-sys` | 0.18.2 | MIT |
 | `atomic-waker` | 1.1.2 | Apache-2.0 OR MIT |
@@ -1049,9 +1048,11 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `cfb` | 0.7.3 | MIT |
 | `cfg-expr` | 0.15.8 | MIT OR Apache-2.0 |
 | `cfg-if` | 1.0.4 | MIT OR Apache-2.0 |
+| `cfg_aliases` | 0.2.2 | MIT |
 | `chrono` | 0.4.45 | MIT OR Apache-2.0 |
 | `combine` | 4.6.7 | MIT |
-| `cookie` | 0.18.1 | MIT OR Apache-2.0 |
+| `constant_time_eq` | 0.6.2 | CC0-1.0 OR MIT-0 OR Apache-2.0 |
+| `cookie` | 0.18.3 | MIT OR Apache-2.0 |
 | `core-foundation` | 0.10.1 | MIT OR Apache-2.0 |
 | `core-foundation-sys` | 0.8.7 | MIT OR Apache-2.0 |
 | `core-graphics` | 0.25.0 | MIT OR Apache-2.0 |
@@ -1070,7 +1071,6 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `darling_macro` | 0.23.0 | MIT |
 | `dbus` | 0.9.12 | Apache-2.0/MIT |
 | `deranged` | 0.5.8 | MIT OR Apache-2.0 |
-| `derive_arbitrary` | 1.4.2 | MIT OR Apache-2.0 |
 | `derive_more` | 2.1.1 | MIT |
 | `derive_more-impl` | 2.1.1 | MIT |
 | `digest` | 0.10.7 | MIT OR Apache-2.0 |
@@ -1103,7 +1103,7 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `foreign-types` | 0.5.0 | MIT/Apache-2.0 |
 | `foreign-types-macros` | 0.2.3 | MIT/Apache-2.0 |
 | `foreign-types-shared` | 0.3.1 | MIT/Apache-2.0 |
-| `form_urlencoded` | 1.2.2 | MIT OR Apache-2.0 |
+| `form_urlencoded` | 1.2.3 | MIT OR Apache-2.0 |
 | `futures-channel` | 0.3.33 | MIT OR Apache-2.0 |
 | `futures-core` | 0.3.33 | MIT OR Apache-2.0 |
 | `futures-executor` | 0.3.33 | MIT OR Apache-2.0 |
@@ -1193,6 +1193,7 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `ndk` | 0.9.0 | MIT OR Apache-2.0 |
 | `ndk-sys` | 0.6.0+11769913 | MIT OR Apache-2.0 |
 | `new_debug_unreachable` | 1.0.6 | MIT |
+| `nix` | 0.32.0 | MIT |
 | `num-conv` | 0.2.2 | MIT OR Apache-2.0 |
 | `num-traits` | 0.2.19 | MIT OR Apache-2.0 |
 | `num_enum` | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 |
@@ -1256,8 +1257,8 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `ring` | 0.17.14 | Apache-2.0 AND ISC |
 | `rustc-hash` | 2.1.3 | Apache-2.0 OR MIT |
 | `rustc_version` | 0.4.1 | MIT OR Apache-2.0 |
-| `rustix` | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
-| `rustls` | 0.23.45 | Apache-2.0 OR ISC OR MIT |
+| `rustix` | 1.1.6 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| `rustls` | 0.23.46 | Apache-2.0 OR ISC OR MIT |
 | `rustls-pki-types` | 1.15.0 | MIT OR Apache-2.0 |
 | `rustls-webpki` | 0.103.16 | ISC |
 | `rustversion` | 1.0.23 | MIT OR Apache-2.0 |
@@ -1328,7 +1329,7 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `tinystr` | 0.8.3 | Unicode-3.0 |
 | `tinyvec` | 1.12.0 | Zlib OR Apache-2.0 OR MIT |
 | `tinyvec_macros` | 0.1.1 | MIT OR Apache-2.0 OR Zlib |
-| `tokio` | 1.53.1 | MIT |
+| `tokio` | 1.54.1 | MIT |
 | `tokio-util` | 0.7.19 | MIT |
 | `toml` | 0.8.2 | MIT OR Apache-2.0 |
 | `toml` | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 |
@@ -1349,6 +1350,7 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `tracing-core` | 0.1.36 | MIT |
 | `tray-icon` | 0.24.1 | MIT OR Apache-2.0 |
 | `try-lock` | 0.2.5 | MIT |
+| `typed-path` | 0.13.0 | MIT OR Apache-2.0 |
 | `typeid` | 1.0.3 | MIT OR Apache-2.0 |
 | `typenum` | 1.20.1 | MIT OR Apache-2.0 |
 | `unic-char-property` | 0.9.0 | MIT/Apache-2.0 |
@@ -1360,7 +1362,7 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `unicode-segmentation` | 1.13.3 | MIT OR Apache-2.0 |
 | `untrusted` | 0.9.0 | ISC |
 | `ureq` | 2.12.1 | MIT OR Apache-2.0 |
-| `url` | 2.5.8 | MIT OR Apache-2.0 |
+| `url` | 2.5.9 | MIT OR Apache-2.0 |
 | `urlpattern` | 0.3.0 | MIT |
 | `utf8_iter` | 1.0.4 | Apache-2.0 OR MIT |
 | `uuid` | 1.24.0 | Apache-2.0 OR MIT |
@@ -1383,7 +1385,7 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `webkit2gtk` | 2.0.2 | MIT |
 | `webkit2gtk-sys` | 2.0.2 | MIT |
 | `webpki-roots` | 0.26.11 | CDLA-Permissive-2.0 |
-| `webpki-roots` | 1.0.9 | CDLA-Permissive-2.0 |
+| `webpki-roots` | 1.0.12 | CDLA-Permissive-2.0 |
 | `webview2-com` | 0.38.2 | MIT |
 | `webview2-com-macros` | 0.8.1 | MIT |
 | `webview2-com-sys` | 0.38.2 | MIT |
@@ -1443,10 +1445,11 @@ kopyleft: değiştirilmeden kullanılır, kaynakları crates.io'daki aynı sür�
 | `zerofrom` | 0.1.8 | Unicode-3.0 |
 | `zerofrom-derive` | 0.1.7 | Unicode-3.0 |
 | `zeroize` | 1.9.0 | Apache-2.0 OR MIT |
+| `zeroize_derive` | 1.5.0 | Apache-2.0 OR MIT |
 | `zerotrie` | 0.2.4 | Unicode-3.0 |
 | `zerovec` | 0.11.6 | Unicode-3.0 |
 | `zerovec-derive` | 0.11.3 | Unicode-3.0 |
-| `zip` | 2.4.2 | MIT |
+| `zip` | 9.8.2 | MIT |
 | `zmij` | 1.0.23 | MIT |
 | `zopfli` | 0.8.3 | Apache-2.0 |
 

@@ -37,4 +37,7 @@ ignore = [
     "RUSTSEC-2025-0081", # unic-char-property bakımsız (idna üzerinden)
     "RUSTSEC-2025-0098", # unic-ucd-version bakımsız (idna üzerinden)
     "RUSTSEC-2025-0100", # unic-ucd-ident bakımsız (idna üzerinden)
+    # YS3 (2026-11-27): chrono bakımsız (yamalı sürüm YOK). Kilitte yalnız tauri-utils → serde_with'in İSTEĞE BAĞLI bağımlılığı;
+    # hiçbir derlemeye girmez (`cargo tree -i chrono@0.4.45 --target all -e all` boş). Kodumuz chrono kullanmaz.
+    "RUSTSEC-2026-0543",
 ]

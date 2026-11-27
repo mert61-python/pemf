@@ -693,11 +693,14 @@ fn zip_dosya_listesi(zip_yolu: &Path, profil: &str) -> Result<Vec<String>, FlowE
     let f = fs::File::open(zip_yolu).map_err(|e| {
         FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.onbellekOkunamadi", &[("profil", &(profil).to_string()), ("dosya", &(zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")).to_string()), ("hata", &(e).to_string())]))
     })?;
-    let arsiv = zip::ZipArchive::new(f).map_err(|e| {
+    let bozuk = |e: zip::result::ZipError| {
         FlowError::ProfilKaldirma(crate::dil::t_ile("rust.kurulum.onbellekBozuk", &[("profil", &(profil).to_string()), ("dosya", &(zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")).to_string()), ("hata", &(e).to_string())]))
-    })?;
-    let mut v = Vec::with_capacity(arsiv.len());
-    for ad in arsiv.file_names() {
+    };
+    let arsiv = zip::ZipArchive::new(f).map_err(bozuk)?;
+    // YS3 (zip 9): girdi adları tembel çözülür (`ZipResult<Cow<str>>`) — çözülemeyen ad da "önbellek bozuk" (2.x açılışta çözerdi).
+    let adlar: Vec<_> = arsiv.file_names().collect::<Result<_, _>>().map_err(bozuk)?;
+    let mut v = Vec::with_capacity(adlar.len());
+    for ad in &adlar {
         match model_yolunu_normalize_et(ad) {
             Ok(Some(yol)) => v.push(yol),
             Ok(None) => {}
@@ -2216,7 +2219,7 @@ mod tests {
         {
             let f = fs::File::create(&zip_yolu).unwrap();
             let mut z = zip::ZipWriter::new(f);
-            let o: zip::write::FileOptions<'_, ()> =
+            let o: zip::write::SimpleFileOptions =
                 zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
             for (ad, icerik) in [
                 ("PEMF_Backend/PEMF_Backend.exe", &b"YENI-EXE"[..]),
@@ -2315,7 +2318,7 @@ mod tests {
         {
             let f = fs::File::create(&zip_yolu).unwrap();
             let mut z = zip::ZipWriter::new(f);
-            let o: zip::write::FileOptions<'_, ()> =
+            let o: zip::write::SimpleFileOptions =
                 zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
             z.start_file("PEMF_Backend/_internal/frontend/dist/index.html", o).unwrap();
             z.write_all(b"YENI-WEB").unwrap();
@@ -3356,7 +3359,7 @@ mod tests {
         {
             let f = fs::File::create(&zip_yolu).unwrap();
             let mut z = zip::ZipWriter::new(f);
-            let o: zip::write::FileOptions<'_, ()> =
+            let o: zip::write::SimpleFileOptions =
                 zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
             for (ad, icerik) in [
                 ("PEMF_Backend/PEMF_Backend.exe", &b"YENI-EXE"[..]),
@@ -3696,7 +3699,7 @@ mod kp2_testleri {
     /// Bellekte zip üret; sonu `/` olan ad DİZİN girdisidir.
     fn zip_bayt(girdiler: &[(&str, &[u8])]) -> Vec<u8> {
         let mut z = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-        let o: zip::write::FileOptions<'_, ()> =
+        let o: zip::write::SimpleFileOptions =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
         for (ad, icerik) in girdiler {
             if ad.ends_with('/') {
