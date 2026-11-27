@@ -19,6 +19,10 @@
     }
   },
   "launcher": {
+    "1.9.56": {
+      "notes": "Başlatıcının paket açma ve bağlantı kütüphaneleri yamalı sürümlere yükseltildi. Uygulama penceresi kapatılıp hemen \"Başlat\"a basıldığında pencere artık hata sayfasında kalmaz: önce kapanış biter, sonra uygulama yeniden açılır.",
+      "notes_en": "The launcher's package-extraction and connection libraries were updated to patched versions. Pressing \"Start\" right after closing the app window no longer leaves the window on an error page: closing finishes first, then the app opens again."
+    },
     "1.9.55": {
       "notes": "İnternetsiz açılan PEMF Vet Client, bağlantı gelince kendiliğinden çevrimiçine döner. Bilgisayar ikinci bir Windows hesabıyla da kullanılıyorsa paylaşım kartı açılışta kaybolmaz; \"İzin ver\" PEMF'in kendi programlarının Windows güvenlik duvarı engelini kaldırır. Kurulum bitince durum satırı \"uygulama penceresi açıldı\" der.",
       "notes_en": "PEMF Vet Client opened without internet now goes back online by itself when the connection returns. If the computer is also used from a second Windows account, the sharing card no longer disappears at startup, and \"Allow\" removes the Windows Firewall block on PEMF's own programs. After setup the status line says \"app window opened\"."

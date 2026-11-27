@@ -20,7 +20,7 @@ import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 NOTLAR = KOK / "docs" / "surum_notlari.json"
-TASLAK = {"app": "1.9.53", "launcher": "1.9.55", "mobile": "2.3.36"}
+TASLAK = {"app": "1.9.53", "launcher": "1.9.56", "mobile": "2.3.36"}  # YS3c: başlatıcı 1.9.56 (yayınlanmadı)
 
 _TR_HARF = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
 _IDDIA_TR = re.compile(r"(?i)(iyileştir|şifa|tedavi eder|tedavi sağlar|ağrıyı (giderir|azaltır|keser)|etkili tedavi)")

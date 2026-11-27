@@ -523,7 +523,8 @@ mod tests {
         // manifest'in paket sunması tutarsızdı. Client artık "bu platform için paket yok" deyip
         // DURUR — sessizce kilitli bir cihaz kurmaktansa açık hata.
         //
-        // GERİ ALMAK İÇİN: paketleri CI ile üret (`linux-backend.yml` / `mac-backend.yml`),
+        // GERİ ALMAK İÇİN: paketleri CI ile üret (`linux-backend.yml` / `mac-backend.yml` — Y320 / YS1b'de kaldırıldı, git
+        // geçmişinden geri getirilir),
         // `layers` + `rollout` ekle ve bu iddiaları geri getir. Şu hâlde YOKLUĞU kilitliyoruz ki
         // yanlışlıkla geri sızmasın.
         assert!(!m.runtimes.contains_key(platform::LINUX_X64),

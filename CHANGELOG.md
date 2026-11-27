@@ -6,6 +6,23 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.56 — YAYINLANMADI (tarih ve yayın notu yayın günü yazılır) · app 1.9.53 · mobile 2.3.36
+
+> Yalnız başlatıcı (PEMF Vet Client) değişti — uygulama paketi (app 1.9.53) ve telefon uygulaması (2.3.36) bu bölümde
+> DEĞİŞMEDİ. Kaynak: istem 63 YS3 (yayın sonrası düzeltmeler). Site indirme bağlantısı yayın günü güncellenir.
+
+- **Bağımlılık güvenliği (YG1 4e):** başlatıcının paket açma kütüphanesi (zip) 2.4.2 → 9.8.2; TLS (rustls 0.23.46), çerez
+  (cookie 0.18.3), adres (url 2.5.9), kök sertifika (webpki-roots 1.0.12), rustix 1.1.6 ve tokio 1.54.1 yamalı sürümlerde →
+  `cargo audit --deny warnings` 13 bildirim + 3 uyarı → 0. Paket açmanın güvenlik davranışı AYNI: kurulum klasörünün dışına
+  çıkan (`..`, mutlak yol, sembolik bağ) ya da NUL baytlı ad içeren girdi reddedilir; profil paketi doğrulanmış `runtime/`'ı ve
+  durum dosyalarını ezemez; açılım boyutu / girdi sayısı sınırları aynen. (zip 9 mutlak yolu sessizce göreliye çevirdiği için
+  açıcı artık arşivdeki HAM adı kendisi doğrular.)
+- **"Başlat" yeniden açılış yarışı (B12, LattePanda):** uygulama penceresi kapatılıp HEMEN "Başlat"a basılınca pencere
+  "127.0.0.1 bağlanmayı reddetti" sayfasında kalıyordu (kapanmakta olan arka uç "çalışıyor" sayılıp pencere ona açılıyordu).
+  Artık Başlat önce kapanışın (bobinler güvenle durdurulur) bitmesini bekler, sonra yeni arka ucu başlatır; kapanış 15 sn'de
+  bitmezse "Uygulama hâlâ kapanıyor — birkaç saniye sonra yeniden Başlat'a basın" der. Pencere yüklendiğinde arka uç yanıt
+  vermiyorsa pencere en çok ~10 sn kendini yeniden dener. Kapanış sırası DEĞİŞMEDİ.
+
 ## launcher 1.9.55 — 2026-11-25 · app 1.9.53 · mobile 2.3.36 (yayın adayı: tarih PLANLANAN yayın günü — yayın başka gün olursa bu tarih ve sitedeki sürüm tarihi o gün yazılır; paket kimliği yayın günü)
 
 > ⚠️ Yayın adayı — sahibin "yayınla"sıyla yayınlanır (tezgâhta, LattePanda günü). **Kontrolcü

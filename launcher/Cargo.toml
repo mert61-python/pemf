@@ -3,7 +3,7 @@ members = ["core", "app"]
 resolver = "2"
 
 [workspace.package]
-version = "1.9.55"
+version = "1.9.56"
 edition = "2021"
 # YS3: zip 9.x'in asgari derleyicisi 1.89 (CI `stable`; 1.77 artık derleyemezdi — bildirilen sürüm gerçeği söylesin).
 rust-version = "1.89"
