@@ -130,7 +130,10 @@ jobs:
       - name: gitleaks ikilisi (pre-commit, sabit rev)
         shell: bash
         run: |
-          pip install "pre-commit>=4.0,<5.0"
+          # CT1 (istem 66, ölçüldü 27-11 CI eşinde): kısıtsız kurulum derleme kilidindeki packaging 26.2 → 26.4 ve typing-extensions
+          # 4.15.0 → 4.16.0 YÜKSELTİYORDU — testler ürün kilidinden farklı sürümlerle koşuyordu. Kilit KISIT (-c) olarak verilir.
+          # Kapı: tests/test_CT1e_ci_ortami_KILITLE_ayni.py
+          pip install "pre-commit>=4.0,<5.0" -c build_tools/myenv-requirements.txt
           pre-commit install-hooks
 
       # KP-5 E13 (sahip Y279 · Y282, 12-11): AI ağırlıkları / git-ignored test eserleri (ODAK alan tablosu + ONNX dahil) AÇIK DEPOYA
@@ -138,12 +141,24 @@ jobs:
       # doğrulanır, model kökü `PEMF_AI_MODELS_DIR`e yazılır. "Eser yoksa atla" koruması YOK (KP-4 [SAHİBE] 4): indirme / doğrulama
       # düşerse iş KIRMIZI. Anahtar: depo Settings → Secrets → Actions → `PEMF_CI_MODEL_ANAHTARI`; kaynak listenin `kaynak.url`i
       # (ya da `PEMF_CI_MODEL_KAYNAGI` değişkeni). Paket: `python scripts/ci_modelleri.py paketle` (sahip, yerelde).
+      # CT1 b / e (istem 66 · Y324): paket artık TAM ağırlık ağacı + PT ikizleri + test girdileri (~4,2 GB, 2 GiB sınırı yüzünden
+      # PARÇALI — `PEMF_CI_MODEL_KAYNAGI` parça adreslerini boşlukla ayrılmış taşır). Parçalar önbellekte: anahtar = LİSTE özeti (liste
+      # her dosyanın ve parçanın SHA-256'sını taşır → paket değişince anahtar değişir); `restore-keys` YOK (eski paket geri yüklenmez).
+      # İndirme adımı önbellekteki parçaları SHA-256 ile doğrular, tutmazsa yeniden indirir. Kapı: test_CT1b_ci_modelleri_COK_PARCALI.py
+      - name: AI model paketi önbelleği
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pemf_ci_paket
+          key: pemf-ci-modelleri-${{ hashFiles('scripts/ci_modelleri_listesi.json') }}
+
       - name: AI modelleri (gizli anahtarla indirme + SHA-256 doğrulama)
         shell: bash
         env:
           PEMF_CI_MODEL_ANAHTARI: ${{ secrets.PEMF_CI_MODEL_ANAHTARI }}
           PEMF_CI_MODEL_KAYNAGI: ${{ vars.PEMF_CI_MODEL_KAYNAGI }}
-        run: python scripts/ci_modelleri.py indir --hedef "$RUNNER_TEMP/pemf_ai_models" --github-env "$GITHUB_ENV"
+        # CT1 (ölçüldü 27-11, CI eşi): ağırlık ağacı DEPO İÇİ `release_assets/ai_models`'a açılır — yayın makinesinin (guii) düzeni;
+        # 56 test bu yolu doğrudan okur (ör. test_yedek_kapsami büyük ağırlık karşıt-kanıtı) — RUNNER_TEMP'te ZORUNLU kipte KIRMIZIYDI.
+        run: python scripts/ci_modelleri.py indir --hedef "$GITHUB_WORKSPACE/release_assets/ai_models" --onbellek "$RUNNER_TEMP/pemf_ci_paket" --github-env "$GITHUB_ENV"
 
       # YS1j → YS1l (tanı 21b5be65 · Windows Server 2025): koşucunun profil TEMP'inde doğan dosyaya `icacls /inheritance:r` kalıtımlı
       # ACE'leri SİLMİYOR, açık ACE'ye çeviriyor → "başka hesabın kilidi" (`/grant:r *S-1-5-19:(F)`) sonrası süreç hesabı (LA) erişimini
@@ -214,6 +229,9 @@ jobs:
           PEMF_SIMULATE: ""
           PEMF_GITLEAKS_ZORUNLU: "1"
           PEMF_DEMA_DIST_ZORUNLU: "1"   # YS1g: DEMA dist yukarıda derlenir → o kapı ATLANAMAZ
+          # CT1 b (istem 66): model paketi TAM → eser / ağırlık yokluğu ATLAMA değil KIRMIZI (Y sınıfı yayın makinesi eserleri
+          # `capraz.atla(…, yalniz_yayin=True)` ile gerekçeli atlar — tests/ci_atlanan_defteri.json). Kapı: test_CT1b_ci_modelleri_COK_PARCALI.py
+          PEMF_CAPRAZ_KAYNAK_ZORUNLU: "1"
         run: python scripts/ci_kisitli_belirtec.py pytest tests -n auto --dist loadgroup -v -rfEs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
 
       # ⚠️ A-46 / D2.07: testler geçse bile "sqlcipher" nedenli ATLAMA varsa iş KIRMIZI. Kurulum adımı
@@ -232,6 +250,22 @@ jobs:
 
       - name: sqlcipher atlama kapısı (A-46)
         run: python scripts/ci_sqlcipher_atlama_kapisi.py pytest-junit.xml
+
+      # CT1 c (istem 66 · Y324): SESSİZ ATLAMA BİTER — atlanan her test `tests/ci_atlanan_defteri.json`'da gerekçeli olmalı (yalnız Y =
+      # yalnız yayın makinesi eseri, P = platform / ortam). Defterde olmayan atlama, M / D kaydı, model / eser nedenli kayıt ve koşuda
+      # atlamayan (bayat) kayıt → KIRMIZI. Kapı: tests/test_CT1c_ci_atlanan_defteri_KAPI.py
+      - name: Atlanan defteri kapısı (CT1 c)
+        run: python scripts/ci_atlanan_kapisi.py pytest-junit.xml
+
+      # CT1 f / g (istem 66 · Y311 / Y325 / Y326): KAPSAM KİLİDİ — (1) Python paketleri tabanın ALTINA inemez (sunucu %100 +
+      # ai_hub tabanı, tests/kapsam_tabani.json; pyproject fail_under yalnız sunucuyu görür) · (2) dalın değiştirdiği ölçülen her
+      # satır (sunucu + ai_hub) testle koşmuş olmalı — fark kapsamı %100 (taban: dalga-2, yoksa production-hardening).
+      # Kapı: tests/test_CT1f_kapsam_tabani_KILIDI.py
+      - name: Kapsam kilidi (taban + fark kapsamı)
+        shell: bash
+        run: |
+          python scripts/kapsam_tabani_kapisi.py --json coverage.json
+          python scripts/fark_kapsami.py --covjson coverage.json
 
   sir-taramasi:
     name: sır taraması (gitleaks)
@@ -257,6 +291,8 @@ jobs:
     timeout-minutes: 45          # Y243: + kapsam derlemesi (enstrümanlı) ve cargo-llvm-cov kurulumu
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # CT1 f-3: fark kapsamı tabanı (birleşme tabanı) için tam geçmiş
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -289,7 +325,13 @@ jobs:
         run: cargo install cargo-llvm-cov --locked --version 0.9.1
       - name: cargo llvm-cov (satır kapsamı eşiği)
         working-directory: launcher
-        run: cargo llvm-cov --workspace --all-targets --locked --ignore-filename-regex "[\\/]tests[\\/]|[\\/]app[\\/]src[\\/]kabuk\.rs" --fail-under-lines 95
+        # CT1 f-2 (istem 66 · Y325): eşik = TABAN − ÖLÇÜLMÜŞ oynama payı (tests/kapsam_tabani.json → baslatici_cargo.ci_esigi;
+        # tutarlılık: tests/test_CT1f_kapsam_tabani_KILIDI.py) · lcov → fark kapsamı kapısı (aşağıda).
+        run: cargo llvm-cov --workspace --all-targets --locked --ignore-filename-regex "[\\/]tests[\\/]|[\\/]app[\\/]src[\\/]kabuk\.rs" --fail-under-lines 96.01 --lcov --output-path lcov.info
+      # CT1 f-3 (istem 66 · Y311 / Y325): dalın değiştirdiği her ölçülen başlatıcı satırı testle koşmuş olmalı (fark kapsamı %100).
+      - name: Fark kapsamı kapısı (başlatıcı)
+        shell: bash
+        run: python scripts/fark_kapsami.py --lcov launcher/lcov.info:launcher
       # D3.15 (B-8.18): bağımlılık güvenlik denetimi HER PUSH'ta (eskiden yalnız `launcher-v*` etiketinde — yani yayından SONRA).
       # `launcher/.cargo/audit.toml`'daki gerekçeli yoksayma listesi okunur (çalışma dizini launcher) — onsuz 7 bakımsız uyarı
       # hattı hep kırmızı yapardı; listede olmayan her yeni açık / uyarı kırar. Yoksayma listesine gerçek açık EKLENMEZ.

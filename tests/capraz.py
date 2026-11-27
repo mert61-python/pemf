@@ -30,6 +30,11 @@ KOK = Path(__file__).resolve().parent.parent
 
 #: Yayın makinesinde `1` yapılırsa kardeş kaynak eksikliği ATLAMA değil BAŞARISIZLIK sayılır.
 ZORUNLU = os.environ.get("PEMF_CAPRAZ_KAYNAK_ZORUNLU") == "1"
+#: CT1 c (istem 66 · Y324): Y30 (`scripts/yayin_oncesi_suit.ps1`) `1` yapar. CI de ZORUNLU koşar (model paketi tam — eser yoksa
+#: KIRMIZI); yalnız yayın makinesinde bulunan eser (`yalniz_yayin=True`: kurucu EXE, APK, base-deps.zip, TR tabanı …) CI'da GEREKÇELİ
+#: atlar (`tests/ci_atlanan_defteri.json`, sınıf Y), yayın makinesinde ZORUNLU kuralı aynen işler (atlamaz, düşer).
+YAYIN_MAKINESI = os.environ.get("PEMF_YAYIN_MAKINESI") == "1"
+Y_ONEKI = "[Y — yalnız yayın makinesi]"
 
 
 def kaynak_yolu(gorece: str) -> Path:
@@ -41,7 +46,7 @@ def var_mi(gorece: str) -> bool:
     return kaynak_yolu(gorece).exists()
 
 
-def atla_yoksa(gorece: str, *, izlenen: bool = False) -> None:
+def atla_yoksa(gorece: str, *, izlenen: bool = False, yalniz_yayin: bool = False) -> None:
     """Kardeş kaynak yoksa testi atlar (zorunlu kipte düşürür). Okumadan kontrol için.
 
     `izlenen=True` (D4.04, 2026-10-10): yol bu depoda İZLENEN bir ağaçtadır (`firmware/`, `apps/ui/`). Yalnız
@@ -54,9 +59,7 @@ def atla_yoksa(gorece: str, *, izlenen: bool = False) -> None:
         sebep = f"izlenen kaynak yok: {gorece} — depoda İZLENİR; tam depoda yokluğu klasör taşıması/silinmesidir (yalnız backend paketinde beklenir)"
     else:
         sebep = f"kardeş kaynak yok: {gorece} — bu depoda izlenmez (.gitignore); ayrı depo/derleme çıktısı"
-    if ZORUNLU:
-        pytest.fail(f"PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 ama {sebep}")
-    pytest.skip(sebep)
+    atla(sebep, yalniz_yayin=yalniz_yayin)
 
 
 def oku(gorece: str) -> str:
@@ -65,7 +68,7 @@ def oku(gorece: str) -> str:
     return kaynak_yolu(gorece).read_text(encoding="utf-8")
 
 
-def atla(sebep: str) -> None:
+def atla(sebep: str, *, yalniz_yayin: bool = False) -> None:
     """Yol DIŞI eser yokluğu (çözümlenen ağırlık, araç ikilisi …): atla — ZORUNLU kipte DÜŞ (D5-F, 2026-10-27).
 
     Depo köküne göre bir yolun yokluğunda `atla_yoksa` tercih edilir (izlenen / kardeş ayrımını o yapar). Bu ikiz, varlığı
@@ -73,7 +76,11 @@ def atla(sebep: str) -> None:
     `pytest.skip` ZORUNLU=1'de de atlıyordu; meta kapı (`test_atlama_ZORUNLU_kipte_DUSER_D5.py`) onu yasaklar.
 
     Modül düzeyinde de çağrılabilir (`importorskip` gibi): varsayılan kipte modülü atlar, ZORUNLU kipte toplama HATASI (kırmızı).
+    `yalniz_yayin=True` (CT1 c): eser YALNIZ yayın makinesinde bulunur → yayın makinesi DIŞINDA (CI) ZORUNLU'da da gerekçeli atlar;
+    test / modül `yalniz_yayin_makinesi` işaretini taşımalı (Y30'da atlarsa `yayin_makinesi_kapisi` kırmızı yapar).
     """
+    if yalniz_yayin and not YAYIN_MAKINESI:
+        pytest.skip(f"{Y_ONEKI} {sebep}", allow_module_level=True)
     if ZORUNLU:
         pytest.fail(f"PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 ama {sebep}")
     pytest.skip(sebep, allow_module_level=True)

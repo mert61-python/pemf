@@ -146,6 +146,11 @@ def pytest_configure(config):
     import fikstur_yenileme_kapisi
 
     fikstur_yenileme_kapisi.kur(config)
+    # CT1 c (istem 66 · Y324): Y sınıfı (yalnız yayın makinesi eseri) test Y30'da (`PEMF_YAYIN_MAKINESI=1`) ATLARSA KIRMIZI; CI'da
+    # gerekçeli atlar (`tests/ci_atlanan_defteri.json` + `scripts/ci_atlanan_kapisi.py`). Kapı: tests/test_CT1c_ci_atlanan_defteri_KAPI.py
+    import yayin_makinesi_kapisi
+
+    yayin_makinesi_kapisi.kur(config)
     # Başlık `-q`/`--no-header` altında basılmaz → silme uyarı özetinde de görünsün (her kipte).
     if _PEMF_SIMULATE_DISARIDAN:
         config.issue_config_time_warning(

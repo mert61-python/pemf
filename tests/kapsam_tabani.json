@@ -1,0 +1,53 @@
+{
+ "aciklama": "KAPSAM TABANI (Y311 / Y325 / Y326 · istem 66 CT1 f-2 / g) — makinece okunur TEK kaynak; insan okur tablo ve geçmiş DENETIM\\KAPSAM-TABANI.md. Taban YALNIZ YUKARI gider; düşüş test eklenerek kapatılır, eşik DÜŞÜRÜLMEZ (CLAUDE.md 'Test kapsamı'). CI eşikleri buradan: pytest fail_under (sunucu) + scripts/kapsam_tabani_kapisi.py (sunucu + ai_hub) · apps/ui/jest.config.js · apps/web/vite.config.ts · tests.yml launcher --fail-under-lines (= baslatici_cargo.ci_esigi). Tutarlılık kapısı: tests/test_CT1f_kapsam_tabani_KILIDI.py",
+ "paketler": {
+  "sunucu": {
+   "olcu": "pytest --cov (pyproject [tool.coverage]; ai_hub report.omit ile DIŞINDA) · satır",
+   "satir": 100.0,
+   "kaynak": "KP-6 F (16-11) · YS1 CI @ a2839930 (27-11) TOTAL 100%"
+  },
+  "istemci_jest": {
+   "olcu": "apps/ui jest --coverage (global)",
+   "satir": 100.0,
+   "deyim": 99.3,
+   "dal": 94.4,
+   "islev": 100.0,
+   "kaynak": "CT1 (27-11) @ 78685622 + backendKonumu.CT1 testi — CI eşi Node 22 tam jest: satır 9199 / 9199 · deyim 11084 / 11162 · dal 10377 / 10992 · işlev 2295 / 2295 (önceki YGK 21-11 @ b42bac89)"
+  },
+  "site_vitest": {
+   "olcu": "apps/web vitest --coverage (v8)",
+   "satir": 100.0,
+   "deyim": 100.0,
+   "dal": 98.21,
+   "islev": 100.0,
+   "kaynak": "YGK (21-11) @ b42bac89 · CT1 (27-11) yeniden ölçüldü: satır 1237 / 1237 · deyim 1448 / 1448 · dal 1103 / 1123 · işlev 444 / 444"
+  },
+  "baslatici_cargo": {
+   "olcu": "cargo llvm-cov ÜRÜN ölçüsü (launcher/core/src + launcher/app/src; tests/ ve kabuk.rs hariç) · satır",
+   "satir": 96.04,
+   "oynama_payi": 0.03,
+   "ci_esigi": 96.01,
+   "kaynak": "KP-8 D (17-11) · YGK (21-11) 96,04 · CT1 f-2 (27-11) @ 78685622 AYNI ağaçta 3 koşu: eksik 607 / 610 / 609 (15 385 satır) = %96,05 / 96,04 / 96,04 → oynama 3 satır ≈ 0,02 puan (backend.rs:901–903 zamanlamaya bağlı kol) → pay 0,03, CI eşiği 96,01"
+  },
+  "ai_hub": {
+   "olcu": "pytest --cov (ai_hub ürün yolu; report.omit geçersiz kılınarak) · satır",
+   "satir": 73.18,
+   "kaynak": "CT1 g (27-11) @ 78685622 CI eşi tam koşu (Python 3.10.11 venv, tam model paketi, ZORUNLU): ai_hub %73,18 — ilk ölçüm, olduğu gibi TABAN (Y326: geriye dönük kampanya YOK; yeni / değişen satır %100)",
+   "disarida": {
+    "ai_hub/inference_cat_organ/calibrate_camera.py": "geliştirici kamera kalibrasyon aracı (satranç tahtası fotoğraflarından .npz üretir; CLI) — ürün çalışma yolunda içe aktarılmaz",
+    "model ağırlıkları (*.onnx / *.pt / *.pkl / *.npz)": "Python kodu değil; CI model paketiyle gelir (scripts/ci_modelleri_listesi.json)"
+   }
+  },
+  "kart_yazilimi": {
+   "olcu": "STM32 güvenlik mantığı, ana makine ISR koşum takımı (tests/firmware_host_aparat.py) gcc --coverage + gcov → scripts/firmware_kapsam.py · satır",
+   "satir": 24.19,
+   "kaynak": "CT1 g (27-11) @ 78685622 · winlibs GCC 16.2.0 · main.c 165 / 682",
+   "disarida": {
+    "CubeMX başlatma işlevleri (SystemClock_Config, MX_*_Init, HAL_*Msp*Init, Error_Handler, assert_failed)": "donanım saat / çevre birimi kurulumu — ana makinede anlamsız (scripts/firmware_kapsam.py DISARIDA_ISLEV)",
+    "firmware/stm32_pemf/Drivers/** · stm32f4xx_hal_msp.c · stm32f4xx_it.c · system_stm32f4xx.c · syscalls.c · sysmem.c": "HAL / CMSIS / CubeMX üretimi ve sürücüler",
+    "firmware/esp8266_pemf_coil/** · firmware/esps3_pemf_coil/**": "Ö.4-Y7: ESP devre dışı (kod silinmez) — ürünle sevk edilmez",
+    "firmware/stm32_pemf/Core/Src/pemf_sensor.c · pemf_akim.c ve main.c ana döngü kolları": "ana döngü koşum takımı (tests/firmware_dongu_aparat.py) YALNIZ MSVC (VEH + /alternatename) → gcov ölçümü yok; CT2 f (CI) ya da koşum takımının gcc portu — [SAHİBE]"
+   }
+  }
+ }
+}

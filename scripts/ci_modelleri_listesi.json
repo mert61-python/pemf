@@ -1,10 +1,430 @@
 {
- "aciklama": "KP-5 E13 (Y279 · Y282): CI'ın istediği AI ağırlıkları / git-ignored test eserleri. Paket depo DIŞINDA (açık depoya GİRMEZ); CI gizli anahtarla indirir, her dosyayı buradaki SHA-256 ile doğrular. Paketi kur / listeyi yenile: `python scripts/ci_modelleri.py paketle --modeller release_assets/ai_models --cikti <zip>`.",
+ "aciklama": "KP-5 E13 (Y279 · Y282) + CT1 b (istem 66 · Y324): CI'ın istediği AI ağırlıkları (release_assets/ai_models AĞACININ TAMAMI: ağırlıklar + PT ikizleri + ODAK) ve git-ignored test eserleri (ai_hub/PEMF_AI_Test_Girdileri + modül yanı ONNX / pkl / PT). Paket depo DIŞINDA (açık depoya GİRMEZ); CI gizli anahtarla indirir, her dosyayı ve her PARÇAYI buradaki SHA-256 ile doğrular. Gizlilik: test girdilerinde kişi / konum yok (CT1 b taraması); TIFF EXIF'i pakette TEMİZ. Paketi kur / listeyi yenile: `python scripts/ci_modelleri.py paketle --modeller release_assets/ai_models --depo <hazırlık> --cikti <zip>`.",
  "kaynak": {
   "url": "",
   "not": "Boş: adres depo değişkeni `PEMF_CI_MODEL_KAYNAGI`dan okunur (Settings → Secrets and variables → Actions → Variables)."
  },
  "dosyalar": [
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/00_README_OKU.txt",
+   "sha256": "14a1c56abd356a8bd7a290fe25520199652ced924c57f7037dde6db25f028344",
+   "bayt": 8001
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/01_YuzAgrisi_FGS_kedi.jpeg",
+   "sha256": "baf72b683059d586739eceda46812a2c8254e4e3735d8a8c855a4ff564594c41",
+   "bayt": 192224
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/02_Segmentasyon_kedi.jpeg",
+   "sha256": "b9570a6d888a954d5dfb4b95bf9ad413e7afd6566d46d7451ff92d15b194d50d",
+   "bayt": 1123127
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/03a_Termal_saglikli.jpg",
+   "sha256": "6c92eb6e7fb6146080b7aba1e0187198c323d00a0a36f07fcd79ab5b56732e87",
+   "bayt": 524288
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/03b_Termal_hasta.jpg",
+   "sha256": "ff1634ac88d53ae9024f046c1beeae8a2712d1ecc0413734c349125df9b891ba",
+   "bayt": 524288
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/04a_Retikulosit.jpg",
+   "sha256": "49f4bc478cbb7d33c7279678f0d85ca69dd9ec9400cfeafb1a0b667b511bafca",
+   "bayt": 15560
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/04b_Retikulosit.jpg",
+   "sha256": "d920672e1728d6ad94378e94a90b68f7ebd3456e44635d3c5b7c6cad64ff016f",
+   "bayt": 15846
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/05_FantomTumor.jpeg",
+   "sha256": "74c7eace547ff3cf9bdc143d1a5c80ca074e58536311cddfa7b1ab8ce58ced2c",
+   "bayt": 26508
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/06_PetriKuyu.jpg",
+   "sha256": "299e997d638fe40de64478076dfbe5c677965222df07bb314e09d8c1e89a8fc2",
+   "bayt": 88093
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/06b_PetriKuyu_aruco.jpg",
+   "sha256": "2bc67f41323db61a1c6d3213fed8ce81dc5dd4d422843ee95db23eae0d5f5eef",
+   "bayt": 30277
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/07a_BobrekCT_tas.jpg",
+   "sha256": "a37bffa47a79e5e2bdb1d168d113ed71faba5700028efcc918ebf3525573751b",
+   "bayt": 90625
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/07b_BobrekCT_kist.jpg",
+   "sha256": "276d78f32fd54b79209246e0d7592cc0ac89326f38549ac545d9994b2a4705d6",
+   "bayt": 100549
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/07c_BobrekCT_normal.jpg",
+   "sha256": "a1887306204f939289184468be245b99e2e87ec18b2ee9883b80119c950d53c4",
+   "bayt": 81480
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/08a_BobrekPatoloji_grade0.jpg",
+   "sha256": "186b9bca9e115e1b51435e85bfbe37daa33247d60172b33f732026a029774a58",
+   "bayt": 32517
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/08b_BobrekPatoloji_grade2.jpg",
+   "sha256": "8d77b8c21cce43c11af9f604d29c99c19b192a9cf059c69762601b95f22dca2f",
+   "bayt": 24883
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/08c_BobrekPatoloji_grade4.jpg",
+   "sha256": "df79d78321530bd847622c0da573979dcc54f0ef25795acc220f7eddec5e7ba9",
+   "bayt": 31473
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/09_KediOrgan.jpg",
+   "sha256": "54dada15fdbb89144af596b4d7c4b970646f20a762ca5ecfee9a1f09269c7b9b",
+   "bayt": 3027238
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/10a_KediSesi_mutlu.mp3",
+   "sha256": "c68ccf6c8174b6eeef2867ba45cca064da592befffb17e52024a0c9fac0b7799",
+   "bayt": 11598
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/10b_KediSesi_kizgin.mp3",
+   "sha256": "4ade1902f259dae856a827972b885cf9c1e877fc568c352a713238b36fca90f8",
+   "bayt": 18494
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/10c_KediSesi_agri.mp3",
+   "sha256": "674e7178b6ed65907bd7c344cdec1ba067dd02e0ffee6f7e95624aee24a701c1",
+   "bayt": 77113
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/11_BobrekRNA.csv",
+   "sha256": "b550d00c165b4ba106dc64e171c8652a9cfa4470474d7293c965e6a3c6bc9fde",
+   "bayt": 651528
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/11b_BobrekRNA_gercekformat.csv",
+   "sha256": "3a499e4743395e7eb8dce3f95e9cb98c06b59963f80cd0ca3fa1baa8d59439d5",
+   "bayt": 2778402
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/12a_YaraKapanma_0H.tif",
+   "sha256": "590037fb713694be900983992e6bb61d158aaf4d47a3e7c0b8bbdc505f065896",
+   "bayt": 5760192
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/12b_YaraKapanma_24H.tif",
+   "sha256": "7cbd8b2bdaa597ce3087ac66a2a3e3dd47febbde24da7f2b5569478c1b8d0a18",
+   "bayt": 5760192
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/90_Batch_XAI/em_fantom_points.csv",
+   "sha256": "beec1c049f71eb3789af7e1716c9d8e135fa870831a0c78dbbf59ab6416618b4",
+   "bayt": 136
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_AI_Test_Girdileri/90_Batch_XAI/em_petri_points.csv",
+   "sha256": "beec1c049f71eb3789af7e1716c9d8e135fa870831a0c78dbbf59ab6416618b4",
+   "bayt": 136
+  },
+  {
+   "yol": "depo/ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf",
+   "sha256": "228cd465e97391abf397acf7bf37de1f37540c89b0408aa04181369b9fd7ed6e",
+   "bayt": 290904
+  },
+  {
+   "yol": "depo/ai_hub/inference_em_petri/scaler_X.pkl",
+   "sha256": "8dede5ec860282a83def7bb793ec823c10c04c5ecb6504e85ee306ed91182d33",
+   "bayt": 639
+  },
+  {
+   "yol": "depo/ai_hub/inference_em_petri/scaler_extra.pkl",
+   "sha256": "57db6271af5ef3fbe98945a9016ed757fc873530103da884d5e0bcad9c3c29fe",
+   "bayt": 631
+  },
+  {
+   "yol": "depo/ai_hub/inference_em_petri/scaler_y.pkl",
+   "sha256": "5015a1215ce16f39d4905521376ca35d50596d21ef3ff71310bc4e6954f560ce",
+   "bayt": 1119
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_disease/CatBoost.onnx",
+   "sha256": "34d7af516b9081fa5fa42ff8f08b13338828ca8c177f4aa4ca5f2c9e71622f18",
+   "bayt": 3300871
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_disease/ExtraTrees.onnx",
+   "sha256": "1ca94a001f3d66832932b5c991cc13455b4c4c5df2861cef4c996bb01ded1577",
+   "bayt": 774706
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_disease/LogisticRegression.onnx",
+   "sha256": "7e7f63b49b9f2c753a092fa5fc33622e89a5bf73fe67732053d5f14b91cff578",
+   "bayt": 608
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_disease/RandomForest.onnx",
+   "sha256": "f72d8d52c4f2925bc0fdbde9d1e66fe93d931b96d6bf0eee0820e0c5da975f6a",
+   "bayt": 383077
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_disease/preprocessor.pkl",
+   "sha256": "4b3bf3d42dafe1a0705510ba71dc87c4f18d56e6c2f42edfc02bd44631e345d2",
+   "bayt": 3558
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_rna/mlp_medium_kirc.onnx",
+   "sha256": "a22282c7a9b14dd3e138231b9e8780d1446460cff2fd11ec67e81b3dae78a68f",
+   "bayt": 1207455
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt",
+   "sha256": "545b3322191eb8625896ffc0f3ee63ceb617a3dbb4abc4e4c298e78abd7f8c9e",
+   "bayt": 1212952
+  },
+  {
+   "yol": "depo/ai_hub/inference_human_kidney_rna/scaler.pkl",
+   "sha256": "6526cf8490715bbb1bf72ed6f84ad221082e15d70ef499d4eddaa30143369b8d",
+   "bayt": 493311
+  },
+  {
+   "yol": "modeller/ai_hub/cat_disease/XGBoost.onnx",
+   "sha256": "b7329a2d90457124ecae56dcb1cd5e4fae8617713179aa92b2f93b3d42164e4b",
+   "bayt": 46312558
+  },
+  {
+   "yol": "modeller/ai_hub/cat_disease/XGBoost.pkl",
+   "sha256": "2710d254e6d6dd178a496448210686f5ad70a16a6c358d37d51d47ec6dfa40fe",
+   "bayt": 53249189
+  },
+  {
+   "yol": "modeller/ai_hub/cat_disease/label_encoder.pkl",
+   "sha256": "bb529c15bbf2681f15a17bd722331864d8adb6e75b89b24b8a495c2ba3527f7a",
+   "bayt": 867
+  },
+  {
+   "yol": "modeller/ai_hub/cat_disease/scaler_X.pkl",
+   "sha256": "f0a0f5b20a35ce696e5611f74c4318b065eecbc3bbd1508307ae6753c804eed9",
+   "bayt": 1055
+  },
+  {
+   "yol": "modeller/ai_hub/cat_landmark/thresholds_calibrated.json",
+   "sha256": "e8988c4df552ee52976f53b42b70991ab3ca395aa8ad8aecd90c1d136b47150f",
+   "bayt": 1914
+  },
+  {
+   "yol": "modeller/ai_hub/cat_landmark/yolo26m-pose.onnx",
+   "sha256": "8d86088637eb5e2e000550c269e79f5c64f6ae58b8f6db28b9ecab5b90b958d3",
+   "bayt": 94887773
+  },
+  {
+   "yol": "modeller/ai_hub/cat_segmentation/yolov8m-seg.onnx",
+   "sha256": "4ee76081b27516cb2eff7c82c47225a9ee7aeb86bca79fbb908d05b2d004df69",
+   "bayt": 109168220
+  },
+  {
+   "yol": "modeller/ai_hub/cat_thermal/GhostNetV2.onnx",
+   "sha256": "b1d0d4a0f7b85ccd32a1d33c48bde5e85234cdc858079652c4aba968dfd1f587",
+   "bayt": 20882015
+  },
+  {
+   "yol": "modeller/ai_hub/cat_thermal/GhostNetV2.pt",
+   "sha256": "0958fd6d41331a9050e0ad570dba79a0d4583b23d99db7220fce091889e3e799",
+   "bayt": 21324220
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi/BiLSTM_XXL_Raw.onnx",
+   "sha256": "1af478b7ea4989c1734160f0af02813e35d4ec02fe1b282b153826f4b672d70c",
+   "bayt": 60367988
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi/scaler_X.pkl",
+   "sha256": "13d046db1f9b2622662df413665efe65377a89e3cdae0e8970888b9ac545c9bd",
+   "bayt": 639
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi/scaler_extra.pkl",
+   "sha256": "7e7af489ff9466efc6270b21e1f1bf308a254207d271e16719d26dedb01b4b43",
+   "bayt": 631
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi/scaler_y.pkl",
+   "sha256": "2c7bf85f347384e97ad69b455116a27517f8cc87682b1f7a38c48e17f2e88dee",
+   "bayt": 1111
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi_legacy/ResNet_kedi_v2.onnx",
+   "sha256": "4bcddb3efb79c55abd823e0b87f52ab4a27926439be8bd2670973048c10581fb",
+   "bayt": 49703686
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi_legacy/scaler_X_kedi_v2.pkl",
+   "sha256": "99c9e4746963d8feaa2ead0c7112623f08c5199a6ffa816ebae8303b0079018a",
+   "bayt": 671
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi_legacy/scaler_extra_kedi.pkl",
+   "sha256": "3796b0f3a78ef81fddd347043241566de0e96e7a34fd661285b7987ce041a230",
+   "bayt": 663
+  },
+  {
+   "yol": "modeller/ai_hub/em_kedi_legacy/scaler_y_kedi_v2.pkl",
+   "sha256": "009ab135d670035d7210b2672d10b3a9f343c2b0c273708ad9c39cddd59d76b7",
+   "bayt": 1143
+  },
+  {
+   "yol": "modeller/ai_hub/em_petri/PetriNet_v3.onnx",
+   "sha256": "b3c2b2665619ac4af80bf132ec0ce7b43f7a9fa0575d1c925af010cab5ebec6b",
+   "bayt": 50882534
+  },
+  {
+   "yol": "modeller/ai_hub/em_petri/scaler_D_petri_v3.pkl",
+   "sha256": "1906083a7504c39eed5bf3d54a31e2dd2b929c43c50987fb14d7eb7a3d9edecf",
+   "bayt": 767
+  },
+  {
+   "yol": "modeller/ai_hub/em_petri/scaler_E_petri_v3.pkl",
+   "sha256": "c0aaa1ce4c2ba75ecf9561fc449b981b2091880f4bc5fc76c43df8162ff88840",
+   "bayt": 663
+  },
+  {
+   "yol": "modeller/ai_hub/em_petri/scaler_X_petri_v3.pkl",
+   "sha256": "b1f64fdca47a527058a9db2ba2621aafe94e88d430d56d10287ab84164a2078c",
+   "bayt": 711
+  },
+  {
+   "yol": "modeller/ai_hub/em_petri/scaler_extra_petri_v3.pkl",
+   "sha256": "88ff14bd286c9b9d3ce79546e74546685c37d7d40a4908f49884ff1483634ec5",
+   "bayt": 663
+  },
+  {
+   "yol": "modeller/ai_hub/em_phantom/PhantomNet_v3.onnx",
+   "sha256": "1f9f7a07ad1198c225e4b698958b278e3ac15b7745fc6ddf75087b13e572161d",
+   "bayt": 50879462
+  },
+  {
+   "yol": "modeller/ai_hub/em_phantom/scaler_D_phantom_v3.pkl",
+   "sha256": "c015fa8b50b260ada17bad20cfb297b929f01422a95724460725508d2012f328",
+   "bayt": 767
+  },
+  {
+   "yol": "modeller/ai_hub/em_phantom/scaler_E_phantom_v3.pkl",
+   "sha256": "9e328fffd03283b2ccf0314c702765d602436b14358f482eb90fd958dbec73fd",
+   "bayt": 663
+  },
+  {
+   "yol": "modeller/ai_hub/em_phantom/scaler_X_phantom_v3.pkl",
+   "sha256": "573d9c47de2d6c930e3e3eddbb22c35d035af3ad809042a72197dba4623847df",
+   "bayt": 671
+  },
+  {
+   "yol": "modeller/ai_hub/em_phantom/scaler_extra_phantom_v3.pkl",
+   "sha256": "de79d03014f27ee112998a5be9cd6226385567c30d472f7db6f9b8b57e692b16",
+   "bayt": 663
+  },
+  {
+   "yol": "modeller/ai_hub/feline_reticulocytes/yolov8s.onnx",
+   "sha256": "f6b90f4bb24e11895e6ebb0904909a313beab8c90b2545d842b91fd5b441cd68",
+   "bayt": 44749108
+  },
+  {
+   "yol": "modeller/ai_hub/feline_reticulocytes/yolov8s.pt",
+   "sha256": "41c134bceb593ea954792caa71942bdd4fd939632e21afc47e467f39fa4eebb1",
+   "bayt": 22519843
+  },
+  {
+   "yol": "modeller/ai_hub/inference_cat_organ/models/superanimal_quadruped_fasterrcnn_mobilenet_v3_large_fpn.onnx",
+   "sha256": "1f7e81929713e750d4576b9b2124def0a74bf18aa3c26fb68b9d77c01f3ff852",
+   "bayt": 75975077
+  },
+  {
+   "yol": "modeller/ai_hub/inference_cat_organ/models/superanimal_quadruped_rtmpose_s.onnx",
+   "sha256": "11a16b478bc5e8732e63f3bdd673e11c66d2bee456f1a7a6f2a0d3d953dad001",
+   "bayt": 24274672
+  },
+  {
+   "yol": "modeller/ai_hub/inference_cat_organ/models/yolov8m-seg.onnx",
+   "sha256": "896188395fda6e20db5ab4524c03b137453572ee7460bb4b83d4385d6c54de79",
+   "bayt": 109128685
+  },
+  {
+   "yol": "modeller/ai_hub/inference_cat_sound/EfficientNet_Lite0.onnx",
+   "sha256": "e3fe38a02453f00bbcf29a2cbc1614725c077d2961c96789597be84f49dace21",
+   "bayt": 14767966
+  },
+  {
+   "yol": "modeller/ai_hub/inference_cat_sound/EfficientNet_Lite0.pt",
+   "sha256": "8b073ac2a5bc171cfe592e9082acb1824498958428aeb98886e564ec9d5d5a0e",
+   "bayt": 15074593
+  },
+  {
+   "yol": "modeller/ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx",
+   "sha256": "949837ef4344021620929801681e20baafef0c8c4394a33c63bf752c2a139479",
+   "bayt": 60368248
+  },
+  {
+   "yol": "modeller/ai_hub/inference_em_fantom/scaler_X.pkl",
+   "sha256": "1e14e674f216b9eab2879c2765ac556e1d547f62dae173407e12f437dbc4be26",
+   "bayt": 639
+  },
+  {
+   "yol": "modeller/ai_hub/inference_em_fantom/scaler_extra.pkl",
+   "sha256": "149b3dea86b0272f261145fe9797a2953ab66803c49cca51b835ef9644f41e1a",
+   "bayt": 631
+  },
+  {
+   "yol": "modeller/ai_hub/inference_em_fantom/scaler_y.pkl",
+   "sha256": "ff98086f5177cc99ee4c27ef84458f45019b547d8064164db8f7878991aed247",
+   "bayt": 1119
+  },
+  {
+   "yol": "modeller/ai_hub/inference_em_petri/BaggingRegressor.onnx",
+   "sha256": "9b359f0d1102b528342f36bff86c22857541c18244bd789bd35d3b03603bd6ac",
+   "bayt": 238769699
+  },
+  {
+   "yol": "modeller/ai_hub/inference_human_kidney_ct/yolov8s.onnx",
+   "sha256": "0820f76e6ac35c322bbea7da51e914ef69a4d1aa0aa59af61b7a552df7a8fc71",
+   "bayt": 44749157
+  },
+  {
+   "yol": "modeller/ai_hub/inference_human_kidney_ct/yolov8s.pt",
+   "sha256": "1172a9533a39e3ae1d15964f957054fe081c25f51922eb4ab398041bbfa515bb",
+   "bayt": 22551921
+  },
+  {
+   "yol": "modeller/ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt",
+   "sha256": "545b3322191eb8625896ffc0f3ee63ceb617a3dbb4abc4e4c298e78abd7f8c9e",
+   "bayt": 1212952
+  },
+  {
+   "yol": "modeller/ai_hub/inference_paper_dilek_hoca/ginoro_CpnResNeXt101UNet-fbe875f1a3e5ce2c.pt",
+   "sha256": "fbe875f1a3e5ce2cec2682bc9747c1edd853b4ac8f8297844addd8d4f3e37d42",
+   "bayt": 914071975
+  },
+  {
+   "yol": "modeller/ai_hub/inference_petri_dish/yolo11m-seg.onnx",
+   "sha256": "1fe920ff22dedf2e1f43e1eeb472d25d5eece0c1c9b278ed15e1b428475ea181",
+   "bayt": 89662211
+  },
+  {
+   "yol": "modeller/ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.onnx",
+   "sha256": "4a965c2cc82f0977d0046ec64c40a19defd97bf70990e67341ee63cf50426d54",
+   "bayt": 899141548
+  },
+  {
+   "yol": "modeller/ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt",
+   "sha256": "c61bf550438d86afd85c1c31274adbda323fa9f633beb37a827b7423e3300794",
+   "bayt": 900013354
+  },
   {
    "yol": "modeller/ai_hub/odak/veri/alan_tablosu.npz",
    "sha256": "d67fb41812755ae75ba997666dd2948d9aeca60baae978e94654f43c9360af56",
@@ -116,14 +536,32 @@
    "bayt": 1510255
   },
   {
-   "yol": "depo/ai_hub/inference_human_kidney_rna/mlp_medium_kirc.onnx",
-   "sha256": "a22282c7a9b14dd3e138231b9e8780d1446460cff2fd11ec67e81b3dae78a68f",
-   "bayt": 1207455
-  },
-  {
-   "yol": "depo/ai_hub/inference_human_kidney_rna/scaler.pkl",
-   "sha256": "6526cf8490715bbb1bf72ed6f84ad221082e15d70ef499d4eddaa30143369b8d",
-   "bayt": 493311
+   "yol": "modeller/ai_hub/petri_dish/yolo11m-seg.onnx",
+   "sha256": "1fe920ff22dedf2e1f43e1eeb472d25d5eece0c1c9b278ed15e1b428475ea181",
+   "bayt": 89662211
   }
- ]
+ ],
+ "paket": {
+  "parca_ust_bayt": 1992294400,
+  "parcalar": [
+   {
+    "ad": "pemf_ci_modelleri_2026-11-27_1.zip",
+    "sha256": "24ede8497cfd5968a04103c89ffbc0cb0400fba9af0276e782cbd999a117da84",
+    "bayt": 1826120107,
+    "dosya": 9
+   },
+   {
+    "ad": "pemf_ci_modelleri_2026-11-27_2.zip",
+    "sha256": "c9ec160987a91ca326fd76ac518a266fe237dcbe477d223afa2ae6fc2bf89056",
+    "bayt": 1559986737,
+    "dosya": 22
+   },
+   {
+    "ad": "pemf_ci_modelleri_2026-11-27_3.zip",
+    "sha256": "a135a9de37722d1afc6bf7d42a1a8a1b8e5308aa041f4b109feb642f5a1bfe37",
+    "bayt": 191085935,
+    "dosya": 76
+   }
+  ]
+ }
 }

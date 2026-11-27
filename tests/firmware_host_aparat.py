@@ -126,8 +126,23 @@ def derle(kaynak: str, dizin: Path) -> Path:
             ["cmd", "/c", str(dizin / "derle.bat")], cwd=str(dizin), capture_output=True, text=True, timeout=300
         )
     else:
+        # CT1 g (istem 66 · Y326): `PEMF_FW_KAPSAM=1` → gcov ölçümü (`scripts/firmware_kapsam.py` .gcda'ları okur). Yalnız gcc kolu.
+        kapsam = ["--coverage"] if os.environ.get("PEMF_FW_KAPSAM") == "1" else []
         r = subprocess.run(
-            [arac, "-std=c11", "-O0", "-w", f"-I{dizin}", f"-I{stub}", f"-I{inc}", "tu.c", "-o", exe.name, "-lm"],
+            [
+                arac,
+                "-std=c11",
+                "-O0",
+                "-w",
+                *kapsam,
+                f"-I{dizin}",
+                f"-I{stub}",
+                f"-I{inc}",
+                "tu.c",
+                "-o",
+                exe.name,
+                "-lm",
+            ],
             cwd=str(dizin),
             capture_output=True,
             text=True,

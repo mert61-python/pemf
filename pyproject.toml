@@ -148,8 +148,12 @@ markers = [
 # (D6.47 · Y32: `PEMF_Backend.exe --destek-paketi`). Küme kapıda backend
 # köklerinden import grafiğiyle TÜRETİLİR (ai_hub hariç — yukarıdaki politika). Etki: 4-A inceleme kapanışı ai+pemf_gui
 # dahil %78,72 ölçtü → eşik DEĞİŞMEZ (75; düşürülmez).
-source =["servers", "services", "database", "controllers", "utils", "backend_service", "headless_core", "event_bus", "ai", "pemf_gui", "tools.kurtarma", "tools.destek_paketi"]
-omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
+# ⚠️ Y326 (istem 66 CT1 g, 26-11): `ai_hub` (AI Pro kararları, ODAK alanı, sabit düzlem, kedi hattı — ~95 dosya / ~22 bin satır) artık
+# ÖLÇÜLÜR: `source`'ta, ama SUNUCU toplamına (`fail_under`) GİRMEZ — `[tool.coverage.report] omit`. Kendi tabanı `tests/kapsam_tabani.json`
+# (`ai_hub`), kapı `scripts/kapsam_tabani_kapisi.py` + fark kapsamı `scripts/fark_kapsami.py` (değişen ai_hub satırı %100).
+# Ölçüm DIŞI (gerekçe `tests/kapsam_tabani.json` → ai_hub.disarida): geliştirici kalibrasyon aracı (ürün çalışma yolu değil).
+source =["servers", "services", "database", "controllers", "utils", "backend_service", "headless_core", "event_bus", "ai", "pemf_gui", "tools.kurtarma", "tools.destek_paketi", "ai_hub"]
+omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/inference_cat_organ/calibrate_camera.py"]
 
 [tool.coverage.report]
 # Kapsam RATCHET'i (regresyon önler): ÖLÇÜLEN %54,24 (2026-08-10, `utils` dâhil, 790 test).
@@ -172,6 +176,8 @@ omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 # KP-6 F (2026-11-16): kapanış (modelli tam süit, uç 03186e40) %100 (26 924 deyim, 0 eksik) + CI-eşdeğeri (E13 paketli, kp2s) ∪ K6C10 testleri %100 (0 eksik) → eşik 99 → 100 (yalnız ölçülen tutuyor; fail_under=100 tek eksik satırda da durdurur). Taban artık 100.
 fail_under = 100
 show_missing = false
+# Y326 (CT1 g): ai_hub ÖLÇÜLÜR ama bu toplamın (sunucu, fail_under 100) DIŞINDA — ayrı taban (tests/kapsam_tabani.json).
+omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 
 [tool.mypy]
 python_version = "3.10"

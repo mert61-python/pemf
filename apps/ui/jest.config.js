@@ -1,6 +1,9 @@
 // Frontend test yapılandırması (audit B-3.2: sıfır test → Jest + jest-expo).
 // Servis/mantık testleri (apiClient, config, wsClient) için jest-expo preset (RN transform)
 // + AsyncStorage mock + '@/' path alias. Component render testleri (RNTL) ayrı bir aşama.
+// CT1 f-2 (istem 66 · Y325): kapsam eşikleri depodaki TABANDAN (tek kaynak; CLAUDE.md "Test kapsamı").
+const KAPSAM_TABANI = require("../../tests/kapsam_tabani.json").paketler.istemci_jest;
+
 module.exports = {
   preset: "jest-expo",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
@@ -48,7 +51,13 @@ module.exports = {
     "!**/*.d.ts",
     "!**/node_modules/**",
   ],
+  // CT1 f-2 (istem 66 · Y325): eşik = TABAN (tests/kapsam_tabani.json — yalnız yukarı gider; düşüş test eklenerek kapatılır).
   coverageThreshold: {
-    global: { lines: 99, statements: 98, branches: 93, functions: 99 },
+    global: {
+      lines: KAPSAM_TABANI.satir,
+      statements: KAPSAM_TABANI.deyim,
+      branches: KAPSAM_TABANI.dal,
+      functions: KAPSAM_TABANI.islev,
+    },
   },
 };

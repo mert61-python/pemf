@@ -33,10 +33,12 @@ if str(KOK) not in sys.path:
 
 from scripts.i18n import katalog, ortak  # noqa: E402
 
+# CT1 c (Y324): Y sınıfı modül — TR tabanı yalnız yayın / denetim makinesinde; CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI.
+pytestmark = pytest.mark.yalniz_yayin_makinesi
 TABAN = ortak.varsayilan_taban()  # PEMF_I18N_TABAN > ~/Desktop/DENETIM/I18N/taban-tr-metinler.json
 # Y205 · S-D5.19 (sahip): yayın hazırlığı makinesinde (ZORUNLU=1) taban yoksa koşu DÜŞER — sessiz atlama yok.
 if not TABAN.is_file():
-    capraz.atla(f"TR tabanı yok ({TABAN}) — depo dışında")
+    capraz.atla(f"TR tabanı yok ({TABAN}) — depo dışında", yalniz_yayin=True)
 DEFTER = json.loads((KOK / "i18n" / "kapsam.json").read_text(encoding="utf-8"))
 
 

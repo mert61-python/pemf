@@ -307,6 +307,7 @@ def test_KRITIK_D233_arayuz_metni_GERCEKTE_konumu_ve_digerini_yazar(dil, tmp_pat
     assert "D:\\kok" in c and "{{" not in c and _katalog(dil)["ui"]["uninAyrica"].split("{{")[0].strip() not in c, c
 
 
+@pytest.mark.yalniz_yayin_makinesi  # CT1 c (Y324): yalnız yayın makinesi eseri — CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI
 @pytest.mark.skipif(
     not os.environ.get("PEMF_TAURI_NSIS_DIZINI"), reason="PEMF_TAURI_NSIS_DIZINI yok (üretilmiş şablon dizini)"
 )

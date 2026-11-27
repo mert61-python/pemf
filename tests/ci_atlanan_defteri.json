@@ -1,0 +1,133 @@
+{
+ "aciklama": "CT1 c (istem 66 · Y324): CI'da ATLANMASINA izin verilen testler. Yalnız iki sınıf: Y = yalnız yayın makinesinde bulunan eser (CI'da gerekçeli atlar; test `yalniz_yayin_makinesi` işaretli, Y30'da `PEMF_YAYIN_MAKINESI=1` ile atlarsa KIRMIZI) · P = platform / ortam (CI koşucusunda var olamaz). Model / test girdisi (M) ve diğer (D) GİREMEZ — kapı: `scripts/ci_atlanan_kapisi.py` (CI'da defterde olmayan atlama, M / D kaydı, bayat kayıt KIRMIZI). Kimlik = junit `classname::name`.",
+ "kayitlar": [
+  {
+   "test": "tests.test_ag_yalitimi::test_SONDA_provizyon_yolunda_dosya_uretir",
+   "sinif": "P",
+   "gerekce": "TASARIM: bu test yalnız kendi kapısının ALT SÜRECİNDE koşar (kapı aynı testi orada çalıştırır ve sonucunu denetler); ana süreçte atlaması beklenen davranıştır."
+  },
+  {
+   "test": "tests.test_file_acl_PAYLASILAN_GRUP_Y96::test_KARSIT_keep_current_user_FALSE_kilidinde_grup_VERILMEZ_Y96",
+   "sinif": "P",
+   "gerekce": "ORTAM: grup üyeliği belirtece yalnız YENİ oturum açmada girer (hesap parolası gerekir); barındırılan koşucuda yapılmaz — grup ACE kolunun kendisi YS1m'den beri CI'da DACL'den ölçülür.",
+   "ortamda_kosabilir": true
+  },
+  {
+   "test": "tests.test_file_acl_PAYLASILAN_GRUP_Y96::test_KRITIK_dizin_kilidi_PAYLASILAN_GRUBA_kalitimla_erisim_verir_ikinci_hesap_YAZAR_OKUR_Y96",
+   "sinif": "P",
+   "gerekce": "ORTAM: grup üyeliği belirtece yalnız YENİ oturum açmada girer (hesap parolası gerekir); barındırılan koşucuda yapılmaz — grup ACE kolunun kendisi YS1m'den beri CI'da DACL'den ölçülür.",
+   "ortamda_kosabilir": true
+  },
+  {
+   "test": "tests.test_file_acl_PAYLASILAN_GRUP_Y96::test_KRITIK_dosya_kilidi_PAYLASILAN_GRUBA_erisim_verir_ikinci_hesap_OKUR_Y96",
+   "sinif": "P",
+   "gerekce": "ORTAM: grup üyeliği belirtece yalnız YENİ oturum açmada girer (hesap parolası gerekir); barındırılan koşucuda yapılmaz — grup ACE kolunun kendisi YS1m'den beri CI'da DACL'den ölçülür.",
+   "ortamda_kosabilir": true
+  },
+  {
+   "test": "tests.test_firmware_isr_ANA_MAKINE::test_TEZGAH_gercek_bacak_araligi_ve_NOP_suresi_osiloskopla",
+   "sinif": "P",
+   "gerekce": "ORTAM: gerçek kart + osiloskop (tezgâh) ölçümü; Y327: tezgâh PC'si CI'a BAĞLANMAZ — tezgâh gününde ölçülür."
+  },
+  {
+   "test": "tests.test_kasa_yalitimi::test_SONDA_kaydedici_kasaya_uzanan_testi_KIRMIZI_yapar",
+   "sinif": "P",
+   "gerekce": "TASARIM: bu test yalnız kendi kapısının ALT SÜRECİNDE koşar (kapı aynı testi orada çalıştırır ve sonucunu denetler); ana süreçte atlaması beklenen davranıştır."
+  },
+  {
+   "test": "tests.test_pemf_simulate_tek_kaynak::test_SONDA_PEMF_SIMULATE_birakir",
+   "sinif": "P",
+   "gerekce": "TASARIM: bu test yalnız kendi kapısının ALT SÜRECİNDE koşar (kapı aynı testi orada çalıştırır ve sonucunu denetler); ana süreçte atlaması beklenen davranıştır."
+  },
+  {
+   "test": "tests.test_pemf_simulate_tek_kaynak::test_SONDA_ardindan_PEMF_SIMULATE_YOK",
+   "sinif": "P",
+   "gerekce": "TASARIM: bu test yalnız kendi kapısının ALT SÜRECİNDE koşar (kapı aynı testi orada çalıştırır ve sonucunu denetler); ana süreçte atlaması beklenen davranıştır."
+  },
+  {
+   "test": "tests.test_pemf_simulate_tek_kaynak::test_SONDA_hw_sim_BASKA_ADLA_birakir",
+   "sinif": "P",
+   "gerekce": "TASARIM: bu test yalnız kendi kapısının ALT SÜRECİNDE koşar (kapı aynı testi orada çalıştırır ve sonucunu denetler); ana süreçte atlaması beklenen davranıştır."
+  },
+  {
+   "test": "tests.test_teardown_system_kasasi::test_EKSTRA_i_gercek_SYSTEM_kasasindaki_kimlik_silinir",
+   "sinif": "P",
+   "gerekce": "ORTAM: gerçek Windows SYSTEM kimlik kasası + yükseltilmiş oturum + `PEMF_SYSTEM_KASA_TESTI=1` ister; barındırılan koşucuda ve Y30'da yapılmaz (gerçek kasaya dokunur — elle, ayrı oturumda)."
+  },
+  {
+   "test": "tests.test_D3_41_kurtarma_kilidi_SEVK_AGACIYLA_ayni::test_D3_41_GERCEK_sevk_agaci_kilitle_AYNI",
+   "sinif": "Y",
+   "gerekce": "Sevk ağacı `build_backend_exe.ps1` çıktısı (`PEMF_BUILD\\dist\\PEMF_Backend`); Y30 betiği ağaç varsa `PEMF_SEVK_AGACI`'nı verir, derleme betiği de her derlemede `kilit_denetimi.py --sevk` ile aynı denetimi koşar."
+  },
+  {
+   "test": "tests.test_D3_41_kurtarma_kilidi_SEVK_AGACIYLA_ayni::test_KRITIK_D3_44_derleme_yorumlayicisi_sabitlerle_AYNI",
+   "sinif": "Y",
+   "gerekce": "Ürün gömülü Python 3.10.2 ile derlenir; CI 3.10.11 venv'de koşar — test yalnız GÖMÜLÜ derleme yorumlayıcısında anlamlı (Y30 onunla koşar; statik / sentetik kollar CI'da da koşar)."
+  },
+  {
+   "test": "tests.test_YH_D2_bagimlilik_sabitleri_kurulu_surumle_ayni::test_KRITIK_derleme_ortaminda_uretim_ve_kilit_sabitleri_KURULU_surumle_ayni",
+   "sinif": "Y",
+   "gerekce": "Ürün gömülü Python 3.10.2 ile derlenir; CI 3.10.11 venv'de koşar — test yalnız GÖMÜLÜ derleme yorumlayıcısında anlamlı (Y30 onunla koşar; statik / sentetik kollar CI'da da koşar)."
+  },
+  {
+   "test": "tests.test_i18n_tr_taban",
+   "sinif": "Y",
+   "gerekce": "TR tabanı (`DENETIM\\I18N\\taban-tr-metinler.json`) depo DIŞINDA, yalnız yayın / denetim makinesinde; Y30 gerçek ev diziniyle koşar ve bulur (i18n K-kapıları TR değerini ona göre kilitler)."
+  },
+  {
+   "test": "tests.test_kaldirma_KVKK_konumu_ve_BAGLAM_L7::test_FIKSTUR_uretilmis_sablonla_AYNI",
+   "sinif": "Y",
+   "gerekce": "Tauri'nin ürettiği NSIS şablon dizini `cargo tauri build` çıktısıdır (`launcher/target/release/nsis/x64`); Y30 betiği dizin varsa `PEMF_TAURI_NSIS_DIZINI`'ni verir (Y327: kurucu CI'da derlenmez)."
+  },
+  {
+   "test": "tests.test_license_surface::test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ",
+   "sinif": "Y",
+   "gerekce": "`pemf-app-packages/base-deps.zip` (katmanlı paketin bağımlılık katmanı) yayın makinesinde `katmanli_yayin_hazirla.ps1` ile üretilir; açık depoya ve CI'a girmez (Y327: yayın eseri CI'da üretilmez)."
+  },
+  {
+   "test": "tests.test_license_surface::test_bilinen_istisna_HALA_GECERLI",
+   "sinif": "Y",
+   "gerekce": "`pemf-app-packages/base-deps.zip` (katmanlı paketin bağımlılık katmanı) yayın makinesinde `katmanli_yayin_hazirla.ps1` ile üretilir; açık depoya ve CI'a girmez (Y327: yayın eseri CI'da üretilmez)."
+  },
+  {
+   "test": "tests.test_license_surface::test_ultralytics_AGPL_olarak_tespit_ediliyor",
+   "sinif": "Y",
+   "gerekce": "`pemf-app-packages/base-deps.zip` (katmanlı paketin bağımlılık katmanı) yayın makinesinde `katmanli_yayin_hazirla.ps1` ile üretilir; açık depoya ve CI'a girmez (Y327: yayın eseri CI'da üretilmez)."
+  },
+  {
+   "test": "tests.test_site_indirme_varligi_URETILDI::test_KARSIT_KANIT_APK_icindeki_surum_versions_json_ile_AYNI",
+   "sinif": "Y",
+   "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  },
+  {
+   "test": "tests.test_site_indirme_varligi_URETILDI::test_KRITIK_iki_APK_AYNI_ikili",
+   "sinif": "Y",
+   "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  },
+  {
+   "test": "tests.test_site_indirme_varligi_URETILDI::test_KRITIK_iki_EXE_AYNI_ikili",
+   "sinif": "Y",
+   "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  },
+  {
+   "test": "tests.test_site_indirme_varligi_URETILDI::test_KRITIK_sitenin_isaret_ettigi_APK_URETILMIS",
+   "sinif": "Y",
+   "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  },
+  {
+   "test": "tests.test_site_indirme_varligi_URETILDI::test_KRITIK_sitenin_isaret_ettigi_WINDOWS_kurulumu_URETILMIS",
+   "sinif": "Y",
+   "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  },
+  {
+   "test": "tests.test_site_indirme_varligi_URETILDI::test_KRITIK_surumsuz_APK_da_URETILMIS",
+   "sinif": "Y",
+   "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  },
+  {
+   "test": "tests.test_site_indirme_varligi_URETILDI::test_KRITIK_surumsuz_EXE_de_URETILMIS",
+   "sinif": "Y",
+   "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  }
+ ]
+}

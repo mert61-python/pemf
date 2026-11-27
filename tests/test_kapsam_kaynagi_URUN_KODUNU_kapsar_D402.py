@@ -34,7 +34,8 @@ KOK = Path(__file__).resolve().parents[1]
 BACKEND = "apps/backend"
 #: Backend'den erişilen ama PAKET düzeyinde kaynağa GİRMEYEN kök paketleri (gerekçe zorunlu).
 KOK_PAKET_ISTISNA = {
-    "ai_hub": "ağır/ayrı (84 MB, kod koruması .pyd/.pyenc) — kapsamdan bilinçli dışarıda (`omit */ai_hub/*`)",
+    "ai_hub": "Y326 (istem 66 CT1 g): ÖLÇÜLÜR (`source`) ama sunucu toplamının DIŞINDA (`report.omit`) — ayrı taban "
+    "`tests/kapsam_tabani.json`; import grafiği türetmesine girmez (paket bütün olarak `source`ta)",
     "tools": "geliştirici araç paketi (e2e, sniffer…) — yalnız backend'den ERİŞİLEN modülleri tek tek girer",
 }
 
@@ -111,6 +112,12 @@ def test_KRITIK_kapsam_source_URUN_KODUNA_esit():
         f"türetme backend'in içe aktardığı KÖK paketlerini görmüyor (S-4A.3): {sorted(urun)}"
     )
     source = set(t["tool"]["coverage"]["run"]["source"])
+    # Y326: ai_hub ayrı tabanla ölçülür — source'ta OLMALI, sunucu raporunun (fail_under) DIŞINDA kalmalı
+    assert "ai_hub" in source, "Y326: ai_hub ölçümden çıkarılmış"
+    assert "*/ai_hub/*" in t["tool"]["coverage"]["report"].get("omit", []), (
+        "ai_hub sunucu toplamına karışıyor (fail_under 100)"
+    )
+    source -= {"ai_hub"}
     eksik, fazla = sorted(urun - source), sorted(source - urun)
     assert not eksik, f"kapsam ÖLÇMÜYOR (ratchet bu kodda kördür): {eksik}"
     assert not fazla, f"kapsam source'unda var olmayan ürün adı (coverage yalnız uyarır): {fazla}"

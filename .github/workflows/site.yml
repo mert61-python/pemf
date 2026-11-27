@@ -38,6 +38,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # CT1 f-3: fark kapsamı tabanı (birleşme tabanı) için tam geçmiş
 
       - uses: actions/setup-node@v4
         with:
@@ -77,6 +79,12 @@ jobs:
       # Y243 (KP-2 A5): `--coverage` → vite.config.ts `test.coverage.thresholds` UYGULANIR (@vitest/coverage-v8 devDependency).
       - name: Testler (vitest)
         run: npm test -- --coverage
+
+      # CT1 f-3 (istem 66 · Y311 / Y325): dalın değiştirdiği her ölçülen satır testle koşmuş olmalı (fark kapsamı %100; vitest lcov).
+      # Eşikler (vite.config.ts thresholds) tests/kapsam_tabani.json'dan. Kapı: tests/test_CT1f_kapsam_tabani_KILIDI.py
+      - name: Fark kapsamı kapısı
+        working-directory: .
+        run: python3 scripts/fark_kapsami.py --lcov apps/web/coverage/lcov.info:apps/web
 
       - name: Uretim derlemesi
         run: npx vite build

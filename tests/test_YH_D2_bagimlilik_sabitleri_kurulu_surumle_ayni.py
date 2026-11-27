@@ -104,6 +104,7 @@ def test_KRITIK_requirements_test_sabitleri_KURULU_surumle_ayni():
     assert not farkli, f"requirements-test.txt sabiti ≠ kurulu sürüm (sabit: kurulu): {farkli}"
 
 
+@pytest.mark.yalniz_yayin_makinesi  # CT1 c (Y324): yalnız yayın makinesi eseri — CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI
 def test_KRITIK_derleme_ortaminda_uretim_ve_kilit_sabitleri_KURULU_surumle_ayni():
     if not _gomulu_derleme_pythonu():
         pytest.skip(

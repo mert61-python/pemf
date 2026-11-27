@@ -99,6 +99,19 @@ if ($PSBoundParameters.ContainsKey('PytestOnek')) {
 
 $env:PEMF_CAPRAZ_KAYNAK_ZORUNLU = '1'
 $env:PEMF_GOLDEN_REQUIRED = '1'
+# CT1 c (istem 66 · Y324): YAYIN MAKINESI KIPI - `yalniz_yayin_makinesi` isaretli (Y sinifi: kurucu EXE, APK, base-deps.zip, sevk agaci,
+# Tauri NSIS sablonu, gomulu derleme Python'u, TR tabani) test burada ATLARSA KIRMIZI; CI'da gerekceli atlar (tests/ci_atlanan_defteri.json).
+# Yalniz derleme ciktisinda bulunan iki eser verilmemisse varsayilan yerinden verilir; yoksa ilgili Y testi KIRMIZI = once derleyin.
+# Kapi: tests/test_CT1c_ci_atlanan_defteri_KAPI.py
+$env:PEMF_YAYIN_MAKINESI = '1'
+if (-not $env:PEMF_SEVK_AGACI) {
+  $sevkAgaci = Join-Path $kok 'PEMF_BUILD\dist\PEMF_Backend'
+  if (Test-Path -LiteralPath $sevkAgaci) { $env:PEMF_SEVK_AGACI = $sevkAgaci }
+}
+if (-not $env:PEMF_TAURI_NSIS_DIZINI) {
+  $nsisSablon = Join-Path $kok 'launcher\target\release\nsis\x64'
+  if (Test-Path -LiteralPath $nsisSablon) { $env:PEMF_TAURI_NSIS_DIZINI = $nsisSablon }
+}
 
 # Y176: TAM kipte eski damga koşu BAŞINDA silinir; silinemezse süit KOŞMAZ (bayat damga bir kırmızı koşudan sağ çıkmasın).
 $damgaYolu = $null

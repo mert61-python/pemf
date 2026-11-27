@@ -180,7 +180,14 @@ def beklenen_eserler(baseline: set, izlenen, mevcut: set, ci_paketi: set) -> set
 def test_KP6_ci_paketi_eserleri_BASELINEin_izlenmeyen_eserleri():
     """Listedeki `.pkl` eserleri BASELINE'da olmalı (olmayan bir ad `beklenen_eserler`de sessizce etkisiz kalırdı)."""
     ci = _ci_paketi_eserleri()
-    assert ci == {"inference_human_kidney_rna/scaler.pkl"}, ci
+    # CT1 b (istem 66): paket genişledi — modül yanı izlenmeyen BÜTÜN .pkl eserleri (em_petri ×3 + kidney_disease + kidney_rna)
+    assert ci == {
+        "inference_human_kidney_rna/scaler.pkl",
+        "inference_em_petri/scaler_X.pkl",
+        "inference_em_petri/scaler_extra.pkl",
+        "inference_em_petri/scaler_y.pkl",
+        "inference_human_kidney_disease/preprocessor.pkl",
+    }, ci
     assert ci <= set(BASELINE)
 
 

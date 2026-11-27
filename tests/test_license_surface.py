@@ -65,7 +65,7 @@ def paket_gerekli():
     ⚠️ D4.08 (B-10.139): eskiden modül düzeyi `pytestmark = skipif(not PAKET.exists())` vardı → paketsiz ortamda
     (temiz checkout, CI) dosyadaki TÜM testler atlanıyordu; paket gerektirmeyen 4 test (LGPL sınıflandırıcı, NOTICE,
     karar notu) CI'da hiç koşmuyordu. Kapı artık yalnız pakete bakan üç teste uygulanır."""
-    capraz.atla_yoksa("pemf-app-packages/base-deps.zip")
+    capraz.atla_yoksa("pemf-app-packages/base-deps.zip", yalniz_yayin=True)
 
 
 # ── kapı ─────────────────────────────────────────────────────────────────────
@@ -79,6 +79,7 @@ def _paket_kopyleft():
     return paket_kopyleft(PAKET)
 
 
+@pytest.mark.yalniz_yayin_makinesi  # CT1 c (Y324): yalnız yayın makinesi eseri — CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI
 def test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ(paket_gerekli):
     """Yeni bir AGPL/GPL bağımlılık pakete sızarsa uyumsuzluk yüzeyi sessizce büyür.
     Bu test, o kararın BİLİNÇLİ verilmesini zorunlu kılar."""
@@ -91,6 +92,7 @@ def test_KRITIK_YENI_kopyleft_bagimlilik_EKLENMEZ(paket_gerekli):
     )
 
 
+@pytest.mark.yalniz_yayin_makinesi  # CT1 c (Y324): yalnız yayın makinesi eseri — CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI
 def test_bilinen_istisna_HALA_GECERLI(paket_gerekli):
     """İstisna listesi 'ölü' kalmasın: `ultralytics` paketten çıkarsa (ONNX'e taşındıysa)
     bu test düşer ve listeden silinmesi hatırlatılır — sorun çözüldüğünde kapı da kapanmalı."""
@@ -102,6 +104,7 @@ def test_bilinen_istisna_HALA_GECERLI(paket_gerekli):
     )
 
 
+@pytest.mark.yalniz_yayin_makinesi  # CT1 c (Y324): yalnız yayın makinesi eseri — CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI
 def test_ultralytics_AGPL_olarak_tespit_ediliyor(paket_gerekli):
     """Tespit mantığının kendisi çalışıyor mu — yoksa kapı boş güvence verirdi."""
     lisanslar = _paket_lisanslari()

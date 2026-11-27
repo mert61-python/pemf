@@ -84,6 +84,7 @@ def test_KARSIT_D3_41_zeroconf_SURUMU_OKUNAMAZSA_kirmizi_ve_bos_agac_kor_degil(t
     assert any("hiç dist-info yok" in h for h in kd.sevk(bos, URETIM, KILIT))
 
 
+@pytest.mark.yalniz_yayin_makinesi  # CT1 c (Y324): yalnız yayın makinesi eseri — CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI
 @pytest.mark.skipif(
     not Path(sys.base_prefix).joinpath(f"python{sys.version_info.major}{sys.version_info.minor}.zip").exists(),
     reason="gömülü derleme Python'u değil (CI / venv) — statik + sentetik kollar yine koştu",
@@ -92,6 +93,7 @@ def test_KRITIK_D3_44_derleme_yorumlayicisi_sabitlerle_AYNI():
     assert kd.ortam(URETIM, KILIT) == []
 
 
+@pytest.mark.yalniz_yayin_makinesi  # CT1 c (Y324): yalnız yayın makinesi eseri — CI'da gerekçeli atlar, Y30'da atlarsa KIRMIZI
 def test_D3_41_GERCEK_sevk_agaci_kilitle_AYNI():
     import os
 

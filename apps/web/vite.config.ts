@@ -2,6 +2,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { readFileSync } from 'node:fs'
+
+// CT1 f-2 (istem 66 · Y325): kapsam eşikleri depodaki TABANDAN (tek kaynak; CLAUDE.md "Test kapsamı").
+const KAPSAM_TABANI = JSON.parse(
+  readFileSync(new URL('../../tests/kapsam_tabani.json', import.meta.url), 'utf-8'),
+).paketler.site_vitest
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -21,8 +27,14 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'scripts/**/*.mjs'],
       exclude: ['**/__tests__/**', '**/*.test.*', '**/*.d.ts'],
-      reporter: ['text-summary', 'json-summary'],
-      thresholds: { lines: 99, statements: 99, branches: 96, functions: 99 },
+      // CT1 f: lcov → fark kapsamı kapısı (scripts/fark_kapsami.py). Eşik = TABAN (tests/kapsam_tabani.json; yalnız yukarı).
+      reporter: ['text-summary', 'json-summary', 'lcov'],
+      thresholds: {
+        lines: KAPSAM_TABANI.satir,
+        statements: KAPSAM_TABANI.deyim,
+        branches: KAPSAM_TABANI.dal,
+        functions: KAPSAM_TABANI.islev,
+      },
     },
   },
 })
