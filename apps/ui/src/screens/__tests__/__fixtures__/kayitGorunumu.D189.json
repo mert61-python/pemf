@@ -167,6 +167,7 @@
   "session": {
    "alan_notu": "",
    "duration_minutes": 0,
+   "durdurma_nedeni": null,
    "end_time": "SABIT",
    "ended_epoch": 0,
    "id": 1,
@@ -183,6 +184,7 @@
  },
  "listeOgesi": {
   "duration_minutes": 0,
+  "durdurma_nedeni": null,
   "end_time": "SABIT",
   "frequency_hz": 100.0,
   "id": 1,

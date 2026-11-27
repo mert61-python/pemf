@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from servers import ai_pro_hedef  # AI Pro hedef saglayicilari (kedi | fantom | petri)
+from servers import ai_pro_surus_muhasebesi as _surus_muhasebesi  # YS2 a (B1): seans kaydının gerçek sürüşü
 from servers.ai_client import (
     ai_service_enabled,
     delegate_infer,
@@ -990,6 +991,28 @@ def _sabit_numune_neden_metni(odak_engeli, dil: str | None = None) -> str:
     return ceviri.t("ai.pro.sabitNumune.durdu", dil=dil, sn=int(_SABIT_NUMUNE_TOLERANS_S), neden=neden)
 
 
+def _sabit_numune_neden_kodu(odak_engeli) -> str:
+    """YS2 a (B1): tolerans STOP'unun KAYIT nedeni (`ai_pro_surus_muhasebesi` kodu) — panel nedeniyle AYNI kaynak (engel ya da son
+    lokalizasyonun plaka engeli): plaka seans başındaki yerinden kaydıysa "plaka kaydı", değilse "plaka doğrulanamadı"."""
+    if not (isinstance(odak_engeli, dict) and odak_engeli.get("engel")):
+        odak_engeli = ai_pro_hedef.plaka_engel_plani(_saglayici_meta())
+    kod = odak_engeli.get("engel") if isinstance(odak_engeli, dict) else None
+    return _surus_muhasebesi.NEDEN_PLAKA_KAYDI if kod == "plakaKaydi" else _surus_muhasebesi.NEDEN_PLAKA_DOGRULANAMADI
+
+
+def _muhasebe_sid():
+    """YS2 a (B1): sürüş muhasebesinin anahtarı = AKTİF seansın DB satırı (döngü yalnız kendi seansı aktifken sürer). Okunamazsa
+    None (muhasebe yalnız kayıt içindir — döngüyü, sürüşü ve STOP'u ASLA düşürmez)."""
+    try:
+        import servers.api_server as _apx
+
+        with _apx._session_lock:
+            return _apx._active_session.get("db_session_id")
+    except Exception:
+        logger.debug("AI Pro: sürüş muhasebesi seans kimliği okunamadı (kayıt düzeltmesi yapılmaz)", exc_info=True)
+        return None
+
+
 def _sabit_numune_stopu(odak_engeli, bildir: bool) -> str:
     """Y300 (ODD B-1): sabit numunede tolerans penceresi doldu → kayıp nesli artar (uçuştaki "bulundu" gözlemi süremez) + STOP.
     STOP doğrulanamayan HER turda yinelenir (idempotent; Ö.4-Y8: STOP yalnız artar); bildirim + günlük yalnız pencerenin İLK
@@ -1003,6 +1026,8 @@ def _sabit_numune_stopu(odak_engeli, bildir: bool) -> str:
         import servers.api_server as _apx
 
         _teyitsiz = _apx._stop_session_coils(range(1, 8))
+        # YS2 a (B1): STOP'tan SONRA yalnız sayılır (seans kaydı "Durduruldu" + gerçek süre); STOP'u geciktirmez.
+        _surus_muhasebesi.durdu(_muhasebe_sid(), _sabit_numune_neden_kodu(odak_engeli))
         if bildir:
             _apx._bildir_teyitsiz_stop(_teyitsiz, lambda d: ceviri.t("bildirim.kaynak.aiProSabitNumuneDurdu", dil=d))
             _apx._bildir(lambda d: _sabit_numune_neden_metni(odak_engeli, dil=d), "warning")
@@ -2245,6 +2270,7 @@ def _ai_pro_loop(dongu_muhru=None):
     _son_plan = None  # (D, P, kayıp damgası): son DOĞRULANMIŞ turda telde sürülen plan
     _son_dogrulama = time.monotonic()  # seans başı = pencere başı (ilk ölçüm beklenir)
     _tolerans_neden = ""  # pencere doldu → STOP gönderildi; panelde gösterilen neden ("" = yok)
+    _surus_muhasebesi.basla(_muhasebe_sid())  # YS2 a (B1): seans kaydının gerçek sürüş süresi / dozu / durdurma nedeni
     while _ai_loop_active and _dongu_gecerli():
         start_time = time.time()
         # Dış STOP (acil-durdur / süre-watchdog / STM-disconnect / /session/stop) AI loop'u da durdursun.
@@ -2410,6 +2436,7 @@ def _ai_pro_loop(dongu_muhru=None):
                         _surulen = _drive_coils_ai_pro(D, P) or []
                     if _surulen:
                         _canli_e_odak()  # ODK6: canlı E = bu turda sürülen ODAK planının CST E'si
+                        _surus_muhasebesi.surdu(_muhasebe_sid())
                     if not _dongu_gecerli():
                         logger.warning("AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor.")
                         break
@@ -2432,6 +2459,8 @@ def _ai_pro_loop(dongu_muhru=None):
                         D, P, _plan_damgasi = _son_plan
                         with estop_mandali.surus_baglami(_nesil), estop_mandali.gozlem_baglami(_plan_damgasi):
                             _surulen = _drive_coils_ai_pro(D, P) or []
+                        if _surulen:
+                            _surus_muhasebesi.surdu(_muhasebe_sid())
                         if not _dongu_gecerli():
                             logger.warning(
                                 "AI Pro: sürüş sırasında durdurma/acil durdurma geldi → döngü sonlandırılıyor."
@@ -2467,6 +2496,7 @@ def _ai_pro_loop(dongu_muhru=None):
                         # Denetim 2. tur [1.1]: teyitsiz STOP'lar operatore bildirilir
                         # (broker oluyken hedef-kaybi durdurmasi sessizce dusuyordu).
                         _teyitsiz2 = _apx2._stop_session_coils(range(1, 8))
+                        _surus_muhasebesi.durdu(_muhasebe_sid(), _surus_muhasebesi.NEDEN_HEDEF_KAYBI)  # YS2 a (B1)
                         if _bildir:
                             _apx2._bildir_teyitsiz_stop(
                                 _teyitsiz2, lambda d: ceviri.t("bildirim.kaynak.aiProHedefKaybi", dil=d)

@@ -154,13 +154,23 @@ def hedef_etiketi(hedef):
     return ceviri.t(hedef_anahtari) if hedef_anahtari else _ai_pro_kayit_hedefi(hedef)
 
 
-def durum_etiketi(durum) -> str:
+#: YS2 a (B1): AI Pro durdurma nedeni kodu (`session_parameters.durdurma_nedeni`) -> katalog ANAHTARI. Arayüz `durdurmaNedeni.*` ile AYNI.
+DURDURMA_NEDENLERI: dict[str, str] = {
+    "plaka_kaydi": "seans.durdurmaNedeni.plaka_kaydi",
+    "plaka_dogrulanamadi": "seans.durdurmaNedeni.plaka_dogrulanamadi",
+    "hedef_kaybi": "seans.durdurmaNedeni.hedef_kaybi",
+}
+
+
+def durum_etiketi(durum, neden=None) -> str:
     """Ham seans durumunu Türkçe gösterim etiketine çevirir.
 
     ⚠️ BİLİNMEYEN DURUM SİLİNMEZ: ham değer (baş harfi büyütülerek) döner. Etiket
     haritası bayatladığında hücre BOŞ kalsaydı, operatör "durum yok" sanırdı —
     oysa kayıt bir durum taşıyor, biz onu adlandıramıyoruz. Arayüzdeki
     `statusLabelTr()` ile AYNI kural.
+
+    YS2 a (B1): `neden` (AI Pro durdurma nedeni kodu) biliniyorsa "Durduruldu (plaka kaydı)"; bilinmeyen / boş neden eklenmez.
     """
     if durum is None:
         return ""
@@ -168,6 +178,8 @@ def durum_etiketi(durum) -> str:
     if not ham:
         return ""
     durum_anahtari = DURUM_ETIKETLERI.get(ham.lower())
-    if durum_anahtari:
-        return ceviri.t(durum_anahtari)
-    return ham[0].upper() + ham[1:]
+    etiket = ceviri.t(durum_anahtari) if durum_anahtari else ham[0].upper() + ham[1:]
+    neden_anahtari = DURDURMA_NEDENLERI.get(str(neden or ""))
+    if neden_anahtari:
+        return ceviri.t("seans.durumNedenli", durum=etiket, neden=ceviri.t(neden_anahtari))
+    return etiket

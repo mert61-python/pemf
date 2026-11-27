@@ -29,7 +29,7 @@ import { colors, spacing, typography, rs, layoutMax } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
 import { kayitYogunlugu, olculenAlanOrt } from "@/utils/yogunlukGosterimi";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
-import { hedefEtiketi, modEtiketi } from "@/utils/seansDegerEtiketi";
+import { hedefEtiketi, modEtiketi, nedenliDurum } from "@/utils/seansDegerEtiketi";
 import { etkinBicimYereli, ondalikMetni } from "@/i18n/dil";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
@@ -67,11 +67,12 @@ const STATUS_ANAHTARLARI: Record<string, string> = {
   aborted_duration_unknown: "seans.durum.aborted_duration_unknown",
 };
 
-function statusEtiketi(status?: string): string {
+function statusEtiketi(status?: string, neden?: string | null): string {
   if (!status) return i18n.t("ai.deger.unknown");
   const key = status.toLowerCase();
   const anahtar = STATUS_ANAHTARLARI[key];
-  if (typeof anahtar === "string") return i18n.t(anahtar as never) as string;
+  // YS2 a (B1): AI Pro durdurma nedeni → "Durduruldu (plaka kaydı)" (PDF / CSV ile aynı kaynak ve etiket).
+  if (typeof anahtar === "string") return nedenliDurum(i18n.t, i18n.t(anahtar as never) as string, neden);
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -90,6 +91,8 @@ interface SessionInfo {
   patient_name?: string;
   patient_notes?: string;
   session_status?: string;
+  /** YS2 a (B1): AI Pro durdurma nedeni kodu (`plaka_kaydi` / `plaka_dogrulanamadi` / `hedef_kaybi`); yoksa null. */
+  durdurma_nedeni?: string | null;
   /** CH3 · Y152: seansın ölçülen alanı ÷5 düzeltildiyse not (backend `utils/mt_duzeltme.NOT_METNI`); değilse boş. */
   alan_notu?: string;
 }
@@ -320,7 +323,7 @@ function SummarySection({ session, adsizAd }: { session: SessionInfo | null; ads
         <SummaryItem label={t("seans.detay.mod")} value={modEtiketi(t, session.treatment_mode || "") || "—"} />
         <SummaryItem label={t("ai.pro.adim.hedef")} value={hedefEtiketi(t, session.target_condition || "") || "—"} />
         <SummaryItem label={t("seans.detay.operator")} value={session.operator_name || "—"} />
-        <SummaryItem label={t("seans.detay.durum")} value={statusEtiketi(session.session_status)} />
+        <SummaryItem label={t("seans.detay.durum")} value={statusEtiketi(session.session_status, session.durdurma_nedeni)} />
       </View>
       {/* Y207 (S-D5.3): kanıtı 3 açılış boyunca okunamayan seans "süre bilinmiyor" kapanır — süre / doz uydurulmadığı söylenir. */}
       {(session.session_status || "").toLowerCase() === "aborted_duration_unknown" ? (

@@ -5188,6 +5188,25 @@ def _kilit_hatasi_mi(e: BaseException) -> bool:
     return "locked" in m or "busy" in m
 
 
+def _ai_pro_kapanis_duzeltmesi(db_session_id, durum: str):
+    """YS2 a (B1): AI Pro sürüş muhasebesinin kapanış düzeltmesi (`servers.ai_pro_surus_muhasebesi`); yoksa None (satır aynen)."""
+    from servers import ai_pro_surus_muhasebesi
+
+    return ai_pro_surus_muhasebesi.kapanis_duzeltmesi(db_session_id, durum)
+
+
+def _ai_pro_duzeltmesini_yaz(db, db_session_id, duzeltme) -> None:
+    """YS2 a (B1): düzeltmenin doz (hiç sürülmediyse 0) ve neden parametresi — `end_session` satırı kapattıktan SONRA."""
+    if not duzeltme:
+        return
+    from servers import ai_pro_surus_muhasebesi
+
+    if duzeltme["doz_sifir"]:
+        db.set_session_meta(db_session_id, intensity_mt=0.0)
+    if duzeltme["neden"]:
+        db.set_session_parameter(db_session_id, ai_pro_surus_muhasebesi.PARAMETRE, duzeltme["neden"], "")
+
+
 def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: str = "auto", start_mono=None) -> int:
     """Seansi DB'de KAPAT: kismi dakika-ortalamasi + sensor buffer flush + end_session/ended_epoch.
 
@@ -5270,6 +5289,11 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                     _durum = "interrupted"
                 else:
                     _durum = "completed"
+                # YS2 a (B1): AI Pro seansında bobinler durdurmayla duruyorduysa / hiç sürülmediyse "Tamamlandı" YAZILMAZ —
+                # durum, süre ve doz GERÇEK sürüşten; neden ayrı parametre (geçmiş / detay / PDF / CSV aynı satırı okur).
+                _duzeltme = _ai_pro_kapanis_duzeltmesi(db_session_id, _durum)
+                if _duzeltme:
+                    _durum, dur_min = _duzeltme["durum"], _duzeltme["sure_dk"]
                 _son = time.monotonic() + KAPANIS_KILIT_SURESI_SN  # D5: kilitte sınırlı yeniden deneme (yukarıdaki not)
                 _satir_kapandi = False
                 # Sınırlı döngü (sonsuz `while True` DEĞİL — daemon döngüsü kapısı `test_dongu_hata_bildirimi_OLDURMEZ`).
@@ -5279,6 +5303,7 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                         if not _satir_kapandi:
                             db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
                             db.set_session_meta(db_session_id, ended_epoch=_now)
+                            _ai_pro_duzeltmesini_yaz(db, db_session_id, _duzeltme)
                             _satir_kapandi = True
                         # OYZ4 (D5 kalıcı kilit): satırla birlikte seansın HÂLÂ AÇIK bobin çalışma kayıtları da kapanır (açılış
                         # kurtarmasıyla aynı kural) — kilitte bütçesi tükenen çağıran koşu kayıtlarını tek tek yazamadıysa açık kalmaz.
@@ -6095,15 +6120,14 @@ async def stop_session():
                     try:
                         _now = time.time()
                         dur_min = _kayit_suresi_dk(start_mono, started_epoch)
-                        db.end_session(
-                            db_session_id,
-                            duration_minutes=dur_min,
-                            session_status=(
-                                "cancelled" if _ucustaki_baslatma else ("completed" if _sure_doldu else "stopped")
-                            ),
-                        )
+                        _durum = "cancelled" if _ucustaki_baslatma else ("completed" if _sure_doldu else "stopped")
+                        _duzeltme = _ai_pro_kapanis_duzeltmesi(db_session_id, _durum)  # YS2 a (B1)
+                        if _duzeltme:
+                            _durum, dur_min = _duzeltme["durum"], _duzeltme["sure_dk"]
+                        db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
                         # Yeni kolon: gercek wall-clock bitis epoch'u (end_session bunu yazmaz).
                         db.set_session_meta(db_session_id, ended_epoch=_now)
+                        _ai_pro_duzeltmesini_yaz(db, db_session_id, _duzeltme)
                     except Exception:
                         logging.exception("stop: end_session hatasi")
                 return _flushed

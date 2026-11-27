@@ -339,7 +339,7 @@
    "aciklama": "servisler, güncelleme, sırlar, kalan yardımcılar (çoğu muaf: iç / günlük)",
    "durum": "tamam",
    "metin": 136,
-   "dosyaSayisi": 46
+   "dosyaSayisi": 47
   },
   {
    "ad": "launcher-11a-ui",
@@ -9039,6 +9039,17 @@
    "muaf": [],
    "birlesikIstisna": [],
    "not": ""
+  },
+  "apps/backend/servers/ai_pro_surus_muhasebesi.py": {
+   "yuzey": "sunucu",
+   "grup": "sunucu-10h-servis",
+   "sira": 10,
+   "durum": "tamam",
+   "metin": 0,
+   "kritik": false,
+   "muaf": [],
+   "birlesikIstisna": [],
+   "not": "YS2 a (B1): AI Pro sürüş muhasebesi — kullanıcı metni yok (yalnız neden KODLARI; gösterim katalogda)"
   },
   "apps/backend/servers/audit_log.py": {
    "yuzey": "sunucu",

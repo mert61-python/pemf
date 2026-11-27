@@ -396,6 +396,22 @@
    "onek": "ai.pro.odak.engel.",
    "degerler": ["hedefKabinDisi", "dozGecersiz", "dozTavanUstu", "dozSapmasi", "modelEski", "modelYok", "kediGovdeYok", "fantomErtelendi", "plakaYok", "plakaUyumsuz", "plakaKaydi", "kuyuYok", "kalibrasyonYok", "kalibrasyonBozuk", "kalibrasyonEski", "eslemeDogrulanmadi"],
    "gerekce": "ODAK (istem 45): engel kodu KAPALI küme — ai_hub.odak.oneri.Engel kodları + ai_hub.odak.alan.KalibrasyonHatasi kodları"
+  },
+  {
+   "yuzey": "sunucu",
+   "dosya": "apps/backend/utils/seans_durum.py",
+   "ifade": "ceviri.t(neden_anahtari)",
+   "onek": "seans.durdurmaNedeni.",
+   "degerler": ["hedef_kaybi", "plaka_dogrulanamadi", "plaka_kaydi"],
+   "gerekce": "YS2 a (B1): AI Pro durdurma nedeni KODU (`session_parameters.durdurma_nedeni`, `servers.ai_pro_surus_muhasebesi.NEDENLER`) DURDURMA_NEDENLERI'nde ANAHTARA eşlenir; değer kümesi KAPALI (3 kod), bilinmeyen kod etikete eklenmez"
+  },
+  {
+   "yuzey": "arayuz",
+   "dosya": "apps/ui/src/utils/seansDegerEtiketi.ts",
+   "ifade": "t(anahtar as never)",
+   "onek": "seans.durdurmaNedeni.",
+   "degerler": ["hedef_kaybi", "plaka_dogrulanamadi", "plaka_kaydi"],
+   "gerekce": "YS2 a (B1): AI Pro durdurma nedeni KODU (backend `durdurma_nedeni`) DURDURMA_NEDENLERI'nde ANAHTARA eşlenir (sunucu `utils/seans_durum.DURDURMA_NEDENLERI` ile aynı); değer kümesi KAPALI, bilinmeyen kod eklenmez"
   }
  ]
 }

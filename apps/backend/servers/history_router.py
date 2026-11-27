@@ -370,7 +370,7 @@ def export_csv(
                     s.get("intensity_mt", ""),
                     s.get("session_date", ""),
                     s.get("start_time", ""),
-                    _csv_safe(durum_etiketi(s.get("session_status", ""))),
+                    _csv_safe(durum_etiketi(s.get("session_status", ""), s.get("durdurma_nedeni"))),  # YS2 a (B1)
                     _csv_safe(s.get("patient_notes", "")),
                     _dutyler.get(s.get("id"), ""),
                 ]
@@ -692,6 +692,8 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
             "patient_name": raw.get("patient_name"),
             "patient_notes": raw.get("patient_notes"),
             "session_status": raw.get("session_status"),
+            # YS2 a (B1): AI Pro durdurma nedeni (plaka kaydı / plaka doğrulanamadı / hedef kaybı) — kod; gösterim istemcide.
+            "durdurma_nedeni": ((raw.get("parameters") or {}).get("durdurma_nedeni") or {}).get("value"),
         }
 
         summaries = db.get_run_summaries(session_id)

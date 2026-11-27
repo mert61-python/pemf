@@ -52,6 +52,11 @@
     "yuklenemedi": "Session details could not be loaded.",
     "yukleniyor": "Loading details…"
   },
+  "durdurmaNedeni": {
+    "hedef_kaybi": "target lost",
+    "plaka_dogrulanamadi": "plate not verified",
+    "plaka_kaydi": "plate moved"
+  },
   "durum": {
     "aborted_due_to_power": "Power Outage",
     "aborted_duration_unknown": "Duration Unknown",
@@ -71,6 +76,7 @@
     "stopped": "Stopped",
     "success": "Successful"
   },
+  "durumNedenli": "{{durum}} ({{neden}})",
   "gecmis": {
     "araPlaceholder": "Search patient, note or date...",
     "benim": "My Sessions",

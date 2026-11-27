@@ -52,6 +52,11 @@
     "yuklenemedi": "Seans detayları yüklenemedi.",
     "yukleniyor": "Detaylar yükleniyor…"
   },
+  "durdurmaNedeni": {
+    "hedef_kaybi": "hedef kaybı",
+    "plaka_dogrulanamadi": "plaka doğrulanamadı",
+    "plaka_kaydi": "plaka kaydı"
+  },
   "durum": {
     "aborted_due_to_power": "Elektrik Kesintisi",
     "aborted_duration_unknown": "Süre Bilinmiyor",
@@ -71,6 +76,7 @@
     "stopped": "Durduruldu",
     "success": "Başarılı"
   },
+  "durumNedenli": "{{durum}} ({{neden}})",
   "gecmis": {
     "araPlaceholder": "Hasta, Not veya Tarih ara...",
     "benim": "Benim Seanslarım",

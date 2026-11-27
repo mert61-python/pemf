@@ -47,7 +47,7 @@ except ImportError:
 from database.treatment_history_db import get_treatment_db
 
 from utils import ceviri
-from utils.seans_durum import hedef_etiketi, mod_etiketi
+from utils.seans_durum import durum_etiketi, hedef_etiketi, mod_etiketi
 
 # DENETIM P2: rapor sorgulari SABIT limit=1000 kullaniyordu → yogun bir klinikte en yeni 1000
 # seansin DISINDA kalan kayitlar rapora SESSIZCE girmiyordu (hasta raporunda eksik gecmis;
@@ -701,6 +701,11 @@ class PDFReportGenerator:
             [ceviri.t("pdf.seans.baslangicSaati"), session.get('start_time', ceviri.t("ai.deger.unknown"))],
             [ceviri.t("pdf.seans.bitisSaati"), session.get('end_time', ceviri.t("ai.deger.unknown"))],
             [ceviri.t("pdf.seans.sure"), ceviri.t("pdf.sure.dakika", n=self._format_duration(parameters, session))],
+            # YS2 a (B1): seansın durumu (+ AI Pro durdurma nedeni) — geçmiş listesi / detay / CSV ile AYNI kaynak ve etiket.
+            [
+                ceviri.t("gecmis.csv.durum"),
+                durum_etiketi(session.get('session_status'), session.get('durdurma_nedeni')),
+            ],
             [
                 ceviri.t("pdf.seans.tedaviModu"),
                 mod_etiketi(session.get('treatment_mode', ceviri.t("ai.deger.unknown"))),

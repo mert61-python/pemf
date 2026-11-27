@@ -905,6 +905,11 @@
       "tumPetri": "Tüm petri",
       "tumor": "Tümör"
     },
+    "durdurmaNedeni": {
+      "hedef_kaybi": "hedef kaybı",
+      "plaka_dogrulanamadi": "plaka doğrulanamadı",
+      "plaka_kaydi": "plaka kaydı"
+    },
     "durum": {
       "aborted_due_to_power": "Elektrik Kesintisi",
       "aborted_duration_unknown": "Süre Bilinmiyor",
@@ -924,6 +929,7 @@
       "stopped": "Durduruldu",
       "success": "Başarılı"
     },
+    "durumNedenli": "{{durum}} ({{neden}})",
     "hata": {
       "aiSure": "AI seansının süresi hekim onayının mührüdür — buradan DEĞİŞTİRİLMEDİ (yeni öneri/onay gerekir).",
       "aktifYok": "Aktif seans yok — güncellenecek parametre yok.",

@@ -502,7 +502,8 @@ class SeansKarisimi:
                            sp_vet.parameter_value as patient_vet_contact,
                            sp_veteriner.parameter_value as patient_veteriner,
                            sp_duration.parameter_value as treatment_duration,
-                           COALESCE(NULLIF(sp_owner_email.parameter_value, ''), pt.owner_email) as owner_email
+                           COALESCE(NULLIF(sp_owner_email.parameter_value, ''), pt.owner_email) as owner_email,
+                           sp_durdurma.parameter_value as durdurma_nedeni
                     FROM treatment_sessions ts
                     LEFT JOIN session_parameters sp_name ON ts.id = sp_name.session_id AND sp_name.parameter_name = 'patient_name'
                     LEFT JOIN session_parameters sp_surname ON ts.id = sp_surname.session_id AND sp_surname.parameter_name = 'patient_surname'
@@ -515,6 +516,7 @@ class SeansKarisimi:
                     LEFT JOIN session_parameters sp_veteriner ON ts.id = sp_veteriner.session_id AND sp_veteriner.parameter_name = 'patient_veteriner'
                     LEFT JOIN session_parameters sp_duration ON ts.id = sp_duration.session_id AND sp_duration.parameter_name = 'duration'
                     LEFT JOIN session_parameters sp_owner_email ON ts.id = sp_owner_email.session_id AND sp_owner_email.parameter_name = 'patient_owner_email'
+                    LEFT JOIN session_parameters sp_durdurma ON ts.id = sp_durdurma.session_id AND sp_durdurma.parameter_name = 'durdurma_nedeni'
                     LEFT JOIN patients pt ON ts.patient_id = pt.id
                     WHERE 1=1
                 '''

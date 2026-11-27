@@ -905,6 +905,11 @@
       "tumPetri": "Whole well plate",
       "tumor": "Tumor"
     },
+    "durdurmaNedeni": {
+      "hedef_kaybi": "target lost",
+      "plaka_dogrulanamadi": "plate not verified",
+      "plaka_kaydi": "plate moved"
+    },
     "durum": {
       "aborted_due_to_power": "Power Outage",
       "aborted_duration_unknown": "Duration Unknown",
@@ -924,6 +929,7 @@
       "stopped": "Stopped",
       "success": "Successful"
     },
+    "durumNedenli": "{{durum}} ({{neden}})",
     "hata": {
       "aiSure": "The duration of an AI session is the seal of the veterinarian's approval — it was NOT CHANGED from here (a new recommendation/approval is required).",
       "aktifYok": "No active session — there are no parameters to update.",

@@ -14,7 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 import { aramaEslesir } from "@/utils/aramaNormalize";
-import { hedefEtiketi, modEtiketi } from "@/utils/seansDegerEtiketi";
+import { hedefEtiketi, modEtiketi, nedenliDurum } from "@/utils/seansDegerEtiketi";
 import {
   inScope,
   kimlikIstemiMetni,
@@ -80,11 +80,12 @@ export function seansTarihi(s: { started_epoch?: number | null; session_date?: s
   return d.toLocaleString(etkinBicimYereli(), { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function statusEtiketi(status?: string): string {
+function statusEtiketi(status?: string, neden?: string | null): string {
   if (!status) return i18n.t("ai.deger.unknown");
   const key = status.toLowerCase();
   const anahtar = STATUS_ANAHTARLARI[key];
-  if (typeof anahtar === "string") return i18n.t(anahtar as never) as string;
+  // YS2 a (B1): AI Pro durdurma nedeni → "Durduruldu (plaka kaydı)" (PDF / CSV ile aynı kaynak ve etiket).
+  if (typeof anahtar === "string") return nedenliDurum(i18n.t, i18n.t(anahtar as never) as string, neden);
   // Bilinmeyen durumu en azından okunaklı göster (ilk harf büyük).
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
@@ -536,7 +537,7 @@ function SessionCard({
           {secimModu ? null : <Text style={styles.detailsHint} numberOfLines={1}>{t("seans.gecmis.bobinDetayi")}</Text>}
         </TouchableOpacity>
         <View style={{flexShrink: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm}}>
-          <StatusPill label={statusEtiketi(session.session_status)} state={state} />
+          <StatusPill label={statusEtiketi(session.session_status, session.durdurma_nedeni)} state={state} />
           {/* ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "paylaşım seçeneği ve pdf butonu aynı işi
               yapıyor seans başına. birini tutalım birini kaldır."
               ÖLÇÜLDÜ — DOĞRUYDU: `handleShareReport` ile `downloadPdf` AYNI uca, AYNI dosya

@@ -77,6 +77,20 @@ const aiProHedef = (t: TFunction, h: string): string => {
   return h;
 };
 
+/** YS2 a (B1): AI Pro durdurma nedeni KODU (backend `session_parameters.durdurma_nedeni`, `utils/seans_durum.DURDURMA_NEDENLERI` ile
+ *  AYNI) → katalog anahtarı. Geçmiş listesi, seans detayı, PDF ve CSV aynı satırdan okur. */
+const DURDURMA_NEDENLERI: Record<string, string> = {
+  plaka_kaydi: "seans.durdurmaNedeni.plaka_kaydi",
+  plaka_dogrulanamadi: "seans.durdurmaNedeni.plaka_dogrulanamadi",
+  hedef_kaybi: "seans.durdurmaNedeni.hedef_kaybi",
+};
+
+/** Durum etiketine nedeni ekler: "Durduruldu" + `plaka_kaydi` → "Durduruldu (plaka kaydı)". Bilinmeyen / boş neden EKLENMEZ. */
+export const nedenliDurum = (t: TFunction, durum: string, neden?: string | null): string => {
+  const anahtar = neden ? DURDURMA_NEDENLERI[neden] : undefined;
+  return anahtar ? t("seans.durumNedenli", { durum, neden: t(anahtar as never) }) : durum;
+};
+
 /** Seans modunun GÖRÜNEN adı. ⚠️ Değer (`Manuel` / `Otomatik` / `AI` / `AI Pro · …`) seansa / DB'ye GİDER → DEĞİŞMEZ; "AI" iki dilde aynıdır. */
 export const modEtiketi = (t: TFunction, mod: string): string => {
   switch (mod) {
