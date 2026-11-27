@@ -208,6 +208,50 @@ def test_KRITIK_backend_isi_URUN_ortamini_ve_TS_kapilarinin_girdilerini_KURAR_YS
     )
 
 
+#: YS1k: `makensis` isteyen kurucu kanca testleri — CI'da NSIS yokken "makensis yok" diye ATLIYORLARDI (17 test).
+_NSIS_ISTEYENLER = (
+    "test_18K_K1_nsis_estop_VARSAYILAN_port.py",
+    "test_YH_SYH2_sessiz_kaldirma_backend_port_SILINIR_veri_koku_KALIR.py",
+    "test_YH_Y296_etkilesimli_kaldirma_ISARETSIZ_backend_port_SILINIR.py",
+    "test_i18n_launcher_altyapi.py",
+    "test_kaldirma_yetim_surec_temizligi.py",
+)
+
+
+def test_KRITIK_backend_isi_NSIS_derleyicisini_SABIT_OZETLE_kurar_testlere_YOLU_verir_YS1k():
+    """YS1k: backend işi pytest'ten ÖNCE Tauri'nin NSIS dağıtımını (ürün kurucusunu derleyen) SHA-256 doğrulamasıyla kurar ve yolu
+    `PEMF_MAKENSIS` ile verir; kanca testlerinin hepsi yolu önce bu değişkenden okur (yoksa yine sessizce atlarlardı)."""
+    adimlar = _yukle("tests.yml")["jobs"]["backend"]["steps"]
+    metin = [str(a.get("run", "")) for a in adimlar]
+    pyt = next(i for i, m in enumerate(metin) if "pytest tests" in m)
+    nsis = [i for i, m in enumerate(metin) if "nsis-3.11.zip" in m]
+    assert len(nsis) == 1 and nsis[0] < pyt, "NSIS kurulum adımı yok ya da pytest'ten SONRA"
+    adim, govde = adimlar[nsis[0]], metin[nsis[0]]
+    assert adim.get("if") == "runner.os == 'Windows'" and not adim.get("continue-on-error"), adim
+    assert "set -euo pipefail" in govde, "indirme / özet hatası adımı düşürmüyor"
+    for adres in (
+        "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip",
+        "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll",
+    ):
+        assert adres in govde, f"sabit adres yok: {adres}"
+    assert len(re.findall(r'echo "[0-9a-f]{64}  [^"]+" \| sha256sum -c -', govde)) == 2, (
+        "iki indirmenin İKİSİ de SHA-256 ile doğrulanmıyor"
+    )
+    assert re.search(r'echo "PEMF_MAKENSIS=.*" >> "\$GITHUB_ENV"', govde), "makensis yolu testlere verilmiyor"
+    assert "makensis.exe\" -VERSION" in govde, "kurulan derleyici çalıştırılıp sınanmıyor"
+    for ad in _NSIS_ISTEYENLER:
+        assert "PEMF_MAKENSIS" in (KOK / "tests" / ad).read_text(encoding="utf-8"), (
+            f"{ad} makensis yolunu PEMF_MAKENSIS'ten okumuyor"
+        )
+
+
+def test_KRITIK_backend_checkout_TAM_gecmis_YS1k():
+    """YS1k: site yasal metin mührünün geçmiş kolu (D6.33) kaynak commit'i git geçmişinde arar — sığ klonda (fetch-depth 1) ATLIYORDU."""
+    adimlar = _yukle("tests.yml")["jobs"]["backend"]["steps"]
+    cek = [a for a in adimlar if str(a.get("uses", "")).startswith("actions/checkout")]
+    assert len(cek) == 1 and str((cek[0].get("with") or {}).get("fetch-depth")) == "0", cek
+
+
 def test_KRITIK_launcher_WINDOWSTA_derlenir():
     """Launcher'ın Windows'a özgü yolları (DPAPI, icacls, NSIS kancaları) yalnız orada derlenir."""
     assert "windows" in _yukle("tests.yml")["jobs"]["launcher"]["runs-on"]

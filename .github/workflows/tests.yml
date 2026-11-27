@@ -62,7 +62,11 @@ jobs:
         # Y320: yalnız Windows (iş adı "backend (windows-latest)" aynen kalsın diye matris korunur). Kapı: test_ci_workflow_gate.py
         os: [windows-latest]
     steps:
+      # YS1k: TAM geçmiş — site yasal metin mührünün geçmiş kolu (D6.33) mührün kaynak commit'ini git geçmişinde arar; sığ klonda
+      # (varsayılan fetch-depth 1) "kardeş eser yok" diye ATLIYORDU. Kapı: test_ci_workflow_gate.py (…TAM_gecmis_YS1k).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -150,6 +154,25 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: python scripts/ci_temp_acl.py
+
+      # YS1k: kurucu kanca testleri (18K ACİL DURDUR, SYH2 / Y296 kaldırma, i18n başlatıcı, kaldırma yetim süreç — 17 test) `makensis`
+      # ister; koşucuda NSIS YOK ("makensis yok" diye ATLIYORLARDI). Ürün kurucusunu derleyen Tauri CLI 2.11.4'ün sabitlediği dağıtım
+      # (nsis-3.11.zip SHA1 ef7ff767… · nsis_tauri_utils v0.5.3 SHA1 75197fee… — ikili, yerel Tauri önbelleğiyle bayt bayt aynı) SHA-256
+      # ile doğrulanır, Tauri düzeninde açılır; yol testlere `PEMF_MAKENSIS` ile verilir. Kapı: test_ci_workflow_gate.py (…NSIS_YS1k).
+      - name: NSIS (Tauri kurucu derleyicisi, sabit özet)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          z="$RUNNER_TEMP/nsis-3.11.zip"; d="$RUNNER_TEMP/tauri/NSIS"; e="$d/Plugins/x86-unicode/additional"
+          curl -fsSL --retry 3 -o "$z" https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip
+          echo "c7d27f780ddb6cffb4730138cd1591e841f4b7edb155856901cdf5f214394fa1  $z" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/tauri" && unzip -q "$z" -d "$RUNNER_TEMP/tauri" && mv "$RUNNER_TEMP/tauri/nsis-3.11" "$d"
+          mkdir -p "$e"
+          curl -fsSL --retry 3 -o "$e/nsis_tauri_utils.dll" https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll
+          echo "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709  $e/nsis_tauri_utils.dll" | sha256sum -c -
+          "$d/makensis.exe" -VERSION
+          echo "PEMF_MAKENSIS=$(cygpath -w "$d/makensis.exe")" >> "$GITHUB_ENV"
 
       # ⚠️ Y30 / D4.10 (B-10.3): `-rs` her ATLAMAYI nedeniyle listeler — CI varsayılan kipte koşar ve kardeş kaynak
       # yoksa ≥193 test atlanır; nedenler görünmeden "yeşil" okunuyordu. Yayın öncesi ZORUNLU kip ayrı betikte:
