@@ -143,6 +143,7 @@
       "seansBasladiGuncellemeErtelendi": "Seans başladı — güncelleme kuruldu değil, ertelendi. İndirilen dosya saklandı.",
       "setupYoluUtf8": "setup yolu UTF-8 değil",
       "temizlikGorevCoktu": "temizlik görevi çöktü: {{e}}",
+      "uygulamaHalaKapaniyor": "Uygulama hâlâ kapanıyor (bobinler güvenle durduruluyor) — birkaç saniye sonra yeniden Başlat'a basın.",
       "uygulamaKuruluDegil": "Uygulama kurulu değil — önce profil seçip kurun.",
       "yardimciBaslatilamadi": "yardımcı başlatılamadı ({{yol}}): {{e}}",
       "yardimciBatchYoluGuvensiz": "yardımcı batch yolu güvensiz karakter içeriyor",

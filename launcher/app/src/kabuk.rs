@@ -110,6 +110,7 @@ fn open_app_window(app: &tauri::AppHandle, port: u16) {
             uygulama_pencere_boyutu(l.width, l.height)
         })
         .unwrap_or(((1280.0, 860.0), (900.0, 520.0)));
+    let parsed_yeniden = parsed.clone(); // B12: yükleme doğrulamasının yeniden yönleneceği adres
     let built = tauri::WebviewWindowBuilder::new(app, "app", tauri::WebviewUrl::External(parsed))
         .title("PEMF Vet")
         .inner_size(uw, uh)
@@ -117,6 +118,19 @@ fn open_app_window(app: &tauri::AppHandle, port: u16) {
         .maximized(true)
         // LN L9 · D2.E01 (WebView2 kolu) · İG-6.20: indirmeler AÇIK kararla (bkz. `indirme_karari`).
         .on_download(move |_webview, olay| indirme_olayi(olay, port))
+        // YS3 d · B12: yükleme bitince backend yanıtsızsa (hata sayfası, kendini yenilemez) sınırlı yeniden deneme — karar
+        // `pencere_yuklemesini_dogrula`da (main.rs, testli); burada yalnız Tauri olayı + iş parçacığı + gerçek yoklama / yönlendirme.
+        .on_page_load(move |w, yuk| {
+            if matches!(yuk.event(), tauri::webview::PageLoadEvent::Finished) {
+                let hedef = parsed_yeniden.clone();
+                std::thread::spawn(move || {
+                    let yenile = || {
+                        let _ = w.navigate(hedef.clone());
+                    };
+                    pencere_yuklemesini_dogrula(&|| backend::probe_pemf_backend(port), &yenile, PENCERE_YENIDEN_DENEME, PENCERE_YENIDEN_ARALIK);
+                });
+            }
+        })
         .build();
     if built.is_err() {
         // Pencere açılamazsa (nadir) → uygulamayı tarayıcıda göster; client yine açık kalır (fail-safe).
@@ -982,6 +996,9 @@ impl KomutOrtami for tauri::AppHandle {
     }
     fn izlenen_backendi_durdur(&self, state: &AppState, root: &std::path::Path) {
         stop_tracked_backend(state, root);
+    }
+    fn baslat_sokum_azami(&self) -> std::time::Duration {
+        BASLAT_SOKUM_BEKLEME_AZAMI
     }
     fn calisan_backend(&self, root: &std::path::Path) -> Option<u16> {
         backend::detect_running_backend(root)

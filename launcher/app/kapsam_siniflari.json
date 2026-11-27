@@ -635,6 +635,16 @@
    "eksik": 0,
    "neden": "KP-6 D4: `install_and_launch` komutunun gövdesi — kök + dış bağ (`KomutOrtami`) enjekte; sıra / kilit / kapı / sonuç eşlemesi kayıtçı sahteyle davranış testli."
   },
+  "sokum_bitene_kadar_bekle": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "YS3 d · B12: Başlat'ın söküm beklemesi — tutamak yerinde, iş yok / bitti / azami dolu kolları gerçek iş parçacığıyla davranış testli."
+  },
+  "pencere_yuklemesini_dogrula": {
+   "sinif": "K",
+   "eksik": 0,
+   "neden": "YS3 d · B12: pencere yükleme doğrulaması — sağlıklı yükleme / geç gelen sağlık / hiç gelmeyen sağlık kolları sahte yoklama + sayaçla davranış testli."
+  },
   "start_installed_ile": {
    "sinif": "K",
    "eksik": 0,

@@ -143,6 +143,7 @@
       "seansBasladiGuncellemeErtelendi": "A session started — the update was not installed and was postponed. The downloaded file was kept.",
       "setupYoluUtf8": "The setup path is not UTF-8",
       "temizlikGorevCoktu": "The cleanup task crashed: {{e}}",
+      "uygulamaHalaKapaniyor": "The app is still closing (coils are being stopped safely) — press Start again in a few seconds.",
       "uygulamaKuruluDegil": "The app is not installed — select a profile and install it first.",
       "yardimciBaslatilamadi": "The helper could not be started ({{yol}}): {{e}}",
       "yardimciBatchYoluGuvensiz": "The helper batch path contains unsafe characters",

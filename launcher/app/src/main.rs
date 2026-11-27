@@ -49,7 +49,8 @@ struct AppState {
     control: Arc<AtomicU8>,
     /// "app" penceresi kapanınca ARKA PLANDA çalışan backend-kapatma işi (E-stop + kill).
     /// Client ("main") kapanmadan ÖNCE `join` edilir → süreç, bobin durdurma uçarken ÇIKMAZ.
-    teardown: Mutex<Option<std::thread::JoinHandle<()>>>,
+    /// YS3 d · B12: `Arc` — Başlat bu işin bitmesini (tutamağı ALMADAN) bekler (`sokum_bitene_kadar_bekle`).
+    teardown: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
     /// Doğrulanmış Supabase oturumu — YALNIZ BELLEKTE. Kalıcılık ("Beni hatırla") ayrı ve
     /// işletim sistemi korumalı (`secret_store`). ⚠️ Bu alan `progress` snapshot'ına ASLA
     /// yazılmaz: o snapshot `get_progress` ile webview'e akar ve jetonlar UI'ya sızardı.
@@ -79,7 +80,7 @@ impl Default for AppState {
             progress: Arc::new(Mutex::new(None)),
             prefetch: Arc::new(Mutex::new(None)),
             control: Arc::new(AtomicU8::new(CTL_RUN)),
-            teardown: Mutex::new(None),
+            teardown: Arc::new(Mutex::new(None)),
             session: Arc::new(Mutex::new(None)),
             rotasyon_senkronu_aktif: Arc::new(AtomicBool::new(false)),
             kapanis_yakma_beklendi: Arc::new(AtomicU8::new(KAPANIS_NORMAL)),
@@ -359,6 +360,8 @@ trait KomutOrtami: Clone + Send + Sync + 'static {
     fn uygulama_penceresini_kapat(&self);
     /// İzlenen backend'i E-stop → kill ile durdur (üretim: `stop_tracked_backend`).
     fn izlenen_backendi_durdur(&self, state: &AppState, root: &std::path::Path);
+    /// YS3 d · B12: Başlat'ın "app" penceresi söküm işini bekleme azamisi (üretim: `BASLAT_SOKUM_BEKLEME_AZAMI`; test: kısa).
+    fn baslat_sokum_azami(&self) -> std::time::Duration;
     /// Kurulu backend zaten çalışıyor mu (üretim: `backend::detect_running_backend` — port dosyası / varsayılan port).
     fn calisan_backend(&self, root: &std::path::Path) -> Option<u16>;
     /// Sahiplenilen backend'in rotasyon senkronu (üretim: `oturum_rotasyon_senkronu_baslat`).
@@ -872,6 +875,47 @@ async fn install_and_launch_ile<O: KomutOrtami>(
     }
 }
 
+/// YS3 d · B12: Başlat'ın "app" penceresi söküm bekleme azamisi — olağan kapanış (STOP + kuyruk boşaltma + son oturum ≤ 2 sn + kill)
+/// birkaç saniyede biter; dolarsa (ör. kart yazılımı yakılırken kapanış bekliyor) Başlat eylem söyleyen hatayla döner, kapanmakta olan
+/// backend'e pencere AÇILMAZ.
+const BASLAT_SOKUM_BEKLEME_AZAMI: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// YS3 d · B12: "app" penceresinin arka plan söküm işi (`AppState.teardown`) bitene dek en çok `azami` bekler; bitti mi (iş yoksa hemen
+/// `true`). Tutamağı ALMAZ (yalnız `is_finished`): ana pencere kapanışı onu yine `join` eder — süreç E-stop uçarken ÇIKMAZ (değişmez).
+fn sokum_bitene_kadar_bekle(teardown: &Mutex<Option<std::thread::JoinHandle<()>>>, azami: std::time::Duration) -> bool {
+    let bas = std::time::Instant::now();
+    loop {
+        if teardown.lock().unwrap().as_ref().is_none_or(|h| h.is_finished()) {
+            return true;
+        }
+        if bas.elapsed() >= azami {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// YS3 d · B12: uygulama penceresi yüklemesi BİTTİĞİNDE backend imzalı sağlık yoklamasını (`/api/health`, PEMF imzası) geçmiyorsa
+/// sayfa WebView'in "bağlanmayı reddetti" hata sayfasıdır ve KENDİNİ YENİLEMEZ → en çok `deneme` kez `aralik` arayla yokla; backend
+/// yanıt verince pencereyi aynı adrese yeniden yönlendir. Sağlıklı yüklemede hiçbir şey yapmaz. Dönüş: yeniden yönlendirildi mi.
+fn pencere_yuklemesini_dogrula(saglikli: &dyn Fn() -> bool, yenile: &dyn Fn(), deneme: u32, aralik: std::time::Duration) -> bool {
+    if saglikli() {
+        return false;
+    }
+    for _ in 0..deneme {
+        std::thread::sleep(aralik);
+        if saglikli() {
+            yenile();
+            return true;
+        }
+    }
+    false
+}
+
+/// YS3 d · B12: pencere yükleme doğrulamasının deneme sayısı / aralığı (en çok ~10 sn).
+const PENCERE_YENIDEN_DENEME: u32 = 5;
+const PENCERE_YENIDEN_ARALIK: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// Başlat: KURULU uygulamanın backend'ini başlat (indirme YOK). Zaten çalışıyorsa tarayıcıyı
 /// yeniden açar. "Hazır!" ekranındaki büyük Başlat düğmesi bunu çağırır.
 ///
@@ -880,6 +924,17 @@ async fn install_and_launch_ile<O: KomutOrtami>(
 async fn start_installed_ile<O: KomutOrtami>(ortam: &O, state: &AppState, root: std::path::PathBuf) -> Result<String, String> {
     if !install::backend_path(&root).exists() {
         return Err(pemf_launcher_core::dil::t("rust.hata.uygulamaKuruluDegil"));
+    }
+    // YS3 d · B12 (YG2, LattePanda): "app" penceresi kapatılıp HEMEN Başlat → kapanış işi (Destroyed: STOP → yakma beklemesi → son
+    // oturum → kill → port dosyası; ARKA PLANDA) backend'i henüz öldürmemişken o backend imzalı sağlık yoklamasını GEÇİYOR, aşağıdaki
+    // `calisan_backend` onu "çalışıyor" sayıp SAHİPLENİYOR ve pencereyi ona açıyordu; iş backend'i öldürünce WebView "127.0.0.1
+    // bağlanmayı reddetti" gösteriyordu (kendini yenilemiyordu). Uçuştaki söküm BİTMEDEN çalışan backend ARANMAZ; bitmezse pencere
+    // açılmaz, eylem söylenir. Kapanış sırası DEĞİŞMEZ (bobin her kill'den önce durur; benimsenen backend kapanışta durdurulmaz).
+    let sokum = state.teardown.clone();
+    let azami = ortam.baslat_sokum_azami();
+    let bitti = tauri::async_runtime::spawn_blocking(move || sokum_bitene_kadar_bekle(&sokum, azami)).await.unwrap_or(false);
+    if !bitti {
+        return Err(pemf_launcher_core::dil::t("rust.hata.uygulamaHalaKapaniyor"));
     }
     // Zaten bu oturumda çalışıyorsa: yeni süreç başlatma, uygulamayı pencerede tekrar göster.
     let running_port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
@@ -5638,6 +5693,8 @@ Connection: close
         devirde_oturum: Arc<Mutex<Vec<bool>>>,
         /// KP-8: akış SÜRERKEN kullanıcının bastığı düğme (komutun denetim bayrağı + değer) — sahte akış denetimi okumadan hemen önce yazar.
         basilan: Arc<Mutex<Option<(Arc<AtomicU8>, u8)>>>,
+        /// YS3 d · B12: Başlat'ın söküm bekleme azamisi (None → 5 sn).
+        sokum_azami: Option<std::time::Duration>,
     }
 
     impl Kp6Ortam {
@@ -5710,6 +5767,9 @@ Connection: close
                 let _ = c.kill();
                 let _ = c.wait();
             }
+        }
+        fn baslat_sokum_azami(&self) -> std::time::Duration {
+            self.sokum_azami.unwrap_or(std::time::Duration::from_secs(5))
         }
         fn calisan_backend(&self, _root: &std::path::Path) -> Option<u16> {
             self.yaz("calisan?".into());
@@ -6187,6 +6247,118 @@ Connection: close
         assert!(!o.izler().iter().any(|x| x.starts_with("devret") || x.starts_with("hazir")));
         let _ = std::fs::remove_dir_all(&kok);
         let _ = std::fs::remove_dir_all(&bos);
+    }
+
+    /// KRİTİK (YS3 d · B12, YG2 LattePanda): "app" penceresi kapatılıp HEMEN Başlat → kapanmakta olan backend SAHİPLENİLMEZ. Başlat önce
+    /// arka plan söküm işinin BİTMESİNİ bekler, ANCAK SONRA çalışan backend arar (söküm bitince port dosyası silinmiş, backend ölü → yeni
+    /// backend başlar, pencere ona açılır). Söküm tutamağı YERİNDE kalır (ana pencere kapanışı onu join eder).
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_YS3_B12_baslat_UCUSTAKI_sokum_BITMEDEN_calisan_backend_ARAMAZ() {
+        let st = AppState::default();
+        let kok = kp6_kurulu_kok("ys3_b12_sokum");
+        let o = Kp6Ortam::default();
+        let iz = o.iz.clone();
+        *st.teardown.lock().unwrap() = Some(std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            iz.lock().unwrap().push("sokum_bitti".into());
+        }));
+        let r = tauri::async_runtime::block_on(start_installed_ile(&o, &st, kok.clone())).unwrap();
+        assert_eq!(r, backend::app_url(KP6_PORT));
+        let izler = o.izler();
+        assert_eq!(izler.first().map(String::as_str), Some("sokum_bitti"), "çalışan backend söküm BİTMEDEN arandı (B12): {izler:?}");
+        assert_eq!(izler.get(1).map(String::as_str), Some("calisan?"), "{izler:?}");
+        assert!(izler.iter().any(|x| x.starts_with("hazir:")), "yeni backend başlatılmadı: {izler:?}");
+        assert!(st.teardown.lock().unwrap().is_some(), "söküm tutamağı alındı — ana pencere kapanışı artık join edemez");
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (YS3 d · B12): söküm azamide bitmezse Başlat eylem söyleyen hatayla döner — çalışan backend ARANMAZ (kapanmakta olan
+    /// backend sahiplenilmez), pencere AÇILMAZ, başlatma YOK.
+    #[cfg(windows)]
+    #[test]
+    fn KRITIK_YS3_B12_sokum_AZAMIDE_bitmezse_pencere_ACILMAZ_eylem_soylenir() {
+        let st = AppState::default();
+        let kok = kp6_kurulu_kok("ys3_b12_azami");
+        let o = Kp6Ortam { sokum_azami: Some(std::time::Duration::from_millis(100)), calisan: Some(KP6_PORT), ..Default::default() };
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        *st.teardown.lock().unwrap() = Some(std::thread::spawn(move || {
+            let _ = rx.recv();
+        }));
+        let e = tauri::async_runtime::block_on(start_installed_ile(&o, &st, kok.clone())).unwrap_err();
+        assert_eq!(e, pemf_launcher_core::dil::t("rust.hata.uygulamaHalaKapaniyor"));
+        assert!(o.izler().is_empty(), "söküm sürerken bir şey yapıldı: {:?}", o.izler());
+        tx.send(()).unwrap();
+        if let Some(h) = st.teardown.lock().unwrap().take() {
+            h.join().unwrap();
+        }
+        let _ = std::fs::remove_dir_all(&kok);
+    }
+
+    /// KRİTİK (YS3 d · B12): pencere yükleme doğrulaması — sağlıklı yüklemede yönlendirme YOK (tek yoklama) · sağlık geç gelirse TAM bir
+    /// kez yeniden yönlenir · hiç gelmezse 1 + `deneme` yoklamadan sonra vazgeçer (sonsuz döngü / yönlendirme fırtınası YOK) · aralık
+    /// gerçekten beklenir.
+    #[test]
+    fn KRITIK_YS3_B12_pencere_yuklemesi_SAGLIK_gelince_yeniden_yonlenir_SINIRLI() {
+        use std::cell::Cell;
+        let z = std::time::Duration::ZERO;
+        let (yok, yon) = (Cell::new(0u32), Cell::new(0u32));
+        let saglikli = || {
+            yok.set(yok.get() + 1);
+            true
+        };
+        assert!(!pencere_yuklemesini_dogrula(&saglikli, &|| yon.set(yon.get() + 1), 5, z));
+        assert_eq!((yok.get(), yon.get()), (1, 0), "sağlıklı yüklemede yeniden yoklandı / yönlendi");
+        let (yok, yon) = (Cell::new(0u32), Cell::new(0u32));
+        let ucuncude = || {
+            yok.set(yok.get() + 1);
+            yok.get() >= 3
+        };
+        assert!(pencere_yuklemesini_dogrula(&ucuncude, &|| yon.set(yon.get() + 1), 5, z));
+        assert_eq!((yok.get(), yon.get()), (3, 1), "geç gelen sağlıkta bir kez yönlenmedi");
+        let (yok, yon) = (Cell::new(0u32), Cell::new(0u32));
+        let hic = || {
+            yok.set(yok.get() + 1);
+            false
+        };
+        assert!(!pencere_yuklemesini_dogrula(&hic, &|| yon.set(yon.get() + 1), 5, z));
+        assert_eq!((yok.get(), yon.get()), (6, 0), "hiç gelmeyen sağlıkta deneme sınırı tutmadı");
+        let bas = std::time::Instant::now();
+        pencere_yuklemesini_dogrula(&|| false, &|| {}, 2, std::time::Duration::from_millis(30));
+        assert!(bas.elapsed() >= std::time::Duration::from_millis(60), "yeniden deneme aralığı beklenmedi");
+    }
+
+    /// YS3 d · B12: söküm beklemesinin kolları — iş yok (hemen `true`) · süren iş (azami dolunca `false`, azami kadar beklenmiş) · biten
+    /// iş (`true`) · tutamak her durumda YERİNDE.
+    #[test]
+    fn YS3_B12_sokum_beklemesi_kollari_tutamak_yerinde() {
+        let t: Mutex<Option<std::thread::JoinHandle<()>>> = Mutex::new(None);
+        assert!(sokum_bitene_kadar_bekle(&t, std::time::Duration::ZERO));
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        *t.lock().unwrap() = Some(std::thread::spawn(move || {
+            let _ = rx.recv();
+        }));
+        let bas = std::time::Instant::now();
+        assert!(!sokum_bitene_kadar_bekle(&t, std::time::Duration::from_millis(80)));
+        assert!(bas.elapsed() >= std::time::Duration::from_millis(80));
+        tx.send(()).unwrap();
+        assert!(sokum_bitene_kadar_bekle(&t, std::time::Duration::from_secs(5)));
+        assert!(t.lock().unwrap().is_some(), "tutamak alındı");
+    }
+
+    /// YS3 d · B12 kabuk bağı (S, yorum-soyulmuş): üretim azamisi sabitten; pencere yükleme doğrulaması yüklemenin BİTİŞ olayında,
+    /// GERÇEK imzalı sağlık yoklamasıyla ve sabit sınırla bağlı.
+    #[test]
+    fn YS3_B12_kabuk_bagi_uretim_azamisi_ve_yukleme_dogrulamasi() {
+        let soy = kabuk_soy();
+        assert!(soy.contains("fn baslat_sokum_azami(&self) -> std::time::Duration {\n        BASLAT_SOKUM_BEKLEME_AZAMI\n    }"));
+        let ow = &soy[soy.find("fn open_app_window(").expect("open_app_window yok")..];
+        let ow = &ow[..ow.find("\nfn ").expect("sonraki fn yok")];
+        assert!(ow.contains("PageLoadEvent::Finished"), "yükleme bitiş olayına bağlı değil");
+        assert!(
+            ow.contains("pencere_yuklemesini_dogrula(&|| backend::probe_pemf_backend(port), &yenile, PENCERE_YENIDEN_DENEME, PENCERE_YENIDEN_ARALIK)"),
+            "yükleme doğrulaması gerçek imzalı yoklamaya / sabit sınıra bağlı değil"
+        );
     }
 
     // ═════════════════════════════════════════════════════════════════════════════════════
