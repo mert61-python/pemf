@@ -10,6 +10,9 @@ BELİRTEÇ: çağıranın belirteçinden `CreateRestrictedToken(LUA_TOKEN | DISA
 en aza; bütünlük düzeyi ORTA (S-1-16-8192). Yerel UAC oturumunun süzülmüş belirteciyle aynı biçim.
 KULLANIM: python scripts/ci_kisitli_belirtec.py [--zorla] <komut> [arg…]   (çıkış kodu = komutun çıkış kodu)
   Süreç yükseltilmemişse komut DOĞRUDAN koşar (yerel); `--zorla` kısıtlı yolu yükseltilmemişken de kullanır (sınama).
+KONSOL (YS1j, GitHub 4c3c10ee): çocuk KENDİ (penceresiz, `CREATE_NO_WINDOW`) konsoluyla başlar. Devralınan konsol yükseltilmiş koşucunundur
+(bütünlük YÜKSEK) → ORTA bütünlüklü çocuk ve torunları onun tamponunu OKUYAMAZ: Windows PowerShell 5.1 ilerleme çubuğu "Win32 internal
+error 'Access is denied' 0x5 occurred while reading the console output buffer" ile betiği düşürüyordu. Standart akışlar yine devralınır.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ TOKEN_INTEGRITY_LEVEL = 25
 SE_GROUP_INTEGRITY = 0x20
 WIN_BUILTIN_ADMINISTRATORS_SID = 26
 STARTF_USESTDHANDLES = 0x100
+CREATE_NO_WINDOW = 0x08000000
 HANDLE_FLAG_INHERIT = 0x1
 INFINITE = 0xFFFFFFFF
 ORTA_BUTUNLUK = "S-1-16-8192"
@@ -156,7 +160,7 @@ def kisitli_kos(argv: list[str]) -> int:
     pi = _PROCESS_INFORMATION()
     komut = ctypes.create_unicode_buffer(subprocess.list2cmdline(argv))
     if not adv.CreateProcessAsUserW(
-        belirtec, None, komut, None, None, True, 0, None, os.getcwd(), ctypes.byref(si), ctypes.byref(pi)
+        belirtec, None, komut, None, None, True, CREATE_NO_WINDOW, None, os.getcwd(), ctypes.byref(si), ctypes.byref(pi)
     ):
         raise _hata("CreateProcessAsUserW")
     k32.WaitForSingleObject(pi.hProcess, INFINITE)

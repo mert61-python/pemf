@@ -29,3 +29,34 @@ def dacl_sidleri(yol) -> set[str]:
     assert r.returncode == 0 and "D:" in r.stdout, f"aparat: SDDL okunamadı: {r.stdout}{r.stderr}"
     dacl = r.stdout.split("D:", 1)[1].split("S:", 1)[0]
     return {m.group(1) for m in re.finditer(r"\(A;[^;()]*;[^;()]*;[^;()]*;[^;()]*;([^;()]+)\)", dacl)}
+
+
+def sid_metni(ad: str) -> str:
+    """SDDL hesap alanı (takma ad `SY` / `BA` / `LA` … ya da `S-1-…`) → açık SID metni; çözülemezse olduğu gibi döner.
+
+    YS1j (GitHub 4c3c10ee): koşucu hesabı YERLEŞİK Administrator (RID 500) — SDDL o hesabın SID'ini `LA` diye yazar; sabit takma ad
+    sözlüğü bunu bilmediğinden D279 "DACL eksik: [S-…-500] (var: ['LA', …])" ile düştü. Çözüm Windows'un KENDİ SDDL çözücüsüyle
+    (`ConvertStringSidToSidW`): her takma ad, dilden ve makineden bağımsız."""
+    if os.name != "nt" or ad.upper().startswith("S-1-"):
+        return ad
+    import ctypes
+    from ctypes import wintypes as wt
+
+    adv = ctypes.WinDLL("advapi32", use_last_error=True)
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    adv.ConvertStringSidToSidW.argtypes = [wt.LPCWSTR, ctypes.POINTER(ctypes.c_void_p)]
+    adv.ConvertSidToStringSidW.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+    k32.LocalFree.argtypes = [ctypes.c_void_p]
+    psid = ctypes.c_void_p()
+    if not adv.ConvertStringSidToSidW(ad, ctypes.byref(psid)):
+        return ad
+    try:
+        metin = ctypes.c_void_p()
+        if not adv.ConvertSidToStringSidW(psid, ctypes.byref(metin)):
+            return ad
+        try:
+            return ctypes.wstring_at(metin)
+        finally:
+            k32.LocalFree(metin)
+    finally:
+        k32.LocalFree(psid)

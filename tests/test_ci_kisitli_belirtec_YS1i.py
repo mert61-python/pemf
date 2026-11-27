@@ -5,7 +5,7 @@ UAC-SÜZGEÇLİ belirteçle koşar: `scripts/ci_kisitli_belirtec.py` (Administra
 
 KAPI: (1) kısıtlı yol (`--zorla`) çocukta yönetici YOK, Administrators ETKİN DEĞİL; (2) çocuğun çıkış kodu AYNEN döner (kırmızı yutulmaz);
 (3) yükseltilmemiş süreçte komut doğrudan koşar; (4) komutsuz kullanım → 2; (5) CI pytest adımı sarmalayıcıyla ve `shell: bash` (pwsh 7'nin
-PSModulePath sızıntısı yok) koşar.
+PSModulePath sızıntısı yok) koşar; (6) YS1j: kısıtlı çocuk kendi (penceresiz) konsolunda koşar — devralınan YÜKSEK bütünlüklü konsolu paylaşmaz.
 """
 
 from __future__ import annotations
@@ -68,6 +68,40 @@ def test_KRITIK_yukseltilmemis_surecte_DOGRUDAN_kosar_cikis_kodu_aynen():
     assert c.returncode == 3 and "UAC-süzgeçli" not in c.stdout and "SONDA admin=False" in c.stdout, (
         c.stdout,
         c.stderr,
+    )
+
+
+_KONSOL_SONDA = r"""
+import ctypes
+from ctypes import wintypes as wt
+k = ctypes.WinDLL("kernel32", use_last_error=True)
+dizi = (wt.DWORD * 64)()
+n = k.GetConsoleProcessList(dizi, 64)
+print("KONSOL", " ".join(str(dizi[i]) for i in range(min(n, 64))), flush=True)
+"""
+
+
+def test_KRITIK_kisitli_cocuk_KENDI_konsolunda_kosar_devralinan_konsolu_PAYLASMAZ_YS1j():
+    """YS1j (GitHub 4c3c10ee): devralınan konsol yükseltilmiş koşucunundu (bütünlük YÜKSEK) → ORTA bütünlüklü torun (Windows PowerShell
+    5.1) tamponunu okuyamadı ("Access is denied 0x5 … reading the console output buffer"). Sarmalayıcı kendi (penceresiz) konsoluyla
+    başlatılır; kısıtlı çocuk o konsolu PAYLAŞMAMALI (kendi konsolunda koşar)."""
+    p = subprocess.Popen(
+        [sys.executable, str(BETIK), "--zorla", sys.executable, "-c", _KONSOL_SONDA],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=subprocess.CREATE_NO_WINDOW,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+    )
+    cikti, hata = p.communicate(timeout=120)
+    assert p.returncode == 0 and "UAC-süzgeçli belirteç" in cikti, (p.returncode, cikti, hata)
+    satir = [s for s in cikti.splitlines() if s.startswith("KONSOL")]
+    assert satir, (cikti, hata)
+    pidler = {int(x) for x in satir[0].split()[1:]}
+    assert pidler, f"aparat: çocuğun konsolu yok ({satir[0]!r})"
+    assert p.pid not in pidler, (
+        f"kısıtlı çocuk sarmalayıcının (YÜKSEK bütünlüklü) konsolunu PAYLAŞIYOR: {sorted(pidler)} ∋ {p.pid}"
     )
 
 

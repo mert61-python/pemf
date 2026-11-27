@@ -78,18 +78,24 @@ def test_KRITIK_tarama_cikti_icine_cozumlenen_yollari_ATLAR(cli, tmp_path):
     cikti.mkdir()
     (cikti / "eski_xai.jpg").write_bytes(b"x")
     link = girdi / "link"
-    try:
-        link.symlink_to(cikti, target_is_directory=True)
-    except OSError:
-        # D5.59 TUR 3: Windows dev-mode kapalıyken symlink izni yok — HAM `pytest.skip` yerine aynı deliğin ikizi DİZİN BAĞLANTISI
-        # (junction; izin gerektirmez, `rglob` içine iner → ürünün çözümlenmiş-yol bekçisi GERÇEKTEN ölçülür). İkisi de kurulamazsa
-        # `capraz.atla` (ZORUNLU kipte DÜŞER). Bağlantı tmp_path içinde; hedefi de tmp_path içinde.
+    # D5.59 TUR 3: Windows'ta deliğin biçimi DİZİN BAĞLANTISIDIR (junction; izin gerektirmez, `rglob` içine iner → ürünün çözümlenmiş-yol
+    # bekçisi GERÇEKTEN ölçülür). YS1j (GitHub 4c3c10ee): önce symlink deneniyordu — koşucuda geliştirici kipi açık olduğundan symlink
+    # KURULDU ama Python 3.10 `rglob` dizin symlink'ine İNMEZ → aşağıdaki vakum bekçisi (doğru biçimde) düştü. Windows'ta junction önce;
+    # kurulamazsa ve öbür sistemlerde symlink. İkisi de kurulamazsa `capraz.atla` (ZORUNLU kipte DÜŞER). Bağlantı ve hedefi tmp_path içinde.
+    kuruldu = False
+    if sys.platform == "win32":
         try:
             import _winapi
 
             _winapi.CreateJunction(str(cikti), str(link))
-        except (ImportError, AttributeError, OSError) as e:
-            capraz.atla(f"bu ortamda symlink izni yok ve dizin bağlantısı (junction) kurulamadı ({type(e).__name__})")
+            kuruldu = True
+        except (ImportError, AttributeError, OSError):
+            pass
+    if not kuruldu:
+        try:
+            link.symlink_to(cikti, target_is_directory=True)
+        except OSError as e:
+            capraz.atla(f"bu ortamda dizin bağlantısı (junction) ve symlink kurulamadı ({type(e).__name__})")
     # D67 (D5 devri) VAKUM BEKÇİSİ: bağlantı türü (symlink / junction) ne olursa olsun HAM tarama bağlantının İÇİNE İNİYOR mu?
     # İnmiyorsa aşağıdaki iddia ürünün bekçisinden bağımsız YEŞİL kalırdı (delik bu ortamda yok → kapı vakumda).
     ham = [p.name for p in girdi.rglob("*.jpg")]

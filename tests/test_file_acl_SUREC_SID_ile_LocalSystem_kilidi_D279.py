@@ -21,6 +21,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from acl_sddl import sid_metni
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="NTFS ACL (icacls) yalnız Windows")
 
@@ -37,22 +38,38 @@ def _sddl(p: Path) -> str:
 
 
 def _dacl_sidleri(sddl: str) -> set[str]:
-    """DACL'deki ERİŞİM VER (A) ACE'lerinin SID'leri; kısaltmalar açık SID'e çevrilir."""
-    kisa = {
-        "SY": "S-1-5-18",
-        "BA": "S-1-5-32-544",
-        "BU": "S-1-5-32-545",
-        "AU": "S-1-5-11",
-        "WD": "S-1-1-0",
-        "IU": "S-1-5-4",
-    }
+    """DACL'deki ERİŞİM VER (A) ACE'lerinin SID'leri; takma adlar (SY, BA, … ve YS1j: yerleşik Administrator `LA`) Windows'un SDDL
+    çözücüsüyle açık SID'e çevrilir (`acl_sddl.sid_metni`)."""
     dacl = sddl.split("D:", 1)[1]
     sidler = set()
     for ace in dacl.split("(")[1:]:
         alanlar = ace.rstrip(")").split(";")
         if len(alanlar) >= 6 and alanlar[0] == "A":
-            sidler.add(kisa.get(alanlar[5], alanlar[5]))
+            sidler.add(sid_metni(alanlar[5]))
     return sidler
+
+
+def test_KARSIT_SDDL_takma_adlari_ACIK_SIDe_cozulur_yerlesik_Administrator_LA_YS1j():
+    """YS1j: GitHub koşucusu yerleşik Administrator (RID 500) → SDDL sürecin SID'ini `LA` yazar. Beklenen SID bağımsız kaynaktan
+    (yerel hesap listesi, SAM) okunur; sabit takma ad sözlüğü `LA`yı çözmüyordu."""
+    r = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-LocalUser | Where-Object { $_.SID.Value -like 'S-1-5-21-*-500' } | ForEach-Object { $_.SID.Value }",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    la = r.stdout.strip()
+    assert r.returncode == 0 and la.startswith("S-1-5-21-") and la.endswith("-500"), (
+        f"aparat: yerleşik Administrator SID'i: {r}"
+    )
+    sidler = _dacl_sidleri("O:LAG:SYD:PAI(A;;FA;;;LA)(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1200a9;;;S-1-5-19)(D;;FA;;;BU)")
+    assert sidler == {la, "S-1-5-18", "S-1-5-32-544", "S-1-5-19"}, sidler
 
 
 def _sifirla(p: Path) -> None:
