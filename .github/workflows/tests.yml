@@ -175,6 +175,19 @@ jobs:
           "$d/makensis.exe" -VERSION
           echo "PEMF_MAKENSIS=$(cygpath -w "$d/makensis.exe")" >> "$GITHUB_ENV"
 
+      # YS1m (c2d9476a koşusu: 12 637 / 0 kırmızı, kapsam %99,99 — `file_acl` 2 satır): Y96 paylaşılan grup ACE'i (`lock_down_file` /
+      # `lock_down_dir`) bu makinede OLUŞTURULMUŞ bir yerel grup ister; koşucuda hiç yok. Grup ÜYELİKSİZ kurulur: üyelik belirtece
+      # yalnız YENİ oturum açmada girer (barındırılan koşucuda hesap parolasına dokunulmaz) → üyelik isteyen 3 davranış testi yine
+      # atlar (CI-ATLANAN, ORTAM); grup kolunu DACL'den ölçen test koşar. Kapı: test_ci_workflow_gate.py (…YEREL_GRUP_YS1m).
+      - name: Paylaşılan yerel grup (Y96, üyeliksiz)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          net localgroup pemf-ci-paylasim *> $null
+          if ($LASTEXITCODE -ne 0) { net localgroup pemf-ci-paylasim /add /comment:"PEMF CI Y96 grup kolu (uyeliksiz)"; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          net localgroup pemf-ci-paylasim
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       # ⚠️ Y30 / D4.10 (B-10.3): `-rs` her ATLAMAYI nedeniyle listeler — CI varsayılan kipte koşar ve kardeş kaynak
       # yoksa ≥193 test atlanır; nedenler görünmeden "yeşil" okunuyordu. Yayın öncesi ZORUNLU kip ayrı betikte:
       # scripts/yayin_oncesi_suit.ps1 (publish_release.ps1'in zorunlu adımı).

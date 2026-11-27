@@ -252,6 +252,23 @@ def test_KRITIK_backend_checkout_TAM_gecmis_YS1k():
     assert len(cek) == 1 and str((cek[0].get("with") or {}).get("fetch-depth")) == "0", cek
 
 
+def test_KRITIK_backend_isi_UYELIKSIZ_olusturulmus_YEREL_GRUP_kurar_hesaba_DOKUNMAZ_YS1m():
+    """YS1m: Y96 grup ACE'i kolu (`file_acl` 2 satır) bu makinede OLUŞTURULMUŞ bir yerel grup ister; koşucuda yoktu (kapsam %99,99).
+    Adım pytest'ten ÖNCE, Windows'ta, hata yutmadan grubu kurar; grup ÜYELİKSİZ — hesap eklenmez, parola değiştirilmez (`net user`)."""
+    adimlar = _yukle("tests.yml")["jobs"]["backend"]["steps"]
+    metin = [str(a.get("run", "")) for a in adimlar]
+    pyt = next(i for i, m in enumerate(metin) if "pytest tests" in m)
+    grup = [i for i, m in enumerate(metin) if "net localgroup pemf-ci-paylasim /add" in m]
+    assert len(grup) == 1 and grup[0] < pyt, "yerel grup kurulum adımı yok ya da pytest'ten SONRA"
+    adim, govde = adimlar[grup[0]], metin[grup[0]]
+    assert adim.get("if") == "runner.os == 'Windows'" and not adim.get("continue-on-error"), adim
+    assert govde.count("exit 1") >= 2, "kurulum / doğrulama hatası adımı düşürmüyor"
+    assert not re.search(r"net localgroup \S+ \S+ /add", govde), (
+        "gruba HESAP ekleniyor (üyelik yeni oturum ister; gereksiz)"
+    )
+    assert not re.search(r"\bnet user\b|Set-LocalUser|Add-LocalGroupMember", govde), "koşucu hesabına dokunuluyor"
+
+
 def test_KRITIK_launcher_WINDOWSTA_derlenir():
     """Launcher'ın Windows'a özgü yolları (DPAPI, icacls, NSIS kancaları) yalnız orada derlenir."""
     assert "windows" in _yukle("tests.yml")["jobs"]["launcher"]["runs-on"]

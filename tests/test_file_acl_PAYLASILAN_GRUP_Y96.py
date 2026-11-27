@@ -143,6 +143,58 @@ def test_KRITIK_dizin_kilidi_PAYLASILAN_GRUBA_kalitimla_erisim_verir_ikinci_hesa
     assert "auth_users.db" in os.listdir(d), "aparat: /reset sonrası dizine erişim geri gelmedi"
 
 
+@pytest.fixture(scope="module")
+def olusturulmus_grup() -> str:
+    """Bu makinede OLUŞTURULMUŞ herhangi bir yerel grup (S-1-5-21-…) — süreç ÜYE OLMASA da. YS1m: GitHub koşucusunda hiç yoktu (Y96
+    grup kolu kapsam dışı: `file_acl` 2 satır, %99,99 < 100); `tests.yml` üyeliksiz `pemf-ci-paylasim` kurar. CI'da yoksa KIRMIZI
+    (kurulum adımı sessizce kaybolmasın); yerelde yoksa atla."""
+    return _olusturulmus_grup_sec(
+        _ps("Get-LocalGroup | Where-Object { $_.SID.Value -like 'S-1-5-21-*' } | ForEach-Object { $_.SID.Value }"),
+        os.environ.get("GITHUB_ACTIONS") == "true",
+    )
+
+
+def _olusturulmus_grup_sec(cikti: str, ci: bool) -> str:
+    sidler = [s.strip() for s in cikti.splitlines() if s.strip()]
+    if not sidler:
+        if ci:
+            pytest.fail(
+                "CI: oluşturulmuş yerel grup YOK — tests.yml 'Paylaşılan yerel grup (Y96, üyeliksiz)' adımı koşmadı"
+            )
+        pytest.skip("bu makinede oluşturulmuş yerel grup yok — grup ACE'i kolu ölçülemez")
+    return sidler[0]
+
+
+def test_olusturulmus_grup_secimi_CIde_grup_YOKSA_KIRMIZI_yerelde_atlar_YS1m():
+    cikti = "\r\nS-1-5-21-1-2-3-1001\r\nS-1-5-21-1-2-3-1002\r\n"
+    assert _olusturulmus_grup_sec(cikti, ci=True) == "S-1-5-21-1-2-3-1001"
+    with pytest.raises(BaseException) as hata:  # skip de BaseException: CI'da ATLAMA da yakalanıp REDDEDİLSİN
+        _olusturulmus_grup_sec(" \r\n", ci=True)
+    assert hata.type is pytest.fail.Exception and "adımı koşmadı" in str(hata.value), hata.type
+    with pytest.raises(pytest.skip.Exception):
+        _olusturulmus_grup_sec("", ci=False)
+
+
+def test_KRITIK_OLUSTURULMUS_yerel_grup_uye_olunmasa_da_dosya_ve_dizin_kilidinde_ACIKCA_VERILIR_Y96(
+    tmp_path, monkeypatch, ilk_hesap, olusturulmus_grup
+):
+    """Launcher'ın kurduğu grubun üyesi ilk hesaptır; kilidi uygulayan süreç üye olmak ZORUNDA değil. Grup ACE'i DACL'de AÇIKÇA:
+    dosyada `FA`, dizinde kalıtımlı `OICI FA` (ikinci hesap dizinde doğan dosyaya da ulaşsın)."""
+    monkeypatch.setenv(_ORTAM, olusturulmus_grup)
+    f = tmp_path / "pemf_secrets.json"
+    f.write_text("{}", encoding="utf-8")
+    d = tmp_path / "PEMF_GUI"
+    d.mkdir()
+    try:
+        assert ilk_hesap.lock_down_file(f, keep_current_user=True) is True
+        assert f"(A;;FA;;;{olusturulmus_grup})" in _sddl(f), f"dosya kilidinde grup ACE'i yok: {_sddl(f)}"
+        assert ilk_hesap.lock_down_dir(d, keep_current_user=True) is True
+        assert f"(A;OICI;FA;;;{olusturulmus_grup})" in _sddl(d), f"dizin kilidinde kalıtımlı grup ACE'i yok: {_sddl(d)}"
+    finally:
+        _sifirla(f)
+        _sifirla(d)
+
+
 _GENIS = {
     "Users": "S-1-5-32-545",
     "AuthenticatedUsers": "S-1-5-11",
