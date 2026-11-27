@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""CI: koşucunun TEMP'ini OLAĞAN kullanıcı profili ACL'ine getirir — YS1j (GitHub windows-latest 4c3c10ee).
+"""CI: ACL benzetimlerinin ("başka hesabın kilidi") ÖLÇÜLEBİLDİĞİ bir TEMP sağlar — YS1j → YS1l (GitHub windows-latest).
 
-NEDEN: koşucunun TEMP'i alt öğelerine ACE MİRAS VERMİYOR. Orada doğan dosya ACE'lerini belirtecin VARSAYILAN DACL'inden AÇIK (miras
-değil) olarak alır (kullanıcı:F, Administrators:F, SYSTEM:F). ACL benzetimleri ("başka hesabın kilidi": `icacls /inheritance:r /grant:r
-*S-1-5-19:(F)`) yalnız MİRAS ACE'lerini kaldırır → kullanıcının açık ACE'i kalır, dosya OKUNUR: 22 kırmızı + 3 hata (D2.80, Y96, Y113,
-A14, E2-1.6 …) ve kapsam %99,98 (`file_acl` / `config` yalnız o kollarda). Olağan profil TEMP'inde (SYSTEM / Administrators / kullanıcı
-`(OI)(CI)F`) aynı testler yeşil; miras vermeyen dizinde aynı belirti yerelde birebir üretildi. Testleri atlamak yerine ortam düzeltilir.
-DAVRANIŞ: TEMP'te bir sonda dosyası doğurur; ACE'lerinin HEPSİ miras mı ölçer. Öyleyse DOKUNMAZ. Değilse TEMP'e SYSTEM, Administrators
-ve süreç hesabı için kalıtımlı `(OI)(CI)F` verir (aynı hesabın açık ACE'inin yerine) ve yeniden ölçer; hâlâ miras yoksa ÇIKIŞ 1 (süit
-boşuna koşmasın). Hedef: `--dizin <yol>`; yol verilmezse YALNIZ `GITHUB_ACTIONS=true` iken TEMP (geliştiricinin TEMP'ine dokunmaz).
+NEDEN (YS1l tanısı, uç 21b5be65 · Windows Server 2025 26100): koşucunun profil TEMP'inde (C:/Users/runneradmin/AppData/Local/Temp)
+doğan dosyaya `icacls /inheritance:r` kalıtımlı ACE'leri SİLMİYOR, AÇIK ACE'ye ÇEVİRİYOR (`/inheritance:d` gibi): "yalnız LOCAL SERVICE"
+kilidinden sonra DACL `PAI(LS)(SY)(BA)(LA)` — süreç hesabı (LA) erişimini korur, kilit ölçülemez → 19 kırmızı + 3 hata (Y96, D2.80,
+Y113, OB2B24, A14, E2-1.6 …). Aynı koşucuda D:/a/_temp'te aynı komut DOĞRU (`PAI(LS)`, okuma RET). `GetNamedSecurityInfoW` iki
+yerde de dosyanın ACE'lerini `ID` gösterir (ebeveynle karşılaştırıp HESAPLAR) → ACE bayrağına bakan YS1j sondası "miras veriyor"
+dedi ve yanıldı. Bu yüzden ölçüm İŞLEVSEL: dizinde (iki kat altta, pytest'in `tmp_path` zinciri gibi) doğan dosyaya kilit uygulanır,
+DACL'de YALNIZ kilit ACE'i kaldı mı bakılır (belirteçten bağımsız).
+DAVRANIŞ: ölçülüyorsa DOKUNMAZ. Ölçülmüyorsa dizine korumalı, kalıtımlı `(OI)(CI)F` DACL yazar (SYSTEM / Administrators / süreç
+hesabı — olağan profil TEMP biçimi) ve yeniden ölçer. CI'da (yol verilmeden) yine ölçülmüyorsa YEDEK: `$RUNNER_TEMP/pemf-tmp`
+olağanlaştırılır, ölçülür ve `TEMP` / `TMP` sonraki adımlar için `$GITHUB_ENV`'e yazılır. Hiçbiri olmazsa ÇIKIŞ 1 (süit 60 dk boşuna
+koşmasın). Yol verilmezse YALNIZ `GITHUB_ACTIONS=true` iken TEMP hedeflenir (geliştiricinin TEMP'ine dokunmaz).
 KULLANIM: python scripts/ci_temp_acl.py [--dizin <yol>]
 """
 
@@ -94,19 +97,41 @@ def acik_aceler(sddl_metni: str) -> list[str]:
     return sonuc
 
 
+KILIT_ACE = "A;;FA;;;LS"  # `icacls … /grant:r *S-1-5-19:(F)` → SDDL'de tek ACE
+
+
 def sonda(dizin: str) -> tuple[bool, str]:
-    """`dizin`de yeni bir alt dizin + dosya doğurur (pytest'in `tmp_path` zinciri gibi); dosyanın ACE'lerinin HEPSİ miras mı?
-    Dönüş: (miras_mi, dosyanın SDDL'i). Sonda her durumda silinir."""
+    """`dizin`de iki kat alt dizin + dosya doğurur; dosyaya "başka hesabın kilidi" (`/inheritance:r /grant:r *S-1-5-19:(F)`) uygular.
+    Dönüş: (kilit ölçülür mü = DACL'de YALNIZ kilit ACE'i kaldı mı, kilit sonrası SDDL). Sonda her durumda sıfırlanıp silinir."""
     alt = os.path.join(dizin, f"ys_acl_sonda_{os.getpid()}_{uuid.uuid4().hex[:8]}")
-    os.mkdir(alt)
+    os.makedirs(os.path.join(alt, "ic"))
     try:
-        dosya = os.path.join(alt, "sonda.txt")
+        dosya = os.path.join(alt, "ic", "sonda.txt")
         with open(dosya, "w", encoding="utf-8") as h:
             h.write("x")
+        r = subprocess.run(
+            ["icacls", dosya, "/inheritance:r", "/grant:r", "*S-1-5-19:(F)"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"sonda kilidi uygulanamadı (icacls rc={r.returncode}): {r.stdout}{r.stderr}")
         s = sddl(dosya)
-        return bool(aceler(s)) and not acik_aceler(s), s
+        return aceler(s) == [KILIT_ACE], s
     finally:
+        # Kilitli dosya üst dizinin FILE_DELETE_CHILD hakkıyla silinir (`/reset` YOK: kalıtımsız ebeveynde DACL'i BOŞALTIR, silme
+        # düşer — yerelde artık bıraktı). Yine kalırsa: sahip olarak (WRITE_DAC) kendine erişim verip yeniden sil.
         shutil.rmtree(alt, ignore_errors=True)
+        if os.path.exists(alt):
+            subprocess.run(
+                ["icacls", alt, "/grant", f"*{surec_sid()}:(OI)(CI)F", "/T", "/C", "/Q"],
+                capture_output=True,
+                timeout=60,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            shutil.rmtree(alt, ignore_errors=True)
 
 
 def surec_sid() -> str:
@@ -125,11 +150,13 @@ def surec_sid() -> str:
 
 
 def olaganlastir(dizin: str, sid: str) -> subprocess.CompletedProcess:
-    """`dizin`e SYSTEM, Administrators ve süreç hesabı için kalıtımlı tam erişim (`/grant:r`: aynı hesabın açık ACE'inin YERİNE)."""
+    """`dizin`e KORUMALI (`/inheritance:r` — eski tip ebeveyne bağlı kalmaz), kalıtımlı tam erişim: SYSTEM, Administrators, süreç
+    hesabı `(OI)(CI)F` (`/grant:r`: aynı hesabın açık ACE'inin YERİNE). Olağan kullanıcı profili TEMP'inin biçimi."""
     return subprocess.run(
         [
             "icacls",
             dizin,
+            "/inheritance:r",
             "/grant:r",
             f"*{SID_SYSTEM}:(OI)(CI)F",
             "/grant:r",
@@ -142,6 +169,33 @@ def olaganlastir(dizin: str, sid: str) -> subprocess.CompletedProcess:
         timeout=120,
         creationflags=CREATE_NO_WINDOW,
     )
+
+
+def duzelt(dizin: str, sid: str) -> int:
+    """`dizin`de kilit ölçülüyorsa 0 (dokunmaz); değilse olağanlaştırıp yeniden ölçer: 0 ölçülür · 1 hâlâ ölçülmez / icacls düştü."""
+    olculur, s = sonda(dizin)
+    print(f"[ci_temp_acl] {dizin}\n  dizin DACL        : {sddl(dizin)}\n  kilit sonrası DACL: {s}", flush=True)
+    if olculur:
+        print("[ci_temp_acl] kilit benzetimi ölçülüyor — dokunulmadı", flush=True)
+        return 0
+    print(
+        f"[ci_temp_acl] kilit ÖLÇÜLMÜYOR — kilitten sonra kalan fazladan ACE: {[a for a in aceler(s) if a != KILIT_ACE]}",
+        flush=True,
+    )
+    r = olaganlastir(dizin, sid)
+    if r.returncode != 0:
+        print(f"[ci_temp_acl] HATA: icacls rc={r.returncode}: {r.stdout}{r.stderr}", file=sys.stderr)
+        return 1
+    olculur, s = sonda(dizin)
+    print(f"  sonra dizin DACL        : {sddl(dizin)}\n  sonra kilit sonrası DACL: {s}", flush=True)
+    if not olculur:
+        print(f"[ci_temp_acl] olağanlaştırma sonrası da kilit ölçülmüyor: {dizin}", file=sys.stderr)
+        return 1
+    print(
+        "[ci_temp_acl] olağan profil biçimine getirildi (korumalı · SYSTEM / Administrators / süreç hesabı — kalıtımlı tam erişim)",
+        flush=True,
+    )
+    return 0
 
 
 def _konsol_utf8() -> None:
@@ -165,28 +219,29 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    miras, s = sonda(dizin)
-    print(f"[ci_temp_acl] {dizin}\n  dizin DACL : {sddl(dizin)}\n  sonda DACL : {s}", flush=True)
-    if miras:
-        print("[ci_temp_acl] alt öğelere miras veriyor — dokunulmadı", flush=True)
+    sid = surec_sid()
+    if duzelt(dizin, sid) == 0:
         return 0
-    r = olaganlastir(dizin, surec_sid())
-    if r.returncode != 0:
-        print(f"[ci_temp_acl] HATA: icacls rc={r.returncode}: {r.stdout}{r.stderr}", file=sys.stderr)
+    if argv:  # --dizin: yalnız o dizin (yedek yok)
+        print("[ci_temp_acl] HATA: ACL benzetimleri (başka hesabın kilidi) bu dizinde ölçülemez", file=sys.stderr)
         return 1
-    miras, s = sonda(dizin)
-    print(f"  sonra dizin DACL : {sddl(dizin)}\n  sonra sonda DACL : {s}", flush=True)
-    if not miras:
+    rt, ge = os.environ.get("RUNNER_TEMP"), os.environ.get("GITHUB_ENV")
+    if not rt or not ge:
         print(
-            "[ci_temp_acl] HATA: olağanlaştırma sonrası da yeni dosyada AÇIK ACE var — ACL benzetimleri (başka hesabın kilidi) "
-            "bu koşucuda ölçülemez",
+            "[ci_temp_acl] HATA: TEMP'te kilit ölçülemiyor ve yedek için RUNNER_TEMP / GITHUB_ENV yok", file=sys.stderr
+        )
+        return 1
+    yedek = os.path.join(rt, "pemf-tmp")
+    os.makedirs(yedek, exist_ok=True)
+    if duzelt(yedek, sid) != 0:
+        print(
+            "[ci_temp_acl] HATA: yedek TEMP'te de kilit ölçülemiyor — ACL benzetimleri bu koşucuda ölçülemez",
             file=sys.stderr,
         )
         return 1
-    print(
-        "[ci_temp_acl] olağan profil biçimine getirildi (SYSTEM / Administrators / süreç hesabı — kalıtımlı tam erişim)",
-        flush=True,
-    )
+    with open(ge, "a", encoding="utf-8") as h:
+        h.write(f"TEMP={yedek}\nTMP={yedek}\n")
+    print(f"[ci_temp_acl] YEDEK: sonraki adımların TEMP / TMP'si → {yedek}", flush=True)
     return 0
 
 

@@ -73,14 +73,6 @@ jobs:
           python-version: "3.10"
           cache: pip
 
-      # YS1l GEÇİCİ TANI: kısıtlı belirteçte kilit neden kapatmıyor (yükseltilmiş + kısıtlı ölçüm). Kök neden düzelince KALDIRILIR.
-      - name: ACL tanı (geçici)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          python scripts/ci_acl_tani.py
-          python scripts/ci_kisitli_belirtec.py python scripts/ci_acl_tani.py
-
       # SQLCipher: at-rest şifreleme / göç / karantina / kurtarma testleri GERÇEK kütüphaneyle koşsun.
       # ⚠️ A-46 (sahip kararı) + D2.07 (B-3.47): sqlcipher3 KURULAMAZSA İŞ KIRMIZI — sessiz düşüş YOK.
       # Eskiden Linux'ta kurulum `|| echo "... duz-metin yoluyla kosulacak"` ile YUTULUYOR, Windows'ta
@@ -153,10 +145,11 @@ jobs:
           PEMF_CI_MODEL_KAYNAGI: ${{ vars.PEMF_CI_MODEL_KAYNAGI }}
         run: python scripts/ci_modelleri.py indir --hedef "$RUNNER_TEMP/pemf_ai_models" --github-env "$GITHUB_ENV"
 
-      # YS1j (4c3c10ee koşusu): koşucunun TEMP'i alt öğelere ACE MİRAS VERMİYOR → orada doğan dosya belirtecin varsayılan DACL'ini
-      # AÇIK ACE olarak alır; "başka hesabın kilidi" benzetimi (`icacls /inheritance:r /grant:r *S-1-5-19:(F)`) kullanıcının açık
-      # ACE'ini kaldırmaz, dosya OKUNUR (22 kırmızı + 3 hata — UAC-süzgeçli belirteçle bile). TEMP olağan profil biçimine getirilir
-      # (SYSTEM / Administrators / süreç hesabı kalıtımlı tam erişim); sonda yine açık ACE görürse adım DÜŞER (süit boşuna koşmaz).
+      # YS1j → YS1l (tanı 21b5be65 · Windows Server 2025): koşucunun profil TEMP'inde doğan dosyaya `icacls /inheritance:r` kalıtımlı
+      # ACE'leri SİLMİYOR, açık ACE'ye çeviriyor → "başka hesabın kilidi" (`/grant:r *S-1-5-19:(F)`) sonrası süreç hesabı (LA) erişimini
+      # korur, dosya OKUNUR / dizin LİSTELENİR (19 kırmızı + 3 hata — UAC-süzgeçli belirteçle bile). D:\a\_temp'te aynı komut doğru.
+      # Adım kilidi İŞLEVSEL ölçer; ölçülmüyorsa TEMP'i korumalı olağan profil biçimine getirir, yine olmazsa `$RUNNER_TEMP/pemf-tmp`'yi
+      # hazırlayıp TEMP / TMP'yi oraya yönlendirir (GITHUB_ENV); hiçbiri ölçülmezse adım DÜŞER (süit boşuna koşmaz).
       # Kapı: tests/test_ci_temp_acl_YS1j.py.
       - name: Koşucu TEMP ACL'i (olağan profil biçimi)
         if: runner.os == 'Windows'
