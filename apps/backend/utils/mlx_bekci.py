@@ -33,6 +33,10 @@ class MlxBekci:
         self._son: dict[int, float] = {}
         self._dustu: set[int] = set()
         self._bagli = False
+        # YS2 d (B5, YG0 25-11) TANI: uyarı 2 kez kendiliğinden düzeldi, doğrudan COM'da kesinti yok → kart mı sustu, okuyucu mu
+        # duraksadı? Son tık anı + bobin başına son `B=`den beri okuyucu döngüsünün EN UZUN tık aralığı (yalnız günlüğe; karar AYNI).
+        self._son_tik: float | None = None
+        self._en_uzun_ara: dict[int, float] = {}
 
     def baglandi(self) -> None:
         with self._kilit:
@@ -41,6 +45,8 @@ class MlxBekci:
             for coil_id in self._son:
                 self._son[coil_id] = simdi
             self._dustu.clear()
+            self._son_tik = None  # kopukken geçen süre okuyucu duraksaması SAYILMAZ (bağlanınca baştan)
+            self._en_uzun_ara.clear()
 
     def koptu(self) -> None:
         with self._kilit:
@@ -52,6 +58,7 @@ class MlxBekci:
             c = int(coil_id)
             self._son[c] = self._saat()
             self._dustu.discard(c)
+            self._en_uzun_ara[c] = 0.0
 
     def tikla(self) -> list[int]:
         """Eşiği yeni aşan (henüz bildirilmemiş) bobinler; bağlı değilken boş."""
@@ -59,6 +66,19 @@ class MlxBekci:
             if not self._bagli:
                 return []
             simdi = self._saat()
+            if self._son_tik is not None:
+                ara = simdi - self._son_tik
+                for c in self._son:
+                    self._en_uzun_ara[c] = max(self._en_uzun_ara.get(c, 0.0), ara)
+            self._son_tik = simdi
             yeni = sorted(c for c, t in self._son.items() if c not in self._dustu and simdi - t >= self._esik)
             self._dustu.update(yeni)
             return yeni
+
+    def tani(self, coil_id) -> tuple[float, float]:
+        """YS2 d (B5) TANI: (son `B=`den beri geçen sn, okuyucu döngüsünün bu sürede EN UZUN tık aralığı sn). İkincisi birincisine
+        yakınsa okuyucu DURAKSAMIŞTIR (yanlış uyarı adayı — ağır CV / model yüklemesi); küçükse kart gerçekten `B=` basmamıştır."""
+        with self._kilit:
+            c = int(coil_id)
+            t = self._son.get(c)
+            return (0.0 if t is None else self._saat() - t, self._en_uzun_ara.get(c, 0.0))

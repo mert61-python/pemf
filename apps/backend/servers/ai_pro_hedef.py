@@ -1091,6 +1091,8 @@ class _EmCvSaglayici:
                 # eşleşen (takip edilen) hedef ilk görüldüğü etiketi KORUR — mühürlü etiket karede değişmez.
                 aday["label"] = aday.get("label") or f"{self.hedef_etiketi} {sonraki}"
                 sonraki += 1
+        # YS2 d (B4): kimlikler yazılmadan ÖNCE (sonraki kare düzeltilmiş etiketi taşır)
+        self._yinelenen_etiketleri_coz(yeni)
         with self._kilit:
             etkin = {a["id"] for a in yeni}
             for k in eski:
@@ -1105,6 +1107,27 @@ class _EmCvSaglayici:
         for a in yeni:  # I18NI-A2.8: ARAYÜZ gösterimi (`HedefSecici`); `label` VERİ kalır (onay mührü)
             a["etiketGosterim"] = self.etiket_gosterim(str(a.get("label") or ""))
         return yeni
+
+    @staticmethod
+    def _yinelenen_etiketleri_coz(adaylar: list) -> None:
+        """YS2 d (B4, YG0 25-11): aynı karede İKİ aday aynı etiketi taşımaz (hedef listesinde "C2 ×2", "A5 ×2"). Takip, eşleşen adaya
+        önceki karenin etiketini taşır; plaka eğik / halka kenarındayken ızgara kareden kareye kayınca bu etiket CV'nin BU karede başka
+        bir kuyuya verdiği etiketle çakışıyordu. Çakışmada CV'nin bu karedeki etiketi kazanır (ODAK sürüşü de ızgaranın CV etiketini
+        hedefler — `oneri.kip_girdisi`): taşınan etiketi CV'ninkinden farklı olan aday kendi CV etiketine geçer (o da karede
+        kullanılıyorsa dokunulmaz). KİMLİK (onay mührü, `_hedef_sec`) DEĞİŞMEZ."""
+        from collections import Counter
+
+        sayim = Counter(a.get("label") for a in adaylar)
+        if all(n < 2 for n in sayim.values()):
+            return
+        kullanilan = set(sayim)
+        for a in adaylar:
+            eski, cv = a.get("label"), a.get("cv_label")
+            if sayim[eski] > 1 and cv and cv != eski and cv not in kullanilan:
+                a["label"] = cv
+                sayim[eski] -= 1
+                sayim[cv] = 1
+                kullanilan.add(cv)
 
     def _hedef_sec(self, adaylar: list, hedef_id: int):
         """hedef_id 0 → otomatik (en yüksek `oncelik`), aksi hâlde KALICI kimliğe göre."""

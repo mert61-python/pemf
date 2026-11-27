@@ -2627,6 +2627,12 @@ def _ai_pro_loop(dongu_muhru=None):
         if dongu_muhru is not None and not _yeni_dongu:
             _ai_loop_active = False  # bu (güncel) döngü bitiyor
         _atla = _yeni_dongu or (dongu_muhru is None and _ai_loop_active)
+        if not _atla:
+            # YS2 c (B2, YG0 25-11): süre dolumu / kesinti / dış durdurma da seansı bitirir → mühürlü ODAK ayarı ve sabit numune
+            # referansı ("seans başı plaka konumu") burada biter. Eskiden yalnız `/ai/pro/stop` ve "Hazırlığı durdur" temizliyordu:
+            # süresi dolan T-8 seansından sonra yeni hazırlık eski referansla "Plaka seansın başındaki yerinden kaydı" diyordu.
+            # Kilit İÇİNDE: yeni seans ayarını aynı kilitle kurar (`_atla` değilken araya yeni seans giremez).
+            _sabit_numune_referansini_birak()
         _yetki_gecerli = dongu_muhru is None or estop_mandali.mandalli_mi() or not estop_mandali.baslatma_engeli(_nesil)
         if not _atla and _yetki_gecerli:
             try:
@@ -3479,6 +3485,13 @@ def stop_ai_pro():
     return {"status": "success", "message": "AI Pro Closed-Loop Stopped"}
 
 
+def _sabit_numune_referansini_birak() -> None:
+    """YS2 c (B2): bütün sağlayıcılarda mühürlü ODAK ayarı + sabit numune referansı (seans başı plaka konumu) + ortanca penceresi
+    temizlenir (`ai_pro_hedef.odak_ayarla(_, None)` — durdurmanın kullandığı yol). Yalnız SEANS YOKKEN / seans biterken çağrılır."""
+    for _s in ai_pro_hedef.SAGLAYICILAR.values():
+        ai_pro_hedef.odak_ayarla(_s, None)
+
+
 def _ai_pro_satirini_kapat(seans: dict | None, sebep: str) -> None:
     """D2.E07 (YA-1): AI Pro seansının DB satırını `_finalize_session_db` ile kapat (kısmi dakika + sensör + bitiş damgası).
     `seans` = kapatılmadan HEMEN önce alınmış oturum anlık görüntüsü (yalnız o an aktif olan KENDİ seansı); yoksa ya da
@@ -3572,6 +3585,12 @@ def calibrate_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     # [B1]: YABANCI istemci sahibin lokalizasyonunu zorla tazeleyemez (deny-only).
     if _ai_kare_yabanci(payload.client_id):
         raise HTTPException(status_code=403, detail=ceviri.t("ai.pro.hata.sahipDegil"))
+    # YS2 c (B2): seans YOKKEN "Yeniden Konumla" plakanın YENİ yerini referans alır. Seans sürerken (döngü / mühür) referans KALIR —
+    # gerçek kayma hâlâ STOP (T-8; düğmeyle aşılamaz).
+    _muhurlu = _ai_pro_surus_muhru() is not None  # kilitten ÖNCE (hazırlıkla aynı kilit sırası — ters yön yok)
+    with _ai_loop_lock:
+        if not _ai_loop_active and not _muhurlu:
+            _sabit_numune_referansini_birak()
     _ai_relocalize = True
     return {"status": "success", "relocalize": True}
 
@@ -3653,6 +3672,7 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         # Model seçimi (Faz 1): seans YOK → güvenli. Hazırlık sürerken model değişirse önizleme
         # yeni sağlayıcıyla devam eder (thread her turda `_aktif_saglayici()` okur).
         _ai_hedef_modeli = _saglayici.ad
+        _sabit_numune_referansini_birak()  # YS2 c (B2): seans YOK → önceki seansın ODAK ayarı / plaka referansı taşınmaz
         ai_pro_hedef.kosulsuz_ayarla(_saglayici, payload.kosulsuz is True)  # T3 · Y189 (kedide yok sayılır)
         if _organ_req in _saglayici.hedef_idleri():
             _ai_organ_id = _organ_req  # panelde seçili hedef için lokalize et

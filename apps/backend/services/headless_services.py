@@ -816,15 +816,25 @@ class NetworkStatusService:
     # halinde SON BILINEN degeri koru (yanlis-negatif titremesini de keser). Internet kontrolu
     # saf soket oldugundan (ucuz) 5 sn'de kalir.
     _EXPENSIVE_POLL_TTL_S = 60.0
+    #: YS2 e (B9, YG2 25-11): OLUMSUZ sonuç ("hotspot kapalı") KISA ömürlü. Açılışta backend'in ilk yoklaması hotspot kalkmadan ÖNCE
+    #: gelince "Cihaz Wi-Fi'si (PEMF-Gateway) Kapalı" ≤ 60 sn yanlış kırmızı kalıyordu (arayüz 8 sn'de bir sorsa da önbellek dönüyordu).
+    #: Olumlu sonuç 60 sn (yoklama fırtınası yok). Bağlantı mantığı ve istemci sayımı DEĞİŞMEZ.
+    _OLUMSUZ_POLL_TTL_S = 10.0
 
-    def _cached_poll(self, key: str, producer):
-        """Pahali (subprocess) yoklamalari TTL ile onbellekle; hata/timeout'ta son degeri koru."""
+    def _cached_poll(self, key: str, producer, olumsuz=None):
+        """Pahali (subprocess) yoklamalari TTL ile onbellekle; hata/timeout'ta son degeri koru.
+        `olumsuz(deger)` doğruysa (ör. hotspot kapalı) önbellek `_OLUMSUZ_POLL_TTL_S` sonra tazelenir."""
         now = time.monotonic()
         cache = getattr(self, "_poll_cache", None)
         if cache is None:
             cache = self._poll_cache = {}
         hit = cache.get(key)
-        if hit and (now - hit[0]) < self._EXPENSIVE_POLL_TTL_S:
+        ttl = (
+            self._OLUMSUZ_POLL_TTL_S
+            if (hit and olumsuz is not None and olumsuz(hit[1]))
+            else self._EXPENSIVE_POLL_TTL_S
+        )
+        if hit and (now - hit[0]) < ttl:
             return hit[1]
         try:
             val = producer()
@@ -835,7 +845,9 @@ class NetworkStatusService:
         return val
 
     def _check_hotspot(self) -> dict[str, Any]:
-        cached = self._cached_poll("hotspot", self._check_hotspot_uncached)
+        cached = self._cached_poll(
+            "hotspot", self._check_hotspot_uncached, olumsuz=lambda v: not (isinstance(v, dict) and v.get("active"))
+        )
         return cached if cached is not None else {"active": False, "ssid": "", "ip": "", "clients": 0}
 
     def _check_hotspot_uncached(self) -> dict[str, Any]:

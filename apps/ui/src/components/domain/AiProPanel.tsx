@@ -1303,6 +1303,9 @@ export function AiProPanel({
     : kareOrani(mobileResult, pencereY > pencereX);
   const kutu = kutuW > 0 ? kameraKutusu(kutuW, kareOran, pencereY, 0.5) : null;
   const perCoil: Coil[] = (IS_WEB ? v?.perCoil : mobileResult?.perCoil) ?? [];
+  // YS2 d (B3, YG0 25-11): seans durunca son karenin duty'leri tabloda KALMAZ — kare bağlamda kalıcı olduğundan elle Durdur'dan
+  // sonra (sayfa değişse de) tablo %17–36 "sürülüyor" gösteriyordu, bobinler durmuşken. Seans sürmüyorsa tablo boş (0) satırlar.
+  const tabloBobinleri: Coil[] = running ? perCoil : [];
   const remaining = IS_WEB ? (v?.remainingSec ?? 0) : remainingSec;
 
   /**
@@ -1764,9 +1767,9 @@ export function AiProPanel({
       {/* Per-coil diagnostik tablo (7 bobin; bobin 8 kapalı) */}
       <Text style={styles.label}>{t("ai.pro.bobinDiagnostigi")}</Text>
       {/* Y54 (sahip): operatörün durdurduğu bobin otomasyona yenilmez — neden AÇIKÇA yazılır ("sürülmedi" yetmez). */}
-      {perCoil.some((c) => c.planDisi) ? (
+      {tabloBobinleri.some((c) => c.planDisi) ? (
         <Text style={styles.note} testID="ai-pro-plan-disi">
-          {perCoil
+          {tabloBobinleri
             .filter((c) => c.planDisi)
             .map((c) => t("ai.pro.planDisiBobin", { id: c.id }))
             .join(" · ")}
@@ -1779,7 +1782,7 @@ export function AiProPanel({
           <Text style={[styles.th, { flex: 1 }]}>{t("kontrol.bobin.duty")}</Text>
           <Text style={[styles.th, { flex: 1 }]}>{t("kontrol.sinir.faz")}</Text>
         </View>
-        {(perCoil.length ? perCoil : Array.from({ length: STM_BOBIN_SAYISI }, (_, i): Coil => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
+        {(tabloBobinleri.length ? tabloBobinleri : Array.from({ length: STM_BOBIN_SAYISI }, (_, i): Coil => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
           <View key={c.id} style={styles.tr}>
             <Text style={[styles.td, { flex: 1 }]}>{c.id}</Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.freq} Hz</Text>

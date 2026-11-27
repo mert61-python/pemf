@@ -1192,9 +1192,15 @@ class HeadlessCore:
         """Y285: `B=` eşik süresince gelmeyen bobin → telemetri olayı `alan_kayip` (arayüz uyarısı `api_server`da). Okuyucu döngüsü her
         okumada (boş okuma dahil: port zaman aşımı 0,3 sn) çağırır."""
         for coil_id in self._mlx_bekci().tikla():
+            gecen, ara = self._mlx_bekci().tani(
+                coil_id
+            )  # YS2 d (B5): kart mı sustu, okuyucu mu duraksadı (tezgâh tanısı)
             self.logger.warning(
-                "[STM32] bobin %s manyetik alan sensoru (MLX90393) veri gondermiyor — firmware yeniden ariyor, kullanici uyarildi",
+                "[STM32] bobin %s manyetik alan sensoru (MLX90393) veri gondermiyor — firmware yeniden ariyor, kullanici uyarildi "
+                "(tani: son B= %.1f sn once, okuyucu dongusu en uzun %.1f sn duraksadi)",
                 coil_id,
+                gecen,
+                ara,
             )
             self._publish_event("hardware.stm.telemetry", {"coil_id": coil_id, "alan_kayip": True})
 
