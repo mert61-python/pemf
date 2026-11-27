@@ -73,6 +73,14 @@ jobs:
           python-version: "3.10"
           cache: pip
 
+      # YS1l GEÇİCİ TANI: kısıtlı belirteçte kilit neden kapatmıyor (yükseltilmiş + kısıtlı ölçüm). Kök neden düzelince KALDIRILIR.
+      - name: ACL tanı (geçici)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python scripts/ci_acl_tani.py
+          python scripts/ci_kisitli_belirtec.py python scripts/ci_acl_tani.py
+
       # SQLCipher: at-rest şifreleme / göç / karantina / kurtarma testleri GERÇEK kütüphaneyle koşsun.
       # ⚠️ A-46 (sahip kararı) + D2.07 (B-3.47): sqlcipher3 KURULAMAZSA İŞ KIRMIZI — sessiz düşüş YOK.
       # Eskiden Linux'ta kurulum `|| echo "... duz-metin yoluyla kosulacak"` ile YUTULUYOR, Windows'ta
