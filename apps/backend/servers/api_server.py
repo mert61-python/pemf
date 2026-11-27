@@ -4677,6 +4677,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
         _csv_yolu = _seans_alan.seans_basladi(
             str(_active_session.get("session_id") or ""),
             {
+                "seans_no": _active_session.get("db_session_id"),  # Y331: dosya adı seans no + tarih
                 "patient_name": payload.patient_name,
                 "operator_name": _operator_adi,
                 "mode": payload.mode,

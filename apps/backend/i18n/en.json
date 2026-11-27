@@ -515,7 +515,7 @@
     "alanDoygun": "⚠️ The field measured by the cabin sensor (MLX, board channel {{coil}}) EXCEEDED the sensor range (±24.6 mT) — the displayed mT is UNRELIABLE (it wraps around, so the value may look LOW)",
     "alanKaydiAcilamadi": "⚠️ The session field log (CSV) could not be opened — the treatment is not affected",
     "alanKaydiBasladi": "📄 Session field log started: {{yol}}",
-    "alanKaydiYazildi": "📄 Session field log saved to the desktop: {{name}}",
+    "alanKaydiYazildi": "📄 Session field log saved to the Session CSV folder: {{name}}",
     "asiriSicaklik": "🌡️ The board of coil {{coil}} reported OVERTEMPERATURE ({{atype}}) — only coil {{coil}} was stopped; the other coils are still running. Check the coil.",
     "beklenmedikCalisiyordu": "⚠️ Coil {{coil}} was running unexpectedly — a safety stop was sent",
     "bobinAlarm": "🚨 Coil {{coil}} ALARM ({{atype}}) — the session was stopped for safety",
@@ -662,6 +662,10 @@
       "tarih": "Date",
       "tepeMt": "Peak(mT)",
       "veriYok": "No data found"
+    },
+    "csvKlasoru": {
+      "acilamadi": "Could not open the Session CSV folder ({{yol}}) — open it manually in File Explorer.",
+      "json": "Folder not opened: the request must be JSON (Content-Type: application/json). Use the button in the app."
     },
     "hata": {
       "dbHazirDegil": "The history database is not ready",

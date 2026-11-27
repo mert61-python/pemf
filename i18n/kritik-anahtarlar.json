@@ -2394,7 +2394,7 @@
    "anahtar": "bildirim.alanKaydiYazildi",
    "tur": "seans",
    "kaynak": "apps/backend/servers/api_server.py",
-   "aciklama": "seans alan kaydı masaüstüne yazıldı"
+   "aciklama": "seans alan kaydı Seans CSV klasörüne yazıldı (Y331)"
   },
   {
    "yuzey": "sunucu",
@@ -3685,8 +3685,8 @@
   {
    "dosya": "apps/backend/servers/api_server.py",
    "satir": 84,
-   "metin": "📄 Seans alan kaydı masaüstüne yazıldı: {{name}}",
-   "ham": "📄 Seans alan kaydı masaüstüne yazıldı: {{name}}"
+   "metin": "📄 Seans alan kaydı Seans CSV klasörüne yazıldı: {{name}}",
+   "ham": "📄 Seans alan kaydı Seans CSV klasörüne yazıldı: {{name}}"
   },
   {
    "dosya": "apps/backend/servers/api_server.py",

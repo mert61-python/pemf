@@ -55,6 +55,28 @@ def test_KAPI_arastirma_modulleri_ARAYUZUN_modul_tablosuyla_AYNI():
     )
 
 
+def test_KAPI_ISTEMCI_KOLU_profil_degisince_BASLIK_esZamanli_ve_ACIK_EKRAN_yeniden_kurulur_Y339():
+    """Y339 (GY-B6, sahip 26-11): sahip ÜÇ profilde de veteriner dilimini gördü. Sunucu süzgeci (yukarıdaki kapılar) başlığı doğru
+    uyguluyor; istemci kolu iki koşula bağlı: (1) `setUserMode` başlığı state'ten ÖNCE ve eşzamanlı günceller (profil seçildikten hemen
+    sonra açılan ekranın ilk isteği yeni profille gider); (2) `MainRouter` ekran anahtarı PROFİLİ içerir — kabuk menüsü profili yerinde
+    değiştirir, anahtar yalnız rota iken aynı rotadaki ekran yeniden kurulmuyor ve önceki profilin listesi kalıyordu. Davranış kapısı
+    (gerçek sağlayıcı + gerçek başlık + yeniden kurulum): `apps/ui/src/__tests__/MainRouter.Y339.profilDegisinceEkranYenidenKurulur.test.tsx`."""
+    baglam = (KOK / "apps/ui/src/context/UserModeContext.tsx").read_text(encoding="utf-8")
+    govde = re.search(r"const setUserMode = useCallback\(\(mode: UserMode\) => \{(.*?)\}, \[\]\);", baglam, re.S)
+    assert govde, "setUserMode gövdesi bulunamadı — kapı kör"
+    satirlar = [s.strip() for s in govde.group(1).splitlines() if s.strip()]
+    assert satirlar[:2] == ["setProfilBasligi(mode);", "setUserModeState(mode);"], (
+        f"profil başlığı state'ten ÖNCE ve eşzamanlı güncellenmiyor: {satirlar}"
+    )
+    uygulama = (KOK / "apps/ui/src/PemfApp.tsx").read_text(encoding="utf-8")
+    anahtar = re.search(r"<ErrorBoundary key=\{(.*?)\}>", uygulama)
+    assert anahtar, "MainRouter ekran sınırının anahtarı bulunamadı — kapı kör"
+    assert "userMode" in anahtar.group(1) and "effectiveRoute" in anahtar.group(1), (
+        f"ekran anahtarı profili içermiyor (profil değişince açık ekran eski profilin listesini gösterir): key={anahtar.group(1)}"
+    )
+    assert (KOK / "apps/ui/src/__tests__/MainRouter.Y339.profilDegisinceEkranYenidenKurulur.test.tsx").is_file()
+
+
 def test_KAPI_arastirma_AI_Pro_onekleri_saglayici_adlariyla_AYNI():
     """Eski seansın profili `treatment_mode` önekinden türer (`AI Pro · {sağlayıcı.title}`); başlık değişirse kapı kırılır."""
     from servers import ai_pro_hedef as h

@@ -259,7 +259,7 @@ def test_KRITIK_UCTAN_UCA_telemetriden_karta_ANLIK_deger_gider(tmp_path, monkeyp
     from servers import api_server, live_state
     from servers.seans_alan_kaydi import seans_alan_kaydi
 
-    monkeypatch.setattr("servers.seans_alan_kaydi.masaustu_dizini", lambda: (tmp_path, "test"))
+    monkeypatch.setattr("servers.seans_alan_kaydi.seans_csv_dizini", lambda: (tmp_path, "test"))
 
     with live_state._live_state_lock:
         eski = dict(live_state._live_state["activeTreatment"])

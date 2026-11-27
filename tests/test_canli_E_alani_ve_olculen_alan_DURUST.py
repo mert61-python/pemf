@@ -223,7 +223,7 @@ def kayit(monkeypatch, tmp_path):
     from servers import seans_alan_kaydi as sak
 
     k = sak.SeansAlanKaydi()
-    monkeypatch.setattr(sak, "masaustu_dizini", lambda: (tmp_path, "test"))
+    monkeypatch.setattr(sak, "seans_csv_dizini", lambda: (tmp_path, "test"))  # Y331: seans CSV çözücüsü
     monkeypatch.setattr(api, "_seans_alan", k)
     monkeypatch.setattr(api, "_ws_broadcast_sync", lambda m: None)
     monkeypatch.setattr(live_state, "_ws_broadcast_sync", lambda m: None)
@@ -269,7 +269,7 @@ def test_KRITIK_D176c_CSV_ACILAMAYAN_seansta_onceki_zirve_GORUNMEZ(kayit, monkey
     def _patla():
         raise PermissionError("masaüstü yazılamaz")
 
-    monkeypatch.setattr(sak, "masaustu_dizini", _patla)
+    monkeypatch.setattr(sak, "seans_csv_dizini", _patla)  # Y331
     assert k.seans_basladi("B") is None, "aparat: CSV açılmamalıydı"
     live_state.update_live_session_state(is_active=True, mode="Manuel")
     api._handle_backend_event(_Olay({"coil_id": 6, "magnetic_field": 1.0}))

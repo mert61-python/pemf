@@ -259,6 +259,18 @@ export function PatientScreen() {
   useEffect(() => { setVisibleCount(PAGE); }, [search, scope]);
   const filteredPatients = matchedPatients.slice(0, visibleCount);
   const hiddenCount = matchedPatients.length - filteredPatients.length;
+  // YS2 e (B8, YG2 25-11): profilin TOPLAM kayıt sayısı ("2 hasta"); arama / kapsam süzgeci varsa "x / y hasta gösteriliyor".
+  // Araştırmada "örnek". Kimliksizken (kayıt gösterilmez, Y103) sayı da yazılmaz.
+  const arastirmaSayaci = !!isResearcher || userMode === "researcher";
+  const sayacMetni = !myEmail
+    ? null
+    : matchedPatients.length === patients.length
+      ? arastirmaSayaci
+        ? t("hasta.liste.toplamArastirma", { count: patients.length })
+        : t("hasta.liste.toplam", { count: patients.length })
+      : arastirmaSayaci
+        ? t("hasta.liste.gosterilenArastirma", { gosterilen: matchedPatients.length, count: patients.length })
+        : t("hasta.liste.gosterilen", { gosterilen: matchedPatients.length, count: patients.length });
 
   // ── SON ANALİZ ÖZETİ (sahip isteği 2026-09-12: "pet owner için ne ekleyebiliriz") ──
   // "Mia'ya en son ne zaman baktırdım?" sorusunun tek bakışta cevabı.
@@ -436,6 +448,9 @@ export function PatientScreen() {
   keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
   olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
   yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
+        {!loading && !loadError && sayacMetni ? (
+          <Text style={styles.sayac} testID="hasta-sayac">{sayacMetni}</Text>
+        ) : null}
         {loading ? (
           <View style={styles.stateBox}>
             <ActivityIndicator color={colors.primary} />
@@ -597,6 +612,7 @@ const styles = StyleSheet.create({
   detailsRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg, backgroundColor: colors.bgAlt, padding: spacing.sm, borderRadius: radius.sm },
   detailText: { color: colors.textMuted, fontSize: typography.caption },
   emptyText: { color: colors.textMuted, textAlign: "center", marginTop: spacing.xl },
+  sayac: { color: colors.textMuted, fontSize: typography.small, fontWeight: "600" },
   stateBox: { alignItems: "center", justifyContent: "center", gap: spacing.md, marginTop: spacing.xl },
   actions: { flexDirection: "row", gap: spacing.sm },
   // WCAG 2.5.5 / platform kılavuzu: minimum 44pt dokunma hedefi. `padding: xs` ile ~28px kalıyordu

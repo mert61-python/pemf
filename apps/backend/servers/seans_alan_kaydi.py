@@ -90,6 +90,45 @@ def masaustu_dizini() -> tuple[Path, str]:
     return Path.cwd(), "masaüstü bulunamadı"
 
 
+#: Y331 (sahip 26-11; Y218 DEĞİŞTİ): seans CSV'lerinin klasörü kullanıcı klasörünün ALTINDA — `%USERPROFILE%/PEMF Vet/Seans CSV`.
+#: Windows Bilinen Klasör yönlendirmesi (Masaüstü / Belgeler → OneDrive) bu yola UYGULANMAZ; DB şifreli ve hasta bulut eşitlemesi
+#: KVKK için kapalıyken şifresiz CSV'nin Masaüstü üzerinden buluta gitmesi çelişkiydi. Dışa aktarım ("İndir") düğmeleri masaüstüne
+#: yazmayı sürdürür (kullanıcının açık eylemi — `masaustu_dizini`).
+SEANS_CSV_ALT = ("PEMF Vet", "Seans CSV")
+_BULUT_DEGISKENLERI = ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")
+
+
+def _bulut_esitlemeli_mi(yol: Path) -> bool:
+    """Yol bir OneDrive eşitleme kökünün altında mı? (`OneDrive*` ortam değişkenleri + "OneDrive…" adlı yol parçası.)"""
+    tam = os.path.normcase(os.path.abspath(str(yol)))
+    for degisken in _BULUT_DEGISKENLERI:
+        kok = os.environ.get(degisken)
+        if kok:
+            kok = os.path.normcase(os.path.abspath(kok)).rstrip("\\/")
+            if tam == kok or tam.startswith(kok + os.sep):
+                return True
+    return any(parca.lower().startswith("onedrive") for parca in Path(tam).parts)
+
+
+def seans_csv_dizini() -> tuple[Path, str]:
+    """(dizin, gerekçe) — seans alan CSV'sinin yazılacağı YEREL klasör (yoksa oluşturulur).
+
+    Sıra: ``~/PEMF Vet/Seans CSV`` → (kullanıcı klasörü bulut eşitlemesindeyse) ``%LOCALAPPDATA%/PEMF Vet/Seans CSV``.
+    ⚠️ LocalSystem profili (``systemprofile``) REDDEDİLİR (`masaustu_dizini` ile aynı gerekçe): geçerli çalışma dizini."""
+    ev = Path(os.path.expanduser("~"))
+    if "systemprofile" in str(ev).lower():
+        return Path.cwd(), "servis hesabı (kullanıcı klasörü yok)"
+    dizin, gerekce = ev.joinpath(*SEANS_CSV_ALT), "kullanıcı klasörü"
+    if _bulut_esitlemeli_mi(dizin):
+        yerel = os.environ.get("LOCALAPPDATA") or str(ev / "AppData" / "Local")
+        dizin, gerekce = (
+            Path(yerel).joinpath(*SEANS_CSV_ALT),
+            "yerel uygulama verisi (kullanıcı klasörü bulut eşitlemesinde)",
+        )
+    dizin.mkdir(parents=True, exist_ok=True)
+    return dizin, gerekce
+
+
 def _guvenli_parca(metin: str, azami: int = 40) -> str:
     """Dosya adına konabilecek hâle getirir (yol ayıracı/kontrol karakteri bırakmaz)."""
     temiz = "".join(c for c in (metin or "") if c.isalnum() or c in (" ", "-", "_")).strip()
@@ -128,10 +167,12 @@ class SeansAlanKaydi:
         self.seans_bitti("yeni seans başladı")
         meta = meta or {}
         try:
-            dizin, _gerekce = masaustu_dizini()
+            dizin, _gerekce = seans_csv_dizini()
             damga = datetime.now().strftime("%Y%m%d_%H%M%S")
-            hasta = _guvenli_parca(str(meta.get("patient_name") or ""))
-            ad = f"PEMF_alan_{damga}" + (f"_{hasta}" if hasta else "") + ".csv"
+            # Y331: dosya adı seans NO + tarih — hasta adı dosya ADINDA YOK (içerikte üst bilgi olarak kalır). Hocanın şartnamesi
+            # (10-30 "CSV adları şartnamedekiyle birebir") yalnız makale `paper_inputs/data/*.csv` adlarını bağlar, bu dosyayı değil.
+            no = _guvenli_parca(str(meta.get("seans_no") or seans_id or ""))
+            ad = "PEMF_alan_" + (f"seans{no}_" if no else "") + f"{damga}.csv"
             yol = dizin / ad
             # utf-8-sig: Excel'in Türkçe karakterleri doğru açması için BOM ŞART.
             dosya = open(yol, "w", encoding="utf-8-sig", newline="")

@@ -3065,6 +3065,20 @@
      "turler": [
       "jsx-metin"
      ]
+    },
+    {
+     "metin": "{{apiBaseUrl}}/history/{{id}}/coil_runs.csv",
+     "gerekce": "API yolu (sunucuya giden) — metin değil (YS2 b · B6)",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "PEMF_Session_{{id}}_Coils.csv",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız; uç yanıtının adıyla aynı (YS2 b · B6)",
+     "turler": [
+      "cagri"
+     ]
     }
    ],
    "birlesikIstisna": [],
@@ -3912,6 +3926,13 @@
      "gerekce": "HTTP başlığı (dosya adı) — metin değil",
      "turler": [
       "sozluk?"
+     ]
+    },
+    {
+     "metin": "PEMF_Session_{{session_id}}_Coils.csv",
+     "gerekce": "indirilen dosya adı (veri) — dilden bağımsız (YS2 b · B6 masaüstü yolu)",
+     "turler": [
+      "cagri"
      ]
     }
    ],
@@ -6258,6 +6279,41 @@
     {
      "metin": "en az bir olcum tam olcege dayandi — degerler GUVENILMEZ",
      "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "Seans CSV",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil (Y331 klasör adı)",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "servis hesabı (kullanıcı klasörü yok)",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil (Y331 günlük gerekçesi)",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "kullanıcı klasörü",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil (Y331 günlük gerekçesi)",
+     "turler": [
+      "dizi"
+     ]
+    },
+    {
+     "metin": "Local",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil (Y331 Windows klasör adı AppData\\Local)",
+     "turler": [
+      "cagri"
+     ]
+    },
+    {
+     "metin": "yerel uygulama verisi (kullanıcı klasörü bulut eşitlemesinde)",
+     "gerekce": "seans alan kaydı CSV dosyası içeriği / dizin adı (VERİ + dosya) — kullanıcı arayüzü metni değil (Y331 günlük gerekçesi)",
      "turler": [
       "dizi"
      ]

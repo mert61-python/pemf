@@ -522,7 +522,8 @@ def test_PDF_konum_tablosu_YALNIZ_giris_varken(db, monkeypatch):
     g._add_sensor_konum_table(eklenen, sid)
     tablo = next(x for x in eklenen if isinstance(x, prg.Table))
     satirlar = tablo._cellvalues
-    assert satirlar[0][2] == "Konum (sol / ön / yükseklik cm)" and [s[2] for s in satirlar[1:]] == [
+    # YS2 d (B7): başlık hücreleri sarılan Paragraph (burada sahtesi ("P", metin)) — metin AYNI denetlenir.
+    assert satirlar[0][2] == ("P", "Konum (sol / ön / yükseklik cm)") and [s[2] for s in satirlar[1:]] == [
         "serbest",
         "10 / 20 / 3",
     ]
@@ -553,7 +554,10 @@ def test_PDF_GERCEK_uretim_yolunda_konum_tablosu_ve_HATASI_raporu_dusurmez(temp_
     tablolar = [
         x
         for x in yakalanan[0]
-        if type(x).__name__ == "Table" and "Konum (sol / ön / yükseklik cm)" in [str(h) for h in x._cellvalues[0]]
+        # YS2 d (B7): başlık hücresi Paragraph (derlemeden sonra ReportLab onu bir akış demetine sarar) → metni `.text`
+        if type(x).__name__ == "Table"
+        and "Konum (sol / ön / yükseklik cm)"
+        in [str(getattr(h[0] if isinstance(h, (list, tuple)) and h else h, "text", h)) for h in x._cellvalues[0]]
     ]
     assert len(tablolar) == 1
     u._add_sensor_konum_table(yakalanan[0], None)  # seans kimliği yok → hiçbir şey

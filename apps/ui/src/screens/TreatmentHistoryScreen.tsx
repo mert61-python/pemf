@@ -32,6 +32,7 @@ import i18n from "i18next";
 /** D2.43: tekil silmede seans sunucuda yoksa (başka cihaz/hekim az önce silmiş) gösterilen metin. */
 export const zatenSilinmisSeans = (): string => i18n.t("seans.gecmis.zatenSilinmis");
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
+import { backendBuMakinede } from "@/services/backendKonumu";
 import { useCokluSecim } from "@/hooks/useCokluSecim";
 import { SecimCubugu } from "@/components/ui/SecimCubugu";
 import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
@@ -126,10 +127,28 @@ export function TreatmentHistoryScreen() {
   // Seans BOBİN-DETAYI modalı için seçili seans (null → kapalı).
   const [selectedSessionId, setSelectedSessionId] = useState<string | number | null>(null);
 
+  // YS2 e (B8, YG2 25-11): profilin TOPLAM seans sayısı (sahip tek tek saymak zorunda kaldı). Liste TAMSA toplam odur; SAYFALIYSA
+  // istatistik ucundan (`X-PEMF-Profil` süzgeciyle AYNI küme) — liste isteğinden SONRA, yalnız gerektiğinde; okunamazsa sayı yazılmaz.
+  const [toplamSeans, setToplamSeans] = useState<number | null>(null);
+  // Y331 (sahip 26-11): seans alan CSV'leri artık bulut eşitlemesi DIŞINDA yerel klasörde (`~/PEMF Vet/Seans CSV`) — klasörü açan
+  // eylem (yalnız backend'in kendi bilgisayarında; sunucu da yalnız cihazın kendi ekranından açar, uzak istemciye yalnız yolu söyler).
+  const csvKlasorunuAc = async () => {
+    const r = await apiPost<{ status: string; yol?: string } | null>("/history/seans_csv_klasoru/ac", {}, null);
+    if (r?.status === "success") showToast(t("seans.gecmis.csvKlasoruAcildi", { yol: r.yol ?? "" }), "success");
+    else if (r?.status === "uzak") showToast(t("seans.gecmis.csvKlasoruUzak", { yol: r.yol ?? "" }), "info");
+    else showToast(t("seans.gecmis.csvKlasoruAcilamadi"), "error");
+  };
+
   const fetchHistory = async () => {
     setLoading(true);
     setLoadError(false);
     const data = await apiGet<any[] | null>(`/history/?limit=${PAGE_SIZE}`, null);
+    setToplamSeans(null);
+    if (Array.isArray(data) && data.length === PAGE_SIZE) {
+      apiGet<{ total_sessions?: number } | null>("/history/statistics", null).then((s) =>
+        setToplamSeans(typeof s?.total_sessions === "number" ? s.total_sessions : null),
+      );
+    }
     // ŞEKİL DOĞRULAMASI: `null` kontrolü tek başına yetmez — backend/proxy dizi OLMAYAN bir 2xx
     // gövdesi (ör. `{detail: ...}`, captive-portal yanıtı) dönerse `sessions.filter` TypeError
     // atıp ekranı beyaza düşürüyordu. Diziden başkasını "veri yok" say.
@@ -260,6 +279,15 @@ export function TreatmentHistoryScreen() {
   // ⚠️ Seçim YALNIZ EKRANDA GÖRÜNEN kayıtlara kapanır (bkz. useCokluSecim "hayalet seçim"):
   // operatör seçtikten sonra aramayı/kapsamı değiştirirse, artık göremediği kayıtlar silinmez.
   const secim = useCokluSecim<number>(filteredSessions.map((s) => s.id));
+  // YS2 e (B8): "20 seans"; süzgeç / arama / yüklenmemiş sayfa varsa "x / y seans gösteriliyor". Kimliksizken (kayıt gösterilmez,
+  // Y103) sayı da yazılmaz.
+  const toplam = toplamSeans ?? (hasMore ? null : sessions.length);
+  const sayacMetni =
+    !myEmail || toplam == null
+      ? null
+      : filteredSessions.length === toplam
+        ? t("seans.gecmis.toplamSeans", { count: toplam })
+        : t("seans.gecmis.gosterilenSeans", { gosterilen: filteredSessions.length, count: toplam });
   const [siliniyor, setSiliniyor] = useState(false);
 
   const secilenleriSil = async () => {
@@ -328,6 +356,17 @@ export function TreatmentHistoryScreen() {
           <TouchableOpacity style={styles.btnPrimary} onPress={downloadAllPdf}>
             <Text style={styles.btnPrimaryText}>{kapsamDaraltilmis ? t("seans.gecmis.pdfGorunen") : t("seans.gecmis.pdfTumu")}</Text>
           </TouchableOpacity>
+          {backendBuMakinede() ? (
+            <TouchableOpacity
+              style={[styles.btnOutline, { minHeight: touch.min, justifyContent: "center" }]}
+              onPress={csvKlasorunuAc}
+              accessibilityRole="button"
+              accessibilityLabel={t("seans.gecmis.csvKlasoruEtiketi")}
+              testID="gecmis-csv-klasoru"
+            >
+              <Text style={styles.btnOutlineText}>{t("seans.gecmis.csvKlasoru")}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -351,6 +390,10 @@ export function TreatmentHistoryScreen() {
           onChangeText={setSearchQuery}
         />
       </View>
+
+      {!loading && !loadError && sayacMetni ? (
+        <Text style={styles.sayac} testID="gecmis-sayac">{sayacMetni}</Text>
+      ) : null}
 
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.xl }} />
@@ -426,6 +469,7 @@ export function TreatmentHistoryScreen() {
         sessionId={selectedSessionId}
         onClose={() => setSelectedSessionId(null)}
         adsizAd={SK.sahipsizKayit}
+        bildir={showToast}
       />
     </View>
   );
@@ -648,6 +692,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.body,
   },
+  sayac: { color: colors.textMuted, fontSize: typography.small, fontWeight: "600" },
   intro: {
     color: colors.textMuted,
     fontSize: typography.body,

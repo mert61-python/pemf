@@ -23,7 +23,7 @@ from servers.seans_alan_kaydi import SeansAlanKaydi, masaustu_dizini
 @pytest.fixture()
 def kayit(tmp_path, monkeypatch):
     """Masaüstü yerine tmp_path'e yazan taze bir kaydedici."""
-    monkeypatch.setattr("servers.seans_alan_kaydi.masaustu_dizini", lambda: (tmp_path, "test"))
+    monkeypatch.setattr("servers.seans_alan_kaydi.seans_csv_dizini", lambda: (tmp_path, "test"))
     k = SeansAlanKaydi()
     yield k
     k.seans_bitti("test bitti")
@@ -158,7 +158,7 @@ def test_KRITIK_SERVIS_HESABINDA_masaustune_yazmaz(monkeypatch, tmp_path):
 
 def test_KRITIK_dosya_acilamazsa_SEANS_ENGELLENMEZ(monkeypatch, tmp_path):
     """CSV bir kolaylıktır; dolu disk yüzünden tedavi başlamaması kabul edilemez."""
-    monkeypatch.setattr("servers.seans_alan_kaydi.masaustu_dizini", lambda: (tmp_path / "yok" / "asla", "test"))
+    monkeypatch.setattr("servers.seans_alan_kaydi.seans_csv_dizini", lambda: (tmp_path / "yok" / "asla", "test"))
     k = SeansAlanKaydi()
     yol = k.seans_basladi("SEANS-10", {})
     assert yol is None, "acilamayan kayit None dondurmeli"

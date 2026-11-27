@@ -25,11 +25,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
-import { colors, spacing, typography, rs, layoutMax } from "@/theme/tokens";
+import { colors, spacing, typography, rs, layoutMax, touch } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
 import { kayitYogunlugu, olculenAlanOrt } from "@/utils/yogunlukGosterimi";
 import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 import { hedefEtiketi, modEtiketi, nedenliDurum } from "@/utils/seansDegerEtiketi";
+import { downloadFileWithAuth } from "@/services/dosyaIndir";
+import { serviceConfig } from "@/services/config";
 import { etkinBicimYereli, ondalikMetni } from "@/i18n/dil";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
@@ -209,10 +211,13 @@ export function SessionDetailModal({
   sessionId,
   onClose,
   adsizAd,
+  bildir,
 }: {
   visible: boolean;
   sessionId: string | number | null;
   onClose: () => void;
+  /** YS2 b (B6): indirme sonucunu operatöre söyleyen bildirim (üst ekranın `showToast`'u); verilmezse sessiz. */
+  bildir?: (m: string, t?: "success" | "error" | "info") => void;
   /** ODD B-4: adı olmayan kaydın gösterim adı (araştırmada "Sahipsiz örnek"); verilmezse "Bilinmeyen Hasta". */
   adsizAd?: string;
 }) {
@@ -252,6 +257,10 @@ export function SessionDetailModal({
   const session = isCurrent ? rawSession : null;
   const coilRuns = isCurrent ? (details?.coil_runs ?? []) : [];
   const sensorSamples = isCurrent ? (details?.sensor_samples ?? []) : [];
+  // YS2 b (B6, YG0 25-11): seansın bobin + kabin sensörü konum dilimleri tablosu (Y308) — geçmişteki tek CSV düğmesi seans başına
+  // tek özet satırı yazıyordu, dilimler yalnız API'den alınabiliyordu. Masaüstünde backend diske yazar, telefonda paylaşım açılır.
+  const csvIndir = (s: SessionInfo) =>
+    downloadFileWithAuth(`${serviceConfig.apiBaseUrl}/history/${s.id}/coil_runs.csv`, `PEMF_Session_${s.id}_Coils.csv`, bildir);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -262,6 +271,17 @@ export function SessionDetailModal({
             <Text style={styles.title} numberOfLines={1}>
               {t("seans.detay.baslik")}
             </Text>
+            {session ? (
+              <TouchableOpacity
+                style={styles.csvBtn}
+                onPress={() => csvIndir(session)}
+                accessibilityRole="button"
+                accessibilityLabel={t("seans.detay.csvEtiketi")}
+                testID="seans-detay-csv"
+              >
+                <Text style={styles.csvBtnText} numberOfLines={1}>{t("seans.detay.csv")}</Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} accessibilityLabel={t("ortak.kapat")}>
               <Text style={styles.closeBtnText}>{t("ortak.kapat")}</Text>
             </TouchableOpacity>
@@ -805,6 +825,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   closeBtnText: { color: colors.primary, fontWeight: "bold", fontSize: typography.small },
+  // YS2 b (B6): "Bu seansın CSV'si" — Kapat ile aynı ölçü, dolu (birincil eylem değil, ama ayırt edilsin).
+  csvBtn: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    flexShrink: 1,
+    minHeight: touch.min,
+    justifyContent: "center",
+  },
+  csvBtnText: { color: colors.white, fontWeight: "bold", fontSize: typography.small },
   centerBox: { alignItems: "center", gap: spacing.md, paddingVertical: spacing.xxl },
   mutedText: { color: colors.textMuted, fontSize: typography.body },
   scrollBody: { gap: spacing.lg, paddingBottom: spacing.md },

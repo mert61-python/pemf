@@ -515,7 +515,7 @@
     "alanDoygun": "⚠️ Kabin sensörünün (MLX, kartta kanal {{coil}}) ölçtüğü alan sensör aralığını AŞTI (±24,6 mT) — gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
     "alanKaydiAcilamadi": "⚠️ Seans alan kaydı (CSV) açılamadı — tedavi etkilenmedi",
     "alanKaydiBasladi": "📄 Seans alan kaydı başladı: {{yol}}",
-    "alanKaydiYazildi": "📄 Seans alan kaydı masaüstüne yazıldı: {{name}}",
+    "alanKaydiYazildi": "📄 Seans alan kaydı Seans CSV klasörüne yazıldı: {{name}}",
     "asiriSicaklik": "🌡️ Bobin {{coil}} kartı AŞIRI SICAKLIK bildirdi ({{atype}}) — yalnız bobin {{coil}} durduruldu; diğer bobinler sürüyor. Bobini kontrol edin.",
     "beklenmedikCalisiyordu": "⚠️ Bobin {{coil}} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
     "bobinAlarm": "🚨 Bobin {{coil}} ALARM ({{atype}}) — seans güvenlik için durduruldu",
@@ -662,6 +662,10 @@
       "tarih": "Tarih",
       "tepeMt": "EnYuksek(mT)",
       "veriYok": "Veri bulunamadi"
+    },
+    "csvKlasoru": {
+      "acilamadi": "Seans CSV klasörü açılamadı ({{yol}}) — klasörü dosya gezgininde elle açın.",
+      "json": "Klasör açılamadı: istek JSON olmalı (Content-Type: application/json). Uygulamadaki düğmeyi kullanın."
     },
     "hata": {
       "dbHazirDegil": "Geçmiş veritabanı hazır değil",

@@ -79,7 +79,8 @@ def test_KRITIK_UCTAN_UCA_konumlu_ve_serbest_giris_DURDUR_detay_ve_CSV(o, monkey
     konumlu = [x for x in dil if not x["serbest"]]
     assert len(konumlu) == 1 and konumlu[0]["sol_cm"] == 27.0 and konumlu[0]["tahmin_mt"] == 1.0
     csv_metni = o.c.get(f"/api/history/{sid}/coil_runs.csv").content.decode("utf-8-sig")
-    assert "konum dilimleri" in csv_metni and "27 / 20 / 2.5" in csv_metni
+    # YS2 d (B7): konum sayısı detay / PDF / CSV dosyasında dile göre (TR virgül) — TR CSV artık 2,5 yazar
+    assert "konum dilimleri" in csv_metni and "27 / 20 / 2,5" in csv_metni
 
 
 def test_KARSIT_giris_YAPILMAYAN_seansin_detayi_BIREBIR_ve_STOP_konumsuz_calisir(o):

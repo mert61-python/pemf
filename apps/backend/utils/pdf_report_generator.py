@@ -822,15 +822,29 @@ class PDFReportGenerator:
         def _s(v, b):
             return "-" if v is None else ceviri.sayi_metni(v, b)
 
+        # YS2 d (B7, YG0 25-11): başlıklar düz metindi → ReportLab hücrede SARMAZ, dar sütunda komşu başlığın üstüne taşıyordu
+        # ("Süre (snKonum…"). Paragraph hücre genişliğinde sarar (beyaz, kalın, ortalı — tablo başlık stiliyle aynı görünüm).
+        baslik_stili = ParagraphStyle(
+            "KonumTablosuBaslik",
+            parent=self.styles['UnicodeNormal'],
+            fontName=self.unicode_font_bold,
+            fontSize=8,
+            leading=9.5,
+            textColor=colors.white,
+            alignment=TA_CENTER,
+        )
         veri = [
             [
-                ceviri.t("pdf.seans.saat"),
-                ceviri.t("pdf.seans.sureSn"),
-                ceviri.t("pdf.seans.konum"),
-                ceviri.t("pdf.seans.ortMt"),
-                ceviri.t("pdf.seans.tepeMt"),
-                ceviri.t("pdf.seans.tahminMt"),
-                ceviri.t("pdf.seans.farkYuzde"),
+                Paragraph(m, baslik_stili)
+                for m in (
+                    ceviri.t("pdf.seans.saat"),
+                    ceviri.t("pdf.seans.sureSn"),
+                    ceviri.t("pdf.seans.konum"),
+                    ceviri.t("pdf.seans.ortMt"),
+                    ceviri.t("pdf.seans.tepeMt"),
+                    ceviri.t("pdf.seans.tahminMt"),
+                    ceviri.t("pdf.seans.farkYuzde"),
+                )
             ]
         ]
         for d in dilimler:

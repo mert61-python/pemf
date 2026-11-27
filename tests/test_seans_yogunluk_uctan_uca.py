@@ -39,7 +39,7 @@ def kur(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "_push_notification", lambda m, s="info": bildirimler.append((m, s)))
 
     # Masaüstü yerine tmp_path'e yazan TAZE kaydedici (süreç geneli örneği kirletme).
-    monkeypatch.setattr("servers.seans_alan_kaydi.masaustu_dizini", lambda: (tmp_path, "test"))
+    monkeypatch.setattr("servers.seans_alan_kaydi.seans_csv_dizini", lambda: (tmp_path, "test"))
     kayit = SeansAlanKaydi()
     monkeypatch.setattr(api, "_seans_alan", kayit)
 

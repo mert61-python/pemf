@@ -930,6 +930,9 @@ def _masaustunu_koru(tmp_path):
         # orijinale bağlı kalır — çünkü o bağ toplama anında kurulur.
         mp.setattr(_sak, "_orijinal_masaustu_dizini", _sak.masaustu_dizini, raising=False)
         mp.setattr(_sak, "masaustu_dizini", lambda: (hedef, "test izolasyonu"), raising=False)
+        # Y331: seans CSV'si artık kullanıcı klasörünün altında (`~/PEMF Vet/Seans CSV`) — o da GERÇEK eve yazılmaz.
+        mp.setattr(_sak, "_orijinal_seans_csv_dizini", getattr(_sak, "seans_csv_dizini", None), raising=False)
+        mp.setattr(_sak, "seans_csv_dizini", lambda: (hedef, "test izolasyonu"), raising=False)
     except Exception:
         pass
 

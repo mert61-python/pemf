@@ -118,6 +118,10 @@ GOLDEN_ROUTES = {
     ("/api/history/export_pdf", "GET"),
     ("/api/history/statistics", "GET"),
     ("/api/history/update_notes", "POST"),
+    (
+        "/api/history/seans_csv_klasoru/ac",
+        "POST",
+    ),  # Y331 (istem 63 YS2 g): Seans CSV klasörünü cihazın kendi ekranından aç
     ("/api/history/{session_id}", "DELETE"),
     ("/api/history/{session_id}", "GET"),
     ("/api/history/{session_id}/coil_runs.csv", "GET"),
@@ -271,4 +275,5 @@ def test_route_contract_unchanged():
     # → 125 (+2 KD-2: /api/ai/pro/kalibrasyon/taban + /sahne-yenile POST), 2026-11-10
     # → 133 (+8 GA geliştirici modülleri: /api/moduller GET, durum GET, {kimlik}/sec, baslat, uygula, durdur, birak, gorunurluk POST), 2026-11-20
     # → 138 (+5 Y308 kabin sensörü konumu: session/sensor_konumu GET+POST, history/{id}/sensor_konumu POST + /{kayit_id} PUT+DELETE), 2026-11-20
-    assert len(current) == len(beklenen) == 138 - (0 if _simulator_mountlu() else 1)
+    # → 139 (+1 Y331 seans CSV klasörünü aç: history/seans_csv_klasoru/ac POST), 2026-11-27 (istem 63 YS2 g)
+    assert len(current) == len(beklenen) == 139 - (0 if _simulator_mountlu() else 1)

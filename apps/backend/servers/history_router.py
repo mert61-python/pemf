@@ -762,9 +762,38 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=500, detail=ceviri.t("gecmis.hata.islemBasarisiz"))
 
 
+@router.post("/seans_csv_klasoru/ac")
+def seans_csv_klasorunu_ac(request: Request):
+    """Y331: Seans CSV klasörünü bu bilgisayarın dosya gezgininde açar (arayüz eylemi, masaüstü uygulaması). YALNIZ cihazın kendi
+    ekranından (`_masaustune_yazilir_mi` — LAN / uzak istemci sunucuda pencere AÇTIRAMAZ): uzak istek yalnız yolu alır."""
+    from servers.seans_alan_kaydi import seans_csv_dizini
+
+    # D5 · 1-C §9 #14 (Sıfırla emsali): basit (ön-uçuşsuz) POST kabul EDİLMEZ — başka bir sayfa cihazın tarayıcısından Gezgin açtıramaz.
+    if "application/json" not in (request.headers.get("content-type") or "").lower():
+        raise HTTPException(status_code=415, detail=ceviri.t("gecmis.csvKlasoru.json"))
+    dizin, _ = seans_csv_dizini()
+    if not _masaustune_yazilir_mi(1, request):
+        return {"status": "uzak", "yol": str(dizin)}
+    try:
+        os.startfile(str(dizin))  # noqa: S606 — yerel kullanıcının kendi eylemi; Gezgin
+    except Exception as e:
+        logger.warning("Seans CSV klasoru acilamadi: %s", e)
+        raise HTTPException(status_code=500, detail=ceviri.t("gecmis.csvKlasoru.acilamadi", yol=str(dizin))) from None
+    return {"status": "success", "yol": str(dizin)}
+
+
 @router.get("/{session_id}/coil_runs.csv")
-def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
-    """Asama-3: Bir seansin bobin calismalarini CSV olarak indir."""
+def export_coil_runs_csv(
+    session_id: int,
+    kaydet: int = Query(0, description="1 = masaüstüne yaz + JSON yol döndür (bkz. export_csv)."),
+    db=Depends(get_db),
+    request: Request = None,
+):
+    """Asama-3: Bir seansin bobin calismalarini CSV olarak indir.
+
+    YS2 b (B6, YG0 25-11): Seans Detayı'ndaki "Bu seansın CSV'si" düğmesi bu uca gider. Masaüstü uygulaması (WebView2) dosyayı
+    ancak backend diske yazarsa alır (`downloadFileWithAuth` `kaydet=1`) — geçmiş CSV'siyle AYNI kural: yalnız cihazın kendi
+    ekranından (`_masaustune_yazilir_mi`), LAN / uzak istek dosyayı yanıtta alır."""
     try:
         runs = db.get_session_coil_runs(session_id)
         summaries = db.get_run_summaries(session_id)
@@ -875,6 +904,9 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         # Excel (Türkçe Windows) BOM'suz UTF-8'i Windows-1254 sanip bozuyor;
         # utf-8-sig ile BOM ekleyip charset belirtiyoruz.
         csv_bytes = csv_data.encode("utf-8-sig")
+
+        if _masaustune_yazilir_mi(kaydet, request):
+            return _diske_kaydet(csv_bytes, f"PEMF_Session_{session_id}_Coils.csv")
 
         return Response(
             content=csv_bytes,

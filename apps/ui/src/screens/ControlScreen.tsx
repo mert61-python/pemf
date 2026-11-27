@@ -13,6 +13,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  Platform,
+  type ViewStyle,
 } from "react-native";
 import { colors, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
@@ -615,7 +617,8 @@ export function ControlScreen() {
           `running || activeTreatment` iken çizilir ve STM çevrimdışıyken bobin durumu
           BİLİNMEDİĞİ için gizleniyordu. Düğme artık sekme çubuğunun ÜSTÜNDE: hangi sekme
           açık olursa olsun, kaydırmadan erişilir. AŞAĞI TAŞIMA. */}
-      <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}
+      <TouchableOpacity style={[styles.emergencyBtn, YAPISKAN_ACIL_DURDUR]} onPress={emergencyStop}
+        testID="kontrol-acil-durdur-tum"
         accessibilityRole="button"
         accessibilityLabel={kritikMetin("guvenlik.acilDurdur.tumBobinlerEtiketi")}
         accessibilityHint={kritikMetin("guvenlik.acilDurdur.erisimIpucu")}>
@@ -944,6 +947,27 @@ function StartButton({
     </TouchableOpacity>
   );
 }
+
+/**
+ * Y330 (sahip 26-11; Y60 DEĞİŞTİ): ekranın KENDİ "TÜM BOBİNLERİ ACİL DURDUR" düğmesi aşağı kaydırırken görünür alanda KALIR — YENİ
+ * düğme eklenmez. Masaüstü (WebView2), telefon (Chrome) ve web istemcisi react-native-web'dir (APK derlenmez — hoca kararı) → CSS
+ * `position: sticky`: AppShell'in içerik ScrollView'ı kaydırma kabıdır, aradaki kaplar (PatientGate parçası, ekran kabı) kırpmaz.
+ * Düğme akıştaki YERİNİ korur (sabit / fixed DEĞİL) → hiçbir denetimi kalıcı örtmez; içerik altındaki AppShell boşluğu aynen. Dar
+ * ekranda da aynı. Basınca AYNI `emergencyStop` (`performEmergencyStop`, Ö.4-Y8); A-51 aynen: ekran düğmeyi HER ZAMAN çizdiği için kayan
+ * ACİL DURDUR gizli kalır (`KendiDurdurmaIsareti`). Y221 profil barı ayrı bileşen — DEĞİŞMEZ. Yerelde (yapışkan yok) bugünkü gibi.
+ */
+const YAPISKAN_ACIL_DURDUR: ViewStyle | null =
+  Platform.OS === "web"
+    ? ({
+        position: "sticky",
+        top: spacing.sm,
+        zIndex: 50,
+        shadowColor: "#000",
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+      } as unknown as ViewStyle)
+    : null;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({

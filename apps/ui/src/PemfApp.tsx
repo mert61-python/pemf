@@ -56,8 +56,11 @@ function MainRouter() {
     <AppNavProvider navigateTo={setActiveRoute}>
     <AppShell activeRoute={effectiveRoute} title={sayfaBasligi(userMode, effectiveRoute).title} subtitle={sayfaBasligi(userMode, effectiveRoute).subtitle} onRouteChange={setActiveRoute}>
       {/* audit B-10.3: EKRAN-bazlı ErrorBoundary — bir ekran çökse bile nav-shell hayatta kalır
-          (tüm uygulama beyaz-ekrana düşmez). key={route} → route değişince boundary sıfırlanır. */}
-      <ErrorBoundary key={effectiveRoute}>
+          (tüm uygulama beyaz-ekrana düşmez). key={route} → route değişince boundary sıfırlanır.
+          ⚠️ Y339 (GY-B6, sahip 26-11): anahtar PROFİL + rota. Kabuktaki profil menüsü profili YERİNDE değiştirir; anahtar yalnız rota
+          iken aynı rotadaki ekran yeniden KURULMUYOR, listeler yalnız kurulumda yüklendiği için önceki profilin listesi kalıyordu
+          (sahip üç profilde de veteriner dilimini gördü). `X-PEMF-Profil` zaten eşzamanlı güncelleniyor (`setUserMode`). */}
+      <ErrorBoundary key={`${userMode}:${effectiveRoute}`}>
         <Suspense fallback={<View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}><ActivityIndicator size="large" color={colors.primary} /></View>}>
           {effectiveRoute === "dashboard"  ? <DashboardScreen /> : null}
           {/* Gate TEK KAYNAK: effectiveRoute yukarıda canAccess ile kapılandı → erişilemez rota buraya

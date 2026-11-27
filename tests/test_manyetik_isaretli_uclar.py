@@ -95,7 +95,7 @@ def test_KRITIK_CSV_isaretli_uclari_ve_tepeden_tepeyeyi_TASIR():
 
 def test_KRITIK_CSV_satiri_UCLARI_ve_TURETILMIS_pp_yi_yazar(tmp_path, monkeypatch):
     """MUTASYON: `olcum`daki `uclar` bloğunu sil → KIRMIZI."""
-    monkeypatch.setattr("servers.seans_alan_kaydi.masaustu_dizini", lambda: (tmp_path, "test"))
+    monkeypatch.setattr("servers.seans_alan_kaydi.seans_csv_dizini", lambda: (tmp_path, "test"))
     k = SeansAlanKaydi()
     yol = k.seans_basladi("S1", {})
     assert yol is not None
@@ -129,7 +129,7 @@ def test_KRITIK_CSV_satiri_UCLARI_ve_TURETILMIS_pp_yi_yazar(tmp_path, monkeypatc
 
 def test_KRITIK_UC_YOKSA_sutun_BOS_kalir_SIFIR_DEGIL(tmp_path, monkeypatch):
     """⚠️ 0.0 yazmak "olctuk, sifir cikti" demektir — bu deponun tekrarlayan arizasi."""
-    monkeypatch.setattr("servers.seans_alan_kaydi.masaustu_dizini", lambda: (tmp_path, "test"))
+    monkeypatch.setattr("servers.seans_alan_kaydi.seans_csv_dizini", lambda: (tmp_path, "test"))
     k = SeansAlanKaydi()
     yol = k.seans_basladi("S2", {})
     k.olcum(6, 2.0, 400, False)  # uclar YOK (eski firmware)

@@ -26,7 +26,7 @@ TR_HARF = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
 
 # (anahtar, parametreler, ESKİ Türkçe çıktı — bayt bayt)
 BILDIRIMLER = [
-    ("bildirim.alanKaydiYazildi", {"name": "a.csv"}, "📄 Seans alan kaydı masaüstüne yazıldı: a.csv"),
+    ("bildirim.alanKaydiYazildi", {"name": "a.csv"}, "📄 Seans alan kaydı Seans CSV klasörüne yazıldı: a.csv"),
     ("bildirim.alanKaydiBasladi", {"yol": "C:\\x\\a.csv"}, "📄 Seans alan kaydı başladı: C:\\x\\a.csv"),
     ("bildirim.alanKaydiAcilamadi", {}, "⚠️ Seans alan kaydı (CSV) açılamadı — tedavi etkilenmedi"),
     ("bildirim.sistemBaglandi", {}, "Sistem bağlantısı kuruldu"),

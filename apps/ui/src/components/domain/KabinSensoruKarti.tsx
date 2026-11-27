@@ -34,7 +34,9 @@ export function konumOzeti(t: TFunction, k: SensorKonumuKaydi | null): string {
   if (!k || k.serbest || k.sol_cm === null || k.on_cm === null || k.yukseklik_cm === null) {
     return t("kontrol.kabinSensoru.konum.serbestDurum");
   }
-  const s = (v: number) => ondalikMetni(v, Number.isInteger(v) ? 0 : 1);
+  // YS2 d (B7, YG0 25-11): en çok 2 ondalık, sondaki sıfırlar atılır (0,75 → "0,75"; eskiden "0,8") — PDF / CSV ile AYNI
+  // (`servers/sensor_konumu.cm_metni`).
+  const s = (v: number) => ondalikMetni(v, 2).replace(/([.,]\d*?)0+$/, "$1").replace(/[.,]$/, "");
   return t("kontrol.kabinSensoru.konum.simdiki", { sol: s(k.sol_cm), on: s(k.on_cm), yukseklik: s(k.yukseklik_cm) });
 }
 

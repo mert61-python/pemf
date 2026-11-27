@@ -137,11 +137,20 @@ def _surus(kosular: list, t0: float, t1: float) -> list:
     ]
 
 
+def cm_metni(v) -> str:
+    """YS2 d (B7, YG0 25-11): konum sayısı — en çok 2 ondalık, sondaki sıfırlar atılır, ondalık ayırıcı istek dilinde (TR "0,75" ·
+    EN "0.75"). Arayüz `KabinSensoruKarti.konumOzeti` ile AYNI kural (eskiden detay "0,8", PDF / CSV "0.75" yazıyordu)."""
+    from utils import ceviri
+
+    m = ceviri.sayi_metni(round(float(v), 2), 2)
+    return m.rstrip("0").rstrip(",.") if ("," in m or "." in m) else m
+
+
 def konum_metni(d: dict, serbest_metni: str) -> str:
     """Dilim / giriş konumu: "sol / ön / yükseklik" cm (rapor biçimi) ya da serbest."""
     if d.get("serbest") or not _sonlu(d.get("sol_cm"), d.get("on_cm"), d.get("yukseklik_cm")):
         return serbest_metni
-    return " / ".join(f"{float(d[k]):g}" for k in ("sol_cm", "on_cm", "yukseklik_cm"))
+    return " / ".join(cm_metni(d[k]) for k in ("sol_cm", "on_cm", "yukseklik_cm"))
 
 
 def dilimler(
