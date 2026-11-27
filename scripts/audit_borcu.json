@@ -1,0 +1,977 @@
+{
+ "aciklama": "BAĞIMLILIK DENETİMİ LİSTESİ (istem 66 CT2 e · Y326 katman 8) — scripts/ci_audit.py + .github/workflows/security.yml okur. POLİTİKA (launcher/.cargo/audit.toml ile TUTARLI): `uygulanamaz` YALNIZ bu üründe erişilemeyen / platform dışı tavsiyeler içindir (gerekçe zorunlu) — GERÇEK açık oraya ASLA eklenmez. `bilinen_borc` 28-11 ölçümünde VAR olan gerçek açıklardır: yükseltme kararı [SAHİBE] (Y3: onnx / torch / torchvision sabit — kabul edilmiş risk). CIRCIR: liste yalnız KÜÇÜLÜR (paket yükseltilince satır silinir); listede olmayan YENİ açık CI'ı KIRMIZI yapar.",
+ "pip": {
+  "uygulanamaz": [],
+  "bilinen_borc": [
+   {
+    "paket": "anyio",
+    "surum": "4.13.0",
+    "kimlikler": [
+     "PYSEC-2026-4024",
+     "PYSEC-2026-4025"
+    ],
+    "kaynak": [
+     "sevk_kilidi",
+     "test_bagimliliklari"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "brotli",
+    "surum": "1.2.0",
+    "kimlikler": [
+     "PYSEC-2026-4322"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "certifi",
+    "surum": "2026.4.22",
+    "kimlikler": [
+     "PYSEC-2026-4320"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "filelock",
+    "surum": "3.29.0",
+    "kimlikler": [
+     "CVE-2026-112907",
+     "CVE-2026-112909",
+     "CVE-2026-112910",
+     "CVE-2026-112913",
+     "CVE-2026-112915",
+     "CVE-2026-112935",
+     "CVE-2026-112936",
+     "CVE-2026-112939",
+     "CVE-2026-112940"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "fsspec",
+    "surum": "2026.4.0",
+    "kimlikler": [
+     "PYSEC-2026-4217"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "h2",
+    "surum": "4.3.0",
+    "kimlikler": [
+     "PYSEC-2026-3628"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "hpack",
+    "surum": "4.1.0",
+    "kimlikler": [
+     "PYSEC-2026-4053"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "idna",
+    "surum": "3.13",
+    "kimlikler": [
+     "PYSEC-2026-215"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "msgpack",
+    "surum": "1.1.2",
+    "kimlikler": [
+     "CVE-2026-114613",
+     "PYSEC-2026-3625"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "multidict",
+    "surum": "6.7.1",
+    "kimlikler": [
+     "PYSEC-2026-4244"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "onnx",
+    "surum": "1.15.0",
+    "kimlikler": [
+     "CVE-2026-115919",
+     "CVE-2026-115920",
+     "CVE-2026-115921",
+     "CVE-2026-115922",
+     "PYSEC-2024-222",
+     "PYSEC-2024-223",
+     "PYSEC-2025-10",
+     "PYSEC-2025-148",
+     "PYSEC-2026-103",
+     "PYSEC-2026-104",
+     "PYSEC-2026-2239",
+     "PYSEC-2026-2240",
+     "PYSEC-2026-2241",
+     "PYSEC-2026-2689",
+     "PYSEC-2026-3587",
+     "PYSEC-2026-3876"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "Y3 (sahip kararı): onnx 1.15.0 SABİT — yükseltme YASAK (numpy<2 / torch 2.1.2 zinciri); kabul edilmiş risk, modeller yalnız sevk edilen yerel dosyalardan yüklenir",
+    "karar": "Y3 — kabul edilmiş risk"
+   },
+   {
+    "paket": "pillow",
+    "surum": "12.3.0",
+    "kimlikler": [
+     "CVE-2026-112390",
+     "CVE-2026-112391",
+     "CVE-2026-112393",
+     "CVE-2026-112395",
+     "CVE-2026-112399",
+     "CVE-2026-112400",
+     "CVE-2026-112401",
+     "CVE-2026-112404",
+     "CVE-2026-112406",
+     "CVE-2026-112891",
+     "CVE-2026-112892",
+     "CVE-2026-112893",
+     "CVE-2026-112894",
+     "CVE-2026-112895",
+     "CVE-2026-112897",
+     "CVE-2026-112899",
+     "CVE-2026-112900",
+     "CVE-2026-128066",
+     "CVE-2026-128067",
+     "CVE-2026-96638",
+     "CVE-2026-96640",
+     "CVE-2026-96778",
+     "GHSA-78g4-xqwv-q3g8",
+     "PYSEC-2026-4326",
+     "PYSEC-2026-4327",
+     "PYSEC-2026-4328",
+     "PYSEC-2026-4329",
+     "PYSEC-2026-4330",
+     "PYSEC-2026-4331",
+     "PYSEC-2026-4332",
+     "PYSEC-2026-4333",
+     "PYSEC-2026-4334",
+     "PYSEC-2026-4335",
+     "PYSEC-2026-4336",
+     "PYSEC-2026-4337",
+     "PYSEC-2026-4338",
+     "PYSEC-2026-4339",
+     "PYSEC-2026-4340",
+     "PYSEC-2026-4341",
+     "PYSEC-2026-4342",
+     "PYSEC-2026-4343",
+     "PYSEC-2026-4363"
+    ],
+    "kaynak": [
+     "sevk_kilidi",
+     "test_bagimliliklari"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "protobuf",
+    "surum": "3.20.3",
+    "kimlikler": [
+     "PYSEC-2026-1805",
+     "PYSEC-2026-1806"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "pyjwt",
+    "surum": "2.13.0",
+    "kimlikler": [
+     "GHSA-pxh4-856f-4h89",
+     "PYSEC-2026-4140",
+     "PYSEC-2026-4141",
+     "PYSEC-2026-4142",
+     "PYSEC-2026-4143",
+     "PYSEC-2026-4144",
+     "PYSEC-2026-4145",
+     "PYSEC-2026-4146",
+     "PYSEC-2026-4147",
+     "PYSEC-2026-4148",
+     "PYSEC-2026-4149",
+     "PYSEC-2026-4150",
+     "PYSEC-2026-4151",
+     "PYSEC-2026-4152",
+     "PYSEC-2026-4183"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "python-dotenv",
+    "surum": "1.0.0",
+    "kimlikler": [
+     "PYSEC-2026-2270"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "pytorch-lightning",
+    "surum": "2.6.5",
+    "kimlikler": [
+     "PYSEC-2026-3967"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "soupsieve",
+    "surum": "2.8.3",
+    "kimlikler": [
+     "CVE-2026-126190",
+     "CVE-2026-126191",
+     "CVE-2026-126192",
+     "CVE-2026-126193",
+     "PYSEC-2026-3071",
+     "PYSEC-2026-3072",
+     "PYSEC-2026-4170",
+     "PYSEC-2026-4171"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "urllib3",
+    "surum": "2.6.3",
+    "kimlikler": [
+     "PYSEC-2026-141",
+     "PYSEC-2026-142",
+     "PYSEC-2026-4175",
+     "PYSEC-2026-4176",
+     "PYSEC-2026-4177"
+    ],
+    "kaynak": [
+     "sevk_kilidi",
+     "test_bagimliliklari"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "weasyprint",
+    "surum": "68.1",
+    "kimlikler": [
+     "PYSEC-2026-3412",
+     "PYSEC-2026-3940",
+     "PYSEC-2026-4311"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   },
+   {
+    "paket": "werkzeug",
+    "surum": "3.1.8",
+    "kimlikler": [
+     "PYSEC-2026-4312"
+    ],
+    "kaynak": [
+     "sevk_kilidi"
+    ],
+    "gerekce": "CT2 e (28-11) ölçümünde açık — yamalı sürüme yükseltme kararı bekliyor",
+    "karar": "[SAHİBE] yükseltme"
+   }
+  ]
+ },
+ "npm": {
+  "apps/ui": [
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-27p8-2357-5qqv"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-3px3-54cx-rmw9"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-4w3w-2rp5-g8jm"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-6gmq-8vp8-gcm6"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-6h8r-xr42-gp59"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-6mj3-qw4j-hgrw"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-8344-3jmq-59r6"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-93r5-fhx6-vmg9"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-965w-775f-mr7g"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-c7q8-3ch8-vqpv"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-g53g-w8rj-fmg7"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-vr34-hp96-76pp"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-w2rr-34g9-rvrj"
+   },
+   {
+    "paket": "@xmldom/xmldom",
+    "tavsiye": "GHSA-x4fp-j954-r2f4"
+   },
+   {
+    "paket": "baseline-browser-mapping",
+    "tavsiye": "GHSA-w5vr-8v7q-w6rv"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-3jxr-9vmj-r5cp"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-6j4f-fj2g-mc7p"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-mh99-v99m-4gvg"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-q2hr-2g5m-vwhr"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-qhr7-859c-m2p7"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-rgw5-rvv9-x895"
+   },
+   {
+    "paket": "browserslist",
+    "tavsiye": "GHSA-73wf-gq98-2v4g"
+   },
+   {
+    "paket": "browserslist",
+    "tavsiye": "GHSA-c83g-rgw3-j3cx"
+   },
+   {
+    "paket": "compression",
+    "tavsiye": "GHSA-vc2v-76pw-4v95"
+   },
+   {
+    "paket": "decode-uri-component",
+    "tavsiye": "GHSA-qr28-fpjm-wq7f"
+   },
+   {
+    "paket": "decode-uri-component",
+    "tavsiye": "GHSA-vcc3-ghjq-m6fr"
+   },
+   {
+    "paket": "glob",
+    "tavsiye": "GHSA-3g3m-2fjr-6pw4"
+   },
+   {
+    "paket": "image-size",
+    "tavsiye": "GHSA-5p2g-fcmc-qvqq"
+   },
+   {
+    "paket": "image-size",
+    "tavsiye": "GHSA-w3rx-r6r6-pgpr"
+   },
+   {
+    "paket": "js-yaml",
+    "tavsiye": "GHSA-2883-xcg3-v3hh"
+   },
+   {
+    "paket": "js-yaml",
+    "tavsiye": "GHSA-52cp-r559-cp3m"
+   },
+   {
+    "paket": "js-yaml",
+    "tavsiye": "GHSA-5p4m-2wfm-xmqj"
+   },
+   {
+    "paket": "minimatch",
+    "tavsiye": "GHSA-g3hv-75wg-m249"
+   },
+   {
+    "paket": "nanoid",
+    "tavsiye": "GHSA-28wg-ghj8-5hjv"
+   },
+   {
+    "paket": "nanoid",
+    "tavsiye": "GHSA-2v37-7h3g-55p8"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-2vgq-wchc-25w7"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-4487-j8r4-4g2f"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-4642-5mcj-2rqw"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-525v-9gp9-w22h"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-5cwg-6vw7-rj6p"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-5x38-2vff-x55p"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-6889-vf6x-f3g5"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-6cv4-p8m7-4r25"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-6qrw-m8cv-hcxf"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-6wvx-3r32-xmcg"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-7wch-p9px-956x"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-86w9-cpqp-85rv"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-8hrf-8g6f-7xwp"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-9wg5-mj3p-v49q"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-h46v-rmh6-fq4f"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-h6cr-wjv9-3cpp"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-hqq3-7jhf-c5jx"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-j8rw-jp99-435v"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-jc66-7q78-782g"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-rhr8-3pm8-cq29"
+   },
+   {
+    "paket": "node-forge",
+    "tavsiye": "GHSA-w4xr-hqv8-ch44"
+   },
+   {
+    "paket": "postcss",
+    "tavsiye": "GHSA-fxqj-rqcc-2cmp"
+   },
+   {
+    "paket": "postcss",
+    "tavsiye": "GHSA-r28c-9q8g-f849"
+   },
+   {
+    "paket": "shell-quote",
+    "tavsiye": "GHSA-395f-4hp3-45gv"
+   },
+   {
+    "paket": "shell-quote",
+    "tavsiye": "GHSA-pqg4-j6r4-53mv"
+   },
+   {
+    "paket": "source-map-js",
+    "tavsiye": "GHSA-68fv-2mgg-jv7q"
+   },
+   {
+    "paket": "uuid",
+    "tavsiye": "GHSA-w5hq-g745-h8pq"
+   },
+   {
+    "paket": "zod",
+    "tavsiye": "GHSA-mrhx-c7xc-m3w5"
+   }
+  ],
+  "apps/web": [
+   {
+    "paket": "@fastify/busboy",
+    "tavsiye": "GHSA-gxm5-99cw-xjw9"
+   },
+   {
+    "paket": "@fastify/busboy",
+    "tavsiye": "GHSA-x8mw-p69m-v3mx"
+   },
+   {
+    "paket": "@vitest/mocker",
+    "tavsiye": "GHSA-82fw-gwwq-j7x9"
+   },
+   {
+    "paket": "@vitest/mocker",
+    "tavsiye": "GHSA-qxg6-89mg-rqv8"
+   },
+   {
+    "paket": "ajv",
+    "tavsiye": "GHSA-2g4f-4pwh-qvx6"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-6j4f-fj2g-mc7p"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-mh99-v99m-4gvg"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-q2hr-2g5m-vwhr"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-qhr7-859c-m2p7"
+   },
+   {
+    "paket": "brace-expansion",
+    "tavsiye": "GHSA-rgw5-rvv9-x895"
+   },
+   {
+    "paket": "glob",
+    "tavsiye": "GHSA-3g3m-2fjr-6pw4"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-22jq-vg5j-6vgg"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-2vr4-cq9g-pvrc"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-4xrf-jv44-h6hh"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-h3mg-xc3c-68pw"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-j6r3-76f7-8jcv"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-mwp4-54f8-5fhr"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-rpw4-54j3-4h4q"
+   },
+   {
+    "paket": "ip-address",
+    "tavsiye": "GHSA-rxp7-6hxx-x8q5"
+   },
+   {
+    "paket": "js-yaml",
+    "tavsiye": "GHSA-2883-xcg3-v3hh"
+   },
+   {
+    "paket": "js-yaml",
+    "tavsiye": "GHSA-52cp-r559-cp3m"
+   },
+   {
+    "paket": "js-yaml",
+    "tavsiye": "GHSA-5p4m-2wfm-xmqj"
+   },
+   {
+    "paket": "js-yaml",
+    "tavsiye": "GHSA-h67p-54hq-rp68"
+   },
+   {
+    "paket": "minimatch",
+    "tavsiye": "GHSA-23c5-xmqv-rm74"
+   },
+   {
+    "paket": "minimatch",
+    "tavsiye": "GHSA-3ppc-4f35-3m26"
+   },
+   {
+    "paket": "minimatch",
+    "tavsiye": "GHSA-7r86-cg39-jmmj"
+   },
+   {
+    "paket": "minimatch",
+    "tavsiye": "GHSA-g3hv-75wg-m249"
+   },
+   {
+    "paket": "nanoid",
+    "tavsiye": "GHSA-2v37-7h3g-55p8"
+   },
+   {
+    "paket": "path-to-regexp",
+    "tavsiye": "GHSA-9wv6-86v2-598j"
+   },
+   {
+    "paket": "postcss",
+    "tavsiye": "GHSA-fxqj-rqcc-2cmp"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-4mjr-xmp4-gh2g"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-6pq8-jhm2-2vcw"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-q8mj-m7cp-5q26"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-x5fp-wj9c-mxmx"
+   },
+   {
+    "paket": "react-router",
+    "tavsiye": "GHSA-qwww-vcr4-c8h2"
+   },
+   {
+    "paket": "smol-toml",
+    "tavsiye": "GHSA-7w5x-hrqm-74c2"
+   },
+   {
+    "paket": "smol-toml",
+    "tavsiye": "GHSA-r4xh-jqrq-34v2"
+   },
+   {
+    "paket": "smol-toml",
+    "tavsiye": "GHSA-v3rj-xjv7-4jmq"
+   },
+   {
+    "paket": "source-map-js",
+    "tavsiye": "GHSA-68fv-2mgg-jv7q"
+   },
+   {
+    "paket": "tar",
+    "tavsiye": "GHSA-r292-9mhp-454m"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-2m5v-pch6-74hx"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-2mjp-6q6p-2qxm"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-35p6-xmwp-9g52"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-4992-7rv2-5pvq"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-8xcm-r25x-g524"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-9fm3-97px-rjf6"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-c76h-2ccp-4975"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-cxrh-j4jr-qwg3"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-g8m3-5g58-fq7m"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-g9mf-h72j-4rw9"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-m8rv-5g2x-5cg5"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-p88m-4jfj-68fv"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-qrxm-fqhp-jwvm"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-r53p-7pc4-xj5r"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-v3r7-h72x-cjcm"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-v9p9-hfj2-hcw8"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-vrm6-8vpv-qv8q"
+   },
+   {
+    "paket": "undici",
+    "tavsiye": "GHSA-vxpw-j846-p89q"
+   },
+   {
+    "paket": "uuid",
+    "tavsiye": "GHSA-w5hq-g745-h8pq"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-587h-7wmj-h5pm"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-698v-4r3x-3vcv"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-9jrq-w75r-8gcw"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-r825-w8mm-5pxw"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-rq7h-c2jc-7f22"
+   },
+   {
+    "paket": "vitest",
+    "tavsiye": "GHSA-82fw-gwwq-j7x9"
+   },
+   {
+    "paket": "zod",
+    "tavsiye": "GHSA-mrhx-c7xc-m3w5"
+   }
+  ],
+  "dema-terapi-simülatörü": [
+   {
+    "paket": "@babel/core",
+    "tavsiye": "GHSA-4x5r-pxfx-6jf8"
+   },
+   {
+    "paket": "baseline-browser-mapping",
+    "tavsiye": "GHSA-w5vr-8v7q-w6rv"
+   },
+   {
+    "paket": "body-parser",
+    "tavsiye": "GHSA-27r3-jxmh-p828"
+   },
+   {
+    "paket": "body-parser",
+    "tavsiye": "GHSA-v422-hmwv-36x6"
+   },
+   {
+    "paket": "browserslist",
+    "tavsiye": "GHSA-73wf-gq98-2v4g"
+   },
+   {
+    "paket": "browserslist",
+    "tavsiye": "GHSA-c83g-rgw3-j3cx"
+   },
+   {
+    "paket": "esbuild",
+    "tavsiye": "GHSA-g7r4-m6w7-qqqr"
+   },
+   {
+    "paket": "nanoid",
+    "tavsiye": "GHSA-28wg-ghj8-5hjv"
+   },
+   {
+    "paket": "nanoid",
+    "tavsiye": "GHSA-2v37-7h3g-55p8"
+   },
+   {
+    "paket": "nanoid",
+    "tavsiye": "GHSA-xwg4-73v4-xw9w"
+   },
+   {
+    "paket": "postcss",
+    "tavsiye": "GHSA-6g55-p6wh-862q"
+   },
+   {
+    "paket": "postcss",
+    "tavsiye": "GHSA-fxqj-rqcc-2cmp"
+   },
+   {
+    "paket": "postcss",
+    "tavsiye": "GHSA-qx2v-qp2m-jg93"
+   },
+   {
+    "paket": "postcss",
+    "tavsiye": "GHSA-r28c-9q8g-f849"
+   },
+   {
+    "paket": "proxy-addr",
+    "tavsiye": "GHSA-jqcg-44mw-7w3h"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-4mjr-xmp4-gh2g"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-6pq8-jhm2-2vcw"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-q8mj-m7cp-5q26"
+   },
+   {
+    "paket": "qs",
+    "tavsiye": "GHSA-x5fp-wj9c-mxmx"
+   },
+   {
+    "paket": "source-map-js",
+    "tavsiye": "GHSA-68fv-2mgg-jv7q"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-587h-7wmj-h5pm"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-698v-4r3x-3vcv"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-9jrq-w75r-8gcw"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-fx2h-pf6j-xcff"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-r825-w8mm-5pxw"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-rq7h-c2jc-7f22"
+   },
+   {
+    "paket": "vite",
+    "tavsiye": "GHSA-v6wh-96g9-6wx3"
+   }
+  ]
+ }
+}

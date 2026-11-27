@@ -40,7 +40,7 @@ Backend'in otomatik testleri. Her push/PR'da CI çalıştırır ([`../.github/`]
 | API sözleşme/tasarım/güvenlik, gözlemlenebilirlik, OTA rollback | ilgili `test_*` dosyaları |
 
 ## Simülasyon modu
-- `PEMF_SIMULATE=1` (sanal STM+ESP+8-bobin sensör) [`../servers/api_server.py`](../apps/backend/servers/README.md) + `deploy/*.env` + `docker/*`'te kablolu — **ama pytest varsayılanı değil**: [`conftest.py`](conftest.py) süreç başında TEK normalizasyonla siler (dış kabuk/CI `PEMF_SIMULATE:""` ya da `1` verse de), test modülleri yazmaz, bir test env'de bırakırsa KIRMIZI olur (D0Ö.11 — kapı: [`test_pemf_simulate_tek_kaynak.py`](test_pemf_simulate_tek_kaynak.py)). Sim davranışı gereken test döngüyü doğrudan ve sınırlı turla koşturur.
+- `PEMF_SIMULATE=1` (sanal STM+ESP+8-bobin sensör) [`../servers/api_server.py`](../apps/backend/servers/README.md) + `deploy/*.env`'te kablolu — **ama pytest varsayılanı değil**: [`conftest.py`](conftest.py) süreç başında TEK normalizasyonla siler (dış kabuk/CI `PEMF_SIMULATE:""` ya da `1` verse de), test modülleri yazmaz, bir test env'de bırakırsa KIRMIZI olur (D0Ö.11 — kapı: [`test_pemf_simulate_tek_kaynak.py`](test_pemf_simulate_tek_kaynak.py)). Sim davranışı gereken test döngüyü doğrudan ve sınırlı turla koşturur.
 - STM sanal test: `../tools/stm32_simulator.py` (socket 5100).
 
 ---

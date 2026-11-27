@@ -5,6 +5,9 @@
 # PR SINIRLARI (YH D6, 2026-10-22 — sahip kararı 2026-10-13: dışlama + PR sınırları YAYIN PUSH'UNDAN önce dosyada): Dependabot bu depoda
 # HİÇ koşmadı; açılınca bir kerede PR dalgası (her biri CI + Vercel önizlemesi) açmasın diye toplam sınır ~50 → 15. Kapı:
 # tests/test_YH_D6_dependabot_Y3_ve_PR_siniri.py
+# CT2 e (istem 66 · Y326 katman 8): github-actions + npm + cargo + pip ekosistemleri HAFTALIK ve TOPLU (her ekosistemde `surum-guncellemeleri`
+# grubu = haftada tek sürüm PR'ı; güvenlik yamaları ayrı grup). İş akışı eylemleri tam SHA ile sabit — Dependabot SHA + yorumdaki
+# sürümü birlikte günceller. Y344-2: `/docker` girdisi Docker dağıtımıyla birlikte kalktı. Kapı: tests/test_CT2e_tedarik_zinciri_KAPILARI.py
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -13,6 +16,10 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 3
     groups:
+      # CT2 e (Y326 katman 8): sürüm güncellemeleri de TOPLU — ekosistem başına haftada TEK PR (Y3 / koordinasyon dışlamaları geçerli).
+      surum-guncellemeleri:
+        applies-to: version-updates
+        patterns: ["*"]
       # Güvenlik yamaları tek PR'da toplansın (gürültü azalt).
       security-patches:
         applies-to: security-updates
@@ -41,27 +48,13 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 2
     groups:
+      # CT2 e (Y326 katman 8): sürüm güncellemeleri de TOPLU — ekosistem başına haftada TEK PR (Y3 / koordinasyon dışlamaları geçerli).
+      surum-guncellemeleri:
+        applies-to: version-updates
+        patterns: ["*"]
       security-patches:
         applies-to: security-updates
         patterns: ["*"]
-
-  # Docker imajının requirements'ı (dizin /docker → pip:"/" bunu GÖRMEZ).
-  - package-ecosystem: "pip"
-    directory: "/docker"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 1
-    ignore:
-      # Y3 (sahip kararı): onnx 1.15.0 / torch 2.1.2+cpu pinleri AYNEN korunur — yükseltme YASAK. update-types YOK = bu paket
-      # için HİÇBİR sürüm / güvenlik PR'ı açılmaz (eski hâl torch'u yalnız major/minor'da dışlıyor, onnx'i hiç dışlamıyordu).
-      - dependency-name: "torch"
-      - dependency-name: "torchvision"
-      - dependency-name: "onnx"
-      # YLI-A2.4: pip:"/" ile AYNI koordinasyon — imaj torch 2.1.2+cpu + numpy 1.26.4 taşır (torch 2.1.2 numpy<2 ister).
-      - dependency-name: "numpy"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "ultralytics"
-        update-types: ["version-update:semver-major"]
 
   # GPU inference mikroservisi (:8100) — kendi web yığını var.
   - package-ecosystem: "pip"
@@ -69,6 +62,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 1
+    groups:
+      # CT2 e (Y326 katman 8): sürüm güncellemeleri de TOPLU — ekosistem başına haftada TEK PR (Y3 / koordinasyon dışlamaları geçerli).
+      surum-guncellemeleri:
+        applies-to: version-updates
+        patterns: ["*"]
     ignore:
       # Y3 (sahip kararı): onnx 1.15.0 / torch 2.1.2+cpu pinleri AYNEN korunur — yükseltme YASAK. update-types YOK = bu paket
       # için HİÇBİR sürüm / güvenlik PR'ı açılmaz (eski hâl torch'u yalnız major/minor'da dışlıyor, onnx'i hiç dışlamıyordu).
@@ -96,6 +94,10 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 3
     groups:
+      # CT2 e (Y326 katman 8): sürüm güncellemeleri de TOPLU — ekosistem başına haftada TEK PR (Y3 / koordinasyon dışlamaları geçerli).
+      surum-guncellemeleri:
+        applies-to: version-updates
+        patterns: ["*"]
       security-patches:
         applies-to: security-updates
         patterns: ["*"]
@@ -117,6 +119,10 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 3
     groups:
+      # CT2 e (Y326 katman 8): sürüm güncellemeleri de TOPLU — ekosistem başına haftada TEK PR (Y3 / koordinasyon dışlamaları geçerli).
+      surum-guncellemeleri:
+        applies-to: version-updates
+        patterns: ["*"]
       security-patches:
         applies-to: security-updates
         patterns: ["*"]
@@ -126,3 +132,8 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
+    groups:
+      # CT2 e (Y326 katman 8): sürüm güncellemeleri de TOPLU — ekosistem başına haftada TEK PR (Y3 / koordinasyon dışlamaları geçerli).
+      surum-guncellemeleri:
+        applies-to: version-updates
+        patterns: ["*"]

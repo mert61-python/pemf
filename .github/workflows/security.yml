@@ -1,12 +1,16 @@
 name: security-audit
 
-# Bağımlılık CVE taraması (audit B-9.3). pip-audit ile web/API çekirdek bağımlılıkları (kurulu
-# ortam üzerinden — torch+cpu/UTF-8 çözümleme sorunlarını atlar) OSV/PyPI advisory DB'ye karşı taranır.
-# BLOKLAYICI DEĞİL (continue-on-error): web/crypto CVE'leri YAMALI (cryptography 43.0.1,
-# starlette 1.3.1, python-multipart 0.0.31 — 2026-07 fix'leri). Kalan bilinen-CVE yalnız AI-çekirdeği
-# (onnx 1.15 / torch 2.1.2) — numpy<2 cascade'i yüzünden BİLİNÇLİ pinli (Y3).
-# torch/onnx CVE GÖRÜNÜRLÜĞÜ GitHub güvenlik uyarılarına bırakıldı (A-42: sahip GitHub ayarlarından açar);
-# `.github/dependabot.yml` SÜRÜM güncellemelerinde torch / torchvision / onnx Y3 gereği DIŞLI (PR açılmaz).
+# Bağımlılık CVE taraması (audit B-9.3) — CT2 e (istem 66 · Y326 katman 8): artık BLOKLAYICI.
+# Eskiden `continue-on-error` + her satırda `|| true` → açık bulunsa da iş yeşildi (bilgi amaçlı). Şimdi cargo audit deseni
+# (launcher/.cargo/audit.toml): yalnız `scripts/audit_borcu.json`'daki gerekçeli liste yoksayılır —
+#   · `uygulanamaz`: bu üründe erişilemeyen tavsiyeler (gerçek açık ASLA eklenmez)
+#   · `bilinen_borc`: 28-11 ölçümünde VAR olan gerçek açıklar (yükseltme kararı [SAHİBE]; Y3: onnx / torch SABİT — kabul edilmiş risk).
+#     CIRCIR: liste yalnız küçülür; listede OLMAYAN YENİ açık bu işi KIRMIZI yapar (sessiz yeni açık biter).
+# pip-audit sürümü = derleme kilidindeki (build_tools/myenv-requirements.txt `pip_audit==`). ⚠️ D6.56: torch / torchvision `+cpu`
+# PyPI'da YOK → pip-audit onları ATLAR (torch CVE'leri bu adımda GÖRÜNMEZ) — GitHub güvenlik uyarıları yolu (A-42).
+# Kapı: tests/test_CT2e_tedarik_zinciri_KAPILARI.py
+# Y320: ubuntu koşucuda kalır (ürün platformu değil). Python yaması burada ÖNEMSİZ: `--no-deps --disable-pip` kurulum / çözümleme
+# yapmaz, yalnız sabit ad + sürümü tavsiye veritabanına sorar (ubuntu-22.04/24.04'te 3.10.2 tekerleği de yok — scripts/ci_sozlesmesi.json).
 
 on:
   # ⚠️ 2026-08-09 (Tier 1): tetikleyici yalnız `main, master` idi ve geliştirme AKTİF DALDA
@@ -31,32 +35,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.10"
-          cache: pip
 
-      - name: Install core deps + pip-audit
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-test.txt
-          pip install pip-audit
+      - name: pip-audit kur (sürüm = derleme kilidi)
+        run: pip install "$(grep -i '^pip_audit==' build_tools/myenv-requirements.txt)"
 
-      - name: pip-audit — çekirdek + SHIPPED AI ağacı (bilgi amaçlı, bloklamaz)
-        # Audit P2: shiplenen AI yığını (onnx 1.15 / ultralytics / xgboost / librosa...) da taransın — eskiden yalnız
-        # requirements-test.txt kuruluyordu. ⚠️ D6.56 (B-10.212): torch==2.1.2+cpu ve torchvision==0.16.2+cpu
-        # (requirements.txt, ek index) PyPI'da BULUNMADIĞI için pip-audit bunları "Dependency not found on PyPI and
-        # could not be audited" diye ATLAR → torch CVE'leri (CVE-2025-32434 dahil) bu adımda GÖRÜNMEZ (başlıktaki
-        # GitHub uyarıları yolu). Bloklayıcı yapmak (sahip kararı: YAPILMAZ) continue-on-error'ı kaldırmakla OLMAZ:
-        # her pip-audit satırındaki `|| true` da kaldırılmalı + bilinen CVE'ler --ignore-vuln <ID> ile allowlist'lenmeli.
-        continue-on-error: true
+      # D3.41 (B-9.15): kurtarma kilidi sevk edilen paketin TAMAMINI pinler (geçişliler dahil) — çözümleme / kurulum YOK.
+      - name: pip-audit — SEVK kilidi (bloklayıcı; yalnız gerekçeli liste yoksayılır)
+        run: pip-audit -r build_tools/myenv-requirements.txt --no-deps --disable-pip --desc $(python scripts/ci_audit.py pip-yoksay)
+
+      - name: pip-audit — test bağımlılıkları (bloklayıcı)
+        run: pip-audit -r requirements-test.txt --no-deps --disable-pip --desc $(python scripts/ci_audit.py pip-yoksay)
+
+  # CT2 e: npm ağaçları (apps/ui — EXE web dışa aktarımı + APK · apps/web — ÖDEME sitesi · DEMA — backend'le sevk edilen dist) kilit
+  # dosyasından denetlenir (`--package-lock-only`, kurulum yok). Karar scripts/ci_audit.py'de (npm audit'in yoksayma listesi yok).
+  npm-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: npm audit (apps/ui · apps/web · DEMA — bloklayıcı; yalnız gerekçeli liste yoksayılır)
+        shell: bash
         run: |
-          echo "== kurulu çekirdek ortam (web/crypto) =="
-          pip-audit --desc || true
-          echo "== SHIPPED ağaç (requirements.txt — AI yığını DAHİL) =="
-          pip-audit -r requirements.txt --desc || true
-          # D3.41 (B-9.15): kurtarma kilidi sevk edilen paketin TAMAMINI pinler (geçişliler dahil) — çözümleme / kurulum YOK.
-          echo "== KURTARMA KİLİDİ (build_tools/myenv-requirements.txt — sevk edilen paketin tamamı) =="
-          pip-audit -r build_tools/myenv-requirements.txt --no-deps --disable-pip --desc || true
+          set -euo pipefail
+          for d in apps/ui apps/web "dema-terapi-simülatörü"; do
+            (cd "$d" && npm audit --package-lock-only --json --audit-level=none > "$RUNNER_TEMP/npm-audit.json")
+            python3 scripts/ci_audit.py npm "$d" "$RUNNER_TEMP/npm-audit.json"
+          done

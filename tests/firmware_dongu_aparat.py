@@ -2,9 +2,10 @@
 """STM ANA DÖNGÜ KOŞUM TAKIMI — Python tarafı (Dalga 1 · 1-G · D1.106). ⚠️ pytest TOPLAMAZ (`test_` ön eki yok).
 
 GERÇEK firmware (`main.c`, `pemf_sensor.c`, `pemf_akim.c`, `stm32f4xx_it.c`, `stm32f4xx_hal_msp.c`,
-`system_stm32f4xx.c`) + GERÇEK vendored HAL 1.8.5 + `tests/firmware_host/dongu/dongu_kosum.c` MSVC x64'te derlenir
+`system_stm32f4xx.c`) + GERÇEK vendored HAL 1.8.5 + `tests/firmware_host/dongu/dongu_kosum.c` MSVC x64'te ya da
+(Y344-1, CT2 f2) GCC mingw-w64 x64'te derlenir (`PEMF_CC=<gcc>`; gcov ölçümü `PEMF_FW_KAPSAM=1` → `scripts/firmware_kapsam.py`)
 (VEH + tek adım yazmaç modeli; ayrıntı C dosyasının başında). Derlemeden önceki biçim dönüşümleri (anlam aynı, sayıları
-DOĞRULANIR — sıfır dönüşüm = aparat kör → hata):
+DOĞRULANIR — sıfır dönüşüm = aparat kör → hata; `__weak` dönüşümü YALNIZ MSVC — GCC'de gerçek zayıf sembol):
     main.c / pemf_sensor.c   `__asm volatile("nop");`  → `pemf_host_nop();`
     HAL .c                   `__weak <tür> AD(`         → `<tür> AD__zayif(` + `#pragma comment(linker, "/alternatename:AD=AD__zayif")`
                              (MSVC'de zayıf sembol yok; güçlü tanım — main.c / koşum takımı — varsa O bağlanır)
@@ -89,7 +90,9 @@ def zayif_donustur(kaynak: str) -> tuple[str, list[str]]:
 def derle(dizin: Path, main_metni: str | None = None, ek_tanimlar: tuple[str, ...] = ()) -> Path:
     """Koşum takımını `dizin`de derle → exe. `main_metni`: main.c METNİ (mutasyon için; varsayılan depodaki)."""
     tur, arac = fw.derleyici_gerekli()
-    assert tur == "msvc", f"ana döngü koşum takımı yalnız MSVC (VEH) ile derlenir; bulunan: {tur}"
+    if tur == "gcc":
+        return _derle_gcc(arac, dizin, main_metni, ek_tanimlar)
+    assert tur == "msvc", f"ana döngü koşum takımı MSVC ya da GCC (mingw-w64) ile derlenir; bulunan: {tur}"
     dizin.mkdir(parents=True, exist_ok=True)
     main_c, n_main = nop_donustur(main_metni if main_metni is not None else fw.MAIN_C.read_text(encoding="utf-8"))
     assert n_main >= 2, f"aparat: main.c'de {n_main} NOP dönüştürüldü (biçim değişmiş)"
@@ -136,6 +139,70 @@ def derle(dizin: Path, main_metni: str | None = None, ek_tanimlar: tuple[str, ..
     assert r.returncode == 0 and exe.is_file(), (
         f"derleme başarısız (rc={r.returncode}):\n{(r.stdout or '')[-4000:]}\n{(r.stderr or '')[-1500:]}"
     )
+    return exe
+
+
+#: gcc kolunda gcov ile ÖLÇÜLEN çeviri birimleri (scripts/firmware_kapsam.py ESLEME ile aynı küme; HAL / koşum takımı ölçülmez)
+OLCULEN = ("main_host.c", "pemf_sensor_host.c", "pemf_akim.c")
+
+
+def _derle_gcc(gcc: str, dizin: Path, main_metni: str | None, ek_tanimlar: tuple[str, ...]) -> Path:
+    """Y344-1 (sahip 27-11, istem 66 CT2 f2): AYNI koşum takımı GCC (mingw-w64 x64) ile — gcov ölçümü için (`PEMF_FW_KAPSAM=1`).
+
+    MSVC kolundan farkı yalnız derleyiciye özgü katman: HAL `__weak` tanımları GERÇEK zayıf sembol kalır (hal_def.h GCC kolu —
+    `/alternatename` dönüşümü YOK, HAL kaynakları DEĞİŞMEDEN derlenir), zorunlu başlık `-include`, iç işlevler cmsis_compiler.h GCC kolu.
+    Firmware ürün kodu DEĞİŞMEZ (aynı NOP dönüşümü + salt-okur sonda)."""
+    import os
+
+    dizin.mkdir(parents=True, exist_ok=True)
+    main_c, n_main = nop_donustur(main_metni if main_metni is not None else fw.MAIN_C.read_text(encoding="utf-8"))
+    assert n_main >= 2, f"aparat: main.c'de {n_main} NOP dönüştürüldü (biçim değişmiş)"
+    (dizin / "main_host.c").write_text(main_c + SONDA, encoding="utf-8")
+    sensor_c, n_sensor = nop_donustur((CORE_SRC / "pemf_sensor.c").read_text(encoding="utf-8"))
+    assert n_sensor >= 1, "aparat: pemf_sensor.c'de NOP yok (biçim değişmiş)"
+    (dizin / "pemf_sensor_host.c").write_text(sensor_c, encoding="utf-8")
+    for ad in ("core_cm4.h", "cmsis_version.h", "mpu_armv7.h"):
+        shutil.copyfile(CMSIS_INC / ad, dizin / ad)
+    for ad in ("cmsis_compiler.h", "pemf_host_on.h", "dongu_kosum.c", "dongu_win.c"):
+        shutil.copyfile(TAKIM / ad, dizin / ad)
+    kapsam_acik = os.environ.get("PEMF_FW_KAPSAM") == "1"
+    ic = [f"-I{p}" for p in (dizin, CORE_INC, HAL_INC, CMSIS_DEV, CMSIS_INC)]
+    tanim = [f"-D{t}" for t in ("STM32F429xx", "USE_HAL_DRIVER", *ek_tanimlar)]
+    ortak = ["-std=gnu11", "-O0", "-w", *ic, *tanim, "-include", str(dizin / "pemf_host_on.h"), "-c"]
+    birimler = [
+        (dizin / "main_host.c", ["-Dmain=pemf_fw_main"]),
+        (dizin / "pemf_sensor_host.c", []),
+        (dizin / "dongu_kosum.c", []),
+        *((HAL_SRC / ad, []) for ad in HAL_MODULLERI),
+        *((CORE_SRC / ad, []) for ad in DOGRUDAN),
+    ]
+    komutlar = []
+    for kaynak, ek in birimler:
+        kapsam = ["--coverage"] if kapsam_acik and kaynak.name in OLCULEN else []
+        komutlar.append([gcc, *ortak, *ek, *kapsam, str(kaynak), "-o", f"{kaynak.stem}.o"])
+    komutlar.append(
+        [
+            gcc,
+            "-std=gnu11",
+            "-O0",
+            *(["-DPEMF_FW_KAPSAM"] if kapsam_acik else []),
+            "-c",
+            "dongu_win.c",
+            "-o",
+            "dongu_win.o",
+        ]
+    )
+    nesneler = [k[-1] for k in komutlar]
+    exe = dizin / "dongu_kosum.exe"
+    komutlar.append([gcc, *nesneler, *(["--coverage"] if kapsam_acik else []), "-o", exe.name])
+    for k in komutlar:
+        r = subprocess.run(
+            k, cwd=str(dizin), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600
+        )
+        assert r.returncode == 0, (
+            f"gcc derleme başarısız (rc={r.returncode}): {' '.join(k[-3:])}\n{(r.stderr or '')[-3000:]}"
+        )
+    assert exe.is_file(), "gcc: dongu_kosum.exe üretilmedi"
     return exe
 
 

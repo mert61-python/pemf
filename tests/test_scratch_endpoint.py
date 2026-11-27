@@ -206,15 +206,6 @@ def test_KRITIK_mesgul_429_ve_OOM_500_ayrimi(istemci, monkeypatch, tmp_path):
     assert "hazır değil" not in (r2.json().get("detail") or "")
 
 
-def test_YAPISAL_dockerfile_cift_cv2_temizligi():
-    """requirements-ai'nin şart koştuğu önlem İMAJDA uygulanmalı (yorum yetmez —
-    ölçüldü: Dockerfile'da adım yoktu, pin fiilen düşüyordu)."""
-    src = (KOK / "docker" / "Dockerfile.ai").read_text(encoding="utf-8")
-    assert "pip3 uninstall -y opencv-python-headless" in src
-    assert "--force-reinstall --no-deps opencv-python==4.11.0.86" in src
-    assert "torch.__version__.startswith('2.7.1')" in src, "torch-ezilme build kanıtı yok"
-
-
 # ── Yapısal pariteler ────────────────────────────────────────────────────────
 def test_YAPISAL_ai_service_scratch_paritesi():
     """:8100 /infer/scratch AYNI scratch_analiz'i çağırır; delegate None-atlama

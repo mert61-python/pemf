@@ -328,3 +328,9 @@ cabin_mqtt_kimlik.yaml
 # Y282 (sahip 12 Kasım 2026): ODAK alan tablosu + ONNX modelleri AÇIK DEPOYA GİRMEZ — AI model katmanında
 # (release_assets/ai_models/ai_hub/odak/veri/, yukarıdaki release_assets kuralıyla yok sayılır). Eski yerine geri girmesin:
 ai_hub/odak/veri/*.npz
+
+# CT2 (istem 66): CI adımlarının depo kökünde bıraktığı geçici çıktılar (hızlı küme listesi · kart yazılımı test listesi / gcov lcov / junit)
+ci_kume.txt
+fw_testleri.txt
+firmware.info
+firmware-junit.xml

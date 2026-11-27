@@ -27,6 +27,8 @@ BETIKLER = KOK / "scripts"
 _PS51 = shutil.which("powershell.exe")
 
 _TASLAK_SUIT = "Add-Content -LiteralPath $env:Y30_KAYIT -Value 'SUIT'\nexit [int]$env:Y30_SUIT_RC\n"
+#: CT2 a: yayın CI kapısı taslağı (gerçeğini tests/test_CT2a_yayin_CI_kapisi.py ölçer) — `Y30_CI_RC` (yoksa 0 = CI yeşil)
+_TASLAK_CI = "Add-Content -LiteralPath $env:Y30_KAYIT -Value 'CI'\nexit [int]$env:Y30_CI_RC\n"
 _SARMAL = r"""param([string]$Publish, [string]$Asset)
 $ErrorActionPreference = 'Stop'
 function global:git { Add-Content -LiteralPath $env:Y30_KAYIT -Value ('GIT ' + ($args -join ' ')) }
@@ -83,6 +85,7 @@ def _publish_51(tmp_path: Path, suit_rc: int):
     (d / "bos_path").mkdir()
     shutil.copy2(BETIKLER / "publish_release.ps1", d / "scripts" / "publish_release.ps1")
     _bom(d / "scripts" / "yayin_oncesi_suit.ps1", _TASLAK_SUIT)
+    _bom(d / "scripts" / "yayin_ci_kapisi.ps1", _TASLAK_CI)
     _bom(d / "sarmal.ps1", _SARMAL)
     (d / "asset.bin").write_bytes(b"x")
     kayit = d / "kayit.txt"

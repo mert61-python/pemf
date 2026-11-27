@@ -23,7 +23,12 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[1]
 CORE_SRC = "firmware/stm32_pemf/Core/Src"
 #: koşum takımının yazdığı kopya adı → gerçek kaynak (satır numarası korunur — dönüşümler aynı satırda)
-ESLEME = {"main_host.c": f"{CORE_SRC}/main.c", "pemf_sensor_host.c": f"{CORE_SRC}/pemf_sensor.c"}
+#: CT2 f2 (Y344-1): ana döngü koşum takımı gcc kolu `pemf_akim.c`yi DEĞİŞTİRMEDEN (gerçek yolundan) derler → adıyla eşlenir.
+ESLEME = {
+    "main_host.c": f"{CORE_SRC}/main.c",
+    "pemf_sensor_host.c": f"{CORE_SRC}/pemf_sensor.c",
+    "pemf_akim.c": f"{CORE_SRC}/pemf_akim.c",
+}
 #: CubeMX üretimi / donanım başlatma — ana makinede anlamsız, ölçüm DIŞI
 DISARIDA_ISLEV = re.compile(r"^(SystemClock_Config|MX_\w+_Init|HAL_\w*Msp\w*Init|Error_Handler|assert_failed)$")
 
@@ -43,6 +48,13 @@ def gcov_oku(gcda: Path, gcov: str = "gcov") -> list[dict]:
     return [json.loads(s) for s in r.stdout.splitlines() if s.strip().startswith("{")]
 
 
+def _satir_sayisi(hedef: str) -> int:
+    """Gerçek kaynağın satır sayısı — kopyanın SONUNA eklenen koşum takımı sondası (ör. `pemf_host_aktif_maske`) gerçek dosyada
+    yoktur, ölçüme girmez (CT2 f2). Kaynak yoksa (sahte gcov çıktısı) sınır yok."""
+    yol = KOK / hedef
+    return len(yol.read_text(encoding="utf-8", errors="replace").splitlines()) if yol.is_file() else sys.maxsize
+
+
 def birlestir(belgeler: list[dict]) -> dict[str, dict[int, int]]:
     """gcov JSON belgeleri → gerçek kaynak → {satır: sayım} (dışarıdaki işlevlerin satırları atılır, sayımlar toplanır)."""
     sonuc: dict[str, dict[int, int]] = {}
@@ -56,9 +68,10 @@ def birlestir(belgeler: list[dict]) -> dict[str, dict[int, int]]:
                 if DISARIDA_ISLEV.match(fn.get("demangled_name") or fn.get("name", "")):
                     disari.update(range(int(fn["start_line"]), int(fn["end_line"]) + 1))
             satirlar = sonuc.setdefault(hedef, {})
+            ust = _satir_sayisi(hedef)
             for ln in f.get("lines", []):
                 no = int(ln["line_number"])
-                if no not in disari:
+                if no not in disari and no <= ust:
                     satirlar[no] = satirlar.get(no, 0) + int(ln["count"])
     return sonuc
 
@@ -90,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kok", type=Path, required=True)
     ap.add_argument("--gcov", default="gcov")
     ap.add_argument("--lcov", type=Path)
+    # CT2 f2 (Y311 / Y344-1): ölçülen yüzde tests/kapsam_tabani.json → kart_yazilimi.satir ALTINA inerse KIRMIZI (CI kart işi)
+    ap.add_argument("--taban", type=Path, help="kapsam_tabani.json — kart_yazilimi.satir altı = çıkış 1")
     a = ap.parse_args(argv)
     gcdalar = sorted(a.kok.rglob("*.gcda"))
     if not gcdalar:
@@ -104,7 +119,16 @@ def main(argv: list[str] | None = None) -> int:
         lcov_yaz(olcum, a.lcov)
     for d, s in sorted(olcum.items()):
         print(f"{d}: {sum(1 for c in s.values() if c > 0)} / {len(s)} satır")
-    print(f"kart yazılımı (ölçülen güvenlik mantığı): %{yuzde(olcum):.2f} · {len(gcdalar)} derleme")
+    olculen = yuzde(olcum)
+    print(f"kart yazılımı (ölçülen güvenlik mantığı): %{olculen:.2f} · {len(gcdalar)} derleme")
+    if a.taban:
+        taban = float(json.loads(a.taban.read_text(encoding="utf-8"))["paketler"]["kart_yazilimi"]["satir"])
+        if round(olculen, 2) < taban:
+            print(
+                f"!!! kart yazılımı %{olculen:.2f} < taban %{taban:.2f} — eşik DÜŞÜRÜLMEZ, test ekleyin (CLAUDE.md 'Test kapsamı')"
+            )
+            return 1
+        print(f"taban %{taban:.2f} · tamam")
     return 0
 
 

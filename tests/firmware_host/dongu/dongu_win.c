@@ -19,8 +19,16 @@ void dk_firmware(void);
 uint64_t dk_vt(void);
 uint64_t dk_erisim(void);
 
+#if defined(PEMF_FW_KAPSAM)
+/* gcov (Y344-1, CT2 f2): TerminateProcess atexit'i koşturmaz → sayaçlar çıkıştan ÖNCE elle yazılır (libgcov). */
+void __gcov_dump(void);
+#endif
+
 void dw_bitir(int kod) {
   fflush(stdout);
+#if defined(PEMF_FW_KAPSAM)
+  __gcov_dump();
+#endif
   TerminateProcess(GetCurrentProcess(), (UINT)kod);
 }
 

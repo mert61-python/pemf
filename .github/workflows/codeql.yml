@@ -1,0 +1,38 @@
+name: codeql
+
+# CT2 e (istem 66 · Y326 katman 8): CodeQL statik güvenlik analizi — Python + JavaScript/TypeScript, HAFTALIK (+ elle). Derleme
+# gerektirmez (`build-mode: none`). Bulgular GitHub "Code scanning" sekmesine yazılır (security-events: write — YALNIZ bu iş akışında).
+# Haftalık olduğu için yayın commit'ine durum yazmayabilir → gerekli liste DIŞINDA (scripts/ci_sozlesmesi.json). Eylemler tam SHA.
+
+on:
+  schedule:
+    - cron: "15 4 * * 2"   # her Salı 04:15 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.dil }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        dil: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - uses: github/codeql-action/init@74c1aea9df7c0f02e9b7bfe4a8935abf2e5e3aa6  # v3.39.5
+        with:
+          languages: ${{ matrix.dil }}
+          build-mode: none
+
+      - uses: github/codeql-action/analyze@74c1aea9df7c0f02e9b7bfe4a8935abf2e5e3aa6  # v3.39.5
+        with:
+          category: "/language:${{ matrix.dil }}"

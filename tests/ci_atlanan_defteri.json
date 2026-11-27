@@ -62,12 +62,12 @@
   {
    "test": "tests.test_D3_41_kurtarma_kilidi_SEVK_AGACIYLA_ayni::test_KRITIK_D3_44_derleme_yorumlayicisi_sabitlerle_AYNI",
    "sinif": "Y",
-   "gerekce": "Ürün gömülü Python 3.10.2 ile derlenir; CI 3.10.11 venv'de koşar — test yalnız GÖMÜLÜ derleme yorumlayıcısında anlamlı (Y30 onunla koşar; statik / sentetik kollar CI'da da koşar)."
+   "gerekce": "Ürün GÖMÜLÜ Python 3.10.2 dağıtımıyla derlenir; CI aynı yamayı (3.10.2, CT2 b) setup-python TAM kurulumu + venv'le koşar (python310.zip yok) — test yalnız gömülü derleme yorumlayıcısında anlamlı (Y30 onunla koşar; statik / sentetik kollar CI'da da koşar)."
   },
   {
    "test": "tests.test_YH_D2_bagimlilik_sabitleri_kurulu_surumle_ayni::test_KRITIK_derleme_ortaminda_uretim_ve_kilit_sabitleri_KURULU_surumle_ayni",
    "sinif": "Y",
-   "gerekce": "Ürün gömülü Python 3.10.2 ile derlenir; CI 3.10.11 venv'de koşar — test yalnız GÖMÜLÜ derleme yorumlayıcısında anlamlı (Y30 onunla koşar; statik / sentetik kollar CI'da da koşar)."
+   "gerekce": "Ürün GÖMÜLÜ Python 3.10.2 dağıtımıyla derlenir; CI aynı yamayı (3.10.2, CT2 b) setup-python TAM kurulumu + venv'le koşar (python310.zip yok) — test yalnız gömülü derleme yorumlayıcısında anlamlı (Y30 onunla koşar; statik / sentetik kollar CI'da da koşar)."
   },
   {
    "test": "tests.test_i18n_tr_taban",
@@ -128,6 +128,11 @@
    "test": "tests.test_site_indirme_varligi_URETILDI::test_KRITIK_surumsuz_EXE_de_URETILMIS",
    "sinif": "Y",
    "gerekce": "Kurucu EXE / Android APK yayın makinesinde derlenip `release_assets/`'e konur (Y327: yayın eseri CI'da üretilmez); site indirme bağlantısının gerçek esere işaret ettiği Y30'da ölçülür."
+  },
+  {
+   "test": "tests.test_CT2b_ci_python_URUN_yamasi::test_KRITIK_sevk_agacinin_python_DLLi_SOZLESMEYLE_AYNI",
+   "sinif": "Y",
+   "gerekce": "Sevk ağacı (`PEMF_BUILD\\dist\\PEMF_Backend`, `build_backend_exe.ps1` çıktısı) yalnız yayın makinesinde; Y30 betiği `PEMF_SEVK_AGACI`'nı verir — ürünün gönderdiği python310.dll yaması CI sözleşmesiyle (scripts/ci_sozlesmesi.json urun_python) AYNI olmalı."
   }
  ]
 }

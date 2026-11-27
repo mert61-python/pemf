@@ -13,7 +13,7 @@ otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→
 | `requirements-ai.txt` | Kendi bağımlılıkları: `onnxruntime-gpu==1.19.2`, `ultralytics`, `librosa`, `xgboost`, `fastapi`… (torch/torchvision **cu128** burada DEĞİL — Dockerfile'da ayrı kurulur) |
 
 ## Çalıştırma / dağıtım
-- **Docker:** [`../docker/Dockerfile.ai`](../docker/DOCKER_README.md) + `docker-compose.ai.yml`.
+- **Docker:** EMEKLİ (Y344, 2026-11-27) — `docker/Dockerfile.ai` + `docker-compose.ai.yml` kaldırıldı (git geçmişinde).
   `CMD uvicorn ai_service.app:app --host 0.0.0.0 --port 8100` · `EXPOSE 8100`.
 - Temel imaj `nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04`, torch 2.7.1 **cu128**, `--gpus all`,
   ağırlıklar salt-okunur mount: `../release_assets/ai_models:/models` (`PEMF_AI_MODELS_DIR=/models`).
@@ -36,7 +36,7 @@ otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→
   mozaik gidiyordu; gömülü yol 1600 px'e indiriyordu).
   Kapılar: `tests/test_ai_gomulu_gpu_paritesi.py` · `tests/test_ai_panel_yayini.py` ·
   `tests/test_xai_kalan_a_grubu.py`. **Yeni alan eklerken İKİ dosyayı da aynı commit'te değiştir.**
-- Bu servis opsiyoneldir: tek-EXE backend AI'yı gömülü çalıştırabilir; mikroservis GPU ölçekleme içindir (bkz. [`../docker/DOCKER_README.md`](../docker/DOCKER_README.md)).
+- Bu servis opsiyoneldir: tek-EXE backend AI'yı gömülü çalıştırabilir; mikroservis GPU ölçekleme içindir (Docker dağıtımı Y344 ile emekli).
 
 ---
-İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/ai_models/) · [docker/](../docker/DOCKER_README.md) · [apps/backend/servers/ai_client](../apps/backend/servers/README.md)
+İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/ai_models/) · [apps/backend/servers/ai_client](../apps/backend/servers/README.md)

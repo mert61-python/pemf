@@ -74,6 +74,8 @@ def _rapor_harfleri_kirmiziyi_da_listeler(komut: str) -> bool:
 # ── 2) publish_release.ps1: süit geçmeden İLERLEMEZ ─────────────────────────
 
 _TASLAK_SUIT = "Add-Content -LiteralPath $env:Y30_KAYIT -Value 'SUIT'\nexit [int]$env:Y30_SUIT_RC\n"
+#: CT2 a: yayın CI kapısı taslağı (gerçeğini tests/test_CT2a_yayin_CI_kapisi.py ölçer) — `Y30_CI_RC` (yoksa 0 = CI yeşil)
+_TASLAK_CI = "Add-Content -LiteralPath $env:Y30_KAYIT -Value 'CI'\nexit [int]$env:Y30_CI_RC\n"
 _SARMAL = r"""param([string]$Publish, [string]$Asset)
 $ErrorActionPreference = 'Stop'
 function global:git { Add-Content -LiteralPath $env:Y30_KAYIT -Value ('GIT ' + ($args -join ' ')) }
@@ -85,19 +87,21 @@ catch { Write-Host ('PUBLISH-HATA: ' + $_.Exception.Message); exit 9 }
 """
 
 
-def _publish_golge(tmp_path: Path, suit_rc: int) -> tuple[int, list[str], str]:
+def _publish_golge(tmp_path: Path, suit_rc: int, ci_rc: int = 0) -> tuple[int, list[str], str]:
     pwsh = _pwsh_gerekli()
     d = tmp_path / f"rc{suit_rc}"
     (d / "scripts").mkdir(parents=True)
     (d / "bos_path").mkdir()
     shutil.copy2(BETIKLER / "publish_release.ps1", d / "scripts" / "publish_release.ps1")
     _yaz_bom(d / "scripts" / "yayin_oncesi_suit.ps1", _TASLAK_SUIT)
+    _yaz_bom(d / "scripts" / "yayin_ci_kapisi.ps1", _TASLAK_CI)
     _yaz_bom(d / "sarmal.ps1", _SARMAL)
     (d / "asset.bin").write_bytes(b"x")
     kayit = d / "kayit.txt"
     kayit.write_text("", encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k.upper() not in ("PATH", "PEMF_CAPRAZ_KAYNAK_ZORUNLU")}
     env.update({"PATH": str(d / "bos_path"), "Y30_KAYIT": str(kayit), "Y30_SUIT_RC": str(suit_rc)})
+    env["Y30_CI_RC"] = str(ci_rc)
     env.update({"HTTPS_PROXY": "http://127.0.0.1:9", "HTTP_PROXY": "http://127.0.0.1:9", "GIT_TERMINAL_PROMPT": "0"})
     komut = [pwsh, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(d / "sarmal.ps1")]
     komut += ["-Publish", str(d / "scripts" / "publish_release.ps1"), "-Asset", str(d / "asset.bin")]

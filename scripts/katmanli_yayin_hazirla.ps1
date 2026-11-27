@@ -45,6 +45,15 @@ if ($LASTEXITCODE -ne 0) {
   throw "Yayin oncesi tam suit GECMEDI (cikis=$LASTEXITCODE) - manifest YAZILMADI, katmanli yayin DURDU (Y30)."
 }
 
+# --- 0b) CT2 a (Y326 katman 1): uç commit'in GitHub CI'ı — GEREKLİ işler yeşil değilse / koşmadıysa DUR (scripts/ci_sozlesmesi.json).
+# Denetim kancası kipinde (DAR SUIT — bu manifest zaten YAYINLANAMAZ) ağa çıkılmaz: kapı atlanır ve damgalanır.
+if ($kancaVar) {
+  Write-Host "[KATMANLI-YAYIN] !!! CI KAPISI ATLANDI (denetim kancasi) - bu manifest YAYINLANAMAZ !!!"
+} else {
+  & (Join-Path $PSScriptRoot 'yayin_ci_kapisi.ps1') -Python $Python
+  if ($LASTEXITCODE -ne 0) { throw "Uc commit'in GitHub CI'i yesil degil (cikis=$LASTEXITCODE) - manifest YAZILMADI, katmanli yayin DURDU (CT2 a)." }
+}
+
 # --- 1) MANIFEST ---
 Write-Host "[KATMANLI-YAYIN] Y30 GECTI -> manifest uretiliyor: make_manifest.py $($ManifestArgs -join ' ')"
 & $Python (Join-Path $kok 'scripts\make_manifest.py') @ManifestArgs

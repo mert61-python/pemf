@@ -24,10 +24,10 @@
   },
   "baslatici_cargo": {
    "olcu": "cargo llvm-cov ÜRÜN ölçüsü (launcher/core/src + launcher/app/src; tests/ ve kabuk.rs hariç) · satır",
-   "satir": 96.04,
+   "satir": 96.06,
    "oynama_payi": 0.03,
-   "ci_esigi": 96.01,
-   "kaynak": "KP-8 D (17-11) · YGK (21-11) 96,04 · CT1 f-2 (27-11) @ 78685622 AYNI ağaçta 3 koşu: eksik 607 / 610 / 609 (15 385 satır) = %96,05 / 96,04 / 96,04 → oynama 3 satır ≈ 0,02 puan (backend.rs:901–903 zamanlamaya bağlı kol) → pay 0,03, CI eşiği 96,01"
+   "ci_esigi": 96.03,
+   "kaynak": "KP-8 D (17-11) · YGK (21-11) 96,04 · CT1 f-2 (27-11) @ 78685622 AYNI ağaçta 3 koşu: eksik 607 / 610 / 609 (15 385 satır) = %96,05 / 96,04 / 96,04 → oynama 3 satır ≈ 0,02 puan (backend.rs:901–903 zamanlamaya bağlı kol) → pay 0,03 · 63 YS3 (27-11) @ 7aec3d0f %96,06 → CT2 g2 (28-11): taban 96,06 (Y311 yalnız yukarı), CI eşiği 96,06 − 0,03 = 96,03"
   },
   "ai_hub": {
    "olcu": "pytest --cov (ai_hub ürün yolu; report.omit geçersiz kılınarak) · satır",
@@ -39,14 +39,14 @@
    }
   },
   "kart_yazilimi": {
-   "olcu": "STM32 güvenlik mantığı, ana makine ISR koşum takımı (tests/firmware_host_aparat.py) gcc --coverage + gcov → scripts/firmware_kapsam.py · satır",
-   "satir": 24.19,
-   "kaynak": "CT1 g (27-11) @ 78685622 · winlibs GCC 16.2.0 · main.c 165 / 682",
+   "olcu": "STM32 güvenlik mantığı (main.c · pemf_sensor.c · pemf_akim.c), ana makine koşum takımları — ISR (tests/firmware_host_aparat.py) + ANA DÖNGÜ (tests/firmware_dongu_aparat.py: ACİL DURDUR, komut ayrıştırma, bekçi) — gcc --coverage + gcov → scripts/firmware_kapsam.py · satır",
+   "satir": 89.26,
+   "kaynak": "CT1 g (27-11) @ 78685622 · winlibs GCC 16.2.0 · yalnız ISR: main.c 165 / 682 = %24,19 → CT2 f2 (28-11, Y344-1: ana döngü düzeneği gcc'ye taşındı) @ 47faa160 + CT2: main.c 611 / 696 · pemf_sensor.c 450 / 491 · pemf_akim.c 102 / 116 = 1163 / 1303 = %89,26 (147 koşum takımı testi, MSVC ↔ gcc sonuç listesi birebir)",
    "disarida": {
     "CubeMX başlatma işlevleri (SystemClock_Config, MX_*_Init, HAL_*Msp*Init, Error_Handler, assert_failed)": "donanım saat / çevre birimi kurulumu — ana makinede anlamsız (scripts/firmware_kapsam.py DISARIDA_ISLEV)",
     "firmware/stm32_pemf/Drivers/** · stm32f4xx_hal_msp.c · stm32f4xx_it.c · system_stm32f4xx.c · syscalls.c · sysmem.c": "HAL / CMSIS / CubeMX üretimi ve sürücüler",
     "firmware/esp8266_pemf_coil/** · firmware/esps3_pemf_coil/**": "Ö.4-Y7: ESP devre dışı (kod silinmez) — ürünle sevk edilmez",
-    "firmware/stm32_pemf/Core/Src/pemf_sensor.c · pemf_akim.c ve main.c ana döngü kolları": "ana döngü koşum takımı (tests/firmware_dongu_aparat.py) YALNIZ MSVC (VEH + /alternatename) → gcov ölçümü yok; CT2 f (CI) ya da koşum takımının gcc portu — [SAHİBE]"
+    "koşum takımı sondası (main_host.c sonuna eklenen pemf_host_aktif_maske)": "gerçek kaynakta YOK — gerçek dosyanın satır sayısını aşan satırlar ölçülmez (scripts/firmware_kapsam.py _satir_sayisi)"
    }
   }
  }

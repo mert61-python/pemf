@@ -34,14 +34,16 @@ defaults:
 
 jobs:
   site:
+    # CT2 a: iş adı scripts/ci_sozlesmesi.json `kosulluysa_gerekli` ile AYNI (yol süzgeçli — koştuysa yeşil olmalı)
+    name: site (lint + tsc + vitest + build)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0        # CT1 f-3: fark kapsamı tabanı (birleşme tabanı) için tam geçmiş
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           # ⚠️ NODE 22+ SART (CI'da olculdu 2026-08-18): Node 20'de YERLESIK WebSocket YOK ve
           # `@supabase/supabase-js` v2'nin RealtimeClient'i onu istiyor. Node 20 ile
@@ -101,7 +103,7 @@ jobs:
       # tarayicisiz ortamda 3 yerine 2 dondurur ve adim KIRMIZI biter (bilincli — CI'da kapi SART).
       - name: Tarayici (headless olcum icin)
         id: tarayici
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce  # v1.7.3
         continue-on-error: true
 
       # ⚠️ KURULAN TARAYICI ACIKCA BILDIRILIR (2026-09-18, olculen ariza): betik sabit bir
@@ -121,7 +123,7 @@ jobs:
 
       - name: Olcum raporu (bulgu varsa)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: responsive-site-raporu
           path: /tmp/responsive-site

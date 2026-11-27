@@ -70,6 +70,11 @@ if (-not (Test-Path $AssetPath)) { throw "Asset bulunamadi: $AssetPath" }
 & (Join-Path $PSScriptRoot 'yayin_oncesi_suit.ps1')
 if ($LASTEXITCODE -ne 0) { throw "Yayin oncesi tam suit GECMEDI (cikis=$LASTEXITCODE) - yayin DURDU (Y30)." }
 
+# --- 0b) CT2 a (Y326 katman 1): uc commit'in GitHub CI'i - GEREKLI islerin hepsi yesil degilse / kosmadiysa DUR ---
+# Liste: scripts/ci_sozlesmesi.json (CT3 dal korumasi ayni listeyi kullanir). Gece kirmizisi UYARI. Kapi: tests/test_CT2a_yayin_CI_kapisi.py
+& (Join-Path $PSScriptRoot 'yayin_ci_kapisi.ps1')
+if ($LASTEXITCODE -ne 0) { throw "Uc commit'in GitHub CI'i yesil degil (cikis=$LASTEXITCODE; is + baglanti yukarida) - yayin DURDU (CT2 a)." }
+
 # --- GitHub token (git credential) ---
 $out = ("protocol=https`nhost=github.com`n`n" | git credential fill 2>$null)
 $token = (($out | Where-Object { $_ -like 'password=*' }) -replace '^password=', '')

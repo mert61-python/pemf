@@ -31,7 +31,8 @@ def _dislamalar(u: dict) -> dict[str, list | None]:
 
 def test_KRITIK_Y3_her_pip_ekosisteminde_torch_torchvision_onnx_TAMAMEN_disli():
     pipler = [u for u in GUNCELLEMELER if u["package-ecosystem"] == "pip"]
-    assert {u["directory"] for u in pipler} >= {"/", "/docker", "/ai_service"}, [u["directory"] for u in pipler]
+    # Y344-2 (CT2 f3): `/docker` Docker dağıtımıyla birlikte kalktı.
+    assert {u["directory"] for u in pipler} >= {"/", "/ai_service"}, [u["directory"] for u in pipler]
     eksik = []
     for u in pipler:
         d = _dislamalar(u)

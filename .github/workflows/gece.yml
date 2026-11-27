@@ -1,0 +1,29 @@
+name: gece-tam-suit
+
+# CT2 c (istem 66 · Y326 katman 6): GECE TAM KOŞU — her gece varsayılan dalın ucunda critical-path-tests TAM kipte (tam süit + gerçek
+# model paketi + paket toplamı / kapsam tabanı + kapsam raporu eseri + launcher + kart yazılımı). Push'ta değişen alanlara göre HIZLI
+# küme koşar; bu iş hızlı kümenin göremediğini yakalar.
+# ⚠️ GEREKLİ DEĞİL (scripts/ci_sozlesmesi.json `gece` — `gerekli_isler`e GİRMEZ): cron işi yayın commit'ine durum yazmaz; gerekli
+# yapılsaydı yayın dalı KİLİTLENİRDİ. Gece kırmızısını yayın betiği (scripts/ci_durum.py) UYARI olarak gösterir.
+# İş adları "tam / backend (windows-latest)" … biçimindedir (çağrılan iş akışı) — push işlerinin adlarıyla KARIŞMAZ.
+# Elle tetikleme: Actions → gece-tam-suit → Run workflow (CT3 bir kez elle koşturur). Kapı: tests/test_CT2c_ci_hizli_kume_KIP.py
+
+on:
+  schedule:
+    - cron: "30 0 * * *"   # her gece 00:30 UTC (03:30 TR) — tam saat yoğunluğundan kaçınmak için
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Çağrılan iş akışının kendi eşzamanlılık grubu `<bu iş akışının adı>-<ref>`; buradaki grup ondan FARKLI olmalı (aynı ad kilitlenir).
+concurrency:
+  group: gece-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tam:
+    uses: ./.github/workflows/tests.yml
+    with:
+      kip: tam
+    secrets: inherit

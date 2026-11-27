@@ -71,6 +71,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--veri", type=Path, default=Path(".coverage"))
     ap.add_argument("--json", type=Path, dest="birlesik")
     ap.add_argument("--taban", type=Path, default=TABAN)
+    # CT2 c (Y326 katman 6): hızlı küme kipinde paket toplamı anlamsız (alt küme) → yalnız birleşik JSON (fark kapsamı girdisi) yazılır,
+    # toplam BİLGİ olarak basılır, tabanla KARŞILAŞTIRILMAZ. Tam kip (production-hardening push + gece) karşılaştırır.
+    ap.add_argument(
+        "--yalniz-json", action="store_true", help="hızlı kip: tabanla karşılaştırma YOK, yalnız --json yazılır"
+    )
     a = ap.parse_args(argv)
     if not a.veri.is_file():
         print(f"!!! kapsam verisi yok: {a.veri} — pytest --cov koştu mu? (kapı kör)")
@@ -83,6 +88,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for ad, d in olcum.items():
         print(f"{ad}: %{d:.2f} (taban %{float(taban[ad]['satir']):.2f})")
+    if a.yalniz_json:
+        print(
+            "hızlı kip: paket toplamı ölçülmez (alt küme) — tabanla karşılaştırma tam kipte (production-hardening push / gece)"
+        )
+        return 0
     sorun = karsilastir(olcum, taban)
     if sorun:
         print("!!! KAPSAM TABANI KAPISI KIRMIZI:\n  " + "\n  ".join(sorun))

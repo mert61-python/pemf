@@ -46,8 +46,11 @@ def test_KRITIK_security_yml_torch_CVE_GORUNURLUK_iddiasi_GERCEK_D6_56():
     assert re.search(r"torch CVE'leri[^.]*GÖRÜNMEZ", yorum), (
         "security.yml torch CVE'lerinin bu adımda GÖRÜNMEDİĞİNİ söylemiyor"
     )
-    assert "|| true" in sec and "continue-on-error'ı kaldırmakla OLMAZ" in yorum, (
-        "bloklayıcı yapma tarifi `|| true`'yu anmıyor"
+    # CT2 e (Y326 katman 8): pip-audit artık BLOKLAYICI — eski "bloklayıcı yapma tarifi" uygulandı: ne `|| true` ne continue-on-error.
+    komut = [s for s in sec.splitlines() if "pip-audit -r" in s and not s.strip().startswith("#")]
+    kod = " ".join(s for s in sec.splitlines() if not s.strip().startswith("#"))
+    assert komut and not any("|| true" in s for s in komut) and "continue-on-error" not in kod, (
+        "pip-audit bloklamıyor (`|| true` / continue-on-error)"
     )
 
 
@@ -109,7 +112,8 @@ def test_pull_request_de_tetikler(dosya):
 #: KENDI yol-filtreli is akislarina konuldular (`frontend.yml`, `site.yml`). Sebep: `tests.yml`
 #: filtresiz kosmali (capraz-katman kapilari icin), ama Expo/Vite hatlarinin her backend
 #: degisikliginde kosmasi gereksiz. Kapsam `test_KRITIK_arayuz_ve_site_CI_KAPSAMINDA` ile kilitli.
-BEKLENEN_ISLER = {"backend", "launcher", "sir-taramasi"}
+#: CT2 (Y326): + `firmware` (katman 9 — STM32 derlemesi + koşum takımı gcov) + `ozet` (katman 7 — dal başına tek özet).
+BEKLENEN_ISLER = {"backend", "launcher", "sir-taramasi", "firmware", "ozet"}
 
 
 def test_KRITIK_tum_isler_TANIMLI():
@@ -442,11 +446,7 @@ _SABIT_YANLIS = re.compile(r"^\s*(false|0|\$\{\{\s*(false|0)\s*\}\})\s*$", re.I)
 BLOKLAMAYAN_IZINLI = {
     # Biçim kontrolü bilgi amaçlı (lint işi `ruff check` ile bloklar).
     ("lint.yml", "ruff", "Ruff format check (bilgi amaçlı — hata verse de iş başarısız olmaz)"): {"|| true"},
-    # pip-audit bilgi amaçlı: torch/onnx CVE'leri bilinen-ertelenen (Ö.4-Y3); exact-ID izin listesi sahip işi.
-    ("security.yml", "pip-audit", "pip-audit — çekirdek + SHIPPED AI ağacı (bilgi amaçlı, bloklamaz)"): {
-        "continue-on-error",
-        "|| true",
-    },
+    # (CT2 e · Y326 katman 8: pip-audit artık BLOKLAYICI — gerekçeli liste scripts/audit_borcu.json; eski bilgi-amaçlı izin KALKTI.)
     # Tarayıcı kurulamazsa görünüm kapısı kendisi "ATLANDI" der (exit 3 → uyarı); kapının kendisi bloklar.
     ("site.yml", "site", "Tarayici (headless olcum icin)"): {"continue-on-error"},
     # (YS1b · Y320: `linux-backend.yml` "Doğrula + paketle" izni iş akışıyla birlikte KALKTI — İG-9.58 artık yok.)
@@ -497,6 +497,8 @@ def test_KRITIK_hicbir_is_ya_da_adim_IZINSIZ_bloklamayan_degil():
         "site.yml",
         "supabase-ping.yml",
         "tests.yml",
+        "gece.yml",  # CT2 c
+        "codeql.yml",  # CT2 e
     }
     assert beklenen <= set(_is_akislari()), (
         f"VAKUM: yalnız {_is_akislari()} tarandı (eksik {sorted(beklenen - set(_is_akislari()))})"
@@ -570,11 +572,25 @@ def test_KRITIK_Windows_ratchet_adimi_KAPSAMI_OLCER():
     assert re.search(r"(^|\s)--cov(\s|=|$)", komut), f"Windows ratchet adımı kapsamı ÖLÇMÜYOR: {komut}"
     assert "--cov-report" in komut, f"Windows ratchet adımında --cov-report yok: {komut}"
     # 4-A inc. 4A-2.8: komut satırı `--cov-fail-under` pyproject eşiğini EZER, `--cov-config` başka ayar dosyasına yönlendirir.
+    # CT2 c (Y326 katman 6) TEK istisna: tests.yml backend HIZLI küme adımı — alt kümede paket toplamı anlamsız, `=0` YALNIZ orada,
+    # YALNIZ hızlı kipte; tam kipte (production-hardening push + gece) fail_under AYNEN uygulanır (test_CT2c_ci_hizli_kume_KIP.py).
+    istisna = 0
     for dosya in _is_akislari():
-        for is_ in (_yukle(dosya).get("jobs") or {}).values():
+        for is_adi, is_ in (_yukle(dosya).get("jobs") or {}).items():
             for a in is_.get("steps") or []:
                 ez = re.findall(r"--cov-(?:fail-under|config)\b\S*", str(a.get("run", "")))
+                if (
+                    ez == ["--cov-fail-under=0"]
+                    and (dosya, is_adi, _adim_adi(a)) == _HIZLI_ADIM
+                    and str(a.get("if", "")).endswith("&& env.CI_KIP == 'hizli'")
+                ):
+                    istisna += 1
+                    continue
                 assert not ez, f"{dosya}/{_adim_adi(a)}: {ez} — pyproject fail_under eşiğini EZER (sahip kararı #20)"
+    assert istisna <= 1
+
+
+_HIZLI_ADIM = ("tests.yml", "backend", "Hızlı küme testleri (değişen alanlar — paket toplamı ölçülmez)")
 
 
 def _fail_under() -> float:

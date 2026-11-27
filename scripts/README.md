@@ -70,8 +70,6 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 | `saha_test_html_uret.py` | `docs/SAHA-TEST-LISTESI.md` → `docs/saha-test-listesi.html` içindeki `const VERI` bloğunu üretir (liste İKİ dosyada elle tutuluyordu, ayrışıyordu) |
 | `b_kaydi_topla.py` | `[BKAYIT]` **seri-port toplayıcı** — S3'ün B kaydını masaüstüne 2 kolonlu CSV yazar (alan + zaman); PWM başlayınca başlar, bitince durur (sahip isteği 2026-09-09) |
 | `xai_batch_rapor.py` | **Mod-2 toplu XAI raporu** — klasör/dosya tara → modülün tek-kaynak explain fonksiyonu → PNG/JPG + `summary.csv` + `index.html` (`--pdf` ŞİMDİLİK KAPALI — İG-9.50). ⚠️ Canlı döngüye ağır XAI asla girmez; bu araç seans-SONRASI/araştırma yüzeyidir |
-| `ai_service_xai_smoke.ps1` | `ai_service` **XAI smoke** — cu128 imaj-içi doğrulama (GPU makinesinde, YAYIN ÖNCESİ): imajı build edip explain ucunu gerçek istekle sınar |
-| `ai_service_xai_smoke_istek.py` | Yukarıdakinin **HOST tarafı isteği** — sentetik sıcak-merkezli termal görüntü → `/infer/thermal` `explain=true`; `xai_image_base64`in tekdüze OLMADIĞINI doğrular |
 | `ai_service_scratch_smoke_istek.py` | `ai_service` **scratch smoke** (HOST'tan) — gerçek CONTROL-24H TIF → `/infer/scratch`; kapanma metriklerini sahip referanslarıyla toleranslı karşılaştırır |
 | `supabase_sql.py` | Supabase'e SQL çalıştır + canlı sorgu/kilit izleme (Management API + PAT); şema özeti/göç kaydı — panele elle-yapıştırma yerine (⚠️PAT git-dışı) |
 

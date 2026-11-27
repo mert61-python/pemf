@@ -50,6 +50,5 @@ def test_KRITIK_numpy_ultralytics_sabitleyen_HER_pip_dizininde_major_disli():
 
 
 def test_KARSIT_olcu_KOR_degil_dizinlerde_sabitler_gercekten_var():
-    assert {"numpy", "ultralytics", "torch"} <= _sabitli_paketler("/docker")
     assert {"numpy", "ultralytics"} <= _sabitli_paketler("/ai_service")
     assert {"numpy", "ultralytics"} <= _sabitli_paketler("/")

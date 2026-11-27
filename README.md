@@ -122,7 +122,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | [`launcher/`](launcher/README.md) | **Tauri v2 ince istemci** ("PEMF Vet Client") — indirir/doğrular/backend'i başlatır, kendini günceller |
 | [`deploy/`](deploy/README.md) | `device.env` / `server.env` / `staging.env` dağıtım profilleri |
 | `offline dağıtım/` | **YEREL** (git'te izlenmez, gitignore'lu) — İnternetsiz USB kurulum (Inno DiskSpanning `.bin` dilimleri) |
-| [`docker/`](docker/DOCKER_README.md) | Container'lar: backend/AI + frontend nginx + GPU AI (3 compose profili) |
+| `docker/` | Yalnız yerel Vault anahtar emaneti (`docker-compose.vault.yml` + `vault/config/vault.hcl`) — uygulama Docker dağıtımı Y344 ile EMEKLİ (git geçmişinde) |
 | `bin/` | Gömülü ikililer: mosquitto (MQTT — ESP kapalıyken kullanılmaz), cloudflared (tünel), nssm (servis) — git'te yalnız `bin/mosquitto/` izlenir |
 | `lattekurulum/` | **YEREL** (git'te izlenmez, gitignore'lu) — LattePanda klinik mini-PC kurulum yardımcıları |
 

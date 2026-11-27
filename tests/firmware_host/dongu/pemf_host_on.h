@@ -1,13 +1,16 @@
-/* tests/firmware_host/dongu — her çeviri birimine ZORUNLU dahil edilen başlık (`cl /FI`), ana döngü koşum takımı.
+/* tests/firmware_host/dongu — her çeviri birimine ZORUNLU dahil edilen başlık (MSVC `cl /FI` · GCC `-include`), ana döngü koşum takımı.
  *
- * GCC'ye özgü üç yapı MSVC'de karşılanır (kaynak metni değişmez):
+ * MSVC: GCC'ye özgü üç yapı karşılanır (kaynak metni değişmez):
  *   `__weak`          → boş: HAL'in zayıf tanımlarını aparat derlemeden önce `<ad>__zayif` + `/alternatename` yapar
  *                       (güçlü tanım — main.c / koşum takımı — varsa o bağlanır; MSVC'de zayıf sembol yok).
  *   `__packed`        → boş (vendored HAL'de yalnız USB/ETH yapılarında; o modüller sürülmez).
- *   `__builtin_ctz`   → `_BitScanForward` (pemf_sensor.c, pin numarası). */
+ *   `__builtin_ctz`   → `_BitScanForward` (pemf_sensor.c, pin numarası).
+ * GCC (Y344-1, istem 66 CT2 f2 — gcov ölçümü): üçü de YERLEŞİK — `__weak` / `__packed` / `__ALIGN_*` HAL'in `stm32f4xx_hal_def.h`
+ * GCC kolundan gelir (gerçek kart derlemesiyle AYNI anlam: zayıf sembol, güçlü tanım bağlanır), `__builtin_ctz` derleyicinin. */
 #ifndef PEMF_HOST_ON_H
 #define PEMF_HOST_ON_H
 
+#if defined(_MSC_VER)
 #include <intrin.h>
 
 #define __weak
@@ -24,6 +27,9 @@ static __inline unsigned pemf_host_ctz(unsigned x) {
   return (unsigned)i;
 }
 #define __builtin_ctz(x) pemf_host_ctz((unsigned)(x))
+#else
+#define __NOINLINE __attribute__((noinline))
+#endif
 
 void pemf_host_nop(void);
 

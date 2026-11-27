@@ -1,15 +1,20 @@
-/* tests/firmware_host/dongu — CMSIS derleyici katmanının MSVC x64 karşılığı (ana döngü koşum takımı, 1-G · D1.106).
+/* tests/firmware_host/dongu — CMSIS derleyici katmanının ana makine (x64) karşılığı (ana döngü koşum takımı, 1-G · D1.106).
  *
  * Gerçek `Drivers/CMSIS/Include/cmsis_compiler.h` bilinmeyen derleyicide `#error` verir; aparat `core_cm4.h`'yi
  * (DEĞİŞTİRMEDEN) derleme dizinine kopyalar, bu dosya onun yanına konur → `#include "cmsis_compiler.h"` bunu bulur.
  * İç işlevler (intrinsic) Cortex-M komutları yerine koşum takımı kancalarına gider: PRIMASK (`__disable_irq` /
  * `__enable_irq`) koşum takımının kesme teslimini kilitler, `__NOP` sanal zamanı 1 çevrim ilerletir, LDREX/STREX
- * düz okuma/yazmadır (tek çekirdek; yazmaç sayfası korumalı → erişim modelden geçer). */
+ * düz okuma/yazmadır (tek çekirdek; yazmaç sayfası korumalı → erişim modelden geçer).
+ *
+ * İKİ DERLEYİCİ (Y344-1, istem 66 CT2 f2): MSVC x64 (`_MSC_VER`) ve GCC (mingw-w64 x64 — gcov ölçümü için). Yalnız derleyiciye
+ * özgü sözdizimi ayrışır (öznitelikler, bayt çevirme / bit tarama iç işlevleri); koşum takımı kancaları ORTAK. */
 #ifndef __CMSIS_COMPILER_H
 #define __CMSIS_COMPILER_H
 
-#include <intrin.h>
 #include <stdint.h>
+
+#if defined(_MSC_VER)
+#include <intrin.h>
 
 #define __ASM __asm
 #define __INLINE __inline
@@ -21,14 +26,34 @@
 #define __PACKED
 #define __PACKED_STRUCT struct
 #define __PACKED_UNION union
+#define __ALIGNED(x) __declspec(align(x))
+#define __RESTRICT __restrict
+#define __COMPILER_BARRIER() _ReadWriteBarrier()
+#define PEMF_HOST_BSWAP32(v) _byteswap_ulong(v)
+#define PEMF_HOST_BSWAP16(v) _byteswap_ushort(v)
+#else /* GCC (mingw-w64): CMSIS'in GCC kolundaki (cmsis_gcc.h) öznitelik anlamları — gerçek kart derlemesiyle aynı */
+#define __ASM __asm__
+#define __INLINE inline
+#define __STATIC_INLINE static inline
+#define __STATIC_FORCEINLINE static inline __attribute__((always_inline))
+#define __NO_RETURN __attribute__((__noreturn__))
+#define __USED __attribute__((used))
+#define __WEAK __attribute__((weak))
+#define __PACKED __attribute__((packed, aligned(1)))
+#define __PACKED_STRUCT struct __attribute__((packed, aligned(1)))
+#define __PACKED_UNION union __attribute__((packed, aligned(1)))
+#define __ALIGNED(x) __attribute__((aligned(x)))
+#define __RESTRICT __restrict
+#define __COMPILER_BARRIER() __asm__ volatile("" ::: "memory")
+#define PEMF_HOST_BSWAP32(v) __builtin_bswap32(v)
+#define PEMF_HOST_BSWAP16(v) __builtin_bswap16(v)
+#endif
+
 #define __UNALIGNED_UINT32(x) (*((uint32_t *)(x)))
 #define __UNALIGNED_UINT16_WRITE(addr, val) ((*((uint16_t *)(addr))) = (val))
 #define __UNALIGNED_UINT16_READ(addr) (*((const uint16_t *)(addr)))
 #define __UNALIGNED_UINT32_WRITE(addr, val) ((*((uint32_t *)(addr))) = (val))
 #define __UNALIGNED_UINT32_READ(addr) (*((const uint32_t *)(addr)))
-#define __ALIGNED(x) __declspec(align(x))
-#define __RESTRICT __restrict
-#define __COMPILER_BARRIER() _ReadWriteBarrier()
 
 void pemf_host_nop(void);
 void pemf_host_irq_kapat(void);
@@ -68,10 +93,13 @@ void pemf_host_primask_yaz(uint32_t deger);
 #define __get_FPSCR() 0U
 #define __set_FPSCR(x) ((void)(x))
 
-__STATIC_INLINE uint32_t __REV(uint32_t v) { return _byteswap_ulong(v); }
+__STATIC_INLINE uint32_t __REV(uint32_t v) { return PEMF_HOST_BSWAP32(v); }
 __STATIC_INLINE uint32_t __REV16(uint32_t v) { return ((v & 0x00FF00FFU) << 8) | ((v >> 8) & 0x00FF00FFU); }
-__STATIC_INLINE int16_t __REVSH(int16_t v) { return (int16_t)_byteswap_ushort((uint16_t)v); }
-__STATIC_INLINE uint32_t __ROR(uint32_t v, uint32_t n) { return _rotr(v, (int)(n & 31U)); }
+__STATIC_INLINE int16_t __REVSH(int16_t v) { return (int16_t)PEMF_HOST_BSWAP16((uint16_t)v); }
+__STATIC_INLINE uint32_t __ROR(uint32_t v, uint32_t n) {
+  n &= 31U;
+  return (n == 0U) ? v : ((v >> n) | (v << (32U - n)));
+}
 __STATIC_INLINE uint32_t __RBIT(uint32_t v) {
   uint32_t r = 0U;
   for (uint32_t i = 0U; i < 32U; i++) {
@@ -80,12 +108,15 @@ __STATIC_INLINE uint32_t __RBIT(uint32_t v) {
   return r;
 }
 __STATIC_INLINE uint8_t __CLZ(uint32_t v) {
-  unsigned long i;
+  uint8_t n = 0U;
   if (v == 0U) {
     return 32U;
   }
-  _BitScanReverse(&i, v);
-  return (uint8_t)(31U - i);
+  while ((v & 0x80000000U) == 0U) {
+    v <<= 1;
+    n++;
+  }
+  return n;
 }
 __STATIC_INLINE uint8_t __LDREXB(volatile uint8_t *p) { return *p; }
 __STATIC_INLINE uint16_t __LDREXH(volatile uint16_t *p) { return *p; }

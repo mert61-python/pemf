@@ -46,6 +46,10 @@ def _kapsar(adim: dict, isletim: str) -> bool:
     # YS1g: junit eseri adımı `if: always()` — her işletim sisteminde (kırmızıda da) koşar.
     if not kosul or kosul in ("always()", "${{ always() }}"):
         return True
+    # CT2 c: kip / alan koşulları (`env.CI_KIP == 'tam'` …) işletim sisteminden BAĞIMSIZ — OS kısmı ayrıca değerlendirilir.
+    kosul = re.sub(r"\s*&&\s*env\.CI_(?:KIP|ALAN)\s*(?:==|!=)\s*'\w+'\s*$", "", kosul)
+    if re.fullmatch(r"env\.CI_(?:KIP|ALAN)\s*(?:==|!=)\s*'\w+'", kosul):
+        return True
     m = re.fullmatch(r"runner\.os\s*(==|!=)\s*'(\w+)'", kosul)
     assert m, f"tanınmayan adım koşulu (kapı genişletilmeli): {kosul!r}"
     return (m.group(2) == isletim) == (m.group(1) == "==")

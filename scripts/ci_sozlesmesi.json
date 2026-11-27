@@ -1,0 +1,25 @@
+{
+ "aciklama": "CI SÖZLEŞMESİ (istem 66 CT2 · Y326 / Y327) — TEK kaynak. (1) `gerekli_isler`: HER push'ta koşan işler (iş adı = GitHub check-run adı); yayın betiği (`scripts/ci_durum.py` ← `yayin_ci_kapisi.ps1`) uç commit'te HEPSİ yeşil değilse ya da biri koşmadıysa yayını DURDURUR; CT3 `production-hardening` dal koruması gerekli durum denetimlerini BU listeden kurar. Gece (cron) işi buraya GİRMEZ (yayın commit'ine durum yazmaz; gerekli olsaydı yayın dalı kilitlenirdi) — gece kırmızısı yayın betiğinde UYARI. (2) `kosulluysa_gerekli`: yol süzgeçli iş akışları — koştuysa yeşil olmalı, koşmadıysa (o alan değişmedi) engel değil. (3) `urun_python`: ürünün GÖNDERDİĞİ yorumlayıcı yaması (sevk ağacı `python310.dll`, gömülü derleme Python'u) — CI'ın Windows işleri bu sürümle koşar. Kapı: tests/test_CT2a_yayin_CI_kapisi.py · tests/test_CT2b_ci_python_URUN_yamasi.py",
+ "urun_python": "3.10.2",
+ "depo": "mert61-python/pemf",
+ "gerekli_isler": [
+  {"is_akisi": "critical-path-tests", "ad": "backend (windows-latest)"},
+  {"is_akisi": "critical-path-tests", "ad": "sır taraması (gitleaks)"},
+  {"is_akisi": "critical-path-tests", "ad": "launcher (cargo)"},
+  {"is_akisi": "critical-path-tests", "ad": "firmware (STM32 + bilgisayar)"},
+  {"is_akisi": "lint", "ad": "ruff"},
+  {"is_akisi": "security-audit", "ad": "pip-audit"},
+  {"is_akisi": "security-audit", "ad": "npm-audit"}
+ ],
+ "kosulluysa_gerekli": [
+  {"is_akisi": "frontend-ci", "ad": "frontend (lint + tsc + jest)"},
+  {"is_akisi": "site-ci", "ad": "site (lint + tsc + vitest + build)"}
+ ],
+ "gece": {"is_akisi": "gece-tam-suit", "dosya": "gece.yml"},
+ "on_denetim": [
+  "uç commit GitHub'da (origin) var ve gerekli işlerin HEPSİ yeşil (scripts/ci_durum.py)",
+  "yol süzgeçli iş koştuysa yeşil (frontend-ci / site-ci)",
+  "gece tam koşusu son durumu (kırmızıysa UYARI — yayını durdurmaz)",
+  "kart ikilisi SHA-256 ↔ manifest tutarlılığı — istem 64 OF1 BURAYA ekleyecek (Y322; bu zincirde kurulmadı)"
+ ]
+}

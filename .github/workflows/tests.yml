@@ -6,6 +6,17 @@ name: critical-path-tests
 # (ürün platformu değil, yalnız CI makinesi).
 # (Arayüz/site işleri için dosyanın SONUNDAKİ "KALDIRILDI (2026-08-12)" notuna bakınız.)
 #
+# CT2 (istem 66 · Y326 — endüstri standardı CI katmanları):
+#   · Katman 6 HIZLI PUSH + GECE TAM: `CI_KIP` (scripts/ci_hizli_kume.py) — production-hardening / main / master push'u, gece
+#     (gece.yml → bu iş akışı `kip: tam`), elle `kip=tam` ve geniş etkili değişiklik TAM süit + paket toplamı; diğer dallar değişen
+#     alanlara göre HIZLI küme (paket toplamı ölçülmez, dalın değişen satırlarının fark kapsamı %100 HER kipte zorunlu).
+#   · Katman 1: her push'ta koşan işler (iş adları) scripts/ci_sozlesmesi.json `gerekli_isler`de — yayın betiği ve CT3 dal
+#     koruması AYNI listeyi okur. Gece işi gerekli DEĞİL (yayın commit'ine durum yazmaz).
+#   · Katman 2: Python = ürünün GÖNDERDİĞİ yama (`urun_python`, sevk ağacı python310.dll) · Katman 7: junit özeti iş sayfasında,
+#     kapsam raporu eser, `ozet` işi dal / commit başına TEK tablo · Katman 8: her `uses:` tam SHA (yorumda sürüm) ·
+#   · Katman 9: `firmware` işi STM32'yi resmî Arm GNU 12.3.rel1 (CubeIDE ile aynı GCC 12.3.1) ile derler + bilgisayar koşum
+#     takımı testleri gcc + gcov (kart yazılımı kapsam tabanı + fark kapsamı). Kapılar: tests/test_CT2*.py
+#
 # ⚠️ DENETİM 2026-08-09 (Tier 1) — CI GERÇEKTEN AÇILDI. Önceki hâlinde:
 #   • tetikleyici yalnız `main, master` idi; geliştirme AKTİF DALDA (production-hardening)
 #     yapıldığı için iş akışı sahadaki hiçbir değişiklikte KOŞMUYORDU,
@@ -30,7 +41,20 @@ on:
     # birlestirmenin asil kazanci (capraz-depo kapilarinin gercekten olcmesi) iptal olurdu.
     # Kritik-yol suiti ~3 dk ve public depoda UCRETSIZ; her degisiklikte kosmasi dogru takas.
   pull_request:
+  # CT2 c: elle tetiklemede kip seçilebilir (boş = otomatik: dala / değişikliğe göre).
   workflow_dispatch:
+    inputs:
+      kip:
+        description: "tam = tam süit + paket toplamı · otomatik = dala / değişikliğe göre (yayın dalı ve geniş etki → tam)"
+        type: choice
+        options: ["otomatik", "tam"]
+        default: "otomatik"
+  # CT2 c: gece tam koşusu (gece.yml) bu iş akışını `kip: tam` ile çağırır — iş adları "tam / …" olur, gerekli listeye GİRMEZ.
+  workflow_call:
+    inputs:
+      kip:
+        type: string
+        default: "tam"
 
 # DENETİM 2026-08-04 (P3): `permissions:` bloğu YOKTU → iş akışı deponun VARSAYILAN
 # GITHUB_TOKEN yetkisini alıyordu (çoğu depoda contents: write). Bu iş akışlarının hiçbiri
@@ -50,7 +74,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # YGH: 25 dk 10-08'de (~790 test) kondu; süit bugün ~12 800 test (yerel CI-eşdeğeri seri 1 sa 51 dk). Paralelde bile 4 çekirdekli
     # koşucuda kapsamlı Windows adımı 25 dk'ya sığmaz → iş zaman aşımıyla düşerdi. Kapı: tests/test_ci_paralel_xdist_Y312.py (≥ 60).
-    timeout-minutes: 90
+    timeout-minutes: 120         # CT2: M sınıfı 201 test de koşuyor (CT1) — tam kip ~70–80 dk
     # YS1a (Y320, 26-11): windows-latest konsolu cp1252 — `scripts/ci_modelleri.py` Türkçe "ğ / ı" yazarken UnicodeEncodeError ile
     # çıkış 1 verdi, testler HİÇ koşmadı (YG1 4e). Betik de kendini UTF-8'e çevirir; bu ikinci katman diğer Türkçe yazan adımlar için.
     # Kapı: tests/test_ci_modelleri_konsol_kodlamasi_YS1.py.
@@ -64,14 +88,22 @@ jobs:
     steps:
       # YS1k: TAM geçmiş — site yasal metin mührünün geçmiş kolu (D6.33) mührün kaynak commit'ini git geçmişinde arar; sığ klonda
       # (varsayılan fetch-depth 1) "kardeş eser yok" diye ATLIYORDU. Kapı: test_ci_workflow_gate.py (…TAM_gecmis_YS1k).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
-          python-version: "3.10"
+          # CT2 b (Y326 katman 2): ürünün GÖNDERDİĞİ yama — sevk ağacı `python310.dll` 3.10.2 = gömülü derleme Python'u (ölçüldü 28-11).
+          # "3.10" setup-python'da 3.10.11 kuruyordu (gh-101283 sınıfı davranış farkı). Kaynak: scripts/ci_sozlesmesi.json `urun_python`.
+          # Kapı: tests/test_CT2b_ci_python_URUN_yamasi.py
+          python-version: "3.10.2"
           cache: pip
+
+      # CT2 c (Y326 katman 6): HIZLI küme mi TAM süit mi — `CI_KIP` (ve hızlı kipte ci_kume.txt) GITHUB_ENV'e. Kapı: test_CT2c_ci_hizli_kume_KIP.py
+      - name: CI kipi (hızlı küme / tam süit)
+        shell: bash
+        run: python scripts/ci_hizli_kume.py kip --olay "${{ github.event_name }}" --dal "${{ github.ref_name }}" --istek "${{ inputs.kip }}" --github-env "$GITHUB_ENV"
 
       # SQLCipher: at-rest şifreleme / göç / karantina / kurtarma testleri GERÇEK kütüphaneyle koşsun.
       # ⚠️ A-46 (sahip kararı) + D2.07 (B-3.47): sqlcipher3 KURULAMAZSA İŞ KIRMIZI — sessiz düşüş YOK.
@@ -102,7 +134,7 @@ jobs:
       # YS1g: TypeScript isteyen pytest kapıları (i18n K-2 metin çıkarıcı `scripts/i18n/cikar_ts.cjs`, arayüz / site kaynak kapıları)
       # apps/ui ve apps/web node_modules'undaki derleyiciyi kullanır; yoksa ATLIYOR (16) ya da düşüyordu (K-2). Arayüz web dışa
       # aktarımı (`frontend/dist`, build_backend_exe.ps1 ile AYNI `npm run export:web`) paket / statik sunum kapılarının girdisi.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -146,7 +178,7 @@ jobs:
       # her dosyanın ve parçanın SHA-256'sını taşır → paket değişince anahtar değişir); `restore-keys` YOK (eski paket geri yüklenmez).
       # İndirme adımı önbellekteki parçaları SHA-256 ile doğrular, tutmazsa yeniden indirir. Kapı: test_CT1b_ci_modelleri_COK_PARCALI.py
       - name: AI model paketi önbelleği
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
         with:
           path: ${{ runner.temp }}/pemf_ci_paket
           key: pemf-ci-modelleri-${{ hashFiles('scripts/ci_modelleri_listesi.json') }}
@@ -223,7 +255,7 @@ jobs:
       # UAC-SÜZGEÇLİ belirteçle koşar (scripts/ci_kisitli_belirtec.py: Administrators yalnız-ret, bütünlük orta). `shell: bash`:
       # pwsh 7 açılışta PSModulePath'e kendi yollarını ekleyip alt powershell.exe 5.1'e sızdırıyordu → Get-Acl yüklenemiyordu (5).
       - name: Kritik-yol testleri + kapsam ratcheti
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && env.CI_KIP == 'tam'
         shell: bash
         env:
           PEMF_SIMULATE: ""
@@ -234,6 +266,20 @@ jobs:
           PEMF_CAPRAZ_KAYNAK_ZORUNLU: "1"
         run: python scripts/ci_kisitli_belirtec.py pytest tests -n auto --dist loadgroup -v -rfEs --no-header --cov --cov-report=term --junitxml=pytest-junit.xml
 
+      # CT2 c (Y326 katman 6): HIZLI küme — değişen test dosyaları + değişen dosyaların adını anan testler + sabit CI / i18n kapıları
+      # (scripts/ci_hizli_kume.py; pytest `@dosya` argüman okuması). Alt kümede PAKET TOPLAMI anlamsız → `--cov-fail-under=0` YALNIZ
+      # bu adımda (pyproject fail_under = 100 tam kipte AYNEN uygulanır: production-hardening push'u + gece); dalın değiştirdiği her
+      # satırın testle koşması (fark kapsamı %100) aşağıdaki kapsam kilidinde BU kipte de zorunlu. Kapı: test_CT2c_ci_hizli_kume_KIP.py
+      - name: Hızlı küme testleri (değişen alanlar — paket toplamı ölçülmez)
+        if: runner.os == 'Windows' && env.CI_KIP == 'hizli'
+        shell: bash
+        env:
+          PEMF_SIMULATE: ""
+          PEMF_GITLEAKS_ZORUNLU: "1"
+          PEMF_DEMA_DIST_ZORUNLU: "1"
+          PEMF_CAPRAZ_KAYNAK_ZORUNLU: "1"
+        run: python scripts/ci_kisitli_belirtec.py pytest @ci_kume.txt -n auto --dist loadgroup -v -rfEs --no-header --cov --cov-report=term --cov-fail-under=0 --junitxml=pytest-junit.xml
+
       # ⚠️ A-46 / D2.07: testler geçse bile "sqlcipher" nedenli ATLAMA varsa iş KIRMIZI. Kurulum adımı
       # bağlayıcıyı içe aktaramazsa iş zaten orada durur; bu adım kalan sessiz yolu kapatır (bağlayıcı
       # bir testte yüklenemedi / yeni bir test sqlcipher3'ü atlayarak eklendi). Çıkış 2 = junit yok/boş (kör).
@@ -241,12 +287,18 @@ jobs:
       # çıkarılır (CI-ATLANAN tablosu, istem 66). Kırmızı koşuda da yüklenir.
       - name: Test raporu (junit) eseri
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: pytest-junit-${{ matrix.os }}
           path: pytest-junit.xml
           retention-days: 30
           if-no-files-found: error
+
+      # CT2 d (Y326 katman 7): junit özeti İŞ SAYFASINDA (geçen / kırmızı / atlanan + neden + defter sınıfı) — üçüncü parti eylem YOK.
+      - name: Test raporu özeti (iş sayfası)
+        if: always()
+        shell: bash
+        run: python scripts/ci_junit_ozet.py pytest-junit.xml --baslik "backend · ${{ env.CI_KIP }} kip" --cikti "$GITHUB_STEP_SUMMARY"
 
       - name: sqlcipher atlama kapısı (A-46)
         run: python scripts/ci_sqlcipher_atlama_kapisi.py pytest-junit.xml
@@ -255,7 +307,13 @@ jobs:
       # yalnız yayın makinesi eseri, P = platform / ortam). Defterde olmayan atlama, M / D kaydı, model / eser nedenli kayıt ve koşuda
       # atlamayan (bayat) kayıt → KIRMIZI. Kapı: tests/test_CT1c_ci_atlanan_defteri_KAPI.py
       - name: Atlanan defteri kapısı (CT1 c)
+        if: env.CI_KIP == 'tam'
         run: python scripts/ci_atlanan_kapisi.py pytest-junit.xml
+
+      # CT2 c: hızlı kümede defterin her kaydı koşmaz → bayat kayıt denetimi YOK (`--kismi`); defterde OLMAYAN atlama yine KIRMIZI.
+      - name: Atlanan defteri kapısı — hızlı küme (kısmi)
+        if: env.CI_KIP == 'hizli'
+        run: python scripts/ci_atlanan_kapisi.py pytest-junit.xml --kismi
 
       # CT1 f / g (istem 66 · Y311 / Y325 / Y326): KAPSAM KİLİDİ — (1) Python paketleri tabanın ALTINA inemez (sunucu %100 +
       # ai_hub tabanı, tests/kapsam_tabani.json; pyproject fail_under yalnız sunucuyu görür) · (2) dalın değiştirdiği ölçülen her
@@ -263,9 +321,20 @@ jobs:
       # Kapı: tests/test_CT1f_kapsam_tabani_KILIDI.py
       - name: Kapsam kilidi (taban + fark kapsamı)
         shell: bash
+        # CT2 c: hızlı kipte paket toplamı ölçülmez (`--yalniz-json`: yalnız fark kapsamı girdisi yazılır); fark kapsamı HER kipte.
         run: |
-          python scripts/kapsam_tabani_kapisi.py --json coverage.json
+          if [ "$CI_KIP" = tam ]; then python scripts/kapsam_tabani_kapisi.py --json coverage.json; else python scripts/kapsam_tabani_kapisi.py --json coverage.json --yalniz-json; fi
           python scripts/fark_kapsami.py --covjson coverage.json
+
+      # CT2 d (katman 7): kapsam raporu ESER olarak (kırmızıda da) — satır satır ölçüm (coverage.json) + junit.
+      - name: Kapsam raporu eseri
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: kapsam-backend-${{ env.CI_KIP }}
+          path: coverage.json
+          retention-days: 14
+          if-no-files-found: warn
 
   sir-taramasi:
     name: sır taraması (gitleaks)
@@ -277,11 +346,11 @@ jobs:
     # `esp` dalı). Hook yalnız onu kuran kişiyi korur; CI işi HERKESİ korur — commit'i kimin
     # yaptığından bağımsız. Bu yüzden her ikisi de var.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0        # gitleaks GEÇMİŞİ de tarasın; yalnız son commit yetmez
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -290,17 +359,31 @@ jobs:
     runs-on: windows-latest      # üretim platformu; Windows'a özgü yollar burada derlenir
     timeout-minutes: 45          # Y243: + kapsam derlemesi (enstrümanlı) ve cargo-llvm-cov kurulumu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0        # CT1 f-3: fark kapsamı tabanı (birleşme tabanı) için tam geçmiş
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      # CT2 c (katman 6): launcher/ (ya da fark kapsamı / taban / bu iş akışı) değişmediyse HIZLI kipte cargo adımları atlanır — iş yine
+      # koşar ve yeşil biter (gerekli durum denetimi her push'ta yazılır); tam kipte (production-hardening / gece) her zaman koşar.
+      - name: Alan (başlatıcı değişti mi?)
+        shell: bash
+        run: python scripts/ci_hizli_kume.py alan launcher --olay "${{ github.event_name }}" --dal "${{ github.ref_name }}" --istek "${{ inputs.kip }}" --github-env "$GITHUB_ENV"
+      - name: Başlatıcı değişmedi — cargo adımları atlandı
+        if: env.CI_ALAN != '1'
+        shell: bash
+        run: echo "launcher/ değişmedi (hızlı kip) — cargo test / kapsam / audit tam kipte ve gece koşar" >> "$GITHUB_STEP_SUMMARY"
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable dalı (launcher.yml ile aynı)
+        if: env.CI_ALAN == '1'
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0  # v2.9.3
+        if: env.CI_ALAN == '1'
         with:
           workspaces: launcher
       # ⚠️ `--all-targets`: entegrasyon testleri (core/tests/real_artifacts.rs) da koşsun.
       # Onlar üretim manifest'ini okuyup şema/URL/platform değişmezlerini doğrular — yayın
       # hatalarını yakalayan asıl kapı orasıdır.
       - name: cargo test
+        if: env.CI_ALAN == '1'
         working-directory: launcher
         run: cargo test --workspace --all-targets --locked
       # Y243 (KP-2 A5): başlatıcı satır kapsamı eşiği. Araç sürümü SABİT (cargo-llvm-cov 0.9.1, `--locked`); payda launcher/core/src +
@@ -320,26 +403,131 @@ jobs:
       # KP-6 F (2026-11-16, madde 6 — 10 komut gövdesi `KomutOrtami` ile testli): llvm toplam %90,90 (15 695 satır, 1 428 eksik) · ÜRÜN ölçüsü (bu adım) %95,36 (14 936 satır, 693 eksik) → 90 → 94.
       # KP-8 D (2026-11-17, KP-7 A auth / söküm + KP-8 A1 indirme / denetim testleri): ÜRÜN ölçüsü %96,04 (15 353 satır, 608 eksik) → 94 → 95.
       - name: llvm-tools (kapsam)
+        if: env.CI_ALAN == '1'
         run: rustup component add llvm-tools-preview
       - name: cargo-llvm-cov kur (sabit sürüm)
+        if: env.CI_ALAN == '1'
         run: cargo install cargo-llvm-cov --locked --version 0.9.1
       - name: cargo llvm-cov (satır kapsamı eşiği)
+        if: env.CI_ALAN == '1'
         working-directory: launcher
         # CT1 f-2 (istem 66 · Y325): eşik = TABAN − ÖLÇÜLMÜŞ oynama payı (tests/kapsam_tabani.json → baslatici_cargo.ci_esigi;
         # tutarlılık: tests/test_CT1f_kapsam_tabani_KILIDI.py) · lcov → fark kapsamı kapısı (aşağıda).
-        run: cargo llvm-cov --workspace --all-targets --locked --ignore-filename-regex "[\\/]tests[\\/]|[\\/]app[\\/]src[\\/]kabuk\.rs" --fail-under-lines 96.01 --lcov --output-path lcov.info
+        run: cargo llvm-cov --workspace --all-targets --locked --ignore-filename-regex "[\\/]tests[\\/]|[\\/]app[\\/]src[\\/]kabuk\.rs" --fail-under-lines 96.03 --lcov --output-path lcov.info
       # CT1 f-3 (istem 66 · Y311 / Y325): dalın değiştirdiği her ölçülen başlatıcı satırı testle koşmuş olmalı (fark kapsamı %100).
       - name: Fark kapsamı kapısı (başlatıcı)
+        if: env.CI_ALAN == '1'
         shell: bash
         run: python scripts/fark_kapsami.py --lcov launcher/lcov.info:launcher
       # D3.15 (B-8.18): bağımlılık güvenlik denetimi HER PUSH'ta (eskiden yalnız `launcher-v*` etiketinde — yani yayından SONRA).
       # `launcher/.cargo/audit.toml`'daki gerekçeli yoksayma listesi okunur (çalışma dizini launcher) — onsuz 7 bakımsız uyarı
       # hattı hep kırmızı yapardı; listede olmayan her yeni açık / uyarı kırar. Yoksayma listesine gerçek açık EKLENMEZ.
       - name: cargo audit (bağımlılık güvenlik denetimi)
+        if: env.CI_ALAN == '1'
         working-directory: launcher
         run: |
           cargo install cargo-audit --locked --version ^0.22
           cargo audit --deny warnings
+
+  # CT2 f / f2 (Y326 katman 9 · Y344-1): KART YAZILIMI CI — (1) STM32 derlemesi HER push'ta resmî Arm GNU Toolchain 12.3.rel1 ile (STM32CubeIDE
+  # 1.17'nin "GNU Tools for STM32 12.3.rel1"i ile AYNI GCC 12.3.1 20230626; sürüm + SHA-256 sabit), boyut iş özetine · (2) bilgisayar koşum
+  # takımı testleri (ISR + ana döngü: ACİL DURDUR, komut ayrıştırma, bekçi, pemf_sensor.c / pemf_akim.c) winlibs GCC + gcov ile → kart
+  # yazılımı kapsam TABANI (tests/kapsam_tabani.json) + fark kapsamı %100. İkili SHA ↔ manifest tutarlılığı istem 64 OF1'in işi (Y322) —
+  # burada KURULMAZ (scripts/ci_sozlesmesi.json `on_denetim`). Kapı: tests/test_CT2f_firmware_CI_isi.py
+  firmware:
+    name: firmware (STM32 + bilgisayar)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          fetch-depth: 0        # fark kapsamı tabanı (birleşme tabanı) için tam geçmiş
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.10.2"   # CT2 b: ürün yaması (scripts/ci_sozlesmesi.json urun_python)
+          cache: pip
+      - name: Alan (kart yazılımı değişti mi?)
+        shell: bash
+        run: python scripts/ci_hizli_kume.py alan firmware --olay "${{ github.event_name }}" --dal "${{ github.ref_name }}" --istek "${{ inputs.kip }}" --github-env "$GITHUB_ENV"
+      - name: Arm GNU araç zinciri (12.3.rel1, sabit özet)
+        shell: bash
+        run: |
+          set -euo pipefail
+          z="$RUNNER_TEMP/arm-gnu-12.3.rel1.zip"; d="$RUNNER_TEMP/arm"
+          curl -fsSL --retry 3 -o "$z" https://developer.arm.com/-/media/Files/downloads/gnu/12.3.rel1/binrel/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi.zip
+          echo "d52888bf59c5262ebf3e6b19b9f9e6270ecb60fd218cf81a4e793946e805a654  $z" | sha256sum -c -
+          mkdir -p "$d" && unzip -q -o "$z" -d "$d"
+          b="$d/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin"
+          "$b/arm-none-eabi-gcc.exe" --version
+          cygpath -w "$b" >> "$GITHUB_PATH"
+      - name: STM32 derlemesi (arm-none-eabi-gcc)
+        shell: bash
+        run: python scripts/firmware_derle.py --stm --cikti "$RUNNER_TEMP/fw_cikti"
+      - name: Kart ikilisi boyutu (iş özeti)
+        shell: bash
+        run: python scripts/ci_junit_ozet.py --fw-boyut "$RUNNER_TEMP/fw_cikti" --cikti "$GITHUB_STEP_SUMMARY"
+      - name: winlibs GCC (bilgisayar koşum takımı + gcov, sabit özet)
+        if: env.CI_ALAN == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          z="$RUNNER_TEMP/winlibs-gcc-16.2.0.zip"
+          curl -fsSL --retry 3 -o "$z" https://github.com/brechtsanders/winlibs_mingw/releases/download/16.2.0posix-23.1.3-14.0.0-ucrt-r3/winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r3.zip
+          echo "3c69305081e4a647144339a936244fcf7d3d9e558319e1ad7be2cd2886d4b6a1  $z" | sha256sum -c -
+          unzip -q -o "$z" -d "$RUNNER_TEMP/winlibs"
+          b="$RUNNER_TEMP/winlibs/mingw64/bin"
+          "$b/gcc.exe" --version
+          cygpath -w "$b" >> "$GITHUB_PATH"
+          echo "PEMF_CC=$(cygpath -w "$b/gcc.exe")" >> "$GITHUB_ENV"
+          echo "PEMF_GCOV=$(cygpath -w "$b/gcov.exe")" >> "$GITHUB_ENV"
+      - name: Test bağımlılıkları (koşum takımı testleri — ürün kilidi)
+        if: env.CI_ALAN == '1'
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-deps -r build_tools/myenv-requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-test.txt
+      - name: Kart yazılımı bilgisayar testleri (gcc + gcov)
+        if: env.CI_ALAN == '1'
+        shell: bash
+        env:
+          PEMF_SIMULATE: ""
+          PEMF_FW_KAPSAM: "1"
+        run: python scripts/ci_hizli_kume.py firmware-testleri --kume-dosyasi fw_testleri.txt && python -m pytest @fw_testleri.txt -n auto --dist loadgroup -rfEs --no-header -p no:cacheprovider --basetemp="$RUNNER_TEMP/fwtmp" --junitxml=firmware-junit.xml
+      - name: Kart yazılımı kapsamı (taban + fark kapsamı)
+        if: env.CI_ALAN == '1'
+        shell: bash
+        run: |
+          python scripts/firmware_kapsam.py --kok "$RUNNER_TEMP/fwtmp" --gcov "$PEMF_GCOV" --lcov firmware.info --taban tests/kapsam_tabani.json
+          python scripts/fark_kapsami.py --lcov firmware.info:.
+      - name: Kart yazılımı raporu eseri
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: firmware-rapor
+          path: |
+            firmware-junit.xml
+            firmware.info
+          retention-days: 14
+          if-no-files-found: warn
+
+  # CT2 d (Y326 katman 7): DAL / COMMIT BAŞINA TEK ÖZET — bu iş akışının bütün işlerinin sonucu tek tabloda (kırmızıda hangi iş, nereye
+  # bakılır). Gerekli liste DIŞINDA (kendisi bir toplama; gerekli işler scripts/ci_sozlesmesi.json).
+  ozet:
+    name: CI özeti
+    needs: [backend, sir-taramasi, launcher, firmware]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - name: İş sonuçları (tek tablo)
+        env:
+          SONUCLAR: ${{ toJSON(needs) }}
+          DAL: ${{ github.ref_name }}
+          KOSU: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scripts/ci_junit_ozet.py --isler-env SONUCLAR --cikti "$GITHUB_STEP_SUMMARY"
 
   # ⚠️ KALDIRILDI (2026-08-12): `arayüz (tsc + jest)` ve `site (build)` işleri.
   #
