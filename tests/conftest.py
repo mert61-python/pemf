@@ -407,6 +407,26 @@ def _canli_tedavi_durumu_sizmaz():
             alan.update(once)
 
 
+@pytest.fixture(autouse=True)
+def _ai_pro_surus_muhasebesi_sizmaz():
+    """CT3 (istem 66, ilk GitHub koşusu @ 6d1ebb75): YS2 a'nın AI Pro sürüş muhasebesi (`servers.ai_pro_surus_muhasebesi.
+    _kayitlar`, anahtar = `db_session_id`) modül-geneldir. AI Pro döngüsünü (`basla`) koşturup seansı tek kapanış yolundan
+    kapatmayan test kaydı BIRAKIR; aynı süreçte sonraki testin TAZE DB'sindeki seans da `id=1` alır → kapanışta bayat kayıt
+    "hiç sürülmedi" sayılır, Manuel seans "stopped · 0 dk" yazılır (ölçüldü: GitHub xdist dağılımında
+    `test_seans_ortasi_SURE_KALAN_sure_Y5_D170::test_KRITIK_Y5_KISALTMA…` KIRMIZI; yerel tam koşularda dağılım şansıyla
+    yeşil). `_kosu_kaydi_sizmaz` ilkesi: her test kayıtları kendinden ÖNCEKİ hâline YERİNDE geri alarak biter (modül İÇE
+    AKTARILMAZ, `monkeypatch` istenmez). Kapı: tests/test_CT3b_ai_pro_surus_muhasebesi_testler_arasi_SIZMAZ.py"""
+    m = sys.modules.get("servers.ai_pro_surus_muhasebesi")
+    once = {k: dict(v) for k, v in m._kayitlar.items()} if m is not None else {}
+    yield
+    m = sys.modules.get("servers.ai_pro_surus_muhasebesi")
+    if m is None:
+        return
+    with m._kilit:
+        m._kayitlar.clear()
+        m._kayitlar.update(once)
+
+
 # ⚠️ O-A2.4 (2-B incelemesi → 2-B2) — CİHAZ OPERATÖR KAYDI testler arası SIZMAZ. `database.auth_db.get_auth_db()` süreç-
 # tekildir: ilk çağıran testin veri kökünde kurulur ve süitin GERİ KALANI aynı `auth_users.db`yi görür. Bir test kayıtlı
 # operatör BIRAKINCA sonraki testler "kayıtlı operatörlü cihaz" kipinde koşar — `cozumlenmis_operator` / `kayitli_operator_var`
