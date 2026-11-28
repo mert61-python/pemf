@@ -414,6 +414,16 @@ jobs:
         # CT1 f-2 (istem 66 · Y325): eşik = TABAN − ÖLÇÜLMÜŞ oynama payı (tests/kapsam_tabani.json → baslatici_cargo.ci_esigi;
         # tutarlılık: tests/test_CT1f_kapsam_tabani_KILIDI.py) · lcov → fark kapsamı kapısı (aşağıda).
         run: cargo llvm-cov --workspace --all-targets --locked --ignore-filename-regex "[\\/]tests[\\/]|[\\/]app[\\/]src[\\/]kabuk\.rs" --fail-under-lines 96.03 --lcov --output-path lcov.info
+      # CT3 (istem 66 · katman 7): ilk GitHub koşusu (@ 6d1ebb75) bu eşikte düştü ama `--lcov` kipi ölçülen değeri BASMIYORDU ve lcov
+      # eser değildi → hangi dosya / satır eksik görülemiyordu. lcov (eşik adımının KENDİ çıktısı — dışlama deseni tek yerde kalır,
+      # tests/test_KP3_main_rs_kapsam_siniflari.py) kırmızıda da eser. Kapı: tests/test_CT3a_kapsam_eseri_BASLATICI_ISTEMCI.py
+      - name: Başlatıcı kapsam raporu eseri (kırmızıda da)
+        if: (success() || failure()) && env.CI_ALAN == '1'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: baslatici-lcov
+          path: launcher/lcov.info
+          if-no-files-found: warn
       # CT1 f-3 (istem 66 · Y311 / Y325): dalın değiştirdiği her ölçülen başlatıcı satırı testle koşmuş olmalı (fark kapsamı %100).
       - name: Fark kapsamı kapısı (başlatıcı)
         if: env.CI_ALAN == '1'

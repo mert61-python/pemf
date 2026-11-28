@@ -72,3 +72,16 @@ jobs:
       - name: Fark kapsamı kapısı
         working-directory: .
         run: python3 scripts/fark_kapsami.py --lcov apps/ui/coverage/lcov.info:apps/ui
+
+      # CT3 (istem 66 · katman 7): ilk GitHub koşusu (@ 6d1ebb75) global dal eşiğinde düştü (%94,39 < taban %94,4) ama dosya bazında
+      # rapor eser değildi → yerel CI eşi ölçümüyle dosya dosya karşılaştırılamıyordu. Kırmızıda da yüklenir.
+      # Kapı: tests/test_CT3a_kapsam_eseri_BASLATICI_ISTEMCI.py
+      - name: Kapsam raporu eseri (kırmızıda da)
+        if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: istemci-jest-kapsam
+          path: |
+            apps/ui/coverage/lcov.info
+            apps/ui/coverage/coverage-final.json
+          if-no-files-found: warn
